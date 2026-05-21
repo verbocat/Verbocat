@@ -2,6 +2,7 @@ import { useMemo } from "react";
 
 export const GlossaryModal = ({
   darkMode,
+  canApplyGlossary,
   glossary,
   glossaryKey,
   glossaryLanguagePairs,
@@ -9,6 +10,7 @@ export const GlossaryModal = ({
   glossaryTargetLang,
   languages,
   onAddRow,
+  onApplyGlossary,
   onClearCurrentGlossary,
   onClearSelection,
   onClose,
@@ -165,6 +167,13 @@ export const GlossaryModal = ({
                 </div>
 
                 <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={onApplyGlossary}
+                    disabled={!canApplyGlossary}
+                    className="rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Apply
+                  </button>
                   <button
                     onClick={onSelectAll}
                     disabled={glossary.length === 0}

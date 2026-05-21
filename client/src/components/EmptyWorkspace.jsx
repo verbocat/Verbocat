@@ -1,6 +1,12 @@
 import { Icons } from "./Icons.jsx";
 
-export const EmptyWorkspace = ({ darkMode, onLoadProject, onUpload, theme }) => (
+export const EmptyWorkspace = ({
+  darkMode,
+  onLoadProject,
+  onOpenGlossary,
+  onUpload,
+  theme
+}) => (
   <div
     className={`relative overflow-hidden rounded-2xl border p-8 sm:p-10 ${theme.cardStrong}`}
   >
@@ -27,6 +33,14 @@ export const EmptyWorkspace = ({ darkMode, onLoadProject, onUpload, theme }) => 
           Choose File
           <input type="file" onChange={onUpload} className="hidden" />
         </label>
+
+        <button
+          onClick={onOpenGlossary}
+          className={`inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold transition ${theme.accentSolid}`}
+        >
+          Glossary
+        </button>
+
         <label
           className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold transition ${theme.buttonSecondary}`}
         >

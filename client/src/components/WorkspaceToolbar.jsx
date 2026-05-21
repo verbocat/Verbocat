@@ -16,7 +16,9 @@ export const WorkspaceToolbar = ({
   onLoadProject,
   onOpenGlossary,
   onSaveProject,
+  onTranslate,
   onToggleQa,
+  isTranslating,
   qaIssuesCount,
   searchQuery,
   segmentsCount,
@@ -82,6 +84,17 @@ export const WorkspaceToolbar = ({
 
           <ActionButton onClick={onOpenGlossary} className={theme.accentSolid}>
             Glossary
+          </ActionButton>
+          <ActionButton
+            onClick={onTranslate}
+            disabled={segmentsCount === 0 || isTranslating}
+            className={
+              segmentsCount === 0 || isTranslating
+                ? "cursor-not-allowed bg-slate-400/30 text-slate-300"
+                : "bg-sky-700 text-white hover:bg-sky-600"
+            }
+          >
+            {isTranslating ? "Translating..." : "Translate"}
           </ActionButton>
           <ActionButton
             onClick={onSaveProject}

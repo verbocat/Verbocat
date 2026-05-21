@@ -131,6 +131,8 @@ export default function App() {
       }));
       setSegments(newSegments);
       setFileId(data.fileId || null);
+      setCurrentProvider("");
+      setShowQaPanel(false);
       showToast(`File uploaded: ${file.name}`);
     } catch (error) {
       console.log(error);
@@ -169,67 +171,79 @@ export default function App() {
     };
   }, []);
 
-  useEffect(() => {
-    const translateSegments = async () => {
-      if (segments.length === 0 || isTranslating) {
-        return;
+  const handleTranslateSegments = async () => {
+    if (segments.length === 0 || isTranslating) {
+      return;
+    }
+
+    setIsTranslating(true);
+    setProgress(0);
+
+    try {
+      const data = await translateBatch(segments, targetLanguage);
+      const results = data.results || [];
+
+      if (results.length > 0) {
+        setCurrentProvider(results[0].provider);
       }
 
-      const untranslated = segments.filter((segment) => !segment.target);
-      if (untranslated.length === 0) {
-        return;
-      }
+      let completed = 0;
 
-      setIsTranslating(true);
+      results.forEach((item, index) => {
+        window.setTimeout(() => {
+          setSegments((previous) =>
+            previous.map((segment) =>
+              segment.id === item.id
+                ? {
+                    ...segment,
+                    target: applyGlossaryTerms(
+                      segment.source,
+                      item.translated,
+                      translationGlossary
+                    ),
+                    provider: item.provider,
+                    qaIssues: item.qaIssues || [],
+                    fuzzyScore: item.fuzzyScore || null
+                  }
+                : segment
+            )
+          );
 
-      try {
-        const data = await translateBatch(untranslated, targetLanguage);
-        const results = data.results || [];
+          completed += 1;
+          setProgress(Math.round((completed / results.length) * 100));
 
-        if (results.length > 0) {
-          setCurrentProvider(results[0].provider);
-        }
+          if (completed === results.length) {
+            setIsTranslating(false);
+            showToast("Translation completed!");
+          }
+        }, index * 20);
+      });
+    } catch (error) {
+      console.log(error);
+      setIsTranslating(false);
+      showToast("Translation error.", "error");
+    }
+  };
 
-        let completed = 0;
+  const handleApplyGlossary = () => {
+    if (segments.length === 0) {
+      showToast("Open a file before applying glossary", "error");
+      return;
+    }
 
-        results.forEach((item, index) => {
-          window.setTimeout(() => {
-            setSegments((previous) =>
-              previous.map((segment) =>
-                segment.id === item.id
-                  ? {
-                      ...segment,
-                      target: applyGlossaryTerms(
-                        segment.source,
-                        item.translated,
-                        translationGlossary
-                      ),
-                      provider: item.provider,
-                      qaIssues: item.qaIssues || [],
-                      fuzzyScore: item.fuzzyScore || null
-                    }
-                  : segment
-              )
-            );
+    setSegments((previous) =>
+      previous.map((segment) => ({
+        ...segment,
+        target: applyGlossaryTerms(
+          segment.source,
+          segment.target || "",
+          translationGlossary
+        )
+      }))
+    );
 
-            completed += 1;
-            setProgress(Math.round((completed / results.length) * 100));
-
-            if (completed === results.length) {
-              setIsTranslating(false);
-              showToast("Translation completed!");
-            }
-          }, index * 20);
-        });
-      } catch (error) {
-        console.log(error);
-        setIsTranslating(false);
-        showToast("Translation error.", "error");
-      }
-    };
-
-    translateSegments();
-  }, [isTranslating, segments.length, targetLanguage, translationGlossary]);
+    showToast("Glossary applied to current translation");
+  };
 
   const updateTranslation = (id, value) => {
     setSegments((previous) =>
@@ -274,6 +288,7 @@ export default function App() {
       setSegments(project.segments || []);
       setTargetLanguage(project.targetLanguage || "hi");
       setCurrentProvider(project.currentProvider || "");
+      setShowQaPanel(false);
       glossaryManager.setGlossaryMap(project.glossaryMap || {});
       showToast("Project loaded!");
     } catch (error) {
@@ -340,6 +355,7 @@ export default function App() {
       <Header
         currentProvider={currentProvider}
         darkMode={darkMode}
+        onOpenGlossary={() => setShowGlossary(true)}
         onLoadProject={loadProject}
         onToggleDarkMode={() => setDarkMode((value) => !value)}
         qaIssuesCount={qaIssuesList.length}
@@ -362,6 +378,7 @@ export default function App() {
         onDeleteLanguagePair={deleteLanguagePairGlossary}
         onDeleteSelected={deleteSelectedGlossaryRows}
         onPasteGlossary={pasteGlossary}
+        onApplyGlossary={handleApplyGlossary}
         onSelectAll={selectAllGlossaryRows}
         onSelectPair={(source, target) => {
           setGlossarySourceLang(source);
@@ -373,6 +390,7 @@ export default function App() {
         setGlossarySourceLang={setGlossarySourceLang}
         setGlossaryTargetLang={setGlossaryTargetLang}
         show={showGlossary}
+        canApplyGlossary={segments.length > 0}
         theme={theme}
       />
 
@@ -399,6 +417,7 @@ export default function App() {
             <EmptyWorkspace
               darkMode={darkMode}
               onLoadProject={loadProject}
+              onOpenGlossary={() => setShowGlossary(true)}
               onUpload={handleUpload}
               theme={theme}
             />
@@ -411,7 +430,9 @@ export default function App() {
               onLoadProject={loadProject}
               onOpenGlossary={() => setShowGlossary(true)}
               onSaveProject={saveProject}
+              onTranslate={handleTranslateSegments}
               onToggleQa={() => setShowQaPanel((value) => !value)}
+              isTranslating={isTranslating}
               qaIssuesCount={qaIssuesList.length}
               searchQuery={searchQuery}
               segmentsCount={segments.length}

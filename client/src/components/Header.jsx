@@ -4,6 +4,7 @@ export const Header = ({
   currentProvider,
   darkMode,
   onLoadProject,
+  onOpenGlossary,
   onToggleDarkMode,
   qaIssuesCount,
   segmentsCount,
@@ -39,18 +40,26 @@ export const Header = ({
 
         <div className="flex items-center gap-2">
           {segmentsCount === 0 && (
-            <label
-              className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${theme.buttonSecondary}`}
-            >
-              <Icons.FileJson />
-              Load Project
-              <input
-                type="file"
-                accept=".json"
-                onChange={onLoadProject}
-                className="hidden"
-              />
-            </label>
+            <>
+              <button
+                onClick={onOpenGlossary}
+                className={`inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${theme.buttonSecondary}`}
+              >
+                Glossary
+              </button>
+              <label
+                className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${theme.buttonSecondary}`}
+              >
+                <Icons.FileJson />
+                Load Project
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={onLoadProject}
+                  className="hidden"
+                />
+              </label>
+            </>
           )}
 
           <button
