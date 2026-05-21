@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+        @page {
+          margin-bottom: auto auto 100px;
+        }
+
+        table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+        .text-piramal-blue {
+          color: #365069;
+        }
+        .main-head {
+          text-align: center;
+          font-weight: bold;
+          font-size: 18px;
+        }
+        .font-lg {
+          font-size: 16px;
+        }
+        .font-md {
+          font-size: 15px;
+        }
+        .font-sm {
+          font-size: 14px;
+        }
+        .padding-bottom {
+          padding-bottom: 10px;
+        }
+        .bold {
+          font-weight: 700;
+        }
+    </style>
+    <title>REJECTION LETTER</title>
+</head>
+
+<body
+        style="
+        font-size: 16px;
+        padding: 16px 0;
+        font-family: Calibri, sans-serif;
+        background-color: #fff;
+        margin: auto;
+        width: 90%;
+        ">
+<table>
+    <tr>
+        <td style="text-align: right;">
+            <img
+                    src="https://cdn.pchf.in/icon/piramal-logo.png"
+                    height="auto"
+                    width="100px"
+            />
+        </td>
+    </tr>
+    <tr>
+        <td class="main-head padding-bottom bold">
+            REJECTION LETTER
+        </td>
+    </tr>
+    <tr>
+        <td class="padding-bottom font-md">
+            <span th:text="${date}"></span>
+        </td>
+    </tr>
+    <tr>
+        <td class="padding-bottom font-md">
+            To,
+        </td>
+    </tr>
+    <tr>
+        <td class="font-lg bold">
+            <span th:text="${applicantNames}"></span>
+        </td>
+    </tr>
+    <tr>
+        <td class="padding-bottom font-lg">
+            <span th:text="${currentAddress}"></span>
+        </td>
+    </tr>
+    <tr>
+        <td class="padding-bottom font-md bold"
+            style="text-decoration: underline;">
+            Subject : Loan Application No <span
+                th:text="${applicationNo}"></span> dated <span
+                th:text="${applicationDate}"></span>.
+        </td>
+    </tr>
+    <tr>
+        <td class="padding-bottom font-sm">
+            Dear Sir/Madam,
+        </td>
+    </tr>
+    <tr>
+        <td class="padding-bottom font-sm">
+            This is to inform you that we are unable to approve your
+            request for Loan against securities, as the
+            <span
+                    th:text="${rejectCategory}"></span>.
+        </td>
+    </tr>
+    <tr>
+        <td class="padding-bottom font-sm">
+            Kindly note that your enquiry for the loan application has been updated in your credit records of CIBIL.
+        </td>
+    </tr>
+    <tr>
+        <td class="font-sm" style="padding-bottom: 12px;">
+            In case of any further assistance, please call us on
+            toll free no. <a href="tel: 1800 266 6444">1800 266 6444</a>
+            or write an e-mail to us at
+            <a href="mailto:customercare@piramal.com">customercare@piramal.com</a>
+        </td>
+    </tr>
+    <tr>
+        <td class=" font-sm bold">
+            This is system generated and does not require signature.
+        </td>
+    </tr>
+</table>
+<div style="position: fixed; bottom: 0; font-size: 7px; width:
+        100%;">
+    <table>
+        <tr class="border_top">
+            <td style="width: 35px;"></td>
+            <td style="text-align: center;">
+                <span class="text-piramal-blue bold">Piramal Finance Limited</span><br/>
+                <span class="text-piramal-blue">(formerly Piramal Capital &amp; Housing Finance Limited)</span><br/>
+                <span class="text-piramal-blue">CIN : L64910MH1984PLC032639</span><br/>
+                <span class="text-piramal-blue">Registered Office Address: 601, 6th Floor, Amiti Building, Agastya Corporate Park, Kamani Junction, Opp. Fire Station,
+LBS Marg, Kurla (West), Mumbai- 400070</span><br/>
+                <span class="text-piramal-blue">T +91 22
+                                        6230 9200 F +91 22 6151 3444</span><br/>
+                <span style="color: #ff0000;">www.piramalfinance.com</span><br/>
+            </td>
+            <td style="width: 85px;">Page 1 of 1</td>
+        </tr>
+    </table>
+</div>
+</body>
+</html>

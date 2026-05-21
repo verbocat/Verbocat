@@ -1,0 +1,40 @@
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap");
+@import "tailwindcss";
+
+:root {
+  font-family: "Plus Jakarta Sans", sans-serif;
+  color: #eef2f7;
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.035), transparent 24%),
+    radial-gradient(circle at 84% 16%, rgba(255, 255, 255, 0.025), transparent 20%),
+    linear-gradient(180deg, #111111 0%, #161616 48%, #101010 100%);
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: "Plus Jakarta Sans", sans-serif;
+  background: transparent;
+  color: #f1f1f1;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+code,
+.font-mono {
+  font-family: "IBM Plex Mono", monospace;
+}

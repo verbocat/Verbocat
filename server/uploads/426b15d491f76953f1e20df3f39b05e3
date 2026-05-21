@@ -1,0 +1,112 @@
+{
+  "fileId": "7aeda642-4ef8-4e2d-a51d-02327d1e4d21",
+  "targetLanguage": "hi",
+  "currentProvider": "Lingva",
+  "segments": [
+    {
+      "id": 0,
+      "source": "\n            REJECTION LETTER\n        ",
+      "target": "अस्वीकृति पत्र"
+    },
+    {
+      "id": 1,
+      "source": "\n            To,\n        ",
+      "target": "को,"
+    },
+    {
+      "id": 2,
+      "source": "\n            Subject : Loan Application No ",
+      "target": "विषय: ऋण आवेदन संख्या"
+    },
+    {
+      "id": 3,
+      "source": " dated ",
+      "target": "दिनांकित"
+    },
+    {
+      "id": 4,
+      "source": ".\n        ",
+      "target": "."
+    },
+    {
+      "id": 5,
+      "source": "\n            Dear Sir/Madam,\n        ",
+      "target": "Dear Sir/Madam,"
+    },
+    {
+      "id": 6,
+      "source": "\n            This is to inform you that we are unable to approve your\n            request for Loan against securities, as the\n            ",
+      "target": "आपको सूचित किया जाता है कि हम आपका अनुमोदन करने में असमर्थ हैं प्रतिभूतियों के बदले ऋण के लिए अनुरोध, जैसे"
+    },
+    {
+      "id": 7,
+      "source": ".\n        ",
+      "target": "."
+    },
+    {
+      "id": 8,
+      "source": "\n            Kindly note that your enquiry for the loan application has been updated in your credit records of CIBIL.\n        ",
+      "target": "कृपया ध्यान दें कि ऋण आवेदन के लिए आपकी पूछताछ आपके CIBIL के क्रेडिट रिकॉर्ड में अपडेट कर दी गई है।"
+    },
+    {
+      "id": 9,
+      "source": "\n            In case of any further assistance, please call us on\n            toll free no. ",
+      "target": "किसी भी अतिरिक्त सहायता के मामले में, कृपया हमें कॉल करें टोल फ्री नं."
+    },
+    {
+      "id": 10,
+      "source": "\n            or write an e-mail to us at\n            ",
+      "target": "या हमें यहां एक ई-मेल लिखें"
+    },
+    {
+      "id": 11,
+      "source": "1800 266 6444",
+      "target": "1800 266 6444"
+    },
+    {
+      "id": 12,
+      "source": "customercare@piramal.com",
+      "target": "customercare@piramal.com"
+    },
+    {
+      "id": 13,
+      "source": "\n            This is system generated and does not require signature.\n        ",
+      "target": "यह सिस्टम द्वारा तैयार किया गया है और इसमें हस्ताक्षर की आवश्यकता नहीं है।"
+    },
+    {
+      "id": 14,
+      "source": "Piramal Finance Limited",
+      "target": "पीरामल फाइनेंस लिमिटेड"
+    },
+    {
+      "id": 15,
+      "source": "(formerly Piramal Capital & Housing Finance Limited)",
+      "target": "(पूर्व में पीरामल कैपिटल एंड हाउसिंग फाइनेंस लिमिटेड)"
+    },
+    {
+      "id": 16,
+      "source": "CIN : L64910MH1984PLC032639",
+      "target": "सीआईएन: L64910MH1984PLC032639"
+    },
+    {
+      "id": 17,
+      "source": "Registered Office Address: 601, 6th Floor, Amiti Building, Agastya Corporate Park, Kamani Junction, Opp. Fire Station,\nLBS Marg, Kurla (West), Mumbai- 400070",
+      "target": "पंजीकृत कार्यालय का पता: 601, 6वीं मंजिल, अमिति बिल्डिंग, अगस्त्य कॉर्पोरेट पार्क, कमानी जंक्शन, सामने। फायर स्टेशन, एलबीएस मार्ग, कुर्ला (पश्चिम), मुंबई- 400070"
+    },
+    {
+      "id": 18,
+      "source": "T +91 22\n                                        6230 9200 F +91 22 6151 3444",
+      "target": "टी +91 22 6230 9200 एफ +91 22 6151 3444"
+    },
+    {
+      "id": 19,
+      "source": "www.piramalfinance.com",
+      "target": "www.piramalfinance.com"
+    },
+    {
+      "id": 20,
+      "source": "Page 1 of 1",
+      "target": "पेज 1 का 1"
+    }
+  ]
+}

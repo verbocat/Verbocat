@@ -1,0 +1,1341 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+        @page {
+          size: A4 portrait;
+          margin: 100px 25px 180px;
+
+          @bottom-right {
+            content: counter(page) "/" counter(pages);
+            font-size: 12px;
+            white-space: nowrap;
+          }
+
+          @bottom-left {
+            content: element(footer);
+          }
+
+          @bottom-center {
+            content: element(pageFooter);
+          }
+
+          @top-right {
+            content: element(pageHeader);
+          }
+
+          counter-increment: page;
+          counter-reset: page 1;
+        }
+
+        .avoid-tr-breaks tr {
+          page-break-inside: avoid;
+        }
+
+        h1 {
+          text-align: right;
+          margin-right: 20px;
+          margin-top: 40px;
+        }
+
+        h2,
+        h3 {
+          text-align: center;
+        }
+
+        th {
+          border: 1px solid black;
+          text-align: center;
+          padding: 10px;
+          width: 5px;
+        }
+
+        .annexABC-table {
+          border-collapse: collapse;
+          width: 100%;
+          margin: auto;
+          table-layout: auto;
+        }
+
+        .first-col {
+          width: 5%;
+          text-align: center;
+          border: 1px solid black;
+          word-wrap: break-word;
+        }
+
+        .second-col {
+          width: 30%;
+          border: 1px solid black;
+          text-align: left;
+          word-wrap: break-word;
+        }
+
+        .third-col {
+          width: 65%;
+          border: 1px solid black;
+          text-align: left;
+          word-wrap: break-word;
+        }
+
+        .page-break {
+          page-break-before: always;
+        }
+
+        .table-main {
+          border-collapse: collapse;
+          border: 2px solid rgb(221, 220, 220);
+        }
+        .table.table-main,
+        table.table-main td {
+          border: 2px solid rgb(221, 220, 220);
+          border-collapse: collapse;
+          padding: 5px;
+        }
+
+        .table-scheduleI-inner {
+          border-collapse: collapse;
+        }
+        .table.table-scheduleI-inner,
+        table.table-scheduleI-inner td {
+          border: 1px solid grey;
+        }
+
+        .table-SMA {
+          border-collapse: collapse;
+          border: 1px solid orange;
+        }
+        .table.table-SMA,
+        table.table-SMA td {
+          border: 1px solid orange;
+          border-collapse: collapse;
+          padding: 5px;
+        }
+
+        #pageFooter {
+          position: running(pageFooter);
+          font-size: 10px;
+          text-align: center;
+        }
+
+        #pageFooter table {
+          width: 100%;
+          margin: 0 auto;
+        }
+
+        #pageHeader {
+          position: running(pageHeader);
+          text-align: right;
+          padding-bottom: 60px;
+          width: 100%;
+          display: block;
+        }
+
+        #pageHeader img {
+          display: block;
+          margin-left: auto;
+          margin-right: 0;
+          float: right;
+        }
+    </style>
+    <title>SC Loan Agreement</title>
+</head>
+
+<body
+        style="
+      font-size: 14px;
+      padding: 16px 0;
+      font-family: Calibri, sans-serif;
+      background-color: #fff;
+      margin: auto;
+      text-align: justify;
+      width: 90%;
+    "
+>
+<header id="pageHeader">
+    <img
+            src="https://cdn.pchf.in/logos/piramal_company_logo.png"
+            height="150px"
+            width="auto"
+    />
+</header>
+<footer id="pageFooter">
+    <table>
+        <tr class="border_top">
+            <td style="text-align: center">
+            <span class="text-piramal-blue bold"><b>Piramal Finance Limited (Formerly known as Piramal Capital &amp; Housing Finance Limited)</b></span
+            ><br />
+                <span>Registered Office Address: 601, 6th Floor, Amiti Building, Agastya Corporate Park, Kamani Junction,<br/>
+              Opp. Fire Station, LBS Marg, Kurla (West), Mumbai- 400070.</span><br />
+                <span class="text-piramal-blue">CIN : U65910MH1984PLCO32639</span
+                ><br />
+                <span class="text-piramal-blue" style="color: #ff0000"
+                >www.piramalfinance.com | Email ID: customerservice.pel@piramal.com | Toll Free Number: 1800 2570 411</span
+                ><br />
+            </td>
+        </tr>
+    </table>
+</footer>
+<div style="position: relative; margin-top: 20px">
+      <span style="position: absolute"
+      >Date: <span th:text="${applicationDate}"></span
+      ></span>
+    <div style="text-align: center"><b>SANCTION LETTER</b></div>
+</div>
+
+<div style="margin-top: 10px">
+    <b
+    >Piramal Finance Ltd. (Formerly Piramal Capital &amp; Housing Finance
+        Ltd.)</b
+    >
+    (the <b>“Lender”</b>) is pleased to inform that the Borrower (details
+    whereof provided below) is eligible for a loan against securities (<b
+>“Flexi Loan”</b
+>) on below terms and conditions.<br />
+    The Flexi Loan is facilitated through the Lender’s technology platform.<br /><br />
+</div>
+
+<div>
+    The sanctioned details mentioned below shall be read with the unattested
+    loan-cum-pledge agreement (Loan Agreement) governing the Flexi Loan.
+</div>
+
+<table class="table-main">
+    <tr style="vertical-align: baseline">
+        <td>
+            <b>1.</b>
+        </td>
+        <td>
+            <b>Application No.</b>
+        </td>
+        <td colspan="3"><span th:text="${applicationNo}"></span></td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>
+            <b>2.</b>
+        </td>
+        <td>
+            <b>Loan Type</b>
+        </td>
+        <td>
+            Flexi Loan against pledge of Securities such as dematerialized shares
+            / units of mutual funds / bonds/other securities as determined by the
+            Lender.
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>
+            <b>3.</b>
+        </td>
+        <td>
+            <b>Purpose</b>
+        </td>
+        <td>
+            For any purpose not prohibited under applicable laws, including any
+            personal or business use.<br />
+            (a) the Flexi Loan shall not be used for any other purposes other than
+            as mentioned herein including illegal, anti-social, money lending
+            &amp; speculative activities speculative investment in real estate,
+            onward lending or for investment in securities, debentures or stock
+            markets.<br />
+            (b) the End use of funds/purpose of the Flexi Loan as mentioned herein
+            shall not be changed in any manner during the term of the Flexi Loan
+            or that such change in the end use shall take place only with the
+            prior written permission of the Lender.<br />
+            (c) any breach of the above undertaking shall tantamount to the to be
+            to breach of the terms and conditions of this Agreement and the Lender
+            shall be at liberty to take such action against me/us including
+            withholding of the balance Flexi Loan/recalling the Flexi Loan as the
+            Lender may deem fit.
+        </td>
+    </tr>
+
+    <tr style="vertical-align: top">
+        <td>4.</td>
+        <td>
+            <b>Details of the Borrower/s</b>
+        </td>
+        <td>
+            <table class="table-scheduleI-inner">
+                <tr th:if="${borrowerEntityType=='INDIVIDUAL' }">
+                    <td colspan="3">
+                        <b>In case Borrower is an Individual</b>
+                    </td>
+                </tr>
+                <tr th:if="${borrowerEntityType=='INDIVIDUAL' }">
+                    <td>1</td>
+                    <td>Name</td>
+                    <td><span th:text="${borrowerName}"></span></td>
+                </tr>
+                <tr th:if="${borrowerEntityType=='INDIVIDUAL' }">
+                    <td></td>
+                    <td style="width: 80px; padding-bottom: 50px">Address</td>
+                    <td><span th:text="${borrowerCurrentAddress}"></span></td>
+                </tr>
+                <tr th:if="${borrowerEntityType=='INDIVIDUAL' }">
+                    <td></td>
+                    <td>Email Address</td>
+                    <td><span th:text="${borrowerEmail}"></span></td>
+                </tr>
+                <tr th:if="${borrowerEntityType=='INDIVIDUAL' }">
+                    <td></td>
+                    <td>Mobile No.</td>
+                    <td><span th:text="${borrowerMobileNo}"></span></td>
+                </tr>
+
+                <tr th:if="${borrowerEntityType=='PRIVATE_LIMITED' }">
+                    <td style="border: none; vertical-align: baseline"></td>
+                    <td style="border: none" colspan="2">
+                        <b>In case Borrower is a Company</b><br />
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${borrowerBusinessName}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >, a company incorporated in India under the [Companies Act,
+                        1956/ Companies Act, 2013], having its registered office at
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${borrowerBusinessAddress}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >
+                        through its authorised director, which expression shall unless
+                        repugnant to the context or meaning thereof be deemed to include
+                        its successors and permitted assigns.<br /><br />
+                    </td>
+                </tr>
+                <tr th:if="${borrowerBusinessType=='PROPRIETORSHIP' }">
+                    <td style="border: none; vertical-align: baseline"></td>
+                    <td style="border: none" colspan="2">
+                        <b>In case Borrower is a sole proprietorship:</b><br />
+                        M/s
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${borrowerBusinessName}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >
+                        a proprietorship concern, its sole proprietor having its
+                        principal place of business at
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${borrowerBusinessAddress}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >, which expression shall unless repugnant to the context or
+                        meaning thereof be deemed to include the heirs, administrators
+                        and executors of the sole proprietor.<br /><br />
+                    </td>
+                </tr>
+                <tr th:if="${borrowerBusinessType=='PARTNERSHIP' }">
+                    <td style="border: none; vertical-align: baseline"></td>
+                    <td style="border: none" colspan="2">
+                        <b>In case Borrower is a partnership firm:</b><br />
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${borrowerBusinessName}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >, a partnership firm, [registered under the Partnership Act,
+                        1932], having its principal place of business at
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${borrowerBusinessAddress}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >, duly represented by authorised partner, which expression
+                        shall unless repugnant to the context or meaning thereof be
+                        deemed to include its partners for the time being and from time
+                        to time and the legal heirs, executors and administrators of the
+                        last such surviving partner.<br /><br />
+                    </td>
+                </tr>
+                <tr th:if="${borrowerBusinessType=='LLP' }">
+                    <td style="border: none; vertical-align: baseline"></td>
+                    <td style="border: none" colspan="2">
+                        <b>In case Borrower is a limited liability partnership:</b
+                        ><br />
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${borrowerBusinessName}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >, a partnership firm formed under the Limited Liability
+                        Partnership Act, 2008 and having its principal place of business
+                        at
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${borrowerBusinessAddress}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >, represented by its authorised partner [], in accordance with
+                        the resolution passed by its partners, which expression shall
+                        unless repugnant to the context or meaning thereof be deemed to
+                        include its successors and permitted assigns.<br /><br />
+                    </td>
+                </tr>
+                <tr th:if="${borrowerBusinessType=='HUF' }">
+                    <td style="border: none; vertical-align: baseline"></td>
+                    <td style="border: none" colspan="2">
+                        <b>In case Borrower is a Hindu Undivided Family:</b><br />
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${borrowerBusinessName}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >, Hindu Undivided Family, represented by [], the Karta, acting
+                        on behalf of all the coparceners and all members of the Hindu
+                        Undivided Family, having its principal place of business
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${borrowerBusinessAddress}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >, which expression shall unless repugnant to the context or
+                        meaning thereof be deemed to include the Karta and the members
+                        for the time being and from time to time of the Hindu Undivided
+                        Family and their respective heirs, executors, administrators and
+                        assigns.<br /><br />
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+
+    <tr style="vertical-align: top">
+        <td>5.</td>
+        <td>
+            <b>Details of Co-Borrower</b>
+        </td>
+        <td>
+            <table class="table-scheduleI-inner">
+                <tr th:if="${coBorrower1EntityType=='INDIVIDUAL' }">
+                    <td colspan="3">
+                        <b>In case Co-Borrower is an Individual</b>
+                    </td>
+                </tr>
+                <tr th:if="${coBorrower1EntityType=='INDIVIDUAL' }">
+                    <td>1</td>
+                    <td>Name</td>
+                    <td><span th:text="${coBorrower1Name}"></span></td>
+                </tr>
+                <tr th:if="${coBorrower1EntityType=='INDIVIDUAL' }">
+                    <td></td>
+                    <td style="width: 10%; padding-bottom: 50px">Address</td>
+                    <td><span th:text="${coBorrower1CurrentAddress}"></span></td>
+                </tr>
+                <tr th:if="${coBorrower1EntityType=='INDIVIDUAL' }">
+                    <td></td>
+                    <td>Email Address</td>
+                    <td><span th:text="${coBorrower1Email}"></span></td>
+                </tr>
+                <tr th:if="${coBorrower1EntityType=='INDIVIDUAL' }">
+                    <td></td>
+                    <td>Mobile No.</td>
+                    <td><span th:text="${coBorrower1Phone}"></span></td>
+                </tr>
+                <tr th:if="${coBorrower2EntityType=='INDIVIDUAL' }">
+                    <td>2</td>
+                    <td>Name</td>
+                    <td><span th:text="${coBorrower2Name}"></span></td>
+                </tr>
+                <tr th:if="${coBorrower2EntityType=='INDIVIDUAL' }">
+                    <td></td>
+                    <td style="width: 10%; padding-bottom: 50px">Address</td>
+                    <td><span th:text="${coBorrower2CurrentAddress}"></span></td>
+                </tr>
+                <tr th:if="${coBorrower2EntityType=='INDIVIDUAL' }">
+                    <td></td>
+                    <td>Email Address</td>
+                    <td><span th:text="${coBorrower2Email}"></span></td>
+                </tr>
+                <tr th:if="${coBorrower2EntityType=='INDIVIDUAL' }">
+                    <td></td>
+                    <td>Mobile No.</td>
+                    <td><span th:text="${coBorrower2Phone}"></span></td>
+                </tr>
+
+                <tr th:if="${coBorrower1BusinessType=='PRIVATE_LIMITED' }">
+                    <td style="border: none; vertical-align: baseline"></td>
+                    <td style="border: none" colspan="2">
+                        <b>In case Co-Borrower is a Company<br /></b>
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${coBorrower1BusinessName}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >, a company incorporated in India under the [Companies Act,
+                        1956/ Companies Act, 2013], having its registered office at
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${coBorrower1BusinessAddress}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >
+                        through its authorised director, which expression shall unless
+                        repugnant to the context or meaning thereof be deemed to include
+                        its successors and permitted assigns.<br /><br />
+                    </td>
+                </tr>
+                <tr th:if="${coBorrower2BusinessType=='PRIVATE_LIMITED' }">
+                    <td style="border: none; vertical-align: baseline"></td>
+                    <td style="border: none" colspan="2">
+                        <b>In case Co-Borrower is a Company<br /></b>
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${coBorrower2BusinessName}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >, a company incorporated in India under the [Companies Act,
+                        1956/ Companies Act, 2013], having its registered office at
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${coBorrower2BusinessAddress}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >
+                        through its authorised director, which expression shall unless
+                        repugnant to the context or meaning thereof be deemed to include
+                        its successors and permitted assigns.<br /><br />
+                    </td>
+                </tr>
+
+                <tr th:if="${coBorrower1BusinessType=='PROPRIETORSHIP' }">
+                    <td style="border: none; vertical-align: baseline"></td>
+                    <td style="border: none" colspan="2">
+                        <b>In case Co-Borrower is a sole proprietorship:<br /></b>
+                        M/s
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${coBorrower1BusinessName}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >
+                        a proprietorship concern, its sole proprietor having its
+                        principal place of business at
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${coBorrower1BusinessAddress}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >, which expression shall unless repugnant to the context or
+                        meaning thereof be deemed to include the heirs, administrators
+                        and executors of the sole proprietor.<br /><br />
+                    </td>
+                </tr>
+                <tr th:if="${coBorrower2BusinessType=='PROPRIETORSHIP' }">
+                    <td style="border: none; vertical-align: baseline"></td>
+                    <td style="border: none" colspan="2">
+                        <b>In case Co-Borrower is a sole proprietorship:<br /></b>
+                        M/s
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${coBorrower2BusinessName}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >
+                        a proprietorship concern, its sole proprietor having its
+                        principal place of business at
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${coBorrower2BusinessAddress}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >, which expression shall unless repugnant to the context or
+                        meaning thereof be deemed to include the heirs, administrators
+                        and executors of the sole proprietor.<br /><br />
+                    </td>
+                </tr>
+
+                <tr th:if="${coBorrower1BusinessType=='PARTNERSHIP' }">
+                    <td style="border: none; vertical-align: baseline"></td>
+                    <td style="border: none" colspan="2">
+                        <b>In case Co-Borrower is a partnership firm:<br /></b>
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${coBorrower1BusinessName}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >, a partnership firm, [registered under the Partnership Act,
+                        1932], having its principal place of business at
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${coBorrower1BusinessAddress}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >, duly represented by authorised partner, which expression
+                        shall unless repugnant to the context or meaning thereof be
+                        deemed to include its partners for the time being and from time
+                        to time and the legal heirs, executors and administrators of the
+                        last such surviving partner.<br /><br />
+                    </td>
+                </tr>
+                <tr th:if="${coBorrower2BusinessType=='PARTNERSHIP' }">
+                    <td style="border: none; vertical-align: baseline"></td>
+                    <td style="border: none" colspan="2">
+                        <b>In case Co-Borrower is a partnership firm:<br /></b>
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${coBorrower2BusinessName}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >, a partnership firm, [registered under the Partnership Act,
+                        1932], having its principal place of business at
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${coBorrower2BusinessAddress}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >, duly represented by authorised partner, which expression
+                        shall unless repugnant to the context or meaning thereof be
+                        deemed to include its partners for the time being and from time
+                        to time and the legal heirs, executors and administrators of the
+                        last such surviving partner.<br /><br />
+                    </td>
+                </tr>
+
+                <tr th:if="${coBorrower1BusinessType=='LLP' }">
+                    <td style="border: none; vertical-align: baseline"></td>
+                    <td style="border: none" colspan="2">
+                        <b
+                        >In case Co-Borrower is a limited liability partnership:<br
+                        /></b>
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${coBorrower1BusinessName}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >, a partnership firm formed under the Limited Liability
+                        Partnership Act, 2008 and having its principal place of business
+                        at
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${coBorrower1BusinessAddress}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >, in accordance with the resolution passed by its partners,
+                        which expression shall unless repugnant to the context or
+                        meaning thereof be deemed to include its successors and
+                        permitted assigns.<br /><br />
+                    </td>
+                </tr>
+                <tr th:if="${coBorrower2BusinessType=='LLP' }">
+                    <td style="border: none; vertical-align: baseline"></td>
+                    <td style="border: none" colspan="2">
+                        <b
+                        >In case Co-Borrower is a limited liability partnership:<br
+                        /></b>
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${coBorrower2BusinessName}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >, a partnership firm formed under the Limited Liability
+                        Partnership Act, 2008 and having its principal place of business
+                        at
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${coBorrower2BusinessAddress}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >, in accordance with the resolution passed by its partners,
+                        which expression shall unless repugnant to the context or
+                        meaning thereof be deemed to include its successors and
+                        permitted assigns.<br /><br />
+                    </td>
+                </tr>
+
+                <tr th:if="${coBorrower1BusinessType=='HUF' }">
+                    <td style="border: none; vertical-align: baseline"></td>
+                    <td style="border: none" colspan="2">
+                        <b>In case Co-Borrower is a Hindu Undivided Family:<br /></b>
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${coBorrower1BusinessName}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >, Hindu Undivided Family, represented by [], the Karta, acting
+                        on behalf of all the coparceners and all members of the Hindu
+                        Undivided Family, having its principal place of business
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${coBorrower1BusinessAddress}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >, which expression shall unless repugnant to the context or
+                        meaning thereof be deemed to include the Karta and the members
+                        for the time being and from time to time of the Hindu Undivided
+                        Family and their respective heirs, executors, administrators and
+                        assigns.<br /><br />
+                    </td>
+                </tr>
+                <tr th:if="${coBorrower2BusinessType=='HUF' }">
+                    <td style="border: none; vertical-align: baseline"></td>
+                    <td style="border: none" colspan="2">
+                        <b>In case Co-Borrower is a Hindu Undivided Family:<br /></b>
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${coBorrower2BusinessName}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >, Hindu Undivided Family, represented by [], the Karta, acting
+                        on behalf of all the coparceners and all members of the Hindu
+                        Undivided Family, having its principal place of business
+                        <u
+                        >&nbsp;&nbsp;&nbsp;&nbsp;<span
+                                th:text="${coBorrower2BusinessAddress}"
+                        ></span
+                        >&nbsp;&nbsp;&nbsp;&nbsp;</u
+                        >, which expression shall unless repugnant to the context or
+                        meaning thereof be deemed to include the Karta and the members
+                        for the time being and from time to time of the Hindu Undivided
+                        Family and their respective heirs, executors, administrators and
+                        assigns.<br /><br />
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>
+            <b>6.</b>
+        </td>
+        <td>
+            <b>Flexi Loan Amount</b>
+        </td>
+        <td>
+            Loan Amount: Rs<u
+        >&nbsp;&nbsp;&nbsp;<span th:text="${loanAmount}"></span
+        >&nbsp;&nbsp;&nbsp;</u
+        >
+            (Rupees
+            <u
+            >&nbsp;&nbsp;&nbsp;<span th:text="${loanAmountInWords}"></span
+            >&nbsp;&nbsp;&nbsp;</u
+            >only) which amount will, subject to compliance with loan terms &amp;
+            conditions, be available for drawdown on a revolving basis.<br /><br />
+            The drawing power on your loan account is calculated after applying
+            the Margin on Market Value of approved and acceptable securities in
+            your portfolio which have been pledged / charged to the Lender. The
+            Lender would periodically revalue your portfolio (including on a daily
+            basis); modify the drawing power if necessary. You can utilize your
+            Flexi Loan to the extent of your drawing power subject to a maximum of
+            the above sanctioned limit.
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>
+            <b>7.</b>
+        </td>
+        <td>
+            <b>Rate of Interest (ROI)</b>
+        </td>
+        <td>
+            Fixed ROI<u
+        >&nbsp;&nbsp;&nbsp;<span th:text="${roi}"></span
+        >&nbsp;&nbsp;&nbsp;</u
+        >% p.a. / payable on monthly basis.
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>
+            <b>8.</b>
+        </td>
+        <td>
+            <b>Repayment of the Loan Amount</b>
+        </td>
+        <td>
+            The Borrower shall repay the entire Outstanding Loan Amount to the
+            Lender on or before Maturity Date.
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>
+            <b>9.</b>
+        </td>
+        <td>
+            <b>Repayment Mode</b>
+        </td>
+        <td>NACH / E-NACH</td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>
+            <b>10.</b>
+        </td>
+        <td>
+            <b>Breakup between principal and interest</b>
+        </td>
+        <td>Kindly refer to the repayment schedule in Key Facts Statement</td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>
+            <b>11.</b>
+        </td>
+        <td>
+            <b>Interest Payment Due Date</b>
+        </td>
+        <td>
+            On or before the 5th day of every month for the previous month unless
+            otherwise communicated by the Lender.
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>
+            <b>12.</b>
+        </td>
+        <td>
+            <b>Margin</b>
+        </td>
+        <td>
+            For Equity Shares and Equity Instruments minimum of 50% (minimum 2
+            times) and other securities as per PFL internal policies<br /><br />
+            The Lender shall have the discretion to revise the Margin and / or
+            list of Securities approved and acceptable to the Lender. Further, in
+            the event the Reserve Bank of India or any other Government Authority
+            stipulates a higher Margin, the same shall become automatically and
+            immediately applicable and the Borrower shall be required to provide
+            Additional Securities without any delay in order to maintain the
+            Margin.
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>
+            <b>13.</b>
+        </td>
+        <td>
+            <b>Margin Call</b>
+        </td>
+        <td>
+            If Margin falls below stipulated requirement or the pledged /lien
+            charged Securities become unacceptable for any reason whatsoever, or
+            under any other circumstances as the Lender deems fit, the Borrower(s)
+            shall provide pledge/ charge over such additional Securities as are
+            acceptable to the Lender (“Additional Securities”) and/or reduce/repay
+            the Outstanding Loan to restore the Margin within 5 (Five) Business
+            Days from the receipt of notice from the Lender. If the Borrower(s)
+            fails to do so the Lender reserves the right to cause sale /
+            redemption of pledged / charged Securities, in full/ part or take such
+            other action as it deems fit to maintain the required Margin or
+            regularize the account, without being required to issue any further
+            notice.
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>
+            <b>14.</b>
+        </td>
+        <td>
+            <b>Security</b>
+        </td>
+        <td>
+            Pledge of securities such as dematerialized listed shares, units of
+            mutual funds, bonds, individual insurance policies units, and other
+            securities as approved by Lender, from time to time and includes any
+            securities accepted in replacement or addition to any securities
+            previously approved by the Lender.
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>
+            <b>15.</b>
+        </td>
+        <td>
+            <b>ROC Charge filling (If applicable) </b>
+        </td>
+        <td>
+            The pledgor shall be responsible for complying with the Registrar of
+            Companies (ROC), wherever applicable, in relation to the acceptance of
+            the credit facility documents within 30 days. A copy of such filings
+            shall be shared with the Lender.<br /><br />
+            Delay in the ROC filling will attract the advolurum duty.
+            <br /><br />In cases where ROC filing is undertaken by PFL on behalf
+            of the pledgor, the vendor charges shall be borne by the client at
+            actuals
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>
+            <b>16.</b>
+        </td>
+        <td>
+            <b>Maturity</b>
+        </td>
+        <td>
+            <span th:text="${maturityDate}"></span>, which may be renewed, upon
+            request by the Borrower at such terms and conditions at the sole and
+            absolute discretion of the Lender.
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>
+            <b>17.</b>
+        </td>
+        <td>
+            <b>Availability Period</b>
+        </td>
+        <td>
+            From the date of the Loan Agreement till expiry of 15 days prior to
+            the Maturity Date (as may be renewed as provided herein).
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>
+            <b>18.</b>
+        </td>
+        <td>
+            <b>Schedule of Fees &amp; Other Charges</b>
+        </td>
+        <td>
+            As provided for below:<br />(The Processing Fee, Lien marking charges
+            and stamp duty charges as applicable shall be deducted from first
+            drawdown of the Loan. In the event no amount is drawn down, such
+            charges will be payable by the Borrower on the Maturity Date and the
+            lien/ charge marked on the Securities will be released only on such
+            payment.)
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>
+            <b></b>
+        </td>
+        <td>
+            <b>(i) Processing Fees</b>
+        </td>
+        <td>
+            Rs <span th:text="${processingFeeAmount}"></span> /- Inclusive of
+            applicable taxes.
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>
+            <b></b>
+        </td>
+        <td>
+            <b>(ii) Penal Charges</b>
+        </td>
+        <td>
+            <b
+            >1. 24% per annum i.e. 2% per month of the overdue amount from the
+                date of such overdue till the date of actual payment<br />
+                2. 24% per annum i.e. 2% per month of Outstanding Amount for the
+                non-compliance of any terms and conditions as detailed below by the
+                Borrower, for the period beginning the date of such non-compliance
+                until the same is cured to the satisfaction of the Lender<br /> </b
+            ><br /><br />
+            <u
+            >Penal Charges to be levied for the non-compliance of the following
+                terms &amp; conditions:
+            </u>
+            <ul>
+                <li>
+                    Default in or non-payment of Outstanding Amount or Installment due
+                    in full or any other dues under the Agreement, on or before the
+                    due date as provided in the Agreement.
+                </li>
+                <li>
+                    Non-creation of Security within time specified or within the
+                    extended time period, in terms of the Agreement or Transaction
+                    Documents.
+                </li>
+                <li>
+                    Failure to maintain the Margin or meet the Margin Call within the
+                    time prescribed in the Transaction Documents.
+                </li>
+                <li>
+                    Any information given by the Borrower/Pledgor in the Loan
+                    Application, or financials provided to the Lender, and/or any
+                    other document/ certificate/receipt/statement, to Lender for
+                    financial assistance is found to be misleading or incorrect.
+                </li>
+                <li>
+                    If the Borrower misuses the Loan Amount or any part thereof for
+                    any purpose other than the Purpose for which the Loan has been
+                    sanctioned or if the Purpose for which the Loan has been obtained
+                    becomes illegal or for any other purpose as restricted by the
+                    Lender from time to time.
+                </li>
+                <li>
+                    Dishonour of any payment instructions provided under the Agreement
+                    / any instructions given by the Borrower for stopping payment of
+                    any mode under the Agreement or instructions to the Lender not to
+                    present any NACH mandate or cancellation of NACH mandate.
+                </li>
+                <li>
+                    Failure on the part of the Borrower/Pledgor in submitting the
+                    documents and/or any information as required by the Lender of any
+                    demand raised by the Lender under the terms of the Transaction
+                    Documents.
+                </li>
+                <li>
+                    Non submission of updated KYC documents within 30 days of change
+                    including but not limited to change in address, employment or
+                    other information submitted at the time of Loan Application.
+                </li>
+            </ul>
+            In the event the Security or part of it is disposed off, gifted, or
+            depreciates in value and the Borrower/Pledgor fails to provide
+            additional security to maintain the Security Cover, or there is any
+            attachment or distrait is levied on the Security or any part thereof
+            as prescribed by the Lender or if the Security Interest provided
+            becomes unenforceable in nature.
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>
+            <b></b>
+        </td>
+        <td>
+            <b>(iii) Lien creation/ invocation / revocation charges </b>
+        </td>
+        <td>At actuals + applicable taxes</td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>
+            <b></b>
+        </td>
+        <td>
+            <b>(iv) Brokerage Charge</b>
+        </td>
+        <td>
+            At actuals + applicable taxes (Brokerage charges shall be deducted by
+            the Depository participant on event of sale of the Securities)
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>
+            <b></b>
+        </td>
+        <td>
+            <b>(v) NACH/Cheque Bounce Charges</b>
+        </td>
+        <td>Rs. 500/- per bouce</td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>
+            <b></b>
+        </td>
+        <td>
+            <b>(vi) Stamp duty/Franking charges</b>
+        </td>
+        <td>At actuals + applicable taxes</td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>
+            <b></b>
+        </td>
+        <td>
+            <b>(vii) Recovery related charges</b>
+        </td>
+        <td>At actuals + applicable taxes</td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>
+            <b></b>
+        </td>
+        <td>
+            <b>(viii)Any legal cost/charges</b>
+        </td>
+        <td>At actuals + applicable taxes</td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>
+            <b></b>
+        </td>
+        <td>
+            <b>(ix) Statutory Charges (if applicable)</b>
+        </td>
+        <td>At actuals + applicable taxes</td>
+    </tr>
+</table>
+
+<div style="margin-top: 50px">
+    <b>Terms &amp; Conditions</b>
+</div>
+
+<table>
+    <tr style="vertical-align: baseline">
+        <td>a.)</td>
+        <td>
+            This Sanction Letter has been issued based on the documents and
+            details submitted by the Borrower at the time of the loan application,
+            and in case of any discrepancy or misrepresentation is found later at
+            any stage before the disbursement of the loan, Lender shall have a
+            right to modify/revoke this Sanction Letter.
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>b.)</td>
+        <td>
+            This sanction letter will only be a letter of offer and shall stand
+            modified or revoked and cancelled, if there are any material changes
+            in the proposal for which the Flexi Loan is sanctioned or; if any
+            event occurs which, in Lender’s sole opinion is prejudicial to its
+            interest or is likely to affect the financial condition of the
+            Borrower or his / her/ their ability to perform any obligations under
+            the Loan or; any details shared or representation made is found to be
+            incorrect or untrue or material fact has concealed or; upon completion
+            of the validity period of this offer unless extended by us in writing.
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>c.)</td>
+        <td>
+            The sanction is subject to Lender’s absolute discretion, without
+            assigning any reason whatsoever and may be revoked subject to prior
+            written notice in part of in full or withhold/stop the drawdown
+            against the available Flexi Loan at any time by the Lender as the
+            Lender may deem fit including in the event any condition precedents
+            are not complied with. The Flexi Loan shall be governed by the Loan
+            Agreement entered between the Lender and the Borrower/s in addition to
+            this Sanction Letter.
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>d.)</td>
+        <td>
+            The Borrower may need to provide certain additional details or
+            documents as required by the Lender at the time of actual disbursal of
+            the Flexi Loan.
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>e.)</td>
+        <td>
+            The actual disbursal of the sanctioned amount shall be subject to
+            execution of requisite loan agreement, security documents and
+            transaction documents by the Borrower, which shall be the final,
+            binding, and superseding document for all purposes for this
+            relationship between the Borrower and the Lender.
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>f.)</td>
+        <td>
+            This sanction does not vest in anyone the right to claim any
+            disbursement of the Flexi Loan amount and none shall be entitled to
+            claim damages against the Lender for non- disbursement of the Flexi
+            Loan for any reasons whatsoever.
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>g.)</td>
+        <td>
+            Margin requirement, Rate of Interest and other terms and conditions,
+            is subject to revision as may be stipulated by RBI/Lender from time to
+            time.
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>h.)</td>
+        <td>
+            Interest Rate for each loan will be decided after considering various
+            factors such as customer profile, tenure of loan, type of loan, value
+            of security, etc. Gradation of interest will be based on factors such
+            as Credit Bureau score, income, etc. For more details, please refer to
+            our website www.piramalfinance.com.
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>i.)</td>
+        <td>
+            In the event of a conflict between the Sanction Letter and the Loan
+            Agreement, the Loan Agreement shall prevail to the extent of conflict.
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>j.)</td>
+        <td>
+            The Borrower confirms that Borrower understand the terms and
+            conditions of this Sanction letter sanctioning the Flexi Loan as laid
+            out in English/ the stated terms and conditions of the letter have
+            been explained to Borrower in a language of understanding/ in
+            vernacular language and the Borrower accept the Flexi Loan on the
+            terms and conditions set above.
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>k.)</td>
+        <td>
+            The Borrower undertakes to do all act including signing or validating
+            application (s) / request (s) with the Depository Participant (DP) and
+            Registrar and Transfer Agents (RTAs) as applicable, as required by the
+            Lender or under Applicable Laws, to give effect of creation of pledge
+            of the Lender over the Securities.
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>l.)</td>
+        <td>
+            The Borrower also confirm that Borrower is aware of and have
+            understood the aforesaid charges applicable on the Flexi Loan and the
+            approach for gradations of risk &amp; rationale followed by Lender for
+            charging different rate of interest to different categories of
+            borrowers along with other policies published on its website. Link:
+            <a href=" www.piramalfinance.com">www.piramalfinance.com</a>
+        </td>
+    </tr>
+</table>
+
+<div style="margin-top: 8px; padding-left: 16px">
+    <b
+    ><i>Classification</i> of loan account as Special Mention Account (SMA)
+        and Non- Performing Asset (NPA)<br
+        /></b>
+    Upon the occurrence of any payment default under this Flexi Loan, the
+    Lender shall classify Borrower’s loan account held with the Lender (Loan
+    Account) in accordance with the prevailing RBI norms and guidelines.<br />
+</div>
+
+<table>
+    <tr style="vertical-align: baseline">
+        <td>I.</td>
+        <td>
+            As per the current prevailing guidelines of RBI, Flexi Loan Account
+            shall be classified as Special Mention Account (SMA) on the following
+            basis:<br />
+            <table class="table-SMA">
+                <tr>
+                    <td>SMA Sub-categories</td>
+                    <td>
+                        Basis for classification –
+                        <b
+                        >Outstanding balance remains continuously in excess of the
+                            sanctioned limit or drawing power, whichever is lower, for a
+                            period of</b
+                        >
+                    </td>
+                    <td>SMA Sub-categories</td>
+                </tr>
+                <tr style="text-align: center">
+                    <td>SMA 1</td>
+                    <td>More than 30 days and upto 60</td>
+                    <td>SMA 1</td>
+                </tr>
+                <tr style="text-align: center">
+                    <td>SMA 2</td>
+                    <td>More than 60 days and upto 90</td>
+                    <td>SMA 2</td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>II.</td>
+        <td>
+            Flexi Loan is classified as NPA if it is ‘out of order’. An account
+            will be treated as ‘out of order’ if:
+            <ol type="i">
+                <li>
+                    The outstanding balance in the Flexi Loan account remains
+                    continuously in excess of the sanctioned limit/drawing power for
+                    90 days, or
+                </li>
+                <li>
+                    The outstanding balance in the Flexi Loan account is less than the
+                    sanctioned limit/drawing power but there are no credits
+                    continuously for 90 days, or the outstanding balance in the Flexi
+                    Loan account is less than the sanctioned limit/drawing power but
+                    credits are not enough to cover the interest debited during the
+                    previous 90 days’ period.
+                </li>
+            </ol>
+        </td>
+    </tr>
+
+    <tr style="vertical-align: baseline">
+        <td>III.</td>
+        <td>
+            <b>Non</b>-performing <b>Assets (NPA) and upgradation from NPA</b
+        ><br />
+            An account which continues to remain overdue beyond 90 days, shall be
+            classified as NPA. Loan account classified as NPAs may be upgraded as
+            ‘standard’ asset only if entire arrears of interest and principal Loan
+            are paid by the Borrower<br /><br /><br />
+        </td>
+    </tr>
+
+    <tr>
+        <td></td>
+        <td>
+            <b>Examples of SMA/NPA classification dates:</b><br />
+            If due date of a loan account is March 31, 2021, and full dues are not
+            received before the Lender runs the day-end process for this date, the
+            date of overdue shall be March 31, 2021. If it continues to remain
+            overdue, then this account shall get tagged as SMA-1 upon running
+            day-end process on April 30, 2021 i.e. upon completion of 30 days of
+            being continuously overdue. Accordingly, the date of SMA-1
+            classification for that account shall be April 30, 2021. Similarly, if
+            the account continues to remain overdue, it shall get tagged as SMA-2
+            upon running day-end process on May 30, 2021 and if continues to
+            remain overdue further, it shall get classified as NPA upon running
+            day-end process on June 29, 2021.<br /><br />
+        </td>
+    </tr>
+</table>
+
+<div>
+    <i>
+        For ease of operation, I hereby sign the Sanction letter digitally
+        through eSignature and shall enter the one-time password (“OTP”) in
+        token of having read, understood, and irrevocably agrees and accepts the
+        Sanction Letter. Once the said OTP is entered, Lender shall assume that
+        such OTP has been provided by me and it is my sole responsibility to
+        ensure that the OTP is not compromised or shared with any unauthorized
+        users.<br /><br /><br />
+    </i>
+</div>
+
+<div>
+    <b><i>I Agree to the Sanction Terms &amp; Conditions</i></b
+    ><br /><br />
+    Name of the Borrower: <span th:text="${applicantName}"></span><br /><br />
+    <div style="display: flex">
+        <div style="margin-right: 80px">
+            Date: <span th:text="${applicationDate}"></span>
+        </div>
+        <div style="margin-right: 80px">
+            Time: <span th:text="${applicationTime}"></span>
+        </div>
+        <div>IP:</div>
+    </div>
+</div>
+</body>
+</html>

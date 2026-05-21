@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style> @page { margin-bottom: auto auto 100px; } table { width: 100%; border-collapse: collapse; } .text-piramal-blue { color: #365069; } .main-head { text-align: center; font-weight: bold; font-size: 18px; } .font-lg { font-size: 16px; } .font-md { font-size: 15px; } .font-sm { font-size: 14px; } .padding-bottom { padding-bottom: 10px; } .bold { font-weight: 700; } </style>
+    <title>తిరస్కరణ లేఖ</title>
+<meta charset="utf-8">
+</head>
+
+<body
+        style="
+        font-size: 16px;
+        padding: 16px 0;
+        font-family: Calibri, sans-serif;
+        background-color: #fff;
+        margin: auto;
+        width: 90%;
+        ">
+<table>
+    <tr>
+        <td style="text-align: right;"><img
+                    src="https://cdn.pchf.in/icon/piramal-logo.png"
+                    height="auto"
+                    width="100px"
+            /></td>
+    </tr>
+    <tr>
+        <td class="main-head padding-bottom bold">తిరస్కరణ లేఖ</td>
+    </tr>
+    <tr>
+        <td class="padding-bottom font-md"><span th:text="${date}"></span></td>
+    </tr>
+    <tr>
+        <td class="padding-bottom font-md">గౌరవనీయులైన,</td>
+    </tr>
+    <tr>
+        <td class="font-lg bold"><span th:text="${applicantNames}"></span></td>
+    </tr>
+    <tr>
+        <td class="padding-bottom font-lg"><span th:text="${currentAddress}"></span></td>
+    </tr>
+    <tr>
+        <td class="padding-bottom font-md bold"
+            style="text-decoration: underline;">విషయం : లోన్ అప్లికేషన్ నం. <span
+                th:text="${applicationNo}"></span> తేదీ <span
+                th:text="${applicationDate}"></span>.</td>
+    </tr>
+    <tr>
+        <td class="padding-bottom font-sm">సర్/మేడమ్,</td>
+    </tr>
+    <tr>
+        <td class="padding-bottom font-sm">మీ లోన్ ఎగైనెస్ట్ సెక్యూరిటీస్ అభ్యర్థనను మేము ఆమోదించలేకపోతున్నామని ఈ లేఖ ద్వారా తెలియజేస్తున్నాము <span
+                    th:text="${rejectCategory}"></span>.</td>
+    </tr>
+    <tr>
+        <td class="padding-bottom font-sm">మీరు లోన్ అప్లికేషన్ కోసం చేసిన విచారణ మీ CIBIL యొక్క క్రెడిట్ రికార్డులలో అప్&zwnj;డేట్ చేయబడిందని దయచేసి గమనించండి.</td>
+    </tr>
+    <tr>
+        <td class="font-sm" style="padding-bottom: 12px;">మరేదైనా సహాయం అవసరమైతే, దయచేసి మా టోల్ ఫ్రీ నెం. <a href="tel: 1800 266 6444">1800 266 6444</a> కు కాల్ చేయండి లేదా <a href="mailto:customercare@piramal.com">customercare@piramal.com</a> వద్ద మాకు ఇ-మెయిల్ చేయండి</td>
+    </tr>
+    <tr>
+        <td class=" font-sm bold">ఇది సిస్టమ్ ద్వారా జనరేట్ చేయబడింది మరియు సంతకం అవసరం లేదు.</td>
+    </tr>
+</table>
+<div style="position: fixed; bottom: 0; font-size: 7px; width:
+        100%;">
+    <table>
+        <tr class="border_top">
+            <td style="width: 35px;"></td>
+            <td style="text-align: center;"><span class="text-piramal-blue bold">పీరమల్ ఫైనాన్స్ లిమిటెడ్</span><br/> <span class="text-piramal-blue">(గతంలో పీరమల్ క్యాపిటల్ &amp; హౌసింగ్ ఫైనాన్స్ లిమిటెడ్)</span><br/> <span class="text-piramal-blue">CIN : L64910MH1984PLC032639</span><br/> <span class="text-piramal-blue">రిజిస్టర్డ్ కార్యాలయం చిరునామా: 601, 6వ అంతస్తు, అమితి బిల్డింగ్, పీరమల్ కార్పొరేట్ పార్క్, కమణి జంక్షన్, ఎదురుగా. ఫైర్ స్టేషన్, LBS మార్గ్, కుర్లా (వెస్ట్), ముంబై- 400070</span><br/> <span class="text-piramal-blue">T +91 22 6230 9200 F +91 22 6151 3444</span><br/> <span style="color: #ff0000;">www.piramalfinance.com</span><br/></td>
+            <td style="width: 85px;">పేజీ 1 లో 1</td>
+        </tr>
+    </table>
+</div>
+</body>
+</html>
