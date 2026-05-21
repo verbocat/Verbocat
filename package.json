@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "dotenv": "^17.4.2",
     "libretranslate": "^1.0.1"
   }
 }
