@@ -1,0 +1,107 @@
+<!DOCTYPE html><html lang="en" xmlns:th="http://www.thymeleaf.org"><head>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>
+        @page {
+          margin-bottom: auto auto 100px;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+        .text-piramal-blue {
+          color: #365069;
+        }
+        .main-head {
+          text-align: center;
+          font-weight: bold;
+          font-size: 18px;
+        }
+        .font-lg {
+          font-size: 16px;
+        }
+        .font-md {
+          font-size: 15px;
+        }
+        .font-sm {
+          font-size: 14px;
+        }
+        .padding-bottom {
+          padding-bottom: 10px;
+        }
+        .bold {
+          font-weight: 700;
+        }
+    </style>
+    <title>REJECTION LETTER</title>
+</head>
+
+<body style="font-size: 16px; padding: 16px 0; font-family: Calibri, sans-serif; background-color: #fff; margin: auto; width: 90%;">
+<table>
+    <tbody><tr>
+        <td style="text-align: right;">
+            <img src="https://cdn.pchf.in/icon/piramal-logo.png" width="100px">
+        </td>
+    </tr>
+
+    <tr>
+        <td class="main-head padding-bottom bold">__SEG_0__</td>
+    </tr>
+
+    <tr>
+        <td class="padding-bottom font-md"><span th:text="${date}"></span></td>
+    </tr>
+
+    <tr>
+        <td class="padding-bottom font-md">__SEG_1__</td>
+    </tr>
+
+    <tr>
+        <td class="font-lg bold"><span th:text="${applicantNames}"></span></td>
+    </tr>
+
+    <tr>
+        <td class="padding-bottom font-lg"><span th:text="${currentAddress}"></span></td>
+    </tr>
+
+    <tr>
+        <td class="padding-bottom font-md bold" style="text-decoration: underline;">__SEG_2__<span th:text="${applicationNo}"></span>__SEG_3__<span th:text="${applicationDate}"></span>__SEG_4__</td>
+    </tr>
+
+    <tr>
+        <td class="padding-bottom font-sm">__SEG_5__</td>
+    </tr>
+
+    <tr>
+        <td class="padding-bottom font-sm">__SEG_6__<span th:text="${rejectCategory}"></span>__SEG_7__</td>
+    </tr>
+
+    <tr>
+        <td class="padding-bottom font-sm">__SEG_8__</td>
+    </tr>
+
+    <tr>
+        <td class="font-sm" style="padding-bottom: 12px;">__SEG_9__<a href="tel:18002570411">__SEG_11__</a>__SEG_10__<a href="mailto:customerservice.pel@piramal.com">__SEG_12__</a>
+        </td>
+    </tr>
+
+    <tr>
+        <td class="font-sm bold">__SEG_13__</td>
+    </tr>
+</tbody></table>
+
+<!-- FOOTER -->
+<div style="position: fixed; bottom: 0; font-size: 7px; width: 100%;">
+    <table>
+        <tbody><tr>
+            <td style="text-align: center;">
+                <span class="text-piramal-blue bold">__SEG_16__</span><br>
+                <span class="text-piramal-blue">__SEG_17__</span><br>
+                <span class="text-piramal-blue">__SEG_18__</span><br>
+                <span class="text-piramal-blue">__SEG_19__<a href="https://www.mca.gov.in" style="color:#365069; text-decoration: underline;">__SEG_20__</a></span><br>
+                <a href="https://www.piramalfinance.com" style="color:#ff0000; text-decoration: underline;">__SEG_21__</a>__SEG_14__<a href="mailto:customerservice.pel@piramal.com" style="color:#365069; text-decoration: underline;">__SEG_22__</a>__SEG_15__<a href="tel:18002570411" style="color:#365069; text-decoration: underline;">__SEG_23__</a>
+            </td>
+        </tr>
+    </tbody></table>
+</div>
+
+</body></html>

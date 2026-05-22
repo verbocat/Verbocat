@@ -1,9 +1,10 @@
 const fs = require("fs");
+const path = require("path");
 const cheerio = require("cheerio");
 const mammoth = require("mammoth");
 const { v4: uuidv4 } = require("uuid");
 
-const htmlFiles = {};
+const uploadsDir = path.join(__dirname, "../../uploads");
 
 const SKIP_SELECTOR = "script,style,noscript,svg,canvas";
 
@@ -88,7 +89,8 @@ const processUploadedFile = async (file) => {
     const segments = createHtmlSegments($);
 
     const fileId = uuidv4();
-    htmlFiles[fileId] = $.html();
+    const filePath = path.join(uploadsDir, `${fileId}.html`);
+    fs.writeFileSync(filePath, $.html());
 
     return {
       type: "html",
@@ -124,13 +126,22 @@ const processUploadedFile = async (file) => {
 };
 
 const exportHtml = (fileId, segments) => {
-  let html = htmlFiles[fileId];
+  if (!fileId) {
+    const error = new Error("Cannot export: No file ID found. Please note that DOCX exports are not supported, only HTML files can be exported.");
+    error.status = 400;
+    throw error;
+  }
 
-  if (!html) {
-    const error = new Error("File not found");
+  const filePath = path.join(uploadsDir, `${fileId}.html`);
+
+  if (!fs.existsSync(filePath)) {
+    console.error(`Export failed: File ${filePath} not found on disk.`);
+    const error = new Error(`File not found. Did you load an old project file? Try re-uploading the original HTML document.`);
     error.status = 404;
     throw error;
   }
+
+  let html = fs.readFileSync(filePath, "utf-8");
 
   segments.forEach((segment) => {
     const replacement =

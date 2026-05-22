@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+        @page {
+          size: A4 portrait;
+          margin: 100px 25px 180px;
+
+          @bottom-right {
+            content: counter(page) "/" counter(pages);
+            font-size: 12px;
+            white-space: nowrap;
+          }
+
+          @bottom-left {
+            content: element(footer);
+          }
+
+          @bottom-center {
+            content: element(pageFooter);
+          }
+
+          @top-right {
+            content: element(pageHeader);
+          }
+
+          counter-increment: page;
+          counter-reset: page 1;
+        }
+
+        .avoid-tr-breaks tr {
+          page-break-inside: avoid;
+        }
+
+        h1 {
+          text-align: right;
+          margin-right: 20px;
+          margin-top: 40px;
+        }
+
+        h2,
+        h3 {
+          text-align: center;
+        }
+
+        th {
+          border: 1px solid black;
+          text-align: center;
+          padding: 10px;
+          width: 5px;
+        }
+
+        .annexABC-table {
+          border-collapse: collapse;
+          width: 100%;
+          margin: auto;
+          table-layout: auto;
+        }
+
+        .first-col {
+          width: 5%;
+          text-align: center;
+          border: 1px solid black;
+          word-wrap: break-word;
+        }
+
+        .second-col {
+          width: 30%;
+          border: 1px solid black;
+          text-align: left;
+          word-wrap: break-word;
+        }
+
+        .third-col {
+          width: 65%;
+          border: 1px solid black;
+          text-align: left;
+          word-wrap: break-word;
+        }
+
+        .page-break {
+          page-break-before: always;
+        }
+
+        #pageFooter {
+          position: running(pageFooter);
+          font-size: 10px;
+          text-align: center;
+        }
+
+        #pageFooter table {
+          width: 100%;
+          margin: 0 auto;
+        }
+
+        #pageHeader {
+          position: running(pageHeader);
+          text-align: right;
+          padding-bottom: 60px;
+          width: 100%;
+          display: block;
+        }
+
+        #pageHeader img {
+          display: block;
+          margin-left: auto;
+          margin-right: 0;
+          float: right;
+        }
+    </style>
+    <title>KFS Document</title>
+</head>
+
+<body
+        style="
+      font-size: 14px;
+      padding: 16px 0;
+      font-family: Calibri, sans-serif;
+      background-color: #fff;
+      margin: auto;
+      text-align: justify;
+      width: 90%;
+    "
+>
+<header id="pageHeader">
+    <img
+            src="https://cdn.pchf.in/logos/piramal_company_logo.png"
+            height="150px"
+            width="auto"
+    />
+</header>
+<footer id="pageFooter">
+    <table>
+        <tr class="border_top">
+            <td style="text-align: center">
+            <span class="text-piramal-blue bold"><b>Piramal Finance Limited (Formerly known as Piramal Capital &amp; Housing Finance Limited)</b></span
+            ><br />
+                <span>Registered Office Address: 601, 6th Floor, Amiti Building, Agastya Corporate Park, Kamani Junction,<br/>
+              Opp. Fire Station, LBS Marg, Kurla (West), Mumbai- 400070.</span><br />
+                <span class="text-piramal-blue">CIN : U65910MH1984PLCO32639</span
+                ><br />
+                <span class="text-piramal-blue" style="color: #ff0000"
+                >www.piramalfinance.com | Email ID: customerservice.pel@piramal.com | Toll Free Number: 1800 2570 411</span
+                ><br />
+            </td>
+        </tr>
+    </table>
+</footer>
+<h1>Annex A</h1>
+<h2>Key Facts and Statements</h2>
+<h3>Part 1 (Interest rate and fees/charges)</h3>
+<table class="annexABC-table">
+    <tr style="font-weight: bold">
+        <td class="half_col" style="text-align: left">
+            Generated Date: <span th:text="${generatedDate}"></span>
+        </td>
+        <td class="half_col" style="text-align: right">Validity: 3 Days</td>
+    </tr>
+</table>
+
+<br />
+<table class="annexABC-table">
+    <tr style="text-align: left; padding-left: 5px; font-weight: bold">
+        <th class="first-col">Sr No.</th>
+        <th class="second-col">Particulars</th>
+        <th class="third-col">Details</th>
+    </tr>
+    <tr>
+        <td class="first-col">1</td>
+        <td class="second-col" style="font-weight: bold">
+            Loan Proposal/Account No.
+        </td>
+        <td class="third-col" th:text="${loanAccountNo}"></td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col" style="font-weight: bold">Type of Loan</td>
+        <td class="third-col">Loan Against Demat Securities</td>
+    </tr>
+
+    <tr>
+        <td class="first-col">2</td>
+        <td class="second-col" style="font-weight: bold">
+            Sanctioned Loan Amount (in Rupees)
+        </td>
+        <td class="third-col" th:text="${loanAmountWithInsurance}"></td>
+    </tr>
+
+    <tr>
+        <td class="first-col">3</td>
+        <td class="second-col">
+            <b>Disbursal Schedule</b> <br />
+            (i) Disbursement in stages or 100% upfront.<br />
+            (ii) Disbursement in stages, specify stages and amount at each stage.
+        </td>
+        <td class="third-col" th:text="${disbursal100orNot}"></td>
+    </tr>
+
+    <tr>
+        <td class="first-col">4</td>
+        <td class="second-col" style="font-weight: bold">
+            Loan term (year/months/days)
+        </td>
+        <td class="third-col">
+            <span th:text="${loanTenureinMonths}"></span> Months
+        </td>
+    </tr>
+
+    <tr>
+        <td class="first-col">5</td>
+        <td colspan="2" style="font-weight: bold">Instalment details</td>
+    </tr>
+
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">Type of Instalments</td>
+        <td class="third-col" th:text="${instalmentType}"></td>
+    </tr>
+
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">Commencement of repayment, post sanction</td>
+        <td class="third-col">5th of every month</td>
+    </tr>
+    <tr>
+        <td class="first-col">6</td>
+        <td class="second-col" style="font-weight: bold">
+            Interest rate (%) and type (fixed or floating or hybrid)
+        </td>
+        <td class="third-col"><span th:text="${roi}"></span>%p.a</td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col" style="font-weight: bold">
+            Interest Type (Fixed/Floating)
+        </td>
+        <td class="third-col" th:text="${interestRateType}"></td>
+    </tr>
+
+    <tr>
+        <td class="first-col">7</td>
+        <td colspan="2" style="font-weight: bold">
+            Additional Information in case of Floating rate of interest
+        </td>
+    </tr>
+
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">Reference Benchmark</td>
+        <td class="third-col">NA</td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">Benchmark rate (%) (B)</td>
+        <td class="third-col">NA</td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">Spread (%) (S)</td>
+        <td class="third-col">NA</td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">Final rate (%) R = (B) + (S)</td>
+        <td class="third-col" th:text="${finalRate}">NA</td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">Reset periodicity (Months)</td>
+        <td class="third-col" th:text="${resetPeriodicity}"></td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">
+            Impact of change in the reference benchmark <br />
+            (for 25 bps)
+        </td>
+        <td class="third-col" th:text="${benchmarkImpact}"></td>
+    </tr>
+
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">Change in EMI(in Rupees)</td>
+        <td class="third-col" th:text="${installmentifFloating}"></td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">Change in No. of EMIs</td>
+        <td class="third-col" th:text="${tenureInMonthsifFloating}"></td>
+    </tr>
+
+    <tr>
+        <td class="first-col">8</td>
+        <td colspan="2" style="font-weight: bold">Fee/Charges</td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col" style="font-weight: bold">
+            1. Payable to PFL (A)
+        </td>
+        <td class="third-col" th:text="${payableToREA}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">(i)</td>
+        <td class="second-col">Login Fee (One-Time)</td>
+        <td class="third-col" th:text="${loginFees}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">(ii)</td>
+        <td class="second-col">Admin Charges (One-Time)</td>
+        <td class="third-col" th:text="${adminFees}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">(iii)</td>
+        <td class="second-col">Processing Fees (One-Time)</td>
+        <td class="third-col" th:text="${processingFees}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">(iv)</td>
+        <td class="second-col">Stamp Duty Charges</td>
+        <td class="third-col" th:text="${stampDutyChargesForKfs}"></td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col" style="font-weight: bold">
+            2. Payable to a third party through PFL(B)
+        </td>
+        <td class="third-col" th:text="${payableToREB}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">(i)</td>
+        <td class="second-col">Valuation Fees (One-Time)</td>
+        <td class="third-col" th:text="${valuationFees}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">(ii)</td>
+        <td class="second-col">CERSAI Charges (One-Time)</td>
+        <td class="third-col" th:text="${cersaiCharges}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">(iii)</td>
+        <td class="second-col">MG Fees</td>
+        <td class="third-col" th:text="${mgFees}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">(iv)</td>
+        <td class="second-col">CIBIL Charges</td>
+        <td class="third-col" th:text="${cibilCharges}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">9</td>
+        <td class="second-col" style="font-weight: bold">
+            Annual Percentage Rate (APR) (%)
+        </td>
+        <td class="third-col" th:text="${apr}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">10</td>
+        <td colspan="2" style="font-weight: bold">
+            Details of Contingent Charges (in Rupees or %, as applicable)
+        </td>
+    </tr>
+    <tr>
+        <td class="first-col">(i)</td>
+        <td class="second-col">
+            Penal Charges, if any, in case of delayed payment
+        </td>
+        <td class="third-col" style="text-align: justify">
+            24% per annum i.e. 2% p.m. on default of Installment/ EMI from the
+            date of default till the date of actual payment.
+        </td>
+    </tr>
+    <tr>
+        <td class="first-col">(ii)</td>
+        <td class="second-col">Other Penal Charges, if any</td>
+        <td class="third-col" style="text-align: justify">
+            2% p.m. on Outstanding Amount for the non-compliance of the terms and
+            conditions of the Transaction Documents as detailed below by the
+            Borrower, for the period beginning the date of such non-compliance
+            until the same is cured to the satisfaction of the Lender.
+        </td>
+    </tr>
+    <tr>
+        <td class="first-col">(iii)</td>
+        <td class="second-col">Foreclosure charges, if applicable</td>
+        <td class="third-col" style="text-align: justify">NA</td>
+    </tr>
+    <tr>
+        <td class="first-col">(iv)</td>
+        <td class="second-col">
+            Charges for switching of loans from floating to fixed rate and vice
+            versa
+        </td>
+        <td class="third-col" style="text-align: justify">NA</td>
+    </tr>
+    <tr>
+        <td class="first-col">(v)</td>
+        <td class="second-col">Any other charges, please specify</td>
+        <td class="third-col" style="text-align: justify">-</td>
+    </tr>
+</table>
+<br />
+
+<h2>Part 2 (Other qualitative information)</h2>
+
+<table class="annexABC-table">
+    <tr>
+        <td class="first-col">1</td>
+        <td class="second-col">
+            Clause of Loan agreement relating to engagement of recovery agents
+        </td>
+        <td class="third-col" style="text-align: justify">
+            The Borrower expressly recognises and accepts that the Lender shall,
+            without prejudice to its right to perform such activities itself or
+            through its officers or servants, be absolutely entitled and have full
+            powers and authority to appoint &amp;engage at the cost &amp;expenses
+            of the Borrower a recovery agent of the Lender’s choice to assist in
+            the recovery of any Outstanding Amounts due under this Agreement, to
+            visit the premises of the Borrower whether residential or office or
+            otherwise, collect on behalf of the Lender all unpaid dues, getting or
+            verifying any information of the Borrower/ their assets and to perform
+            and execute all act(s), deed(s), matter(s) and thing(s) connected
+            therewith or incidental thereto including sending notices of demand,
+            or otherwise contacting the Borrower, receiving the outstanding (in
+            cash/through bank draft/cheque) from the Borrower, and to perform and
+            execute all lawful acts, deeds, matters and things connected herewith
+            or incidental hereto as the recovery agent may consider appropriate
+            for the purpose. The Borrower expressly agrees that in the event of
+            Lender appointing an agent as aforesaid, the Lender shall be entitled
+            to provide the information held by the Lender in relation to the
+            Borrower/guarantor &amp;Loan to such agent and the Borrower shall
+            co-operate with such agent appointed by the Lender in the same manner
+            as it would with the Lender in terms of this Agreement.
+        </td>
+    </tr>
+    <tr>
+        <td class="first-col">2</td>
+        <td class="second-col">
+            Clause of Loan agreement which details grievance redressal mechanism
+        </td>
+        <td class="third-col" style="text-align: justify">
+            Borrower shall approach the Lender for all its complaints and
+            grievance. The Borrower may raise his / her complaint through Toll
+            free number mentioned on our company website or Email to
+            customerservice.pel@piramal.com. com or meet the Branch Operational
+            Manager. The complaint will be addressed as soon as it is received. If
+            the Borrower is not satisfied with the resolution provided, or his/her
+            query is not resolved within 15 days, the Borrower may escalate by
+            writing to us at: grievances@piramal.com. If the Borrower is not
+            satisfied with the resolution provided at Level 2 or his/her queries
+            are not solved within 15 days, the Borrower may escalate to: The Nodal
+            Officer – Ms. Hetal Parihar: 1st Floor, Amiti Building, Agastya
+            Corporate Park, Kamani Junction, Opp. Fire Station, LBS Marg, Kurla
+            (W) Mumbai MH 400070. Email : nodal.officer@piramal.com Contact
+            Number: 022- 71740555 In case of non-addressal of the complaint to the
+            customer’s satisfaction within a period of 30 days from the above
+            quarters, the Borrower may approach the RBI CMS portal by lodging a
+            complaint online at the given link https://cms.rbi.org.in or may write
+            to below mentioned address: Centralised Receipt and Processing Centre,
+            Reserve Bank of India, 4th Floor, Sector 17, Chandigarh – 160017, Toll
+            Free No. 14448. Email Id:
+            <a href="mailto:customerservice.pel@piramal.com"
+            >customerservice.pel@piramal.com</a
+            >
+        </td>
+    </tr>
+    <tr>
+        <td class="first-col">3</td>
+        <td class="second-col">
+            Phone number and email id of the nodal grievance redressal officer
+        </td>
+        <td class="third-col" style="text-align: justify">
+            Name: Ms. Hetal Parihar<br />
+            Designation: Nodal Officer <br />
+            Address: 1st Floor, Amiti Building, Agastya Corporate Park, Kamani
+            Junction, Opp. Fire Station, LBS Marg, Kurla (W) Mumbai MH 400070.<br />
+            Email id: nodal.officer@piramal.com<br />
+            Contact Number: 022-71740555 <br />
+        </td>
+    </tr>
+    <tr>
+        <td class="first-col">4</td>
+        <td class="second-col">
+            Whether the loan is, or in future maybe, subject to transfer to other
+            REs or securitisation (Yes/ No)
+        </td>
+        <td class="third-col">Yes</td>
+    </tr>
+    <tr>
+        <td class="first-col">5</td>
+        <td class="second-col">
+            In case of lending under collaborative lending arrangements (e.g.,
+            co-lending/outsourcing), following additional details may be
+            furnished:
+        </td>
+        <td class="third-col"></td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">
+            Name of the originating RE, along with its funding proportion
+        </td>
+        <td class="third-col">NA</td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">
+            Name of the partner RE along with its proportion of funding
+        </td>
+        <td class="third-col">NA</td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">Blended rate of interest</td>
+        <td class="third-col">NA</td>
+    </tr>
+
+    <tr>
+        <td class="first-col">6</td>
+        <td class="second-col">In Case of Digital Loans</td>
+        <td class="third-col"></td>
+    </tr>
+    <tr>
+        <td class="first-col">(i)</td>
+        <td class="second-col">
+            Cooling Off/Look-up Period, in Terms of RE’s Board Approved Policy
+        </td>
+        <td class="third-col">3 days</td>
+    </tr>
+    <tr>
+        <td class="first-col">(ii)</td>
+        <td class="second-col">
+            Details of LSP Acting as Recovery Agent and Authorized to Approach the
+            Borrower
+        </td>
+        <td class="third-col">
+            Piramal Finance Ltd. (Formerly Piramal Capital &amp; Housing Finance
+            Ltd.)
+        </td>
+    </tr>
+</table>
+<br />
+<table>
+    <tr>
+        <td>
+            The above terms and conditions have been explained to me/us and have
+            been acknowledged &amp; understood by me/us.
+        </td>
+    </tr>
+</table>
+<br />
+<table>
+    <tr>
+        <td>Borrower Signature:</td>
+
+        <td>Co-Borrower Signature:</td>
+
+        <td>Guarantor Signature:</td>
+    </tr>
+    <tr>
+        <td>______________________________</td>
+
+        <td>______________________________</td>
+
+        <td>______________________________</td>
+    </tr>
+    <tr>
+        <td>Date:</td>
+
+        <td>Date:</td>
+
+        <td>Date:</td>
+    </tr>
+</table>
+
+<h1 class="page-break">Annex B</h1>
+
+<h2 style="text-align: center; font-weight: bold">Computation of APR</h2>
+
+<table class="annexABC-table">
+    <tr>
+        <th class="first-col">Sr. No.</th>
+        <th class="second-col">Parameter</th>
+        <th class="third-col">Details</th>
+    </tr>
+    <tr>
+        <td class="first-col">1</td>
+        <td class="second-col">Sanctioned Loan Amount</td>
+        <td class="third-col">
+            ₹ <span th:text="${loanAmountWithInsurance}"></span>
+        </td>
+    </tr>
+    <tr>
+        <td class="first-col">2</td>
+        <td class="second-col">Loan Term</td>
+        <td class="third-col" th:text="${loanTenureinMonths}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">3</td>
+        <td class="second-col">Interest Type (Fixed/Floating)</td>
+        <td class="third-col" th:text="${interestRateType}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">4</td>
+        <td class="second-col">Rate of Interest</td>
+        <td class="third-col"><span th:text="${roi}"></span>%p.a</td>
+    </tr>
+    <tr>
+        <td class="first-col">5</td>
+        <td class="second-col">
+            Total Interest Amount to be charged during the entire tenor of the
+            loan as per the rate prevailing on sanction date
+        </td>
+        <td class="third-col">
+            ₹ <span th:text="${totalInterestAmount}"></span>
+        </td>
+    </tr>
+    <tr>
+        <td class="first-col">6</td>
+        <td class="second-col">Fee/Charges payable</td>
+        <td class="third-col">₹ <span th:text="${feesPayable}"></span></td>
+    </tr>
+    <tr>
+        <td class="first-col">a)</td>
+        <td class="second-col">Payable to PFL</td>
+        <td class="third-col">₹ <span th:text="${payableToREA}"></span></td>
+    </tr>
+    <tr>
+        <td class="first-col">b)</td>
+        <td class="second-col">Payable to third-party</td>
+        <td class="third-col">₹ <span th:text="${payableToREB}"></span></td>
+    </tr>
+    <tr>
+        <td class="first-col">7</td>
+        <td class="second-col">Net disbursed amount</td>
+        <td class="third-col">
+            ₹ <span th:text="${netDisbursedAmount}"></span>
+        </td>
+    </tr>
+    <tr>
+        <td class="first-col">8</td>
+        <td class="second-col">
+            Total amount to be paid by the borrower (1+5)
+        </td>
+        <td class="third-col">₹ <span th:text="${totalAmountKfs}"></span></td>
+    </tr>
+    <tr>
+        <td class="first-col">9</td>
+        <td class="second-col">
+            Annual Percentage rate- Effective annualized interest rate
+        </td>
+        <td class="third-col" th:text="${apr}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">10</td>
+        <td class="second-col">
+            Schedule of disbursement as per terms and conditions
+        </td>
+        <td class="third-col">Attached as AnnexC of KFS</td>
+    </tr>
+    <tr>
+        <td class="first-col">11</td>
+        <td class="second-col">Due date of payment of instalment/interest</td>
+        <td class="third-col">5th of every month</td>
+    </tr>
+</table>
+<br />
+<h2>Repayment Schedule</h2>
+
+<table class="annexABC-table" id="scheduleTable">
+    <tr>
+        <th style="border: 1px solid black; text-align: center">
+            Installment No.
+        </th>
+        <th style="border: 1px solid black; text-align: center">
+            Outstanding Principal(in Rupees)
+        </th>
+        <th style="border: 1px solid black; text-align: center">
+            Principal(in Rupees)
+        </th>
+        <th style="border: 1px solid black; text-align: center">
+            Interest (in Rupees)
+        </th>
+        <th style="border: 1px solid black; text-align: center">
+            Installment(in Rupees)
+        </th>
+    </tr>
+    <tr th:each="row: ${las_repayment_schedule_rows}">
+        <td
+                style="border: 1px solid black; text-align: center"
+                th:each="header: ${las_repayment_schedule_headers}"
+                th:text="${row.get(header)}"
+        ></td>
+    </tr>
+</table>
+<br />
+</body>
+</html>

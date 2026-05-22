@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "https://verbocat.onrender.com"
+  baseURL: import.meta.env.VITE_API_URL || "https://verbocat.onrender.com"
 });
 
 export const uploadFile = async (file) => {

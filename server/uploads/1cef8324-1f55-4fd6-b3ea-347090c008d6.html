@@ -1,0 +1,540 @@
+<!DOCTYPE html><html lang="en" xmlns:th="http://www.thymeleaf.org"><head>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>
+        @page {
+          size: A4 portrait;
+          margin: 100px 25px 180px;
+
+          @bottom-right {
+            content: counter(page) "/" counter(pages);
+            font-size: 12px;
+            white-space: nowrap;
+          }
+
+          @bottom-left {
+            content: element(footer);
+          }
+
+          @bottom-center {
+            content: element(pageFooter);
+          }
+
+          @top-right {
+            content: element(pageHeader);
+          }
+
+          counter-increment: page;
+          counter-reset: page 1;
+        }
+
+        .avoid-tr-breaks tr {
+          page-break-inside: avoid;
+        }
+
+        h1 {
+          text-align: right;
+          margin-right: 20px;
+          margin-top: 40px;
+        }
+
+        h2,
+        h3 {
+          text-align: center;
+        }
+
+        th {
+          border: 1px solid black;
+          text-align: center;
+          padding: 10px;
+          width: 5px;
+        }
+
+        .annexABC-table {
+          border-collapse: collapse;
+          width: 100%;
+          margin: auto;
+          table-layout: auto;
+        }
+
+        .first-col {
+          width: 5%;
+          text-align: center;
+          border: 1px solid black;
+          word-wrap: break-word;
+        }
+
+        .second-col {
+          width: 30%;
+          border: 1px solid black;
+          text-align: left;
+          word-wrap: break-word;
+        }
+
+        .third-col {
+          width: 65%;
+          border: 1px solid black;
+          text-align: left;
+          word-wrap: break-word;
+        }
+
+        .page-break {
+          page-break-before: always;
+        }
+
+        #pageFooter {
+          position: running(pageFooter);
+          font-size: 10px;
+          text-align: center;
+        }
+
+        #pageFooter table {
+          width: 100%;
+          margin: 0 auto;
+        }
+
+        #pageHeader {
+          position: running(pageHeader);
+          text-align: right;
+          padding-bottom: 60px;
+          width: 100%;
+          display: block;
+        }
+
+        #pageHeader img {
+          display: block;
+          margin-left: auto;
+          margin-right: 0;
+          float: right;
+        }
+    </style>
+    <title>KFS Document</title>
+</head>
+
+<body style="
+      font-size: 14px;
+      padding: 16px 0;
+      font-family: Calibri, sans-serif;
+      background-color: #fff;
+      margin: auto;
+      text-align: justify;
+      width: 90%;
+    ">
+<header id="pageHeader">
+    <img src="https://cdn.pchf.in/logos/piramal_company_logo.png" height="150px" width="auto">
+</header>
+<footer id="pageFooter">
+    <table>
+        <tbody><tr class="border_top">
+            <td style="text-align: center">
+            <span class="text-piramal-blue bold"><b>__SEG_0__</b></span><br>
+                <span>__SEG_1__<br>__SEG_2__</span><br>
+                <span class="text-piramal-blue">__SEG_3__</span><br>
+                <span class="text-piramal-blue" style="color: #ff0000">__SEG_4__</span><br>
+            </td>
+        </tr>
+    </tbody></table>
+</footer>
+<h1>__SEG_5__</h1>
+<h2>__SEG_6__</h2>
+<h3>__SEG_7__</h3>
+<table class="annexABC-table">
+    <tbody><tr style="font-weight: bold">
+        <td class="half_col" style="text-align: left">__SEG_8__<span th:text="${generatedDate}"></span>
+        </td>
+        <td class="half_col" style="text-align: right">__SEG_9__</td>
+    </tr>
+</tbody></table>
+
+<br>
+<table class="annexABC-table">
+    <tbody><tr style="text-align: left; padding-left: 5px; font-weight: bold">
+        <th class="first-col">__SEG_10__</th>
+        <th class="second-col">__SEG_11__</th>
+        <th class="third-col">__SEG_12__</th>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_13__</td>
+        <td class="second-col" style="font-weight: bold">__SEG_14__</td>
+        <td class="third-col" th:text="${loanAccountNo}"></td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col" style="font-weight: bold">__SEG_15__</td>
+        <td class="third-col">__SEG_16__</td>
+    </tr>
+
+    <tr>
+        <td class="first-col">__SEG_17__</td>
+        <td class="second-col" style="font-weight: bold">__SEG_18__</td>
+        <td class="third-col" th:text="${loanAmountWithInsurance}"></td>
+    </tr>
+
+    <tr>
+        <td class="first-col">__SEG_19__</td>
+        <td class="second-col">
+            <b>__SEG_22__</b> <br>__SEG_20__<br>__SEG_21__</td>
+        <td class="third-col" th:text="${disbursal100orNot}"></td>
+    </tr>
+
+    <tr>
+        <td class="first-col">__SEG_23__</td>
+        <td class="second-col" style="font-weight: bold">__SEG_24__</td>
+        <td class="third-col">
+            <span th:text="${loanTenureinMonths}"></span>__SEG_25__</td>
+    </tr>
+
+    <tr>
+        <td class="first-col">__SEG_26__</td>
+        <td colspan="2" style="font-weight: bold">__SEG_27__</td>
+    </tr>
+
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">__SEG_28__</td>
+        <td class="third-col" th:text="${instalmentType}"></td>
+    </tr>
+
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">__SEG_29__</td>
+        <td class="third-col">__SEG_30__</td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_31__</td>
+        <td class="second-col" style="font-weight: bold">__SEG_32__</td>
+        <td class="third-col"><span th:text="${roi}"></span>__SEG_33__</td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col" style="font-weight: bold">__SEG_34__</td>
+        <td class="third-col" th:text="${interestRateType}"></td>
+    </tr>
+
+    <tr>
+        <td class="first-col">__SEG_35__</td>
+        <td colspan="2" style="font-weight: bold">__SEG_36__</td>
+    </tr>
+
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">__SEG_37__</td>
+        <td class="third-col">__SEG_38__</td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">__SEG_39__</td>
+        <td class="third-col">__SEG_40__</td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">__SEG_41__</td>
+        <td class="third-col">__SEG_42__</td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">__SEG_43__</td>
+        <td class="third-col" th:text="${finalRate}">__SEG_44__</td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">__SEG_45__</td>
+        <td class="third-col" th:text="${resetPeriodicity}"></td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">__SEG_46__<br>__SEG_47__</td>
+        <td class="third-col" th:text="${benchmarkImpact}"></td>
+    </tr>
+
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">__SEG_48__</td>
+        <td class="third-col" th:text="${installmentifFloating}"></td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">__SEG_49__</td>
+        <td class="third-col" th:text="${tenureInMonthsifFloating}"></td>
+    </tr>
+
+    <tr>
+        <td class="first-col">__SEG_50__</td>
+        <td colspan="2" style="font-weight: bold">__SEG_51__</td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col" style="font-weight: bold">__SEG_52__</td>
+        <td class="third-col" th:text="${payableToREA}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_53__</td>
+        <td class="second-col">__SEG_54__</td>
+        <td class="third-col" th:text="${loginFees}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_55__</td>
+        <td class="second-col">__SEG_56__</td>
+        <td class="third-col" th:text="${adminFees}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_57__</td>
+        <td class="second-col">__SEG_58__</td>
+        <td class="third-col" th:text="${processingFees}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_59__</td>
+        <td class="second-col">__SEG_60__</td>
+        <td class="third-col" th:text="${stampDutyChargesForKfs}"></td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col" style="font-weight: bold">__SEG_61__</td>
+        <td class="third-col" th:text="${payableToREB}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_62__</td>
+        <td class="second-col">__SEG_63__</td>
+        <td class="third-col" th:text="${valuationFees}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_64__</td>
+        <td class="second-col">__SEG_65__</td>
+        <td class="third-col" th:text="${cersaiCharges}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_66__</td>
+        <td class="second-col">__SEG_67__</td>
+        <td class="third-col" th:text="${mgFees}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_68__</td>
+        <td class="second-col">__SEG_69__</td>
+        <td class="third-col" th:text="${cibilCharges}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_70__</td>
+        <td class="second-col" style="font-weight: bold">__SEG_71__</td>
+        <td class="third-col" th:text="${apr}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_72__</td>
+        <td colspan="2" style="font-weight: bold">__SEG_73__</td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_74__</td>
+        <td class="second-col">__SEG_75__</td>
+        <td class="third-col" style="text-align: justify">__SEG_76__</td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_77__</td>
+        <td class="second-col">__SEG_78__</td>
+        <td class="third-col" style="text-align: justify">__SEG_79__</td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_80__</td>
+        <td class="second-col">__SEG_81__</td>
+        <td class="third-col" style="text-align: justify">__SEG_82__</td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_83__</td>
+        <td class="second-col">__SEG_84__</td>
+        <td class="third-col" style="text-align: justify">__SEG_85__</td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_86__</td>
+        <td class="second-col">__SEG_87__</td>
+        <td class="third-col" style="text-align: justify">__SEG_88__</td>
+    </tr>
+</tbody></table>
+<br>
+
+<h2>__SEG_89__</h2>
+
+<table class="annexABC-table">
+    <tbody><tr>
+        <td class="first-col">__SEG_90__</td>
+        <td class="second-col">__SEG_91__</td>
+        <td class="third-col" style="text-align: justify">__SEG_92__</td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_93__</td>
+        <td class="second-col">__SEG_94__</td>
+        <td class="third-col" style="text-align: justify">__SEG_95__<a href="mailto:customerservice.pel@piramal.com">__SEG_96__</a>
+        </td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_97__</td>
+        <td class="second-col">__SEG_98__</td>
+        <td class="third-col" style="text-align: justify">__SEG_99__<br>__SEG_100__<br>__SEG_101__<br>__SEG_102__<br>__SEG_103__<br>
+        </td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_104__</td>
+        <td class="second-col">__SEG_105__</td>
+        <td class="third-col">__SEG_106__</td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_107__</td>
+        <td class="second-col">__SEG_108__</td>
+        <td class="third-col"></td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">__SEG_109__</td>
+        <td class="third-col">__SEG_110__</td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">__SEG_111__</td>
+        <td class="third-col">__SEG_112__</td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">__SEG_113__</td>
+        <td class="third-col">__SEG_114__</td>
+    </tr>
+
+    <tr>
+        <td class="first-col">__SEG_115__</td>
+        <td class="second-col">__SEG_116__</td>
+        <td class="third-col"></td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_117__</td>
+        <td class="second-col">__SEG_118__</td>
+        <td class="third-col">__SEG_119__</td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_120__</td>
+        <td class="second-col">__SEG_121__</td>
+        <td class="third-col">__SEG_122__</td>
+    </tr>
+</tbody></table>
+<br>
+<table>
+    <tbody><tr>
+        <td>__SEG_123__</td>
+    </tr>
+</tbody></table>
+<br>
+<table>
+    <tbody><tr>
+        <td>__SEG_124__</td>
+
+        <td>__SEG_125__</td>
+
+        <td>__SEG_126__</td>
+    </tr>
+    <tr>
+        <td>__SEG_127__</td>
+
+        <td>__SEG_128__</td>
+
+        <td>__SEG_129__</td>
+    </tr>
+    <tr>
+        <td>__SEG_130__</td>
+
+        <td>__SEG_131__</td>
+
+        <td>__SEG_132__</td>
+    </tr>
+</tbody></table>
+
+<h1 class="page-break">__SEG_133__</h1>
+
+<h2 style="text-align: center; font-weight: bold">__SEG_134__</h2>
+
+<table class="annexABC-table">
+    <tbody><tr>
+        <th class="first-col">__SEG_135__</th>
+        <th class="second-col">__SEG_136__</th>
+        <th class="third-col">__SEG_137__</th>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_138__</td>
+        <td class="second-col">__SEG_139__</td>
+        <td class="third-col">__SEG_140__<span th:text="${loanAmountWithInsurance}"></span>
+        </td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_141__</td>
+        <td class="second-col">__SEG_142__</td>
+        <td class="third-col" th:text="${loanTenureinMonths}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_143__</td>
+        <td class="second-col">__SEG_144__</td>
+        <td class="third-col" th:text="${interestRateType}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_145__</td>
+        <td class="second-col">__SEG_146__</td>
+        <td class="third-col"><span th:text="${roi}"></span>__SEG_147__</td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_148__</td>
+        <td class="second-col">__SEG_149__</td>
+        <td class="third-col">__SEG_150__<span th:text="${totalInterestAmount}"></span>
+        </td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_151__</td>
+        <td class="second-col">__SEG_152__</td>
+        <td class="third-col">__SEG_153__<span th:text="${feesPayable}"></span></td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_154__</td>
+        <td class="second-col">__SEG_155__</td>
+        <td class="third-col">__SEG_156__<span th:text="${payableToREA}"></span></td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_157__</td>
+        <td class="second-col">__SEG_158__</td>
+        <td class="third-col">__SEG_159__<span th:text="${payableToREB}"></span></td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_160__</td>
+        <td class="second-col">__SEG_161__</td>
+        <td class="third-col">__SEG_162__<span th:text="${netDisbursedAmount}"></span>
+        </td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_163__</td>
+        <td class="second-col">__SEG_164__</td>
+        <td class="third-col">__SEG_165__<span th:text="${totalAmountKfs}"></span></td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_166__</td>
+        <td class="second-col">__SEG_167__</td>
+        <td class="third-col" th:text="${apr}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_168__</td>
+        <td class="second-col">__SEG_169__</td>
+        <td class="third-col">__SEG_170__</td>
+    </tr>
+    <tr>
+        <td class="first-col">__SEG_171__</td>
+        <td class="second-col">__SEG_172__</td>
+        <td class="third-col">__SEG_173__</td>
+    </tr>
+</tbody></table>
+<br>
+<h2>__SEG_174__</h2>
+
+<table class="annexABC-table" id="scheduleTable">
+    <tbody><tr>
+        <th style="border: 1px solid black; text-align: center">__SEG_175__</th>
+        <th style="border: 1px solid black; text-align: center">__SEG_176__</th>
+        <th style="border: 1px solid black; text-align: center">__SEG_177__</th>
+        <th style="border: 1px solid black; text-align: center">__SEG_178__</th>
+        <th style="border: 1px solid black; text-align: center">__SEG_179__</th>
+    </tr>
+    <tr th:each="row: ${las_repayment_schedule_rows}">
+        <td style="border: 1px solid black; text-align: center" th:each="header: ${las_repayment_schedule_headers}" th:text="${row.get(header)}"></td>
+    </tr>
+</tbody></table>
+<br>
+
+</body></html>
