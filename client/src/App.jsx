@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Virtuoso } from "react-virtuoso";
 import { Header } from "./components/Header.jsx";
 import { DragOverlay } from "./components/DragOverlay.jsx";
 import { Toast } from "./components/Toast.jsx";
@@ -451,17 +452,21 @@ export default function App() {
             />
 
             <SegmentBoard theme={theme}>
-              {filteredSegments.map((segment, index) => (
-                <SegmentCard
-                  key={segment.id}
-                  darkMode={darkMode}
-                  index={index}
-                  segment={segment}
-                  theme={theme}
-                  onCopy={copyToClipboard}
-                  onUpdateTranslation={updateTranslation}
-                />
-              ))}
+              <Virtuoso
+                style={{ height: "100%" }}
+                data={filteredSegments}
+                itemContent={(index, segment) => (
+                  <SegmentCard
+                    key={segment.id}
+                    darkMode={darkMode}
+                    index={index}
+                    segment={segment}
+                    theme={theme}
+                    onCopy={copyToClipboard}
+                    onUpdateTranslation={updateTranslation}
+                  />
+                )}
+              />
             </SegmentBoard>
           </main>
         )}

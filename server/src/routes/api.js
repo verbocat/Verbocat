@@ -39,10 +39,10 @@ apiRouter.post("/translate-batch", async (request, response) => {
   }
 });
 
-apiRouter.post("/export-html", (request, response) => {
+apiRouter.post("/export-html", async (request, response) => {
   try {
     const { fileId, segments } = request.body;
-    const html = exportHtml(fileId, segments);
+    const html = await exportHtml(fileId, segments);
 
     response.setHeader(
       "Content-Disposition",

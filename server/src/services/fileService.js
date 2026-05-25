@@ -3,6 +3,7 @@ const path = require("path");
 const cheerio = require("cheerio");
 const mammoth = require("mammoth");
 const { v4: uuidv4 } = require("uuid");
+const { supabase } = require("../config/supabase");
 
 const uploadsDir = path.join(__dirname, "../../uploads");
 
@@ -89,8 +90,16 @@ const processUploadedFile = async (file) => {
     const segments = createHtmlSegments($);
 
     const fileId = uuidv4();
-    const filePath = path.join(uploadsDir, `${fileId}.html`);
-    fs.writeFileSync(filePath, $.html());
+    const { error: insertError } = await supabase
+      .from("html_files")
+      .insert([{ id: fileId, content: $.html() }]);
+
+    if (insertError) {
+      console.error("Supabase insert error:", insertError);
+      const error = new Error("Failed to save HTML template securely to the database.");
+      error.status = 500;
+      throw error;
+    }
 
     return {
       type: "html",
@@ -125,23 +134,27 @@ const processUploadedFile = async (file) => {
   throw error;
 };
 
-const exportHtml = (fileId, segments) => {
+const exportHtml = async (fileId, segments) => {
   if (!fileId) {
     const error = new Error("Cannot export: No file ID found. Please note that DOCX exports are not supported, only HTML files can be exported.");
     error.status = 400;
     throw error;
   }
 
-  const filePath = path.join(uploadsDir, `${fileId}.html`);
+  const { data, error: fetchError } = await supabase
+    .from("html_files")
+    .select("content")
+    .eq("id", fileId)
+    .single();
 
-  if (!fs.existsSync(filePath)) {
-    console.error(`Export failed: File ${filePath} not found on disk.`);
-    const error = new Error(`File not found. Did you load an old project file? Try re-uploading the original HTML document.`);
+  if (fetchError || !data || !data.content) {
+    console.error(`Export failed: File ID ${fileId} not found in Supabase.`);
+    const error = new Error(`File not found. Did you load an old project file or forget to run the Supabase SQL query?`);
     error.status = 404;
     throw error;
   }
 
-  let html = fs.readFileSync(filePath, "utf-8");
+  let html = data.content;
 
   segments.forEach((segment) => {
     const replacement =
