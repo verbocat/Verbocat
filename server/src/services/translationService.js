@@ -11,6 +11,12 @@ const normalizeText = (text) =>
     .replace(/\s+/g, " ")
     .trim();
 
+const ensureEnglishNumerals = (text) => {
+  return String(text || "").replace(/[०-९]/g, (match) => {
+    return String.fromCharCode(match.charCodeAt(0) - 0x0966 + 48);
+  });
+};
+
 const hasVisibleMarkup = (text) => /<\/?[a-z][^>]*>/i.test(text || "");
 
 const digitString = (text) => String(text || "").replace(/\D/g, "");
@@ -94,18 +100,19 @@ const translateSegments = async (segments, target) => {
     for (let offset = 0; offset < chunk.length; offset += 1) {
       const segment = chunk[offset];
       const translated = translatedChunk[offset];
+      const translatedText = ensureEnglishNumerals(translated.translated);
 
       results.push({
         id: segment.id,
-        translated: translated.translated,
+        translated: translatedText,
         provider: translated.provider,
-        qaIssues: runQaChecks(segment.source, translated.translated)
+        qaIssues: runQaChecks(segment.source, translatedText)
       });
 
       if (isPersistableProvider(translated.provider)) {
         insertRows.push({
           source_text: segment.source,
-          target_text: translated.translated,
+          target_text: translatedText,
           source_lang: "en",
           target_lang: target,
           provider: translated.provider

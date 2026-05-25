@@ -30,7 +30,17 @@ export const SegmentCard = ({
       </div>
 
       <section className="space-y-3">
-        <div className="flex items-center justify-end">
+        <div className="flex items-center justify-end gap-2">
+          <button
+            onClick={() => onUpdateTranslation(segment.id, segment.source)}
+            title="Copy Source to Target"
+            className={`rounded-lg px-3 py-2 transition ${theme.buttonSecondary}`}
+          >
+            <span className="inline-flex items-center gap-2 text-sm font-semibold">
+              <Icons.ArrowRight />
+              Copy to Target
+            </span>
+          </button>
           <button
             onClick={() => onCopy(segment.source)}
             className={`rounded-lg px-3 py-2 transition ${theme.buttonSecondary}`}

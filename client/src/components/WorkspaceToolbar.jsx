@@ -27,10 +27,16 @@ export const WorkspaceToolbar = ({
   stats,
   targetLanguage,
   onTargetLanguageChange,
+  fileName,
   theme
 }) => (
   <section className={`rounded-2xl border p-4 ${theme.cardStrong}`}>
     <div className="space-y-4">
+      <div className="flex items-center justify-between pb-2 border-b border-white/5">
+        <h2 className="text-sm font-semibold tracking-wide text-sky-200 uppercase truncate">
+          File: {fileName}
+        </h2>
+      </div>
       <div className="grid gap-3 xl:grid-cols-[200px_minmax(0,1fr)_auto] xl:items-end">
         <div className="grid gap-3 md:grid-cols-[200px_minmax(0,1fr)] xl:col-span-2">
           <label className="space-y-2">

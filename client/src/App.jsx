@@ -9,6 +9,7 @@ import { SegmentCard } from "./components/SegmentCard.jsx";
 import { WorkspaceToolbar } from "./components/WorkspaceToolbar.jsx";
 import { EmptyWorkspace } from "./components/EmptyWorkspace.jsx";
 import { SegmentBoard } from "./components/SegmentBoard.jsx";
+import { LoadingOverlay } from "./components/LoadingOverlay.jsx";
 import { LANGUAGES } from "./constants/languages.js";
 import { useGlossaryManager } from "./hooks/useGlossaryManager.js";
 import {
@@ -31,6 +32,8 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [toast, setToast] = useState(null);
   const [showQaPanel, setShowQaPanel] = useState(false);
+  const [fileName, setFileName] = useState("document");
+  const [isUploading, setIsUploading] = useState(false);
 
   const glossaryManager = useGlossaryManager({
     defaultSourceLang: "en",
@@ -125,6 +128,7 @@ export default function App() {
 
     try {
       setProgress(0);
+      setIsUploading(true);
       const data = await uploadFile(file);
       const newSegments = data.segments.map((segment) => ({
         ...segment,
@@ -132,12 +136,15 @@ export default function App() {
       }));
       setSegments(newSegments);
       setFileId(data.fileId || null);
+      setFileName(data.originalName || file.name.replace(/\.[^/.]+$/, ""));
       setCurrentProvider("");
       setShowQaPanel(false);
       showToast(`File uploaded: ${file.name}`);
     } catch (error) {
       console.log(error);
       showToast("Upload failed. Is the backend running?", "error");
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -272,6 +279,7 @@ export default function App() {
   const saveProject = () => {
     const projectData = {
       fileId,
+      fileName,
       targetLanguage,
       currentProvider,
       segments,
@@ -284,7 +292,7 @@ export default function App() {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute("download", "project.cattool.json");
+    link.setAttribute("download", `${fileName}_${targetLanguage}.json`);
     document.body.appendChild(link);
     link.click();
     showToast("Project saved!");
@@ -301,6 +309,7 @@ export default function App() {
     try {
       const project = JSON.parse(text);
       setFileId(project.fileId || null);
+      setFileName(project.fileName || file.name.replace(".json", ""));
       setSegments(project.segments || []);
       setTargetLanguage(project.targetLanguage || "hi");
       setCurrentProvider(project.currentProvider || "");
@@ -318,7 +327,7 @@ export default function App() {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", "translated.html");
+      link.setAttribute("download", `${fileName}_${targetLanguage}.html`);
       document.body.appendChild(link);
       link.click();
       showToast("HTML exported!");
@@ -366,6 +375,7 @@ export default function App() {
       className={`min-h-screen ${theme.bg} ${theme.text} font-sans transition-colors duration-300`}
     >
       <DragOverlay isDragging={isDragging} />
+      <LoadingOverlay isUploading={isUploading} theme={theme} />
       <Toast toast={toast} />
 
       <Header
@@ -457,6 +467,7 @@ export default function App() {
               stats={stats}
               targetLanguage={targetLanguage}
               onTargetLanguageChange={setTargetLanguage}
+              fileName={fileName}
               theme={theme}
             />
 

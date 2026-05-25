@@ -104,7 +104,8 @@ const processUploadedFile = async (file) => {
     return {
       type: "html",
       fileId,
-      segments
+      segments,
+      originalName: file.originalname.replace(".html", "")
     };
   }
 
@@ -125,7 +126,8 @@ const processUploadedFile = async (file) => {
 
     return {
       type: "docx",
-      segments
+      segments,
+      originalName: file.originalname.replace(".docx", "")
     };
   }
 
