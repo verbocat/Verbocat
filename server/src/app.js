@@ -11,7 +11,8 @@ app.use(
   })
 );
 
-app.use("/", apiRouter);
+// Mount API router under /api so endpoints are available at /api/*
+app.use("/api", apiRouter);
 
 module.exports = {
   app

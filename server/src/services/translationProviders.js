@@ -1,14 +1,8 @@
 const axios = require("axios");
 const { protectTags } = require("../utils/tagProtection");
 
-// Configurable endpoints and defaults via environment variables to avoid
-// hard-coded values in source. Secure callers should set these in the runtime
-// environment (e.g. process manager or container secrets) instead of editing
-// code.
-const GOOGLE_URL = process.env.GOOGLE_TRANSLATE_URL || "https://translate.googleapis.com/translate_a/single";
-const MYMEMORY_URL = process.env.MYMEMORY_URL || "https://api.mymemory.translated.net/get";
-const LIBRE_URL = process.env.LIBRE_URL || "https://translate.argosopentech.com/translate";
-const LINGVA_URL = process.env.LINGVA_URL || "https://lingva.ml";
+// Keep only OpenAI provider; other external provider endpoints were removed
+// to simplify the codebase and avoid maintaining multiple external fallbacks.
 
 const DEFAULT_SOURCE_LANG = process.env.DEFAULT_SOURCE_LANG || "en";
 
@@ -88,11 +82,7 @@ const isRetryableError = (error) => {
 
 const createProviderState = () => ({
   cooldownUntil: {
-    OpenAI: 0,
-    Google: 0,
-    MyMemory: 0,
-    LibreTranslate: 0,
-    Lingva: 0
+    OpenAI: 0
   }
 });
 
@@ -139,74 +129,16 @@ const isUsableTranslation = (source, translated) => {
   );
 };
 
-const translateWithGoogle = async (protectedText, target, source = DEFAULT_SOURCE_LANG) => {
-  const response = await axios.get(GOOGLE_URL, {
-    params: {
-      client: "gtx",
-      sl: source,
-      tl: target,
-      dt: "t",
-      q: protectedText
-    },
-    timeout: 10000
-  });
+// Other provider implementations removed — OpenAI is the sole provider.
 
-  return (response.data?.[0] || [])
-    .map((part) => part?.[0] || "")
-    .join("");
-};
-
-const translateWithMyMemory = async (protectedText, target, source = DEFAULT_SOURCE_LANG) => {
-  const response = await axios.get(MYMEMORY_URL, {
-    params: {
-      q: protectedText,
-      langpair: `${source}|${target}`
-    },
-    timeout: 10000
-  });
-
-  return response.data.responseData.translatedText;
-};
-
-const translateWithLibreTranslate = async (protectedText, target, source = DEFAULT_SOURCE_LANG) => {
-  const response = await axios.post(
-    LIBRE_URL,
-    {
-      q: protectedText,
-      source,
-      target,
-      format: "text"
-    },
-    {
-      headers: {
-        "Content-Type": "application/json"
-      },
-      timeout: 10000
-    }
-  );
-
-  return response.data.translatedText;
-};
-
-const translateWithLingva = async (protectedText, target, source = DEFAULT_SOURCE_LANG) => {
-  const url = `${LINGVA_URL}/api/v1/${encodeURIComponent(source)}/${encodeURIComponent(target)}/${encodeURIComponent(protectedText)}`;
-  const response = await axios.get(url, { timeout: 10000 });
-
-  return response.data.translation;
-};
-
+// Only use OpenAI as the translation provider.
+// If `OPENAI_API_KEY` is not configured, the providers array will be empty
+// and the service will fall back to returning the original text for safety.
 const providers = [];
 
 if (OPENAI_API_KEY) {
   providers.push({ name: "OpenAI", translate: translateWithOpenAI });
 }
-
-providers.push(
-  { name: "Google", translate: translateWithGoogle },
-  { name: "MyMemory", translate: translateWithMyMemory },
-  { name: "LibreTranslate", translate: translateWithLibreTranslate },
-  { name: "Lingva", translate: translateWithLingva }
-);
 
 const callProviderWithRetry = async (provider, protectedText, target, source) => {
   let lastError = null;
@@ -363,7 +295,16 @@ const translateChunk = async (texts, target, source = DEFAULT_SOURCE_LANG, provi
   return results;
 };
 
+const getProviderStatus = () => ({
+  providers: [
+    { name: "OpenAI", enabled: !!OPENAI_API_KEY, model: OPENAI_MODEL }
+  ],
+  defaultSource: DEFAULT_SOURCE_LANG,
+  maxTextLength: MAX_TEXT_LENGTH
+});
+
 module.exports = {
   createProviderState,
-  translateChunk
+  translateChunk,
+  getProviderStatus
 };

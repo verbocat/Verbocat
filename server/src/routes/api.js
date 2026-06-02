@@ -2,6 +2,7 @@ const express = require("express");
 const multer = require("multer");
 const { processUploadedFile, exportHtml } = require("../services/fileService");
 const { translateSegments } = require("../services/translationService");
+const { getProviderStatus } = require("../services/translationProviders");
 
 const apiRouter = express.Router();
 const upload = multer({
@@ -36,6 +37,16 @@ apiRouter.post("/translate-batch", async (request, response) => {
     response.status(500).json({
       error: "Batch translation failed"
     });
+  }
+});
+
+apiRouter.get("/provider-status", (request, response) => {
+  try {
+    const status = getProviderStatus();
+    response.json(status);
+  } catch (error) {
+    console.log(error);
+    response.status(500).json({ error: "Provider status unavailable" });
   }
 });
 
