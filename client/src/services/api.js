@@ -1,18 +1,20 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "https://verbocat.onrender.com"
+  // If VITE_API_URL is set at build/runtime, use it. Otherwise use
+  // an empty baseURL so requests go to the current origin.
+  baseURL: import.meta.env.VITE_API_URL || ""
 });
 
 export const uploadFile = async (file) => {
   const formData = new FormData();
   formData.append("file", file);
-  const response = await api.post("/upload", formData);
+  const response = await api.post("/api/upload", formData);
   return response.data;
 };
 
 export const translateBatch = async (segments, target) => {
-  const response = await api.post("/translate-batch", {
+  const response = await api.post("/api/translate-batch", {
     segments,
     target
   });
@@ -21,7 +23,7 @@ export const translateBatch = async (segments, target) => {
 
 export const exportHtmlFile = async (fileId, segments) => {
   const response = await api.post(
-    "/export-html",
+    "/api/export-html",
     { fileId, segments },
     { responseType: "blob" }
   );
