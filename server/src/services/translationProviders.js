@@ -94,7 +94,13 @@ const translateWithOpenAI = async (protectedText, target, source = DEFAULT_SOURC
     throw new Error("OPENAI_API_KEY not configured");
   }
 
-  const systemPrompt = `You are a concise translator. Translate the user text from ${source} to ${target}. Do not modify or translate tokens that look like __TAG_0__, __TAG_1__ etc. Preserve punctuation and numbers. Return only the translated text without commentary.`;
+  let systemPrompt = process.env.OPENAI_SYSTEM_PROMPT;
+  
+  if (!systemPrompt) {
+    systemPrompt = `You are a concise translator. Translate the user text from ${source} to ${target}. Do not modify or translate tokens that look like __TAG_0__, __TAG_1__ etc. Preserve punctuation and numbers. Return only the translated text without commentary.`;
+  } else {
+    systemPrompt = systemPrompt.replace(/{source}/g, source).replace(/{target}/g, target);
+  }
 
   const payload = {
     model: OPENAI_MODEL,
