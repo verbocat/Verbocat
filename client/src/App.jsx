@@ -211,45 +211,56 @@ export default function App() {
     setIsTranslating(true);
     setProgress(0);
 
-    try {
-      const data = await translateBatch(segments, targetLanguage);
-      const results = data.results || [];
+    const segmentsToTranslate = segments.filter(
+      (s) => !s.target || s.target.trim() === ""
+    );
 
-      if (results.length > 0) {
-        setCurrentProvider(results[0].provider);
+    if (segmentsToTranslate.length === 0) {
+      setIsTranslating(false);
+      showToast("Everything is already translated!");
+      return;
+    }
+
+    try {
+      const BATCH_SIZE = 20;
+      let completedCount = 0;
+
+      for (let i = 0; i < segmentsToTranslate.length; i += BATCH_SIZE) {
+        const batch = segmentsToTranslate.slice(i, i + BATCH_SIZE);
+        const data = await translateBatch(batch, targetLanguage);
+        const results = data.results || [];
+
+        if (results.length > 0 && i === 0) {
+          setCurrentProvider(results[0].provider);
+        }
+
+        setSegments((previous) => {
+          const newSegments = [...previous];
+          results.forEach((item) => {
+            const index = newSegments.findIndex((s) => s.id === item.id);
+            if (index !== -1) {
+              newSegments[index] = {
+                ...newSegments[index],
+                target: applyGlossaryTerms(
+                  newSegments[index].source,
+                  item.translated,
+                  translationGlossary
+                ),
+                provider: item.provider,
+                qaIssues: item.qaIssues || [],
+                fuzzyScore: item.fuzzyScore || null
+              };
+            }
+          });
+          return newSegments;
+        });
+
+        completedCount += batch.length;
+        setProgress(Math.round((completedCount / segmentsToTranslate.length) * 100));
       }
 
-      let completed = 0;
-
-      results.forEach((item, index) => {
-        window.setTimeout(() => {
-          setSegments((previous) =>
-            previous.map((segment) =>
-              segment.id === item.id
-                ? {
-                    ...segment,
-                    target: applyGlossaryTerms(
-                      segment.source,
-                      item.translated,
-                      translationGlossary
-                    ),
-                    provider: item.provider,
-                    qaIssues: item.qaIssues || [],
-                    fuzzyScore: item.fuzzyScore || null
-                  }
-                : segment
-            )
-          );
-
-          completed += 1;
-          setProgress(Math.round((completed / results.length) * 100));
-
-          if (completed === results.length) {
-            setIsTranslating(false);
-            showToast("Translation completed!");
-          }
-        }, index * 20);
-      });
+      setIsTranslating(false);
+      showToast("Translation completed!");
     } catch (error) {
       console.log(error);
       setIsTranslating(false);
