@@ -8,7 +8,8 @@ export const Header = ({
   onToggleDarkMode,
   qaIssuesCount,
   segmentsCount,
-  theme
+  theme,
+  onLock
 }) => (
   <header className="sticky top-0 z-40 px-4 pt-3 sm:px-6 lg:px-8">
     <div
@@ -69,6 +70,14 @@ export const Header = ({
             {darkMode ? <Icons.Sun /> : <Icons.Moon />}
             <span className="text-sm font-semibold">{darkMode ? "Light" : "Dark"}</span>
           </button>
+          {onLock && (
+            <button
+              onClick={onLock}
+              className={`inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 transition ${theme.buttonSecondary}`}
+            >
+              Lock
+            </button>
+          )}
         </div>
       </div>
     </div>

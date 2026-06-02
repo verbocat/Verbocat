@@ -1,6 +1,17 @@
 const axios = require("axios");
 const { protectTags } = require("../utils/tagProtection");
 
+// Configurable endpoints and defaults via environment variables to avoid
+// hard-coded values in source. Secure callers should set these in the runtime
+// environment (e.g. process manager or container secrets) instead of editing
+// code.
+const GOOGLE_URL = process.env.GOOGLE_TRANSLATE_URL || "https://translate.googleapis.com/translate_a/single";
+const MYMEMORY_URL = process.env.MYMEMORY_URL || "https://api.mymemory.translated.net/get";
+const LIBRE_URL = process.env.LIBRE_URL || "https://translate.argosopentech.com/translate";
+const LINGVA_URL = process.env.LINGVA_URL || "https://lingva.ml";
+
+const DEFAULT_SOURCE_LANG = process.env.DEFAULT_SOURCE_LANG || "en";
+
 const successCache = new Map();
 const failedCache = new Map();
 
@@ -21,6 +32,14 @@ const stripVisibleTags = (text) =>
   normalizeTranslatedText(text).replace(/<\/?[^>]+>/g, "").trim();
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const MAX_TEXT_LENGTH = parseInt(process.env.MAX_TRANSLATION_TEXT_LENGTH, 10) || 5000;
+
+const validateLang = (lang) => {
+  if (!lang || typeof lang !== "string") return false;
+  // Simple ISO-ish check: 2-5 chars, letters and dash allowed (e.g. "pt-BR")
+  return /^[a-zA-Z-]{2,5}$/.test(lang);
+};
 
 const cacheKey = (source, target) =>
   `${target}::${normalizeTranslatedText(source).toLowerCase()}`;
@@ -69,12 +88,45 @@ const isRetryableError = (error) => {
 
 const createProviderState = () => ({
   cooldownUntil: {
+    OpenAI: 0,
     Google: 0,
     MyMemory: 0,
     LibreTranslate: 0,
     Lingva: 0
   }
 });
+
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-3.5-turbo";
+
+const translateWithOpenAI = async (protectedText, target, source = DEFAULT_SOURCE_LANG) => {
+  if (!OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY not configured");
+  }
+
+  const systemPrompt = `You are a concise translator. Translate the user text from ${source} to ${target}. Do not modify or translate tokens that look like __TAG_0__, __TAG_1__ etc. Preserve punctuation and numbers. Return only the translated text without commentary.`;
+
+  const payload = {
+    model: OPENAI_MODEL,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: protectedText }
+    ],
+    temperature: 0.0,
+    max_tokens: 2000
+  };
+
+  const response = await axios.post("https://api.openai.com/v1/chat/completions", payload, {
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    timeout: 20000
+  });
+
+  const text = response.data?.choices?.[0]?.message?.content;
+  return String(text || "").trim();
+};
 
 const isUsableTranslation = (source, translated) => {
   const cleanSource = normalizeTranslatedText(source).toLowerCase();
@@ -87,31 +139,28 @@ const isUsableTranslation = (source, translated) => {
   );
 };
 
-const translateWithGoogle = async (protectedText, target) => {
-  const response = await axios.get(
-    "https://translate.googleapis.com/translate_a/single",
-    {
-      params: {
-        client: "gtx",
-        sl: "en",
-        tl: target,
-        dt: "t",
-        q: protectedText
-      },
-      timeout: 10000
-    }
-  );
+const translateWithGoogle = async (protectedText, target, source = DEFAULT_SOURCE_LANG) => {
+  const response = await axios.get(GOOGLE_URL, {
+    params: {
+      client: "gtx",
+      sl: source,
+      tl: target,
+      dt: "t",
+      q: protectedText
+    },
+    timeout: 10000
+  });
 
   return (response.data?.[0] || [])
     .map((part) => part?.[0] || "")
     .join("");
 };
 
-const translateWithMyMemory = async (protectedText, target) => {
-  const response = await axios.get("https://api.mymemory.translated.net/get", {
+const translateWithMyMemory = async (protectedText, target, source = DEFAULT_SOURCE_LANG) => {
+  const response = await axios.get(MYMEMORY_URL, {
     params: {
       q: protectedText,
-      langpair: `en|${target}`
+      langpair: `${source}|${target}`
     },
     timeout: 10000
   });
@@ -119,12 +168,12 @@ const translateWithMyMemory = async (protectedText, target) => {
   return response.data.responseData.translatedText;
 };
 
-const translateWithLibreTranslate = async (protectedText, target) => {
+const translateWithLibreTranslate = async (protectedText, target, source = DEFAULT_SOURCE_LANG) => {
   const response = await axios.post(
-    "https://translate.argosopentech.com/translate",
+    LIBRE_URL,
     {
       q: protectedText,
-      source: "en",
+      source,
       target,
       format: "text"
     },
@@ -139,42 +188,32 @@ const translateWithLibreTranslate = async (protectedText, target) => {
   return response.data.translatedText;
 };
 
-const translateWithLingva = async (protectedText, target) => {
-  const response = await axios.get(
-    `https://lingva.ml/api/v1/en/${target}/${encodeURIComponent(protectedText)}`,
-    {
-      timeout: 10000
-    }
-  );
+const translateWithLingva = async (protectedText, target, source = DEFAULT_SOURCE_LANG) => {
+  const url = `${LINGVA_URL}/api/v1/${encodeURIComponent(source)}/${encodeURIComponent(target)}/${encodeURIComponent(protectedText)}`;
+  const response = await axios.get(url, { timeout: 10000 });
 
   return response.data.translation;
 };
 
-const providers = [
-  {
-    name: "Google",
-    translate: translateWithGoogle
-  },
-  {
-    name: "MyMemory",
-    translate: translateWithMyMemory
-  },
-  {
-    name: "LibreTranslate",
-    translate: translateWithLibreTranslate
-  },
-  {
-    name: "Lingva",
-    translate: translateWithLingva
-  }
-];
+const providers = [];
 
-const callProviderWithRetry = async (provider, protectedText, target) => {
+if (OPENAI_API_KEY) {
+  providers.push({ name: "OpenAI", translate: translateWithOpenAI });
+}
+
+providers.push(
+  { name: "Google", translate: translateWithGoogle },
+  { name: "MyMemory", translate: translateWithMyMemory },
+  { name: "LibreTranslate", translate: translateWithLibreTranslate },
+  { name: "Lingva", translate: translateWithLingva }
+);
+
+const callProviderWithRetry = async (provider, protectedText, target, source) => {
   let lastError = null;
 
   for (let attempt = 0; attempt < PROVIDER_RETRY_DELAYS_MS.length; attempt += 1) {
     try {
-      return await provider.translate(protectedText, target);
+      return await provider.translate(protectedText, target, source);
     } catch (error) {
       lastError = error;
 
@@ -189,7 +228,11 @@ const callProviderWithRetry = async (provider, protectedText, target) => {
   throw lastError;
 };
 
-const translateWithProviders = async (source, protectedText, target, providerState) => {
+const translateWithProviders = async (sourceText, protectedText, target, providerState, sourceLang = DEFAULT_SOURCE_LANG) => {
+  if (!validateLang(sourceLang) || !validateLang(target)) {
+    throw new Error("Invalid source or target language");
+  }
+
   const now = Date.now();
 
   for (const provider of providers) {
@@ -198,9 +241,9 @@ const translateWithProviders = async (source, protectedText, target, providerSta
     }
 
     try {
-      const candidate = await callProviderWithRetry(provider, protectedText, target);
+      const candidate = await callProviderWithRetry(provider, protectedText, target, sourceLang);
 
-      if (isUsableTranslation(source, candidate)) {
+      if (isUsableTranslation(sourceText, candidate)) {
         return {
           translated: candidate,
           provider: provider.name
@@ -227,7 +270,14 @@ const restoreProtectedTags = (translated, tags) => {
   return output;
 };
 
-const translateChunk = async (texts, target = "hi", providerState = createProviderState()) => {
+const translateChunk = async (texts, target, source = DEFAULT_SOURCE_LANG, providerState = createProviderState()) => {
+  if (!target || !validateLang(target)) {
+    throw new Error("Invalid or missing target language");
+  }
+
+  if (!validateLang(source)) {
+    throw new Error("Invalid source language");
+  }
   const results = [];
 
   for (const text of texts) {
@@ -255,11 +305,22 @@ const translateChunk = async (texts, target = "hi", providerState = createProvid
     }
 
     const { protectedText, tags } = protectTags(text);
+
+    if (protectedText.length > MAX_TEXT_LENGTH) {
+      results.push({
+        source: text,
+        translated: text,
+        provider: "TooLong"
+      });
+      continue;
+    }
+
     const translation = await translateWithProviders(
       text,
       protectedText,
       target,
-      providerState
+      providerState,
+      source
     );
 
     let translated = translation?.translated || null;

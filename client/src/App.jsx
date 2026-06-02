@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { Header } from "./components/Header.jsx";
+import { ScreenLock } from "./components/ScreenLock.jsx";
 import { DragOverlay } from "./components/DragOverlay.jsx";
 import { Toast } from "./components/Toast.jsx";
 import { GlossaryModal } from "./components/GlossaryModal.jsx";
@@ -34,6 +35,8 @@ export default function App() {
   const [showQaPanel, setShowQaPanel] = useState(false);
   const [fileName, setFileName] = useState("document");
   const [isUploading, setIsUploading] = useState(false);
+  const [locked, setLocked] = useState(true);
+  const [userRole, setUserRole] = useState(null);
 
   const glossaryManager = useGlossaryManager({
     defaultSourceLang: "en",
@@ -119,6 +122,12 @@ export default function App() {
   const showToast = (message, type = "success") => {
     setToast({ message, type });
     window.setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleUnlock = (role) => {
+    setUserRole(role);
+    setLocked(false);
+    showToast(`Unlocked as ${role}`);
   };
 
   const handleFileProcessing = async (file) => {
@@ -384,10 +393,13 @@ export default function App() {
         onOpenGlossary={() => setShowGlossary(true)}
         onLoadProject={loadProject}
         onToggleDarkMode={() => setDarkMode((value) => !value)}
+        onLock={() => setLocked(true)}
         qaIssuesCount={qaIssuesList.length}
         segmentsCount={segments.length}
         theme={theme}
       />
+
+      {locked && <ScreenLock onUnlock={handleUnlock} />}
 
       <GlossaryModal
         darkMode={darkMode}
@@ -469,6 +481,7 @@ export default function App() {
               onTargetLanguageChange={setTargetLanguage}
               fileName={fileName}
               theme={theme}
+              canTranslate={userRole === "office"}
             />
 
             <QAPanel

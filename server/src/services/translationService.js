@@ -77,9 +77,11 @@ const translateSegments = async (segments, target) => {
 
   const chunkSize = 20;
 
+  const DEFAULT_SOURCE_LANG = process.env.DEFAULT_SOURCE_LANG || "en";
+
   for (let index = 0; index < uniqueMissingSources.length; index += chunkSize) {
     const chunkSources = uniqueMissingSources.slice(index, index + chunkSize);
-    const translatedChunk = await translateChunk(chunkSources, target, providerState);
+    const translatedChunk = await translateChunk(chunkSources, target, DEFAULT_SOURCE_LANG, providerState);
 
     const insertRows = [];
 
@@ -97,7 +99,7 @@ const translateSegments = async (segments, target) => {
         insertRows.push({
           source_text: source,
           target_text: translatedText,
-          source_lang: "en",
+          source_lang: DEFAULT_SOURCE_LANG,
           target_lang: target,
           provider: translated.provider
         });

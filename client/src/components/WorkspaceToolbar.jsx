@@ -29,6 +29,7 @@ export const WorkspaceToolbar = ({
   onTargetLanguageChange,
   fileName,
   theme
+  , canTranslate = true
 }) => (
   <section className={`rounded-2xl border p-4 ${theme.cardStrong}`}>
     <div className="space-y-4">
@@ -94,12 +95,13 @@ export const WorkspaceToolbar = ({
           </ActionButton>
           <ActionButton
             onClick={onTranslate}
-            disabled={segmentsCount === 0 || isTranslating}
+            disabled={segmentsCount === 0 || isTranslating || !canTranslate}
             className={
-              segmentsCount === 0 || isTranslating
+              segmentsCount === 0 || isTranslating || !canTranslate
                 ? "cursor-not-allowed bg-slate-400/30 text-slate-300"
                 : "bg-sky-700 text-white hover:bg-sky-600"
             }
+            title={canTranslate ? "" : "You do not have permission to translate"}
           >
             {isTranslating ? "Translating..." : "Translate"}
           </ActionButton>
