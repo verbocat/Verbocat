@@ -87,7 +87,7 @@ const createProviderState = () => ({
 });
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
-const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-3.5-turbo";
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
 const translateWithOpenAI = async (protectedText, target, source = DEFAULT_SOURCE_LANG) => {
   if (!OPENAI_API_KEY) {
