@@ -11,8 +11,10 @@ app.use(
   })
 );
 
-// Mount API router under /api so endpoints are available at /api/*
-app.use("/api", apiRouter);
+// Mount API router under both `/` and `/api` so older clients
+// expecting root paths (e.g. `/upload`) continue to work while
+// newer clients can use `/api/*`.
+app.use(["/", "/api"], apiRouter);
 
 module.exports = {
   app
