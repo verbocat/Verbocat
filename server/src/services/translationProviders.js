@@ -182,6 +182,7 @@ const translateWithProviders = async (sourceText, protectedText, target, provide
         };
       }
     } catch (error) {
+      console.error(`[Translation Error - ${provider.name}]:`, error?.response?.data || error.message);
       if (isRateLimitError(error)) {
         providerState.cooldownUntil[provider.name] =
           Date.now() + RATE_LIMIT_COOLDOWN_MS;
