@@ -94,12 +94,25 @@ const translateWithOpenAI = async (protectedText, target, source = DEFAULT_SOURC
     throw new Error("OPENAI_API_KEY not configured");
   }
 
+  const getLangName = (code) => {
+    try {
+      return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code;
+    } catch (e) {
+      return code;
+    }
+  };
+
+  const sourceName = getLangName(source);
+  const targetName = getLangName(target);
+
   let systemPrompt = process.env.OPENAI_SYSTEM_PROMPT;
   
+  const strictInstructions = `\n\nCRITICAL INSTRUCTIONS: You are a pure translation engine. You MUST ONLY output the translated text in ${targetName}. Do NOT act as a conversational AI. Do NOT write letters, complete sentences, or answer questions. If the text is just a fragment like "To," or "REJECTION LETTER", just translate that exact fragment to ${targetName}. Preserve any __TAG_n__ tokens.`;
+
   if (!systemPrompt) {
-    systemPrompt = `You are a concise translator. Translate the user text from ${source} to ${target}. Do not modify or translate tokens that look like __TAG_0__, __TAG_1__ etc. Preserve punctuation and numbers. Return only the translated text without commentary.`;
+    systemPrompt = `Translate the user text from ${sourceName} to ${targetName}. Do not modify or translate tokens that look like __TAG_0__, __TAG_1__ etc. Preserve punctuation and numbers. Return only the translated text without commentary.` + strictInstructions;
   } else {
-    systemPrompt = systemPrompt.replace(/{source}/g, source).replace(/{target}/g, target);
+    systemPrompt = systemPrompt.replace(/{source}/g, sourceName).replace(/{target}/g, targetName) + strictInstructions;
   }
 
   const payload = {
