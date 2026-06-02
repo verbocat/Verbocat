@@ -231,85 +231,53 @@ const translateChunk = async (texts, target, source = DEFAULT_SOURCE_LANG, provi
     throw new Error("Invalid source language");
   }
   const results = [];
+  const CONCURRENCY = 5;
 
-  for (const text of texts) {
-    const key = cacheKey(text, target);
-    const cachedSuccess = successCache.get(key);
+  for (let i = 0; i < texts.length; i += CONCURRENCY) {
+    const batch = texts.slice(i, i + CONCURRENCY);
+    
+    const batchPromises = batch.map(async (text) => {
+      const key = cacheKey(text, target);
+      const cachedSuccess = successCache.get(key);
 
-    if (cachedSuccess) {
-      results.push({
-        source: text,
-        translated: cachedSuccess.translated,
-        provider: `${cachedSuccess.provider} Cache`
-      });
-      continue;
-    }
+      if (cachedSuccess) {
+        return { source: text, translated: cachedSuccess.translated, provider: `${cachedSuccess.provider} Cache` };
+      }
 
-    const cachedFailure = getFailedCache(key);
+      const cachedFailure = getFailedCache(key);
 
-    if (cachedFailure) {
-      results.push({
-        source: text,
-        translated: text,
-        provider: "Cached Fallback"
-      });
-      continue;
-    }
+      if (cachedFailure) {
+        return { source: text, translated: text, provider: "Cached Fallback" };
+      }
 
-    const { protectedText, tags } = protectTags(text);
+      const { protectedText, tags } = protectTags(text);
 
-    if (protectedText.length > MAX_TEXT_LENGTH) {
-      results.push({
-        source: text,
-        translated: text,
-        provider: "TooLong"
-      });
-      continue;
-    }
+      if (protectedText.length > MAX_TEXT_LENGTH) {
+        return { source: text, translated: text, provider: "TooLong" };
+      }
 
-    const translation = await translateWithProviders(
-      text,
-      protectedText,
-      target,
-      providerState,
-      source
-    );
+      const translation = await translateWithProviders(text, protectedText, target, providerState, source);
 
-    let translated = translation?.translated || null;
-    let provider = translation?.provider || null;
+      let translated = translation?.translated || null;
+      let provider = translation?.provider || null;
 
-    if (!translated || translated.trim() === "") {
-      translated = text;
-      provider = "Fallback";
-      setLimitedCache(
-        failedCache,
-        key,
-        {
-          createdAt: Date.now()
-        },
-        FAILED_CACHE_LIMIT
-      );
-    }
+      if (!translated || translated.trim() === "") {
+        translated = text;
+        provider = "Fallback";
+        setLimitedCache(failedCache, key, { createdAt: Date.now() }, FAILED_CACHE_LIMIT);
+      }
 
-    const finalTranslation = stripVisibleTags(restoreProtectedTags(translated, tags));
+      const finalTranslation = stripVisibleTags(restoreProtectedTags(translated, tags));
 
-    if (provider !== "Fallback") {
-      setLimitedCache(
-        successCache,
-        key,
-        {
-          translated: finalTranslation,
-          provider
-        },
-        SUCCESS_CACHE_LIMIT
-      );
-    }
+      if (provider !== "Fallback") {
+        setLimitedCache(successCache, key, { translated: finalTranslation, provider }, SUCCESS_CACHE_LIMIT);
+      }
 
-    results.push({
-      source: text,
-      translated: finalTranslation,
-      provider
+      return { source: text, translated: finalTranslation, provider };
     });
+
+    const batchResults = await Promise.all(batchPromises);
+    results.push(...batchResults);
   }
 
   return results;
