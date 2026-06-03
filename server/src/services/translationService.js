@@ -50,7 +50,7 @@ const isSafeTmTranslation = (source, target) => {
 const isPersistableProvider = (provider) =>
   provider && provider !== "Fallback" && provider !== "Cached Fallback";
 
-const translateSegments = async (segments, target) => {
+const translateSegments = async (segments, target, contextSettings) => {
   const providerState = createProviderState();
 
   const uniqueSources = [...new Set(segments.map((s) => s.source))];
@@ -67,11 +67,18 @@ const translateSegments = async (segments, target) => {
   });
 
   const uniqueMissingSources = [];
+  const sourceToIndex = new Map();
 
-  uniqueSources.forEach((source) => {
-    const existing = tmMap[source];
-    if (!existing || !isSafeTmTranslation(source, existing.target_text)) {
-      uniqueMissingSources.push(source);
+  segments.forEach((segment, index) => {
+    if (!segment.target || segment.target.trim() === "") {
+      const source = segment.source;
+      if (!tmMap[source] || !isSafeTmTranslation(source, tmMap[source].target_text)) {
+        if (!sourceToIndex.has(source)) {
+          sourceToIndex.set(source, []);
+          uniqueMissingSources.push(source);
+        }
+        sourceToIndex.get(source).push(index);
+      }
     }
   });
 
@@ -81,7 +88,7 @@ const translateSegments = async (segments, target) => {
 
   for (let index = 0; index < uniqueMissingSources.length; index += chunkSize) {
     const chunkSources = uniqueMissingSources.slice(index, index + chunkSize);
-    const translatedChunk = await translateChunk(chunkSources, target, DEFAULT_SOURCE_LANG, providerState);
+    const translatedChunk = await translateChunk(chunkSources, target, DEFAULT_SOURCE_LANG, providerState, contextSettings);
 
     const insertRows = [];
 

@@ -15,6 +15,7 @@ export const WorkspaceToolbar = ({
   onExport,
   onLoadProject,
   onOpenGlossary,
+  onOpenContext,
   onSaveProject,
   onRelinkHtml,
   onTranslate,
@@ -90,6 +91,9 @@ export const WorkspaceToolbar = ({
             />
           </label>
 
+          <ActionButton onClick={onOpenContext} className={theme.accentSolid}>
+            <Icons.Settings /> Context
+          </ActionButton>
           <ActionButton onClick={onOpenGlossary} className={theme.accentSolid}>
             Glossary
           </ActionButton>

@@ -29,8 +29,8 @@ apiRouter.post("/upload", upload.single("file"), async (request, response) => {
 
 apiRouter.post("/translate-batch", async (request, response) => {
   try {
-    const { segments, target } = request.body;
-    const result = await translateSegments(segments, target);
+    const { segments, target, contextSettings } = request.body;
+    const result = await translateSegments(segments, target, contextSettings);
     response.json(result);
   } catch (error) {
     console.log(error);

@@ -11,6 +11,7 @@ import { WorkspaceToolbar } from "./components/WorkspaceToolbar.jsx";
 import { EmptyWorkspace } from "./components/EmptyWorkspace.jsx";
 import { SegmentBoard } from "./components/SegmentBoard.jsx";
 import { LoadingOverlay } from "./components/LoadingOverlay.jsx";
+import { ContextSettingsModal } from "./components/ContextSettingsModal.jsx";
 import { LANGUAGES } from "./constants/languages.js";
 import { useGlossaryManager } from "./hooks/useGlossaryManager.js";
 import {
@@ -37,6 +38,22 @@ export default function App() {
   const [isUploading, setIsUploading] = useState(false);
   const [locked, setLocked] = useState(true);
   const [userRole, setUserRole] = useState(null);
+  
+  const [showContextPanel, setShowContextPanel] = useState(false);
+  const [contextSettings, setContextSettings] = useState({
+    domain: "General",
+    contentType: "",
+    audience: "",
+    purpose: "",
+    tone: "",
+    brandVoice: "Neutral",
+    formality: "Neutral",
+    terminologyStrictness: "Flexible",
+    localizationLevel: "Translation Only",
+    readingLevel: "General Public",
+    seoOptimization: "Off",
+    region: ""
+  });
 
   const glossaryManager = useGlossaryManager({
     defaultSourceLang: "en",
@@ -227,7 +244,7 @@ export default function App() {
 
       for (let i = 0; i < segmentsToTranslate.length; i += BATCH_SIZE) {
         const batch = segmentsToTranslate.slice(i, i + BATCH_SIZE);
-        const data = await translateBatch(batch, targetLanguage);
+        const data = await translateBatch(batch, targetLanguage, contextSettings);
         const results = data.results || [];
 
         if (results.length > 0 && i === 0) {
@@ -303,7 +320,8 @@ export default function App() {
       targetLanguage,
       currentProvider,
       segments,
-      glossaryMap
+      glossaryMap,
+      contextSettings
     };
 
     const blob = new Blob([JSON.stringify(projectData, null, 2)], {
@@ -335,6 +353,11 @@ export default function App() {
       setCurrentProvider(project.currentProvider || "");
       setShowQaPanel(false);
       glossaryManager.setGlossaryMap(project.glossaryMap || {});
+      
+      if (project.contextSettings) {
+        setContextSettings(project.contextSettings);
+      }
+      
       showToast("Project loaded!");
     } catch (error) {
       showToast("Invalid project file", "error");
@@ -443,6 +466,14 @@ export default function App() {
         theme={theme}
       />
 
+      <ContextSettingsModal
+        show={showContextPanel}
+        onClose={() => setShowContextPanel(false)}
+        contextSettings={contextSettings}
+        setContextSettings={setContextSettings}
+        theme={theme}
+      />
+
       <div className="mx-auto max-w-7xl px-4 pb-10 pt-4 sm:px-6 lg:px-8">
         {isTranslating && (
           <div className="fixed bottom-8 right-8 z-50 w-80 overflow-hidden rounded-xl border border-white/10 bg-slate-950/95 p-4 text-white shadow-2xl shadow-slate-950/40 backdrop-blur-xl">
@@ -478,6 +509,7 @@ export default function App() {
               onExport={handleExportHtml}
               onLoadProject={loadProject}
               onOpenGlossary={() => setShowGlossary(true)}
+              onOpenContext={() => setShowContextPanel(true)}
               onSaveProject={saveProject}
               onRelinkHtml={handleRelinkHtml}
               onTranslate={handleTranslateSegments}

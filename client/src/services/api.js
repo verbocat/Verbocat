@@ -13,10 +13,11 @@ export const uploadFile = async (file) => {
   return response.data;
 };
 
-export const translateBatch = async (segments, target) => {
+export const translateBatch = async (segments, target, contextSettings) => {
   const response = await api.post("/api/translate-batch", {
     segments,
-    target
+    target,
+    contextSettings
   });
   return response.data;
 };

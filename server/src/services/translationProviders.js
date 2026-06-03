@@ -89,7 +89,7 @@ const createProviderState = () => ({
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
-const translateWithOpenAI = async (protectedTexts, target, source = DEFAULT_SOURCE_LANG) => {
+const translateWithOpenAI = async (protectedTexts, target, source = DEFAULT_SOURCE_LANG, contextSettings = null) => {
   if (!OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY not configured");
   }
@@ -107,7 +107,12 @@ const translateWithOpenAI = async (protectedTexts, target, source = DEFAULT_SOUR
 
   let systemPrompt = process.env.OPENAI_SYSTEM_PROMPT;
   
-  const strictInstructions = `\n\nCRITICAL INSTRUCTIONS: You are a pure translation engine. You MUST ONLY output valid JSON. Your response must be a JSON object containing a 'translations' array of strings. The translated strings MUST be in the exact same order as the input 'texts' array. Translate each string into ${targetName}. Do NOT act as a conversational AI. If a text is just a fragment like "To,", translate that exact fragment contextually. Preserve any __TAG_n__ tokens.`;
+  let contextBlock = "";
+  if (contextSettings) {
+    contextBlock = `\nTranslation Context Metadata:\nDomain: ${contextSettings.domain || "General"}\nContent Type: ${contextSettings.contentType || "N/A"}\nAudience: ${contextSettings.audience || "N/A"}\nPurpose: ${contextSettings.purpose || "N/A"}\nTone: ${contextSettings.tone || "N/A"}\nBrand Voice: ${contextSettings.brandVoice || "Neutral"}\nFormality: ${contextSettings.formality || "Neutral"}\nTerminology Strictness: ${contextSettings.terminologyStrictness || "Flexible"}\nLocalization Level: ${contextSettings.localizationLevel || "Translation Only"}\nReading Level: ${contextSettings.readingLevel || "General Public"}\nSEO Optimization: ${contextSettings.seoOptimization || "Off"}\nRegion: ${contextSettings.region || "Global"}\n`;
+  }
+  
+  const strictInstructions = `\n\nCRITICAL INSTRUCTIONS: You are a pure translation engine. You MUST ONLY output valid JSON. Your response must be a JSON object containing a 'translations' array of strings. The translated strings MUST be in the exact same order as the input 'texts' array. Translate each string into ${targetName}. Do NOT act as a conversational AI. If a text is just a fragment like "To,", translate that exact fragment contextually. Preserve any __TAG_n__ tokens.${contextBlock}`;
 
   if (!systemPrompt) {
     systemPrompt = `Translate the user texts from ${sourceName} to ${targetName}. Do not modify or translate tokens that look like __TAG_0__, __TAG_1__ etc. Preserve punctuation and numbers. Return only the translated text without commentary.` + strictInstructions;
@@ -169,12 +174,12 @@ if (OPENAI_API_KEY) {
   providers.push({ name: "OpenAI", translate: translateWithOpenAI });
 }
 
-const callProviderWithRetry = async (provider, protectedTexts, target, source) => {
+const callProviderWithRetry = async (provider, protectedTexts, target, source, contextSettings) => {
   let lastError = null;
 
   for (let attempt = 0; attempt < PROVIDER_RETRY_DELAYS_MS.length; attempt += 1) {
     try {
-      return await provider.translate(protectedTexts, target, source);
+      return await provider.translate(protectedTexts, target, source, contextSettings);
     } catch (error) {
       lastError = error;
 
@@ -189,7 +194,7 @@ const callProviderWithRetry = async (provider, protectedTexts, target, source) =
   throw lastError;
 };
 
-const translateWithProviders = async (sourceTexts, protectedTexts, target, providerState, sourceLang = DEFAULT_SOURCE_LANG) => {
+const translateWithProviders = async (sourceTexts, protectedTexts, target, providerState, sourceLang = DEFAULT_SOURCE_LANG, contextSettings = null) => {
   if (!validateLang(sourceLang) || !validateLang(target)) {
     throw new Error("Invalid source or target language");
   }
@@ -202,7 +207,7 @@ const translateWithProviders = async (sourceTexts, protectedTexts, target, provi
     }
 
     try {
-      const candidateArray = await callProviderWithRetry(provider, protectedTexts, target, sourceLang);
+      const candidateArray = await callProviderWithRetry(provider, protectedTexts, target, sourceLang, contextSettings);
 
       if (candidateArray && Array.isArray(candidateArray) && candidateArray.length === protectedTexts.length) {
         return {
