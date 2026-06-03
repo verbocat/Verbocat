@@ -256,19 +256,19 @@ const translateChunk = async (texts, target, source = DEFAULT_SOURCE_LANG, provi
   for (let i = 0; i < texts.length; i++) {
     const text = texts[i];
     const key = cacheKey(text, target);
-    const cachedSuccess = successCache.get(key);
+    
+    // CACHE DISABLED TEMPORARILY FOR TESTING
+    // const cachedSuccess = successCache.get(key);
+    // if (cachedSuccess) {
+    //   results[i] = { source: text, translated: cachedSuccess.translated, provider: `${cachedSuccess.provider} Cache` };
+    //   continue;
+    // }
 
-    if (cachedSuccess) {
-      results[i] = { source: text, translated: cachedSuccess.translated, provider: `${cachedSuccess.provider} Cache` };
-      continue;
-    }
-
-    const cachedFailure = getFailedCache(key);
-
-    if (cachedFailure) {
-      results[i] = { source: text, translated: text, provider: "Cached Fallback" };
-      continue;
-    }
+    // const cachedFailure = getFailedCache(key);
+    // if (cachedFailure) {
+    //   results[i] = { source: text, translated: text, provider: "Cached Fallback" };
+    //   continue;
+    // }
 
     const { protectedText, tags } = protectTags(text);
 
