@@ -108,8 +108,11 @@ const translateWithOpenAI = async (protectedTexts, target, source = DEFAULT_SOUR
   let systemPrompt = process.env.OPENAI_SYSTEM_PROMPT;
   
   let contextBlock = "";
+  let userContext = "";
   if (contextSettings) {
-    contextBlock = `\nTranslation Context Metadata:\nDomain: ${contextSettings.domain || "General"}\nContent Type: ${contextSettings.contentType || "General"}\nAudience: ${contextSettings.audience || "General"}\nPurpose: ${contextSettings.purpose || "General"}\nTone: ${contextSettings.tone || "General"}\nFormality: ${contextSettings.formality || "Neutral"}\nTerminology Strictness: ${contextSettings.terminologyStrictness || "Flexible"}\nSEO Optimization: ${contextSettings.seoOptimization || "Off"}\n\nCRITICAL TONE INSTRUCTIONS:\nYou MUST adapt your wording and vocabulary to perfectly match the requested Tone and Formality.\nIf Tone is 'Casual' or Formality is 'Informal', you MUST use highly colloquial, everyday conversational language. For languages like Hindi, completely avoid highly academic, typical, or Sanskritized vocabulary (e.g., use 'लोन' instead of 'ऋण', use simple words). Do not sound like a machine. Be natural and relatable.`;
+    contextBlock = `\nTranslation Context Metadata:\nDomain: ${contextSettings.domain || "General"}\nContent Type: ${contextSettings.contentType || "General"}\nAudience: ${contextSettings.audience || "General"}\nPurpose: ${contextSettings.purpose || "General"}\nTone: ${contextSettings.tone || "General"}\nFormality: ${contextSettings.formality || "Neutral"}\nTerminology Strictness: ${contextSettings.terminologyStrictness || "Flexible"}\nSEO Optimization: ${contextSettings.seoOptimization || "Off"}\n\nCRITICAL TONE INSTRUCTIONS:\nYou MUST adapt your wording and vocabulary to perfectly match the requested Tone and Formality.\nIf Tone is 'Casual' or Formality is 'Informal' or 'Very Informal', you MUST use highly colloquial, everyday conversational language (e.g., Hinglish for Hindi). For languages like Hindi, completely avoid highly academic, typical, or Sanskritized vocabulary (e.g., use 'लोन' instead of 'ऋण', 'डिटेल्स' instead of 'विवरण', 'कस्टमर' instead of 'उपभोक्ता'). Do not sound like a machine. Use natural, conversational phrasing that people use in real life.\nIf Formality is 'Very Formal', use precise, strict, professional, and standard terminology.`;
+    
+    userContext = `\n\nREMINDER: Tone is ${contextSettings.tone || "General"} and Formality is ${contextSettings.formality || "Neutral"}. YOU MUST ADAPT YOUR VOCABULARY TO THIS OR YOU WILL BE PENALIZED!`;
   }
   
   const strictInstructions = `\n\nCRITICAL INSTRUCTIONS: You are a pure translation engine. You MUST ONLY output valid JSON. Your response must be a JSON object containing a 'translations' array of strings. The translated strings MUST be in the exact same order as the input 'texts' array. Translate each string into ${targetName}. Do NOT act as a conversational AI. If a text is just a fragment like "To,", translate that exact fragment contextually. Preserve any __TAG_n__ tokens.${contextBlock}`;
@@ -124,9 +127,9 @@ const translateWithOpenAI = async (protectedTexts, target, source = DEFAULT_SOUR
     model: OPENAI_MODEL,
     messages: [
       { role: "system", content: systemPrompt },
-      { role: "user", content: JSON.stringify({ texts: protectedTexts }) }
+      { role: "user", content: JSON.stringify({ texts: protectedTexts }) + userContext }
     ],
-    temperature: 0.3,
+    temperature: 0.6,
     max_tokens: 16000,
     response_format: { type: "json_object" }
   };
