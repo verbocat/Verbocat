@@ -109,7 +109,7 @@ const translateWithOpenAI = async (protectedTexts, target, source = DEFAULT_SOUR
   
   let contextBlock = "";
   if (contextSettings) {
-    contextBlock = `\nTranslation Context Metadata:\nDomain: ${contextSettings.domain || "General"}\nContent Type: ${contextSettings.contentType || "General"}\nAudience: ${contextSettings.audience || "General"}\nPurpose: ${contextSettings.purpose || "General"}\nTone: ${contextSettings.tone || "General"}\nFormality: ${contextSettings.formality || "Neutral"}\nTerminology Strictness: ${contextSettings.terminologyStrictness || "Flexible"}\nSEO Optimization: ${contextSettings.seoOptimization || "Off"}\n\nYou MUST adjust your wording, vocabulary, and phrasing to precisely match the Tone (${contextSettings.tone || "General"}) and Formality (${contextSettings.formality || "Neutral"}). A 'Casual' or 'Informal' setting means you must use conversational, everyday language rather than academic or strict terminology.`;
+    contextBlock = `\nTranslation Context Metadata:\nDomain: ${contextSettings.domain || "General"}\nContent Type: ${contextSettings.contentType || "General"}\nAudience: ${contextSettings.audience || "General"}\nPurpose: ${contextSettings.purpose || "General"}\nTone: ${contextSettings.tone || "General"}\nFormality: ${contextSettings.formality || "Neutral"}\nTerminology Strictness: ${contextSettings.terminologyStrictness || "Flexible"}\nSEO Optimization: ${contextSettings.seoOptimization || "Off"}\n\nCRITICAL TONE INSTRUCTIONS:\nYou MUST adapt your wording and vocabulary to perfectly match the requested Tone and Formality.\nIf Tone is 'Casual' or Formality is 'Informal', you MUST use highly colloquial, everyday conversational language. For languages like Hindi, completely avoid highly academic, typical, or Sanskritized vocabulary (e.g., use 'लोन' instead of 'ऋण', use simple words). Do not sound like a machine. Be natural and relatable.`;
   }
   
   const strictInstructions = `\n\nCRITICAL INSTRUCTIONS: You are a pure translation engine. You MUST ONLY output valid JSON. Your response must be a JSON object containing a 'translations' array of strings. The translated strings MUST be in the exact same order as the input 'texts' array. Translate each string into ${targetName}. Do NOT act as a conversational AI. If a text is just a fragment like "To,", translate that exact fragment contextually. Preserve any __TAG_n__ tokens.${contextBlock}`;
@@ -126,7 +126,7 @@ const translateWithOpenAI = async (protectedTexts, target, source = DEFAULT_SOUR
       { role: "system", content: systemPrompt },
       { role: "user", content: JSON.stringify({ texts: protectedTexts }) }
     ],
-    temperature: 0.0,
+    temperature: 0.3,
     max_tokens: 16000,
     response_format: { type: "json_object" }
   };
