@@ -42,17 +42,13 @@ export default function App() {
   const [showContextPanel, setShowContextPanel] = useState(false);
   const [contextSettings, setContextSettings] = useState({
     domain: "General",
-    contentType: "",
-    audience: "",
-    purpose: "",
-    tone: "",
-    brandVoice: "Neutral",
+    contentType: "General",
+    audience: "General",
+    purpose: "General",
+    tone: "General",
     formality: "Neutral",
     terminologyStrictness: "Flexible",
-    localizationLevel: "Translation Only",
-    readingLevel: "General Public",
-    seoOptimization: "Off",
-    region: ""
+    seoOptimization: "Off"
   });
 
   const glossaryManager = useGlossaryManager({

@@ -3,12 +3,20 @@ import { Icons } from "./Icons.jsx";
 
 const DOMAINS = ["General", "Marketing", "Legal", "Medical", "Pharmaceutical", "Financial", "Banking", "Insurance", "Technical", "Software", "IT & Cybersecurity", "E-commerce", "Automotive", "Manufacturing", "Engineering", "Telecommunications", "Gaming", "Education", "Government", "HR & Recruitment", "Travel & Tourism", "Hospitality", "Retail", "Energy & Utilities", "Real Estate", "Life Sciences", "Healthcare", "Aerospace", "Agriculture", "Media & Entertainment"];
 
+const CONTENT_TYPES = ["General", "Landing Page", "Product Page", "Advertisement", "Email Campaign", "Sales Brochure", "Social Media Post", "UI Strings", "Help Center", "User Guide", "Documentation", "Release Notes", "Knowledge Base", "Contract", "NDA", "Terms of Service", "Privacy Policy", "Compliance Document", "Clinical Trial", "IFU", "Patient Information", "Medical Report", "Website", "Blog", "Article", "Presentation", "Training Material", "Internal Communication"];
+
+const AUDIENCES = ["General", "Consumers", "Small Business Owners", "Enterprise Buyers", "Patients", "Caregivers", "End Users", "Developers", "Administrators"];
+
+const PURPOSES = ["General", "Generate Leads", "Drive Purchases", "Build Trust", "Increase Signups", "Inform", "Educate", "Train", "Comply", "Protect Rights", "Resolve Issues", "Reduce Support Tickets"];
+
+const TONES = ["General", "Persuasive", "Professional", "Friendly", "Formal", "Precise", "Reassuring", "Clear", "Concise", "Casual", "Engaging"];
+
 const PROFILES = {
   "Custom": {},
-  "Marketing Website": { domain: "Marketing", contentType: "Landing Page", purpose: "Generate Leads", tone: "Persuasive", localizationLevel: "Transcreation", brandVoice: "Premium" },
-  "Software Localization": { domain: "Software", contentType: "UI Strings", purpose: "Inform", tone: "Clear", terminologyStrictness: "Strict", readingLevel: "Technical Experts" },
+  "Marketing Website": { domain: "Marketing", contentType: "Landing Page", purpose: "Generate Leads", tone: "Persuasive" },
+  "Software Localization": { domain: "Software", contentType: "UI Strings", purpose: "Inform", tone: "Clear", terminologyStrictness: "Strict" },
   "Legal": { domain: "Legal", contentType: "Contract", purpose: "Comply", tone: "Formal", terminologyStrictness: "Strict", formality: "Very Formal" },
-  "Medical": { domain: "Medical", contentType: "Patient Information", purpose: "Educate", tone: "Professional", terminologyStrictness: "Strict", readingLevel: "General Public" },
+  "Medical": { domain: "Medical", contentType: "Patient Information", purpose: "Educate", tone: "Professional", terminologyStrictness: "Strict" },
   "E-commerce": { domain: "E-commerce", contentType: "Product Page", purpose: "Drive Purchases", tone: "Persuasive", seoOptimization: "Basic" }
 };
 
@@ -71,24 +79,26 @@ export const ContextSettingsModal = ({ show, onClose, contextSettings, setContex
            </InputWrapper>
 
            <InputWrapper label="Content Type">
-             <input type="text" value={contextSettings.contentType || ""} onChange={e => handleChange('contentType', e.target.value)} placeholder="e.g. Landing Page, UI Strings" className={`rounded-xl border px-3 py-2 outline-none ${theme.input}`} />
+             <select value={contextSettings.contentType || "General"} onChange={e => handleChange('contentType', e.target.value)} className={`rounded-xl border px-3 py-2 outline-none ${theme.input}`}>
+               {CONTENT_TYPES.map(d => <option key={d} value={d}>{d}</option>)}
+             </select>
            </InputWrapper>
 
            <InputWrapper label="Audience">
-             <input type="text" value={contextSettings.audience || ""} onChange={e => handleChange('audience', e.target.value)} placeholder="e.g. End Users, Patients" className={`rounded-xl border px-3 py-2 outline-none ${theme.input}`} />
+             <select value={contextSettings.audience || "General"} onChange={e => handleChange('audience', e.target.value)} className={`rounded-xl border px-3 py-2 outline-none ${theme.input}`}>
+               {AUDIENCES.map(d => <option key={d} value={d}>{d}</option>)}
+             </select>
            </InputWrapper>
 
            <InputWrapper label="Purpose">
-             <input type="text" value={contextSettings.purpose || ""} onChange={e => handleChange('purpose', e.target.value)} placeholder="e.g. Inform, Generate Leads" className={`rounded-xl border px-3 py-2 outline-none ${theme.input}`} />
+             <select value={contextSettings.purpose || "General"} onChange={e => handleChange('purpose', e.target.value)} className={`rounded-xl border px-3 py-2 outline-none ${theme.input}`}>
+               {PURPOSES.map(d => <option key={d} value={d}>{d}</option>)}
+             </select>
            </InputWrapper>
 
            <InputWrapper label="Tone">
-             <input type="text" value={contextSettings.tone || ""} onChange={e => handleChange('tone', e.target.value)} placeholder="e.g. Professional, Persuasive" className={`rounded-xl border px-3 py-2 outline-none ${theme.input}`} />
-           </InputWrapper>
-
-           <InputWrapper label="Brand Voice">
-             <select value={contextSettings.brandVoice || "Neutral"} onChange={e => handleChange('brandVoice', e.target.value)} className={`rounded-xl border px-3 py-2 outline-none ${theme.input}`}>
-               {["Neutral", "Professional", "Premium", "Luxury", "Friendly", "Corporate", "Innovative", "Trustworthy", "Technical", "Playful"].map(d => <option key={d} value={d}>{d}</option>)}
+             <select value={contextSettings.tone || "General"} onChange={e => handleChange('tone', e.target.value)} className={`rounded-xl border px-3 py-2 outline-none ${theme.input}`}>
+               {TONES.map(d => <option key={d} value={d}>{d}</option>)}
              </select>
            </InputWrapper>
 
@@ -104,26 +114,10 @@ export const ContextSettingsModal = ({ show, onClose, contextSettings, setContex
              </select>
            </InputWrapper>
 
-           <InputWrapper label="Localization Level">
-             <select value={contextSettings.localizationLevel || "Translation Only"} onChange={e => handleChange('localizationLevel', e.target.value)} className={`rounded-xl border px-3 py-2 outline-none ${theme.input}`}>
-               {["Translation Only", "Light Localization", "Full Localization", "Transcreation"].map(d => <option key={d} value={d}>{d}</option>)}
-             </select>
-           </InputWrapper>
-
-           <InputWrapper label="Reading Level">
-             <select value={contextSettings.readingLevel || "General Public"} onChange={e => handleChange('readingLevel', e.target.value)} className={`rounded-xl border px-3 py-2 outline-none ${theme.input}`}>
-               {["Children", "General Public", "Business", "Technical Experts", "Specialists"].map(d => <option key={d} value={d}>{d}</option>)}
-             </select>
-           </InputWrapper>
-
            <InputWrapper label="SEO Optimization">
              <select value={contextSettings.seoOptimization || "Off"} onChange={e => handleChange('seoOptimization', e.target.value)} className={`rounded-xl border px-3 py-2 outline-none ${theme.input}`}>
                {["Off", "Basic", "Aggressive"].map(d => <option key={d} value={d}>{d}</option>)}
              </select>
-           </InputWrapper>
-
-           <InputWrapper label="Region (Text)">
-             <input type="text" value={contextSettings.region || ""} onChange={e => handleChange('region', e.target.value)} placeholder="e.g. US, Spain, MSA" className={`rounded-xl border px-3 py-2 outline-none ${theme.input}`} />
            </InputWrapper>
         </div>
 
