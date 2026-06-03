@@ -89,7 +89,7 @@ const createProviderState = () => ({
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
-const translateWithOpenAI = async (protectedText, target, source = DEFAULT_SOURCE_LANG) => {
+const translateWithOpenAI = async (protectedTexts, target, source = DEFAULT_SOURCE_LANG) => {
   if (!OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY not configured");
   }
@@ -107,10 +107,10 @@ const translateWithOpenAI = async (protectedText, target, source = DEFAULT_SOURC
 
   let systemPrompt = process.env.OPENAI_SYSTEM_PROMPT;
   
-  const strictInstructions = `\n\nCRITICAL INSTRUCTIONS: You are a pure translation engine. You MUST ONLY output the translated text in ${targetName}. Do NOT act as a conversational AI. Do NOT write letters, complete sentences, or answer questions. If the text is just a fragment like "To," or "REJECTION LETTER", just translate that exact fragment to ${targetName}. Preserve any __TAG_n__ tokens.`;
+  const strictInstructions = `\n\nCRITICAL INSTRUCTIONS: You are a pure translation engine. You MUST ONLY output valid JSON. Your response must be a JSON object containing a 'translations' array of strings. The translated strings MUST be in the exact same order as the input 'texts' array. Translate each string into ${targetName}. Do NOT act as a conversational AI. If a text is just a fragment like "To,", translate that exact fragment contextually. Preserve any __TAG_n__ tokens.`;
 
   if (!systemPrompt) {
-    systemPrompt = `Translate the user text from ${sourceName} to ${targetName}. Do not modify or translate tokens that look like __TAG_0__, __TAG_1__ etc. Preserve punctuation and numbers. Return only the translated text without commentary.` + strictInstructions;
+    systemPrompt = `Translate the user texts from ${sourceName} to ${targetName}. Do not modify or translate tokens that look like __TAG_0__, __TAG_1__ etc. Preserve punctuation and numbers. Return only the translated text without commentary.` + strictInstructions;
   } else {
     systemPrompt = systemPrompt.replace(/{source}/g, sourceName).replace(/{target}/g, targetName) + strictInstructions;
   }
@@ -119,10 +119,11 @@ const translateWithOpenAI = async (protectedText, target, source = DEFAULT_SOURC
     model: OPENAI_MODEL,
     messages: [
       { role: "system", content: systemPrompt },
-      { role: "user", content: protectedText }
+      { role: "user", content: JSON.stringify({ texts: protectedTexts }) }
     ],
     temperature: 0.0,
-    max_tokens: 2000
+    max_tokens: 16000,
+    response_format: { type: "json_object" }
   };
 
   const response = await axios.post("https://api.openai.com/v1/chat/completions", payload, {
@@ -130,11 +131,20 @@ const translateWithOpenAI = async (protectedText, target, source = DEFAULT_SOURC
       Authorization: `Bearer ${OPENAI_API_KEY}`,
       "Content-Type": "application/json"
     },
-    timeout: 20000
+    timeout: 30000
   });
 
-  const text = response.data?.choices?.[0]?.message?.content;
-  return String(text || "").trim();
+  const content = response.data?.choices?.[0]?.message?.content;
+  try {
+    const parsed = JSON.parse(content);
+    if (!parsed.translations || !Array.isArray(parsed.translations)) {
+      throw new Error("Invalid JSON structure from OpenAI");
+    }
+    return parsed.translations.map(t => String(t || "").trim());
+  } catch (error) {
+    console.error("OpenAI JSON parsing failed:", error, "Content:", content);
+    throw error;
+  }
 };
 
 const isUsableTranslation = (source, translated) => {
@@ -159,12 +169,12 @@ if (OPENAI_API_KEY) {
   providers.push({ name: "OpenAI", translate: translateWithOpenAI });
 }
 
-const callProviderWithRetry = async (provider, protectedText, target, source) => {
+const callProviderWithRetry = async (provider, protectedTexts, target, source) => {
   let lastError = null;
 
   for (let attempt = 0; attempt < PROVIDER_RETRY_DELAYS_MS.length; attempt += 1) {
     try {
-      return await provider.translate(protectedText, target, source);
+      return await provider.translate(protectedTexts, target, source);
     } catch (error) {
       lastError = error;
 
@@ -179,7 +189,7 @@ const callProviderWithRetry = async (provider, protectedText, target, source) =>
   throw lastError;
 };
 
-const translateWithProviders = async (sourceText, protectedText, target, providerState, sourceLang = DEFAULT_SOURCE_LANG) => {
+const translateWithProviders = async (sourceTexts, protectedTexts, target, providerState, sourceLang = DEFAULT_SOURCE_LANG) => {
   if (!validateLang(sourceLang) || !validateLang(target)) {
     throw new Error("Invalid source or target language");
   }
@@ -192,11 +202,11 @@ const translateWithProviders = async (sourceText, protectedText, target, provide
     }
 
     try {
-      const candidate = await callProviderWithRetry(provider, protectedText, target, sourceLang);
+      const candidateArray = await callProviderWithRetry(provider, protectedTexts, target, sourceLang);
 
-      if (isUsableTranslation(sourceText, candidate)) {
+      if (candidateArray && Array.isArray(candidateArray) && candidateArray.length === protectedTexts.length) {
         return {
-          translated: candidate,
+          translatedArray: candidateArray,
           provider: provider.name
         };
       }
@@ -230,54 +240,74 @@ const translateChunk = async (texts, target, source = DEFAULT_SOURCE_LANG, provi
   if (!validateLang(source)) {
     throw new Error("Invalid source language");
   }
-  const results = [];
-  const CONCURRENCY = 5;
 
-  for (let i = 0; i < texts.length; i += CONCURRENCY) {
-    const batch = texts.slice(i, i + CONCURRENCY);
-    
-    const batchPromises = batch.map(async (text) => {
-      const key = cacheKey(text, target);
-      const cachedSuccess = successCache.get(key);
+  const results = new Array(texts.length);
+  const uncachedIndices = [];
+  const uncachedTexts = [];
+  const uncachedProtectedTexts = [];
+  const uncachedTags = [];
+  const uncachedKeys = [];
 
-      if (cachedSuccess) {
-        return { source: text, translated: cachedSuccess.translated, provider: `${cachedSuccess.provider} Cache` };
-      }
+  for (let i = 0; i < texts.length; i++) {
+    const text = texts[i];
+    const key = cacheKey(text, target);
+    const cachedSuccess = successCache.get(key);
 
-      const cachedFailure = getFailedCache(key);
+    if (cachedSuccess) {
+      results[i] = { source: text, translated: cachedSuccess.translated, provider: `${cachedSuccess.provider} Cache` };
+      continue;
+    }
 
-      if (cachedFailure) {
-        return { source: text, translated: text, provider: "Cached Fallback" };
-      }
+    const cachedFailure = getFailedCache(key);
 
-      const { protectedText, tags } = protectTags(text);
+    if (cachedFailure) {
+      results[i] = { source: text, translated: text, provider: "Cached Fallback" };
+      continue;
+    }
 
-      if (protectedText.length > MAX_TEXT_LENGTH) {
-        return { source: text, translated: text, provider: "TooLong" };
-      }
+    const { protectedText, tags } = protectTags(text);
 
-      const translation = await translateWithProviders(text, protectedText, target, providerState, source);
+    if (protectedText.length > MAX_TEXT_LENGTH) {
+      results[i] = { source: text, translated: text, provider: "TooLong" };
+      continue;
+    }
 
-      let translated = translation?.translated || null;
-      let provider = translation?.provider || null;
+    uncachedIndices.push(i);
+    uncachedTexts.push(text);
+    uncachedProtectedTexts.push(protectedText);
+    uncachedTags.push(tags);
+    uncachedKeys.push(key);
+  }
 
-      if (!translated || translated.trim() === "") {
+  if (uncachedTexts.length > 0) {
+    const translationData = await translateWithProviders(uncachedTexts, uncachedProtectedTexts, target, providerState, source);
+
+    const translatedArray = translationData?.translatedArray || [];
+    const provider = translationData?.provider || "Fallback";
+
+    for (let j = 0; j < uncachedTexts.length; j++) {
+      const originalIndex = uncachedIndices[j];
+      const text = uncachedTexts[j];
+      const key = uncachedKeys[j];
+      const tags = uncachedTags[j];
+
+      let translated = translatedArray[j];
+      let currentProvider = provider;
+
+      if (!translated || translated.trim() === "" || currentProvider === "Fallback") {
         translated = text;
-        provider = "Fallback";
+        currentProvider = "Fallback";
         setLimitedCache(failedCache, key, { createdAt: Date.now() }, FAILED_CACHE_LIMIT);
       }
 
       const finalTranslation = stripVisibleTags(restoreProtectedTags(translated, tags));
 
-      if (provider !== "Fallback") {
-        setLimitedCache(successCache, key, { translated: finalTranslation, provider }, SUCCESS_CACHE_LIMIT);
+      if (currentProvider !== "Fallback") {
+        setLimitedCache(successCache, key, { translated: finalTranslation, provider: currentProvider }, SUCCESS_CACHE_LIMIT);
       }
 
-      return { source: text, translated: finalTranslation, provider };
-    });
-
-    const batchResults = await Promise.all(batchPromises);
-    results.push(...batchResults);
+      results[originalIndex] = { source: text, translated: finalTranslation, provider: currentProvider };
+    }
   }
 
   return results;

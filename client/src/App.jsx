@@ -222,7 +222,7 @@ export default function App() {
     }
 
     try {
-      const BATCH_SIZE = 20;
+      const BATCH_SIZE = 100;
       let completedCount = 0;
 
       for (let i = 0; i < segmentsToTranslate.length; i += BATCH_SIZE) {
