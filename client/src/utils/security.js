@@ -1,6 +1,6 @@
 const PIN_TO_ROLE = {
   "102030": "office",
-  "894979": "linguist"
+  " ": "linguist"
 };
 
 const SESSION_KEY = "screenlock_session";

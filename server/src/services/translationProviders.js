@@ -237,7 +237,7 @@ const restoreProtectedTags = (translated, tags) => {
   return output;
 };
 
-const translateChunk = async (texts, target, source = DEFAULT_SOURCE_LANG, providerState = createProviderState()) => {
+const translateChunk = async (texts, target, source = DEFAULT_SOURCE_LANG, providerState = createProviderState(), contextSettings = null) => {
   if (!target || !validateLang(target)) {
     throw new Error("Invalid or missing target language");
   }
@@ -285,7 +285,7 @@ const translateChunk = async (texts, target, source = DEFAULT_SOURCE_LANG, provi
   }
 
   if (uncachedTexts.length > 0) {
-    const translationData = await translateWithProviders(uncachedTexts, uncachedProtectedTexts, target, providerState, source);
+    const translationData = await translateWithProviders(uncachedTexts, uncachedProtectedTexts, target, providerState, source, contextSettings);
 
     const translatedArray = translationData?.translatedArray || [];
     const provider = translationData?.provider || "Fallback";
