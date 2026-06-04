@@ -2,11 +2,11 @@ const path = require("path");
 const { v4: uuidv4 } = require("uuid");
 const { supabase } = require("../config/supabase");
 
-const htmlParser = require("./parsers/htmlParser");
-const docxParser = require("./parsers/docxParser");
-const pptxParser = require("./parsers/pptxParser");
-const xlsxParser = require("./parsers/xlsxParser");
-const txtParser = require("./parsers/txtParser");
+const htmlParser = require("../utils/parsers/htmlParser");
+const docxParser = require("../utils/parsers/docxParser");
+const pptxParser = require("../utils/parsers/pptxParser");
+const xlsxParser = require("../utils/parsers/xlsxParser");
+const txtParser = require("../utils/parsers/txtParser");
 
 const getParser = (ext) => {
   switch (ext) {
