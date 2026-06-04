@@ -324,7 +324,8 @@ export const GlossaryModal = ({
                         />
                       </div>
                     );
-                  })}
+                  })
+                  )}
                 </div>
               </div>
             </div>
