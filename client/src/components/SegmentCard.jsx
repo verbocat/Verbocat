@@ -1,3 +1,4 @@
+import { useRef, useEffect } from "react";
 import { Icons } from "./Icons.jsx";
 
 export const SegmentCard = ({
@@ -10,6 +11,19 @@ export const SegmentCard = ({
   onToggleVerify,
   onVerifyAndNext
 }) => {
+  const sourceRef = useRef(null);
+  const targetRef = useRef(null);
+
+  useEffect(() => {
+    if (sourceRef.current) {
+      sourceRef.current.style.height = "auto";
+      sourceRef.current.style.height = `${sourceRef.current.scrollHeight}px`;
+    }
+    if (targetRef.current) {
+      targetRef.current.style.height = "auto";
+      targetRef.current.style.height = `${targetRef.current.scrollHeight}px`;
+    }
+  }, [segment.source, segment.target]);
   const handleKeyDown = (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
@@ -27,7 +41,7 @@ export const SegmentCard = ({
     id={`segment-${segment.id}`}
     className={`border-l-4 ${segment.verified ? 'border-teal-500' : segment.target ? theme.status.translated : theme.status.empty}`}
   >
-    <div className="grid gap-4 px-4 py-4 lg:grid-cols-[72px_minmax(0,1fr)_minmax(0,1fr)]">
+    <div className="grid gap-3 px-3 py-3 lg:grid-cols-[72px_minmax(0,1fr)_minmax(0,1fr)]">
       <div className="flex items-start justify-between lg:block">
         <div className="text-xl font-bold">{index + 1}</div>
         <div className="mt-0 flex flex-wrap gap-2 lg:mt-3 lg:flex-col">
@@ -63,10 +77,11 @@ export const SegmentCard = ({
         </div>
 
         <textarea
+          ref={sourceRef}
           value={segment.source}
           readOnly
           onInput={handleAutoResize}
-          className={`min-h-[60px] w-full resize-none overflow-hidden rounded-xl border p-4 outline-none ${theme.inputSoft}`}
+          className={`min-h-[40px] w-full resize-none overflow-hidden rounded-xl border p-3 outline-none ${theme.inputSoft}`}
         />
       </section>
 
@@ -97,13 +112,14 @@ export const SegmentCard = ({
 
         <textarea
           id={`target-${segment.id}`}
+          ref={targetRef}
           data-segment-target="true"
           value={segment.target || ""}
           onChange={(event) => onUpdateTranslation(segment.id, event.target.value)}
           onKeyDown={handleKeyDown}
           onInput={handleAutoResize}
           placeholder="Translation will appear here... (Press Ctrl+Enter to verify and move to next)"
-          className={`min-h-[60px] w-full resize-none overflow-hidden rounded-xl border p-4 outline-none focus:ring-2 ${segment.verified ? 'focus:ring-teal-500' : 'focus:ring-sky-300'} ${theme.input}`}
+          className={`min-h-[40px] w-full resize-none overflow-hidden rounded-xl border p-3 outline-none focus:ring-2 ${segment.verified ? 'focus:ring-teal-500' : 'focus:ring-sky-300'} ${theme.input}`}
         />
 
         {segment.qaIssues?.length > 0 && (

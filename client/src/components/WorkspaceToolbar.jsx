@@ -177,24 +177,24 @@ export const WorkspaceToolbar = ({
               className={
                 segmentsCount === 0
                   ? "cursor-not-allowed bg-slate-400/30 text-slate-300"
-                  : theme.buttonSecondary
+                  : "bg-emerald-600 text-white hover:bg-emerald-500"
               }
             >
-              <Icons.Download />
+              <Icons.Download /> Export
             </ActionButton>
           </div>
 
           <ActionButton
             onClick={onCloseProject}
             disabled={segmentsCount === 0}
+            title="Close Project"
             className={
               segmentsCount === 0
                 ? "cursor-not-allowed bg-slate-400/30 text-slate-300"
-                : "bg-rose-700 text-white hover:bg-rose-600"
+                : "bg-rose-700 text-white hover:bg-rose-600 px-3 py-2"
             }
           >
             <Icons.X />
-            Close
           </ActionButton>
         </div>
       </div>

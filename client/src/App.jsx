@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { Header } from "./components/Header.jsx";
 import { ScreenLock } from "./components/ScreenLock.jsx";
@@ -23,6 +23,7 @@ import { applyGlossaryTerms } from "./utils/glossary.js";
 import { getTheme } from "./utils/theme.js";
 
 export default function App() {
+  const virtuosoRef = useRef(null);
   const [segments, setSegments] = useState([]);
   const [history, setHistory] = useState([]);
   const [future, setFuture] = useState([]);
@@ -394,14 +395,18 @@ export default function App() {
           const nextId = newSegments[nextIndex].id;
           
           setTimeout(() => {
-            const nextElement = document.getElementById(`segment-${nextId}`);
-            if (nextElement) {
-              nextElement.scrollIntoView({ behavior: "smooth", block: "center" });
-              nextElement.classList.add("ring-2", "ring-teal-500");
-              setTimeout(() => nextElement.classList.remove("ring-2", "ring-teal-500"), 1000);
+            if (virtuosoRef.current) {
+              virtuosoRef.current.scrollToIndex({ index: nextIndex, align: 'center', behavior: 'smooth' });
             }
-            const nextTa = document.getElementById(`target-${nextId}`);
-            if (nextTa) nextTa.focus();
+            setTimeout(() => {
+              const nextElement = document.getElementById(`segment-${nextId}`);
+              if (nextElement) {
+                nextElement.classList.add("ring-2", "ring-teal-500");
+                setTimeout(() => nextElement.classList.remove("ring-2", "ring-teal-500"), 1000);
+              }
+              const nextTa = document.getElementById(`target-${nextId}`);
+              if (nextTa) nextTa.focus();
+            }, 300);
           }, 50);
           break;
         }
@@ -659,8 +664,10 @@ export default function App() {
 
             <SegmentBoard theme={theme}>
               <Virtuoso
+                ref={virtuosoRef}
                 style={{ height: "100%" }}
                 data={filteredSegments}
+                components={{ Footer: () => <div className="h-32" /> }}
                 itemContent={(index, segment) => (
                   <SegmentCard
                     key={segment.id}
