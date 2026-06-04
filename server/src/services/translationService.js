@@ -82,7 +82,7 @@ const translateSegments = async (segments, target, contextSettings) => {
     }
   });
 
-  const chunkSize = 100;
+  const chunkSize = 40;
 
   const DEFAULT_SOURCE_LANG = process.env.DEFAULT_SOURCE_LANG || "en";
 

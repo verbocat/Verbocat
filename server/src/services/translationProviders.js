@@ -139,7 +139,7 @@ const translateWithOpenAI = async (protectedTexts, target, source = DEFAULT_SOUR
       Authorization: `Bearer ${OPENAI_API_KEY}`,
       "Content-Type": "application/json"
     },
-    timeout: 30000
+    timeout: 120000
   });
 
   const content = response.data?.choices?.[0]?.message?.content;
