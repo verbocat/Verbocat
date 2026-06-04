@@ -38,9 +38,6 @@ export const GlossaryModal = ({
     [languages]
   );
 
-  if (!show) {
-    return null;
-  }
 
   const [isEditing, setIsEditing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -70,6 +67,10 @@ export const GlossaryModal = ({
       item.source.toLowerCase().includes(searchQuery.toLowerCase()) || 
       item.target.toLowerCase().includes(searchQuery.toLowerCase())
     );
+
+  if (!show) {
+    return null;
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md">
