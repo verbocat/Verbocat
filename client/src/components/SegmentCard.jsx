@@ -1,5 +1,37 @@
-import { useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Icons } from "./Icons.jsx";
+
+const GlossaryHighlight = ({ term, children }) => {
+  const [show, setShow] = useState(false);
+  const handleCopy = (e) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(term.target);
+  };
+  return (
+    <span 
+      className="relative inline-block group"
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+    >
+      <mark className="bg-amber-200 text-amber-900 rounded-sm px-0.5 cursor-pointer">{children}</mark>
+      {show && (
+        <span 
+          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-slate-800 text-white font-semibold text-xs rounded shadow-lg z-50 whitespace-nowrap cursor-text select-text flex items-center gap-2 border border-white/10"
+          onMouseEnter={() => setShow(true)}
+        >
+          {term.target}
+          <button 
+            onClick={handleCopy}
+            className="p-1 hover:bg-white/20 rounded transition text-sky-300"
+            title="Copy to clipboard"
+          >
+            <Icons.Copy className="w-3 h-3" />
+          </button>
+        </span>
+      )}
+    </span>
+  );
+};
 
 export const SegmentCard = ({
   darkMode,
@@ -37,7 +69,7 @@ export const SegmentCard = ({
           const parts = el.split(regex);
           return parts.map((part, i) => {
             if (i % 2 === 1) { // This is the match
-              return <mark key={`${term.source}-${i}`} className="bg-amber-200 text-amber-900 rounded-sm px-0.5" title={term.target}>{part}</mark>;
+              return <GlossaryHighlight key={`${term.source}-${i}`} term={term}>{part}</GlossaryHighlight>;
             }
             return part;
           });

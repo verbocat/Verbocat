@@ -55,20 +55,22 @@ export const GlossaryModal = ({
 
     if (!file) return;
 
-    Papa.parse(file, {
-      encoding: "UTF-8",
-      complete: (results) => {
-        const newGlossary = results.data
-          .filter(row => row.length >= 2 && row[0] && row[1])
-          .map(row => ({ source: row[0].trim(), target: row[1].trim() }));
-        if (newGlossary.length > 0) {
-          setGlossary(newGlossary);
-          onClearSelection();
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      Papa.parse(event.target.result, {
+        complete: (results) => {
+          const newGlossary = results.data
+            .filter(row => row.length >= 2 && row[0] && row[1])
+            .map(row => ({ source: String(row[0]).trim(), target: String(row[1]).trim() }));
+          if (newGlossary.length > 0) {
+            setGlossary(newGlossary);
+            onClearSelection();
+          }
         }
-      }
-    });
-    // Reset file input
-    if (fileInputRef.current) fileInputRef.current.value = "";
+      });
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    };
+    reader.readAsText(file, "UTF-8");
   };
 
   const filteredGlossary = glossary.map((item, index) => ({...item, originalIndex: index}))
@@ -258,10 +260,10 @@ export const GlossaryModal = ({
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-auto p-5">
-              <div className="overflow-hidden rounded-[24px] border border-white/10">
+            <div className="min-h-0 flex-1 p-5 flex flex-col">
+              <div className="flex flex-col flex-1 min-h-0 overflow-hidden rounded-[24px] border border-white/10">
                 <div
-                  className={`grid grid-cols-[64px_1fr_1fr] border-b px-4 py-3 text-xs font-bold uppercase tracking-[0.22em] ${
+                  className={`grid grid-cols-[64px_1fr_1fr] border-b px-4 py-3 text-xs font-bold uppercase tracking-[0.22em] shrink-0 ${
                     darkMode ? "border-white/10 bg-white/[0.04] text-slate-300" : "border-slate-200 bg-slate-100 text-slate-500"
                   }`}
                 >
@@ -270,11 +272,12 @@ export const GlossaryModal = ({
                   <div>Target</div>
                 </div>
 
-                {filteredGlossary.length === 0 ? (
-                  <div className={`p-10 text-center text-sm ${theme.muted}`}>
-                    No glossary rows found.
-                  </div>
-                ) : (
+                <div className="flex-1 overflow-y-auto">
+                  {filteredGlossary.length === 0 ? (
+                    <div className={`p-10 text-center text-sm ${theme.muted}`}>
+                      No glossary rows found.
+                    </div>
+                  ) : (
                   filteredGlossary.map((item) => {
                     const index = item.originalIndex;
                     const selected = selectedGlossaryRows.includes(index);
@@ -321,8 +324,8 @@ export const GlossaryModal = ({
                         />
                       </div>
                     );
-                  })
-                )}
+                  })}
+                </div>
               </div>
             </div>
           </section>
