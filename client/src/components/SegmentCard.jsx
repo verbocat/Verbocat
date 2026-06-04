@@ -3,21 +3,34 @@ import { Icons } from "./Icons.jsx";
 
 const GlossaryHighlight = ({ term, children }) => {
   const [show, setShow] = useState(false);
+  const timeoutRef = useRef(null);
+
+  const handleMouseEnter = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setShow(true);
+  };
+
+  const handleMouseLeave = () => {
+    timeoutRef.current = setTimeout(() => setShow(false), 800);
+  };
+
   const handleCopy = (e) => {
     e.stopPropagation();
     navigator.clipboard.writeText(term.target);
   };
+
   return (
     <span 
       className="relative inline-block group"
-      onMouseEnter={() => setShow(true)}
-      onMouseLeave={() => setShow(false)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       <mark className="bg-amber-200 text-amber-900 rounded-sm px-0.5 cursor-pointer">{children}</mark>
       {show && (
         <span 
           className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-slate-800 text-white font-semibold text-xs rounded shadow-lg z-50 whitespace-nowrap cursor-text select-text flex items-center gap-2 border border-white/10"
-          onMouseEnter={() => setShow(true)}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
         >
           {term.target}
           <button 

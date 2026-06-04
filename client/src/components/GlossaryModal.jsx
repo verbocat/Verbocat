@@ -84,17 +84,15 @@ export const GlossaryModal = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md">
-      <div
-        className={`w-full max-w-6xl overflow-hidden rounded-2xl border shadow-[0_30px_120px_rgba(2,6,23,0.35)] ${theme.cardStrong}`}
-      >
-        <div className="grid max-h-[88vh] lg:grid-cols-[280px_minmax(0,1fr)]">
+    <div className={`fixed inset-0 z-[100] flex flex-col bg-slate-950 ${theme.text}`}>
+      <div className="flex-1 overflow-hidden">
+        <div className="h-full flex flex-col lg:flex-row">
           <aside
-            className={`border-b p-5 lg:border-b-0 lg:border-r ${
-              darkMode ? "border-white/10 bg-white/[0.03]" : "border-slate-200 bg-slate-100/80"
+            className={`w-full lg:w-[320px] flex flex-col border-b lg:border-b-0 lg:border-r ${
+              darkMode ? "border-white/10 bg-slate-950" : "border-slate-200 bg-slate-50"
             }`}
           >
-            <div className="flex items-center justify-between">
+            <div className="p-5 flex items-center justify-between border-b border-white/10">
               <div>
                 <div className={`text-xs uppercase tracking-[0.25em] ${theme.muted}`}>
                   Glossary
@@ -109,8 +107,9 @@ export const GlossaryModal = ({
               </button>
             </div>
 
-            <div className="mt-5 space-y-4">
-              <label className="block space-y-2">
+            <div className="flex-1 overflow-y-auto p-5">
+              <div className="space-y-4">
+                <label className="block space-y-2">
                 <span className={`text-xs uppercase tracking-[0.2em] ${theme.muted}`}>
                   Source
                 </span>
@@ -188,11 +187,11 @@ export const GlossaryModal = ({
                 <div className={`rounded-2xl border p-4 text-sm ${theme.card}`}>
                   No saved glossary pairs yet.
                 </div>
-              )}
+              </div>
             </div>
           </aside>
 
-          <section className="flex min-h-0 flex-col">
+          <section className={`flex-1 flex flex-col min-w-0 ${darkMode ? "bg-slate-900" : "bg-white"}`}>
             <div className="border-b border-white/10 p-5">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                 <div>
