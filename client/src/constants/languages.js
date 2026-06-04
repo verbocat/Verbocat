@@ -17,5 +17,13 @@ export const LANGUAGES = [
   { code: "ru", name: "Russian" },
   { code: "zh-CN", name: "Chinese" },
   { code: "ja", name: "Japanese" },
-  { code: "ko", name: "Korean" }
+  { code: "ko", name: "Korean" },
+  { code: "it", name: "Italian" },
+  { code: "pt", name: "Portuguese" },
+  { code: "nl", name: "Dutch" },
+  { code: "tr", name: "Turkish" },
+  { code: "pl", name: "Polish" },
+  { code: "id", name: "Indonesian" },
+  { code: "vi", name: "Vietnamese" },
+  { code: "th", name: "Thai" }
 ];

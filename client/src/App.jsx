@@ -15,7 +15,7 @@ import { ContextSettingsModal } from "./components/ContextSettingsModal.jsx";
 import { LANGUAGES } from "./constants/languages.js";
 import { useGlossaryManager } from "./hooks/useGlossaryManager.js";
 import {
-  exportHtmlFile,
+  exportFile,
   translateBatch,
   uploadFile
 } from "./services/api.js";
@@ -24,10 +24,14 @@ import { getTheme } from "./utils/theme.js";
 
 export default function App() {
   const [segments, setSegments] = useState([]);
+  const [history, setHistory] = useState([]);
+  const [future, setFuture] = useState([]);
   const [fileId, setFileId] = useState(null);
+  const [fileExtension, setFileExtension] = useState(".html");
   const [currentProvider, setCurrentProvider] = useState("");
   const [progress, setProgress] = useState(0);
   const [isTranslating, setIsTranslating] = useState(false);
+  const [sourceLanguage, setSourceLanguage] = useState("en");
   const [targetLanguage, setTargetLanguage] = useState("hi");
   const [darkMode, setDarkMode] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -98,7 +102,7 @@ export default function App() {
       progress:
         segments.length > 0
           ? Math.round(
-              (segments.filter((segment) => segment.target).length /
+              (segments.filter((segment) => segment.verified).length /
                 segments.length) *
                 100
             )
@@ -143,6 +147,37 @@ export default function App() {
     showToast(`Unlocked as ${role}`);
   };
 
+  const updateSegmentsWithHistory = (updater) => {
+    setSegments((previous) => {
+      const newSegments = typeof updater === "function" ? updater(previous) : updater;
+      setHistory((h) => [...h.slice(-20), previous]);
+      setFuture([]);
+      return newSegments;
+    });
+  };
+
+  const undo = () => {
+    if (history.length === 0) return;
+    setSegments((current) => {
+      setFuture((f) => [current, ...f]);
+      const previous = history[history.length - 1];
+      setHistory((h) => h.slice(0, -1));
+      return previous;
+    });
+    showToast("Undo successful");
+  };
+
+  const redo = () => {
+    if (future.length === 0) return;
+    setSegments((current) => {
+      setHistory((h) => [...h, current]);
+      const next = future[0];
+      setFuture((f) => f.slice(1));
+      return next;
+    });
+    showToast("Redo successful");
+  };
+
   const handleFileProcessing = async (file) => {
     if (!file) {
       return;
@@ -154,10 +189,14 @@ export default function App() {
       const data = await uploadFile(file);
       const newSegments = data.segments.map((segment) => ({
         ...segment,
-        target: ""
+        target: "",
+        verified: false
       }));
       setSegments(newSegments);
+      setHistory([]);
+      setFuture([]);
       setFileId(data.fileId || null);
+      setFileExtension(`.${data.type}` || ".html");
       setFileName(data.originalName || file.name.replace(/\.[^/.]+$/, ""));
       setCurrentProvider("");
       setShowQaPanel(false);
@@ -216,6 +255,30 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleGlobalKeyDown = (event) => {
+      if (event.ctrlKey || event.metaKey) {
+        const isInput = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName);
+        if (event.key === "z" && !isInput) {
+          event.preventDefault();
+          undo();
+        } else if (event.key === "y" && !isInput) {
+          event.preventDefault();
+          redo();
+        } else if (event.key === "s") {
+          event.preventDefault();
+          if (segments.length > 0) saveProject();
+        } else if (event.key === "e") {
+          event.preventDefault();
+          if (segments.length > 0) handleExportFile();
+        }
+      }
+    };
+    
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, [segments, fileId, fileName, targetLanguage, currentProvider, glossaryMap, contextSettings, history, future]);
+
   const handleTranslateSegments = async () => {
     if (segments.length === 0 || isTranslating) {
       return;
@@ -240,7 +303,7 @@ export default function App() {
 
       for (let i = 0; i < segmentsToTranslate.length; i += BATCH_SIZE) {
         const batch = segmentsToTranslate.slice(i, i + BATCH_SIZE);
-        const data = await translateBatch(batch, targetLanguage, contextSettings);
+        const data = await translateBatch(batch, targetLanguage, sourceLanguage, contextSettings);
         const results = data.results || [];
 
         if (results.length > 0 && i === 0) {
@@ -287,7 +350,7 @@ export default function App() {
       return;
     }
 
-    setSegments((previous) =>
+    updateSegmentsWithHistory((previous) =>
       previous.map((segment) => ({
         ...segment,
         target: applyGlossaryTerms(
@@ -304,15 +367,67 @@ export default function App() {
   const updateTranslation = (id, value) => {
     setSegments((previous) =>
       previous.map((segment) =>
-        segment.id === id ? { ...segment, target: value } : segment
+        segment.id === id ? { ...segment, target: value, verified: false } : segment
       )
     );
+  };
+
+  const toggleVerify = (id) => {
+    updateSegmentsWithHistory((previous) =>
+      previous.map((segment) =>
+        segment.id === id ? { ...segment, verified: !segment.verified } : segment
+      )
+    );
+  };
+
+  const verifyAndNextSegment = (id) => {
+    updateSegmentsWithHistory((previous) => {
+      const newSegments = previous.map((segment) =>
+        segment.id === id ? { ...segment, verified: true } : segment
+      );
+      
+      const currentIndex = newSegments.findIndex((s) => s.id === id);
+      let nextIndex = currentIndex + 1;
+      
+      while (nextIndex < newSegments.length) {
+        if (!newSegments[nextIndex].verified) {
+          const nextId = newSegments[nextIndex].id;
+          
+          setTimeout(() => {
+            const nextElement = document.getElementById(`segment-${nextId}`);
+            if (nextElement) {
+              nextElement.scrollIntoView({ behavior: "smooth", block: "center" });
+              nextElement.classList.add("ring-2", "ring-teal-500");
+              setTimeout(() => nextElement.classList.remove("ring-2", "ring-teal-500"), 1000);
+            }
+            const nextTa = document.getElementById(`target-${nextId}`);
+            if (nextTa) nextTa.focus();
+          }, 50);
+          break;
+        }
+        nextIndex++;
+      }
+      
+      return newSegments;
+    });
+  };
+
+  const copyAllSourceToTarget = () => {
+    updateSegmentsWithHistory((previous) =>
+      previous.map((segment) => ({
+        ...segment,
+        target: segment.target || segment.source
+      }))
+    );
+    showToast("Copied all source to empty targets!");
   };
 
   const saveProject = () => {
     const projectData = {
       fileId,
       fileName,
+      fileExtension,
+      sourceLanguage,
       targetLanguage,
       currentProvider,
       segments,
@@ -343,8 +458,12 @@ export default function App() {
     try {
       const project = JSON.parse(text);
       setFileId(project.fileId || null);
+      setFileExtension(project.fileExtension || ".html");
       setFileName(project.fileName || file.name.replace(".json", ""));
       setSegments(project.segments || []);
+      setHistory([]);
+      setFuture([]);
+      setSourceLanguage(project.sourceLanguage || "en");
       setTargetLanguage(project.targetLanguage || "hi");
       setCurrentProvider(project.currentProvider || "");
       setShowQaPanel(false);
@@ -360,16 +479,16 @@ export default function App() {
     }
   };
 
-  const handleExportHtml = async () => {
+  const handleExportFile = async () => {
     try {
-      const blob = await exportHtmlFile(fileId, segments);
+      const blob = await exportFile(fileId, segments, fileExtension);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `${fileName}_${targetLanguage}.html`);
+      link.setAttribute("download", `${fileName}_${targetLanguage}${fileExtension}`);
       document.body.appendChild(link);
       link.click();
-      showToast("HTML exported!");
+      showToast("File exported successfully!");
     } catch (error) {
       console.log(error);
       showToast("Export failed", "error");
@@ -383,6 +502,8 @@ export default function App() {
 
   const closeProject = () => {
     setSegments([]);
+    setHistory([]);
+    setFuture([]);
     setFileId(null);
     setCurrentProvider("");
     setProgress(0);
@@ -411,7 +532,7 @@ export default function App() {
 
   return (
     <div
-      className={`min-h-screen ${theme.bg} ${theme.text} font-sans transition-colors duration-300`}
+      className={`h-screen flex flex-col overflow-hidden ${theme.bg} ${theme.text} font-sans transition-colors duration-300`}
     >
       <DragOverlay isDragging={isDragging} />
       <LoadingOverlay isUploading={isUploading} theme={theme} />
@@ -426,6 +547,7 @@ export default function App() {
         onLock={() => setLocked(true)}
         qaIssuesCount={qaIssuesList.length}
         segmentsCount={segments.length}
+        progress={stats.progress}
         theme={theme}
       />
 
@@ -470,7 +592,7 @@ export default function App() {
         theme={theme}
       />
 
-      <div className="mx-auto max-w-7xl px-4 pb-10 pt-4 sm:px-6 lg:px-8">
+      <div className="w-full flex-1 overflow-hidden flex flex-col px-2 pb-4 pt-2 sm:px-4">
         {isTranslating && (
           <div className="fixed bottom-8 right-8 z-50 w-80 overflow-hidden rounded-xl border border-white/10 bg-slate-950/95 p-4 text-white shadow-2xl shadow-slate-950/40 backdrop-blur-xl">
             <div className="flex items-center justify-between">
@@ -499,29 +621,34 @@ export default function App() {
             />
           </main>
         ) : (
-          <main className="space-y-6">
-            <WorkspaceToolbar
-              onCloseProject={closeProject}
-              onExport={handleExportHtml}
-              onLoadProject={loadProject}
-              onOpenGlossary={() => setShowGlossary(true)}
-              onOpenContext={() => setShowContextPanel(true)}
-              onSaveProject={saveProject}
-              onRelinkHtml={handleRelinkHtml}
-              onTranslate={handleTranslateSegments}
-              onToggleQa={() => setShowQaPanel((value) => !value)}
-              isTranslating={isTranslating}
-              qaIssuesCount={qaIssuesList.length}
-              searchQuery={searchQuery}
-              segmentsCount={segments.length}
-              setSearchQuery={setSearchQuery}
-              stats={stats}
-              targetLanguage={targetLanguage}
-              onTargetLanguageChange={setTargetLanguage}
-              fileName={fileName}
-              theme={theme}
-              canTranslate={userRole === "office"}
-            />
+          <main className="flex-1 flex flex-col gap-4 overflow-hidden">
+            <div className="shrink-0">
+              <WorkspaceToolbar
+                onCloseProject={closeProject}
+                onExport={handleExportFile}
+                onLoadProject={loadProject}
+                onOpenGlossary={() => setShowGlossary(true)}
+                onOpenContext={() => setShowContextPanel(true)}
+                onSaveProject={saveProject}
+                onRelinkHtml={handleRelinkHtml}
+                onTranslate={handleTranslateSegments}
+                onToggleQa={() => setShowQaPanel((value) => !value)}
+                onCopyAllSource={copyAllSourceToTarget}
+                isTranslating={isTranslating}
+                qaIssuesCount={qaIssuesList.length}
+                searchQuery={searchQuery}
+                segmentsCount={segments.length}
+                setSearchQuery={setSearchQuery}
+                stats={stats}
+                sourceLanguage={sourceLanguage}
+                onSourceLanguageChange={setSourceLanguage}
+                targetLanguage={targetLanguage}
+                onTargetLanguageChange={setTargetLanguage}
+                fileName={fileName}
+                theme={theme}
+                canTranslate={userRole === "office"}
+              />
+            </div>
 
             <QAPanel
               qaIssuesList={qaIssuesList}
@@ -543,6 +670,8 @@ export default function App() {
                     theme={theme}
                     onCopy={copyToClipboard}
                     onUpdateTranslation={updateTranslation}
+                    onToggleVerify={() => toggleVerify(segment.id)}
+                    onVerifyAndNext={() => verifyAndNextSegment(segment.id)}
                   />
                 )}
               />

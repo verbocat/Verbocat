@@ -8,16 +8,17 @@ export const Header = ({
   onToggleDarkMode,
   qaIssuesCount,
   segmentsCount,
+  progress,
   theme,
   onLock
 }) => (
-  <header className="sticky top-0 z-40 px-4 pt-3 sm:px-6 lg:px-8">
+  <header className="sticky top-0 z-40 px-4 pt-2 sm:px-6 lg:px-8">
     <div
-      className={`mx-auto max-w-7xl rounded-2xl border backdrop-blur-xl ${theme.shell}`}
+      className={`mx-auto w-full rounded-2xl border backdrop-blur-xl overflow-hidden ${theme.shell}`}
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-extrabold tracking-tight">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-extrabold tracking-tight">
             VerboCat
           </div>
 
@@ -32,9 +33,14 @@ export const Header = ({
               <span className="rounded-lg bg-white/6 px-2.5 py-1 text-xs font-medium text-slate-200 ring-1 ring-white/10">
                 {segmentsCount} segments
               </span>
-              <span className="rounded-lg bg-white/6 px-2.5 py-1 text-xs font-medium text-slate-200 ring-1 ring-white/10">
-                {qaIssuesCount} QA
+              <span className="rounded-lg bg-teal-500/10 px-2.5 py-1 text-xs font-bold text-teal-400 ring-1 ring-teal-500/20">
+                {progress}% Verified
               </span>
+              {qaIssuesCount > 0 && (
+                <span className="rounded-lg bg-white/6 px-2.5 py-1 text-xs font-medium text-slate-200 ring-1 ring-white/10">
+                  {qaIssuesCount} QA
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -65,7 +71,7 @@ export const Header = ({
 
           <button
             onClick={onToggleDarkMode}
-            className={`inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 transition ${theme.buttonSecondary}`}
+            className={`inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 transition ${theme.buttonSecondary}`}
           >
             {darkMode ? <Icons.Sun /> : <Icons.Moon />}
             <span className="text-sm font-semibold">{darkMode ? "Light" : "Dark"}</span>
@@ -73,13 +79,22 @@ export const Header = ({
           {onLock && (
             <button
               onClick={onLock}
-              className={`inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 transition ${theme.buttonSecondary}`}
+              className={`inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 transition ${theme.buttonSecondary}`}
             >
               Lock
             </button>
           )}
         </div>
       </div>
+      
+      {segmentsCount > 0 && (
+        <div className="h-1.5 w-full bg-slate-950/20">
+          <div
+            className="h-full bg-gradient-to-r from-teal-400 to-emerald-400 transition-all duration-500"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      )}
     </div>
   </header>
 );

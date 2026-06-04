@@ -13,19 +13,20 @@ export const uploadFile = async (file) => {
   return response.data;
 };
 
-export const translateBatch = async (segments, target, contextSettings) => {
+export const translateBatch = async (segments, target, source, contextSettings = null) => {
   const response = await api.post("/api/translate-batch", {
     segments,
     target,
+    source,
     contextSettings
   });
   return response.data;
 };
 
-export const exportHtmlFile = async (fileId, segments) => {
+export const exportFile = async (fileId, segments, extension = '.html') => {
   const response = await api.post(
-    "/api/export-html",
-    { fileId, segments },
+    "/api/export",
+    { fileId, segments, extension },
     { responseType: "blob" }
   );
 

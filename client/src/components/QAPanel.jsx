@@ -13,7 +13,7 @@ export const QAPanel = ({ qaIssuesList, showQaPanel, theme, onGoToSegment }) =>
         </div>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid gap-3 lg:grid-cols-2 max-h-[30vh] overflow-y-auto pr-2">
         {qaIssuesList.map((item, index) => (
           <button
             key={`${item.id}-${index}`}

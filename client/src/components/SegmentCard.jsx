@@ -6,11 +6,26 @@ export const SegmentCard = ({
   segment,
   theme,
   onCopy,
-  onUpdateTranslation
-}) => (
+  onUpdateTranslation,
+  onToggleVerify,
+  onVerifyAndNext
+}) => {
+  const handleKeyDown = (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      e.preventDefault();
+      onVerifyAndNext();
+    }
+  };
+
+  const handleAutoResize = (e) => {
+    e.target.style.height = "auto";
+    e.target.style.height = `${e.target.scrollHeight}px`;
+  };
+
+  return (
   <article
     id={`segment-${segment.id}`}
-    className={`border-l-4 ${segment.target ? theme.status.translated : theme.status.empty}`}
+    className={`border-l-4 ${segment.verified ? 'border-teal-500' : segment.target ? theme.status.translated : theme.status.empty}`}
   >
     <div className="grid gap-4 px-4 py-4 lg:grid-cols-[72px_minmax(0,1fr)_minmax(0,1fr)]">
       <div className="flex items-start justify-between lg:block">
@@ -34,52 +49,61 @@ export const SegmentCard = ({
           <button
             onClick={() => onUpdateTranslation(segment.id, segment.source)}
             title="Copy Source to Target"
-            className={`rounded-lg px-3 py-2 transition ${theme.buttonSecondary}`}
+            className={`rounded-lg p-2 transition text-slate-400 hover:text-white ${theme.buttonSecondary}`}
           >
-            <span className="inline-flex items-center gap-2 text-sm font-semibold">
-              <Icons.ArrowRight />
-              Copy to Target
-            </span>
+            <Icons.ArrowRight />
           </button>
           <button
             onClick={() => onCopy(segment.source)}
-            className={`rounded-lg px-3 py-2 transition ${theme.buttonSecondary}`}
+            title="Copy Source Text"
+            className={`rounded-lg p-2 transition text-slate-400 hover:text-white ${theme.buttonSecondary}`}
           >
-            <span className="inline-flex items-center gap-2 text-sm font-semibold">
-              <Icons.Copy />
-              Copy
-            </span>
+            <Icons.Copy />
           </button>
         </div>
 
         <textarea
           value={segment.source}
           readOnly
-          className={`min-h-[210px] w-full resize-none rounded-xl border p-4 outline-none ${theme.inputSoft}`}
+          onInput={handleAutoResize}
+          className={`min-h-[60px] w-full resize-none overflow-hidden rounded-xl border p-4 outline-none ${theme.inputSoft}`}
         />
       </section>
 
       <section className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div className={`text-sm ${theme.muted}`}>
-            {segment.target ? "Ready to edit" : "Waiting for translation"}
+            {segment.verified ? (
+              <span className="text-teal-500 font-bold flex items-center gap-1"><Icons.Check /> Verified</span>
+            ) : segment.target ? "Ready to edit" : "Waiting for translation"}
           </div>
-          <button
-            onClick={() => onCopy(segment.target || "")}
-            className={`rounded-lg px-3 py-2 transition ${theme.buttonSecondary}`}
-          >
-            <span className="inline-flex items-center gap-2 text-sm font-semibold">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onToggleVerify}
+              title={segment.verified ? 'Unverify' : 'Verify'}
+              className={`rounded-lg p-2 transition ${segment.verified ? 'bg-teal-700 text-white hover:bg-teal-600' : `text-slate-400 hover:text-white ${theme.buttonSecondary}`}`}
+            >
+              <Icons.Check />
+            </button>
+            <button
+              onClick={() => onCopy(segment.target || "")}
+              title="Copy Target Text"
+              className={`rounded-lg p-2 transition text-slate-400 hover:text-white ${theme.buttonSecondary}`}
+            >
               <Icons.Copy />
-              Copy
-            </span>
-          </button>
+            </button>
+          </div>
         </div>
 
         <textarea
+          id={`target-${segment.id}`}
+          data-segment-target="true"
           value={segment.target || ""}
           onChange={(event) => onUpdateTranslation(segment.id, event.target.value)}
-          placeholder="Translation will appear here..."
-          className={`min-h-[210px] w-full resize-none rounded-xl border p-4 outline-none focus:ring-2 focus:ring-sky-300 ${theme.input}`}
+          onKeyDown={handleKeyDown}
+          onInput={handleAutoResize}
+          placeholder="Translation will appear here... (Press Ctrl+Enter to verify and move to next)"
+          className={`min-h-[60px] w-full resize-none overflow-hidden rounded-xl border p-4 outline-none focus:ring-2 ${segment.verified ? 'focus:ring-teal-500' : 'focus:ring-sky-300'} ${theme.input}`}
         />
 
         {segment.qaIssues?.length > 0 && (
@@ -98,3 +122,4 @@ export const SegmentCard = ({
     </div>
   </article>
 );
+};

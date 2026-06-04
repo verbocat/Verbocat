@@ -50,7 +50,7 @@ const isSafeTmTranslation = (source, target) => {
 const isPersistableProvider = (provider) =>
   provider && provider !== "Fallback" && provider !== "Cached Fallback";
 
-const translateSegments = async (segments, target, contextSettings) => {
+const translateSegments = async (segments, target, sourceLang, contextSettings) => {
   const providerState = createProviderState();
 
   const uniqueSources = [...new Set(segments.map((s) => s.source))];
@@ -84,11 +84,11 @@ const translateSegments = async (segments, target, contextSettings) => {
 
   const chunkSize = 40;
 
-  const DEFAULT_SOURCE_LANG = process.env.DEFAULT_SOURCE_LANG || "en";
+  const actualSourceLang = sourceLang || process.env.DEFAULT_SOURCE_LANG || "en";
 
   for (let index = 0; index < uniqueMissingSources.length; index += chunkSize) {
     const chunkSources = uniqueMissingSources.slice(index, index + chunkSize);
-    const translatedChunk = await translateChunk(chunkSources, target, DEFAULT_SOURCE_LANG, providerState, contextSettings);
+    const translatedChunk = await translateChunk(chunkSources, target, actualSourceLang, providerState, contextSettings);
 
     const insertRows = [];
 
@@ -106,7 +106,7 @@ const translateSegments = async (segments, target, contextSettings) => {
         insertRows.push({
           source_text: source,
           target_text: translatedText,
-          source_lang: DEFAULT_SOURCE_LANG,
+          source_lang: actualSourceLang,
           target_lang: target,
           provider: translated.provider
         });

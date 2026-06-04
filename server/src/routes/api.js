@@ -29,8 +29,8 @@ apiRouter.post("/upload", upload.single("file"), async (request, response) => {
 
 apiRouter.post("/translate-batch", async (request, response) => {
   try {
-    const { segments, target, contextSettings } = request.body;
-    const result = await translateSegments(segments, target, contextSettings);
+    const { segments, target, source, contextSettings } = request.body;
+    const result = await translateSegments(segments, target, source, contextSettings);
     response.json(result);
   } catch (error) {
     console.log(error);
@@ -50,17 +50,26 @@ apiRouter.get("/provider-status", (request, response) => {
   }
 });
 
-apiRouter.post("/export-html", async (request, response) => {
+apiRouter.post("/export", async (request, response) => {
   try {
-    const { fileId, segments } = request.body;
-    const html = await exportHtml(fileId, segments);
+    const { fileId, segments, extension } = request.body;
+    const ext = extension || ".html";
+    const buffer = await exportHtml(fileId, segments, ext);
 
     response.setHeader(
       "Content-Disposition",
-      "attachment; filename=translated.html"
+      `attachment; filename=translated${ext}`
     );
-    response.setHeader("Content-Type", "text/html");
-    response.send(html);
+    
+    let contentType = "application/octet-stream";
+    if (ext === ".html") contentType = "text/html";
+    else if (ext === ".txt") contentType = "text/plain";
+    else if (ext === ".docx") contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    else if (ext === ".pptx") contentType = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+    else if (ext === ".xlsx") contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+    response.setHeader("Content-Type", contentType);
+    response.send(buffer);
   } catch (error) {
     console.log(error);
     response.status(error.status || 500).json({
