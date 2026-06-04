@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import Papa from "papaparse";
 import { Icons } from "./Icons.jsx";
 
@@ -43,11 +43,20 @@ export const GlossaryModal = ({
   const [searchQuery, setSearchQuery] = useState("");
   const fileInputRef = useRef(null);
 
+  useEffect(() => {
+    if (!show) {
+      setIsEditing(false);
+    }
+  }, [show]);
+
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
+    if (!file) return;
+
     Papa.parse(file, {
+      encoding: "UTF-8",
       complete: (results) => {
         const newGlossary = results.data
           .filter(row => row.length >= 2 && row[0] && row[1])
@@ -92,7 +101,7 @@ export const GlossaryModal = ({
               </div>
               <button
                 onClick={onClose}
-                className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${theme.buttonSecondary}`}
+                className="rounded-xl px-4 py-2 text-sm font-semibold transition bg-rose-600 text-white hover:bg-rose-500"
               >
                 Close
               </button>
@@ -192,11 +201,6 @@ export const GlossaryModal = ({
                     {languageNameMap[glossarySourceLang] || glossarySourceLang} to{" "}
                     {languageNameMap[glossaryTargetLang] || glossaryTargetLang}
                   </h3>
-                  <p className={`mt-2 text-sm ${theme.muted}`}>
-                    Paste `source = target` or tab-separated pairs. Shortcuts:
-                    Ctrl/Cmd+A select all, Ctrl/Cmd+Shift+A clear selection,
-                    Delete remove selected.
-                  </p>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -261,7 +265,7 @@ export const GlossaryModal = ({
                     darkMode ? "border-white/10 bg-white/[0.04] text-slate-300" : "border-slate-200 bg-slate-100 text-slate-500"
                   }`}
                 >
-                  <div className="text-center">Sel</div>
+                  <div className="text-center">No.</div>
                   <div>Source</div>
                   <div>Target</div>
                 </div>
@@ -287,17 +291,11 @@ export const GlossaryModal = ({
                             : ""
                         }`}
                       >
-                        <label
-                          className="flex items-center justify-center border-r border-white/10"
-                          onClick={(event) => event.stopPropagation()}
+                        <div
+                          className={`flex items-center justify-center border-r border-white/10 font-bold ${selected ? 'text-sky-500' : theme.muted}`}
                         >
-                          <input
-                            type="checkbox"
-                            checked={selected}
-                            onChange={(event) => onToggleRow(index, event.nativeEvent)}
-                            className="h-4 w-4 accent-sky-500"
-                          />
-                        </label>
+                          {index + 1}
+                        </div>
 
                         <input
                           value={item.source}

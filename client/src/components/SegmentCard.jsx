@@ -37,7 +37,7 @@ export const SegmentCard = ({
           const parts = el.split(regex);
           return parts.map((part, i) => {
             if (i % 2 === 1) { // This is the match
-              return <mark key={`${term.source}-${i}`} className="bg-amber-200 text-amber-900 rounded-sm px-0.5">{part}</mark>;
+              return <mark key={`${term.source}-${i}`} className="bg-amber-200 text-amber-900 rounded-sm px-0.5" title={term.target}>{part}</mark>;
             }
             return part;
           });
