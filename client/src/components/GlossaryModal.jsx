@@ -189,7 +189,8 @@ export const GlossaryModal = ({
                 </div>
               )}
             </div>
-          </aside>
+          </div>
+        </aside>
 
           <section className={`flex-1 flex flex-col min-w-0 ${darkMode ? "bg-slate-900" : "bg-white"}`}>
             <div className="border-b border-white/10 p-5">
