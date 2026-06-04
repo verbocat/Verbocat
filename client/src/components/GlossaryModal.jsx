@@ -187,7 +187,7 @@ export const GlossaryModal = ({
                 <div className={`rounded-2xl border p-4 text-sm ${theme.card}`}>
                   No saved glossary pairs yet.
                 </div>
-              </div>
+              )}
             </div>
           </aside>
 
