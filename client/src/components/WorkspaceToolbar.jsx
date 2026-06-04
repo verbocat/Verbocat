@@ -153,7 +153,7 @@ export const WorkspaceToolbar = ({
             </label>
 
             <label
-              title="Relink HTML"
+              title="Relink Template"
               className={
                 segmentsCount === 0
                   ? "inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition bg-slate-400/30 text-slate-300"
@@ -163,7 +163,7 @@ export const WorkspaceToolbar = ({
               <Icons.Upload />
               <input
                 type="file"
-                accept=".html"
+                accept=".html,.docx,.pptx,.xlsx,.txt"
                 onChange={onRelinkHtml}
                 className="hidden"
                 disabled={segmentsCount === 0}
@@ -173,7 +173,7 @@ export const WorkspaceToolbar = ({
             <ActionButton
               onClick={onExport}
               disabled={segmentsCount === 0}
-              title="Export HTML"
+              title="Export File"
               className={
                 segmentsCount === 0
                   ? "cursor-not-allowed bg-slate-400/30 text-slate-300"
