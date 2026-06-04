@@ -6,6 +6,7 @@ export const SegmentCard = ({
   index,
   segment,
   theme,
+  translationGlossary = [],
   onCopy,
   onUpdateTranslation,
   onToggleVerify,
@@ -15,15 +16,39 @@ export const SegmentCard = ({
   const targetRef = useRef(null);
 
   useEffect(() => {
-    if (sourceRef.current) {
-      sourceRef.current.style.height = "auto";
-      sourceRef.current.style.height = `${sourceRef.current.scrollHeight}px`;
-    }
     if (targetRef.current) {
       targetRef.current.style.height = "auto";
       targetRef.current.style.height = `${targetRef.current.scrollHeight}px`;
     }
-  }, [segment.source, segment.target]);
+  }, [segment.target]);
+
+  const renderHighlightedSource = (text) => {
+    if (!text) return null;
+    if (!translationGlossary || translationGlossary.length === 0) return text;
+
+    let elements = [text];
+    
+    translationGlossary.forEach((term) => {
+      if (!term.source) return;
+      const regex = new RegExp(`(${term.source.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')})`, 'gi');
+      
+      elements = elements.flatMap(el => {
+        if (typeof el === 'string') {
+          const parts = el.split(regex);
+          return parts.map((part, i) => {
+            if (i % 2 === 1) { // This is the match
+              return <mark key={`${term.source}-${i}`} className="bg-amber-200 text-amber-900 rounded-sm px-0.5">{part}</mark>;
+            }
+            return part;
+          });
+        }
+        return el;
+      });
+    });
+
+    return elements;
+  };
+
   const handleKeyDown = (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
@@ -76,13 +101,11 @@ export const SegmentCard = ({
           </button>
         </div>
 
-        <textarea
-          ref={sourceRef}
-          value={segment.source}
-          readOnly
-          onInput={handleAutoResize}
-          className={`min-h-[40px] w-full resize-none overflow-hidden rounded-xl border p-3 outline-none ${theme.inputSoft}`}
-        />
+        <div
+          className={`min-h-[40px] w-full break-words rounded-xl border p-3 whitespace-pre-wrap ${theme.inputSoft}`}
+        >
+          {renderHighlightedSource(segment.source)}
+        </div>
       </section>
 
       <section className="space-y-3">

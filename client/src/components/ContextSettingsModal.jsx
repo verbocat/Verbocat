@@ -17,7 +17,7 @@ const PROFILES = {
   "Software Localization": { domain: "Software", contentType: "UI Strings", purpose: "Inform", tone: "Clear", terminologyStrictness: "Strict" },
   "Legal": { domain: "Legal", contentType: "Contract", purpose: "Comply", tone: "Formal", terminologyStrictness: "Strict", formality: "Very Formal" },
   "Medical": { domain: "Medical", contentType: "Patient Information", purpose: "Educate", tone: "Professional", terminologyStrictness: "Strict" },
-  "E-commerce": { domain: "E-commerce", contentType: "Product Page", purpose: "Drive Purchases", tone: "Persuasive", seoOptimization: "Basic" }
+  "E-commerce": { domain: "E-commerce", contentType: "Product Page", purpose: "Drive Purchases", tone: "Persuasive" }
 };
 
 export const ContextSettingsModal = ({ show, onClose, contextSettings, setContextSettings, theme }) => {
@@ -111,12 +111,6 @@ export const ContextSettingsModal = ({ show, onClose, contextSettings, setContex
            <InputWrapper label="Terminology Strictness">
              <select value={contextSettings.terminologyStrictness || "Flexible"} onChange={e => handleChange('terminologyStrictness', e.target.value)} className={`rounded-xl border px-3 py-2 outline-none ${theme.input}`}>
                {["Flexible", "Balanced", "Strict"].map(d => <option key={d} value={d}>{d}</option>)}
-             </select>
-           </InputWrapper>
-
-           <InputWrapper label="SEO Optimization">
-             <select value={contextSettings.seoOptimization || "Off"} onChange={e => handleChange('seoOptimization', e.target.value)} className={`rounded-xl border px-3 py-2 outline-none ${theme.input}`}>
-               {["Off", "Basic", "Aggressive"].map(d => <option key={d} value={d}>{d}</option>)}
              </select>
            </InputWrapper>
         </div>

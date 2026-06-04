@@ -115,7 +115,10 @@ const translateWithOpenAI = async (protectedTexts, target, source = DEFAULT_SOUR
     userContext = `\n\nREMINDER: Tone is ${contextSettings.tone || "General"} and Formality is ${contextSettings.formality || "Neutral"}. YOU MUST OVERRIDE THE ORIGINAL TONE AND ADAPT YOUR VOCABULARY STRICTLY TO THIS OR YOU WILL BE PENALIZED!`;
   }
   
-  const strictInstructions = `\n\nCRITICAL INSTRUCTIONS: You are a pure translation engine. You MUST ONLY output valid JSON. Your response must be a JSON object containing a 'translations' array of strings. The translated strings MUST be in the exact same order as the input 'texts' array. Translate each string into ${targetName}. Do NOT act as a conversational AI. If a text is just a fragment like "To,", translate that exact fragment contextually. Preserve any __TAG_n__ tokens.${contextBlock}`;
+  const strictInstructions = `\n\nCRITICAL INSTRUCTIONS: You are a pure translation engine. You MUST ONLY output valid JSON. Your response must be a JSON object containing a 'translations' array of strings. The translated strings MUST be in the exact same order as the input 'texts' array. Translate each string into ${targetName}. Do NOT act as a conversational AI. If a text is just a fragment like "To,", translate that exact fragment contextually. Preserve any __TAG_n__ tokens.
+Additionally:
+- Technical terms MUST be transliterated (e.g. Locator -> लोकेटर not सुनने का यंत्र).
+- Abbreviations MUST always be kept as abbreviations (e.g. N/A -> N/A not एन/ए).${contextBlock}`;
 
   if (!systemPrompt) {
     systemPrompt = `Translate the user texts from ${sourceName} to ${targetName}. Do not modify or translate tokens that look like __TAG_0__, __TAG_1__ etc. Preserve punctuation and numbers. Return only the translated text without commentary.` + strictInstructions;

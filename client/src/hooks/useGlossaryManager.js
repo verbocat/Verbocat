@@ -264,6 +264,7 @@ export const useGlossaryManager = ({
   return {
     glossaryMap,
     setGlossaryMap,
+    setGlossary,
     glossaryKey,
     glossary,
     glossaryLanguagePairs,

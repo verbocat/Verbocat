@@ -12,6 +12,7 @@ import { EmptyWorkspace } from "./components/EmptyWorkspace.jsx";
 import { SegmentBoard } from "./components/SegmentBoard.jsx";
 import { LoadingOverlay } from "./components/LoadingOverlay.jsx";
 import { ContextSettingsModal } from "./components/ContextSettingsModal.jsx";
+import { SearchReplaceModal } from "./components/SearchReplaceModal.jsx";
 import { LANGUAGES } from "./constants/languages.js";
 import { useGlossaryManager } from "./hooks/useGlossaryManager.js";
 import {
@@ -44,6 +45,7 @@ export default function App() {
   const [locked, setLocked] = useState(true);
   const [userRole, setUserRole] = useState(null);
   
+  const [showSearchReplace, setShowSearchReplace] = useState(false);
   const [showContextPanel, setShowContextPanel] = useState(false);
   const [contextSettings, setContextSettings] = useState({
     domain: "General",
@@ -272,6 +274,9 @@ export default function App() {
         } else if (event.key === "e") {
           event.preventDefault();
           if (segments.length > 0) handleExportFile();
+        } else if (event.key === "h") {
+          event.preventDefault();
+          setShowSearchReplace(true);
         }
       }
     };
@@ -452,6 +457,28 @@ export default function App() {
     showToast("Project saved!");
   };
 
+  const handleReplaceAll = (findStr, replaceStr) => {
+    let replacedCount = 0;
+    updateSegmentsWithHistory((previous) =>
+      previous.map((segment) => {
+        if (!segment.target) return segment;
+        // Simple global case-insensitive replace, or exact match if preferred. Let's do exact match or case-insensitive?
+        // Let's do exact text replacement but global
+        const regex = new RegExp(findStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+        if (regex.test(segment.target)) {
+          replacedCount++;
+          return {
+            ...segment,
+            target: segment.target.replace(regex, replaceStr),
+            verified: false
+          };
+        }
+        return segment;
+      })
+    );
+    showToast(`Replaced in ${replacedCount} segments`);
+  };
+
   const loadProject = async (event) => {
     const file = event.target.files[0];
     if (!file) {
@@ -584,6 +611,7 @@ export default function App() {
         selectedGlossaryRows={selectedGlossaryRows}
         setGlossarySourceLang={setGlossarySourceLang}
         setGlossaryTargetLang={setGlossaryTargetLang}
+        setGlossary={glossaryManager.setGlossary}
         show={showGlossary}
         canApplyGlossary={segments.length > 0}
         theme={theme}
@@ -594,6 +622,13 @@ export default function App() {
         onClose={() => setShowContextPanel(false)}
         contextSettings={contextSettings}
         setContextSettings={setContextSettings}
+        theme={theme}
+      />
+
+      <SearchReplaceModal
+        show={showSearchReplace}
+        onClose={() => setShowSearchReplace(false)}
+        onReplaceAll={handleReplaceAll}
         theme={theme}
       />
 
@@ -675,6 +710,7 @@ export default function App() {
                     index={index}
                     segment={segment}
                     theme={theme}
+                    translationGlossary={translationGlossary}
                     onCopy={copyToClipboard}
                     onUpdateTranslation={updateTranslation}
                     onToggleVerify={() => toggleVerify(segment.id)}

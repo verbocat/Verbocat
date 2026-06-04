@@ -1,4 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState, useRef } from "react";
+import Papa from "papaparse";
+import { Icons } from "./Icons.jsx";
 
 export const GlossaryModal = ({
   darkMode,
@@ -24,6 +26,7 @@ export const GlossaryModal = ({
   selectedGlossaryRows,
   setGlossarySourceLang,
   setGlossaryTargetLang,
+  setGlossary,
   show,
   theme
 }) => {
@@ -38,6 +41,35 @@ export const GlossaryModal = ({
   if (!show) {
     return null;
   }
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const fileInputRef = useRef(null);
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    Papa.parse(file, {
+      complete: (results) => {
+        const newGlossary = results.data
+          .filter(row => row.length >= 2 && row[0] && row[1])
+          .map(row => ({ source: row[0].trim(), target: row[1].trim() }));
+        if (newGlossary.length > 0) {
+          setGlossary(newGlossary);
+          onClearSelection();
+        }
+      }
+    });
+    // Reset file input
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const filteredGlossary = glossary.map((item, index) => ({...item, originalIndex: index}))
+    .filter(item => 
+      item.source.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      item.target.toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md">
@@ -166,7 +198,18 @@ export const GlossaryModal = ({
                   </p>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${theme.inputSoft}`}>
+                    <Icons.Search className="w-4 h-4 opacity-50" />
+                    <input 
+                      type="text" 
+                      placeholder="Search glossary..." 
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      className="bg-transparent outline-none w-32"
+                    />
+                  </div>
+
                   <button
                     onClick={onApplyGlossary}
                     disabled={!canApplyGlossary}
@@ -174,39 +217,37 @@ export const GlossaryModal = ({
                   >
                     Apply
                   </button>
+                  
+                  <input type="file" accept=".csv" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
                   <button
-                    onClick={onSelectAll}
-                    disabled={glossary.length === 0}
-                    className="rounded-xl bg-sky-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${theme.buttonSecondary}`}
                   >
-                    Select All
+                    Upload CSV
                   </button>
+                  
                   <button
-                    onClick={onClearSelection}
-                    disabled={selectedGlossaryRows.length === 0}
-                    className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${theme.buttonSecondary}`}
+                    onClick={() => setIsEditing(!isEditing)}
+                    className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${isEditing ? 'bg-sky-600 text-white' : theme.buttonSecondary}`}
                   >
-                    Clear
+                    Edit
                   </button>
-                  <button
-                    onClick={onDeleteSelected}
-                    disabled={selectedGlossaryRows.length === 0}
-                    className="rounded-xl bg-rose-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Remove Selected
-                  </button>
-                  <button
-                    onClick={onClearCurrentGlossary}
-                    disabled={glossary.length === 0}
-                    className="rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Remove All
-                  </button>
+                  
+                  {selectedGlossaryRows.length > 0 && (
+                    <button
+                      onClick={onDeleteSelected}
+                      title="Remove Selected"
+                      className="rounded-xl px-3 py-2.5 text-sm font-semibold transition bg-rose-500/10 text-rose-500 hover:bg-rose-500/20"
+                    >
+                      <Icons.Trash />
+                    </button>
+                  )}
+
                   <button
                     onClick={onAddRow}
                     className="rounded-xl bg-gradient-to-r from-sky-400 to-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:from-sky-300 hover:to-slate-200"
                   >
-                    Add Term
+                    Add Field
                   </button>
                 </div>
               </div>
@@ -224,12 +265,13 @@ export const GlossaryModal = ({
                   <div>Target</div>
                 </div>
 
-                {glossary.length === 0 ? (
+                {filteredGlossary.length === 0 ? (
                   <div className={`p-10 text-center text-sm ${theme.muted}`}>
-                    No glossary rows in this pair yet.
+                    No glossary rows found.
                   </div>
                 ) : (
-                  glossary.map((item, index) => {
+                  filteredGlossary.map((item) => {
+                    const index = item.originalIndex;
                     const selected = selectedGlossaryRows.includes(index);
 
                     return (
@@ -258,23 +300,25 @@ export const GlossaryModal = ({
 
                         <input
                           value={item.source}
+                          disabled={!isEditing}
                           onClick={(event) => event.stopPropagation()}
                           onPaste={onPasteGlossary}
                           onChange={(event) =>
                             onUpdateGlossary(index, "source", event.target.value)
                           }
                           placeholder="Source term"
-                          className={`border-r border-white/10 px-4 py-3 outline-none ${theme.inputSoft}`}
+                          className={`border-r border-white/10 px-4 py-3 outline-none disabled:opacity-70 disabled:cursor-not-allowed ${theme.inputSoft}`}
                         />
 
                         <input
                           value={item.target}
+                          disabled={!isEditing}
                           onClick={(event) => event.stopPropagation()}
                           onChange={(event) =>
                             onUpdateGlossary(index, "target", event.target.value)
                           }
                           placeholder="Target term"
-                          className={`px-4 py-3 outline-none ${theme.inputSoft}`}
+                          className={`px-4 py-3 outline-none disabled:opacity-70 disabled:cursor-not-allowed ${theme.inputSoft}`}
                         />
                       </div>
                     );

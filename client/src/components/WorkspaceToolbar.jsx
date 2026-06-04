@@ -20,7 +20,6 @@ export const WorkspaceToolbar = ({
   onRelinkHtml,
   onTranslate,
   onToggleQa,
-  onCopyAllSource,
   isTranslating,
   qaIssuesCount,
   searchQuery,
@@ -110,18 +109,6 @@ export const WorkspaceToolbar = ({
               }
             >
               QA {qaIssuesCount > 0 ? `(${qaIssuesCount})` : ""}
-            </ActionButton>
-            <ActionButton
-              onClick={onCopyAllSource}
-              disabled={segmentsCount === 0}
-              title="Copy All Source to Target"
-              className={
-                segmentsCount === 0
-                  ? "cursor-not-allowed bg-slate-400/30 text-slate-300"
-                  : theme.buttonSecondary
-              }
-            >
-              <Icons.CopyAll />
             </ActionButton>
           </div>
 
