@@ -92,8 +92,10 @@ export default function App() {
   );
 
   const stats = useMemo(() => {
-    const sourceText = segments.map((segment) => segment.source).join(" ");
-    const targetText = segments.map((segment) => segment.target || "").join(" ");
+    const stripTags = (text) => (text || "").replace(/<\/?\d+>/g, "");
+    
+    const sourceText = segments.map((segment) => stripTags(segment.source)).join(" ");
+    const targetText = segments.map((segment) => stripTags(segment.target)).join(" ");
     const countWords = (text) =>
       text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
 
@@ -190,9 +192,14 @@ export default function App() {
       setProgress(0);
       setIsUploading(true);
       const data = await uploadFile(file);
+      
+      const extractTagsOnly = (str) => {
+        return (str.match(/<\/?\d+>/g) || []).join(" ");
+      };
+
       const newSegments = data.segments.map((segment) => ({
         ...segment,
-        target: "",
+        target: extractTagsOnly(segment.source),
         verified: false
       }));
       setSegments(newSegments);
@@ -261,7 +268,7 @@ export default function App() {
   useEffect(() => {
     const handleGlobalKeyDown = (event) => {
       if (event.ctrlKey || event.metaKey) {
-        const isInput = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName);
+        const isInput = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName) || document.activeElement?.isContentEditable;
         if (event.key === "z" && !isInput) {
           event.preventDefault();
           undo();
@@ -294,7 +301,7 @@ export default function App() {
     setProgress(0);
 
     const segmentsToTranslate = segments.filter(
-      (s) => !s.target || s.target.trim() === ""
+      (s) => !s.target || s.target.replace(/<\/?\d+>/g, "").trim() === ""
     );
 
     if (segmentsToTranslate.length === 0) {

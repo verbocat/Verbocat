@@ -32,9 +32,11 @@ const extractPlaceholders = (element, $, tagMap, tagCounter) => {
 // Splits a placeholder string into segments based on punctuation
 // Automatically balances active tags across segments
 const splitByPunctuation = (str) => {
+  const MIN_LENGTH = 150;
   const segments = [];
   let currentSegment = "";
   let activeTags = []; // Stack of active tag IDs
+  let currentTextLength = 0;
 
   const regex = /(<\/?\d+>)|([^<]+)/g;
   let match;
@@ -68,27 +70,36 @@ const splitByPunctuation = (str) => {
         const punctuation = splitMatch[0];
         const before = text.substring(lastIndex, splitMatch.index);
 
-        currentSegment += before + punctuation;
+        if (currentTextLength + before.length + punctuation.length >= MIN_LENGTH) {
+          currentSegment += before + punctuation;
 
-        // Close all active tags before splitting
-        let closedTagsStr = "";
-        for (let i = activeTags.length - 1; i >= 0; i--) {
-          closedTagsStr += `</${activeTags[i]}>`;
+          // Close all active tags before splitting
+          let closedTagsStr = "";
+          for (let i = activeTags.length - 1; i >= 0; i--) {
+            closedTagsStr += `</${activeTags[i]}>`;
+          }
+
+          segments.push(currentSegment + closedTagsStr);
+
+          // Start new segment and re-open active tags
+          let openedTagsStr = "";
+          for (let i = 0; i < activeTags.length; i++) {
+            openedTagsStr += `<${activeTags[i]}>`;
+          }
+
+          currentSegment = openedTagsStr;
+          currentTextLength = 0;
+        } else {
+          currentSegment += before + punctuation;
+          currentTextLength += before.length + punctuation.length;
         }
-
-        segments.push(currentSegment + closedTagsStr);
-
-        // Start new segment and re-open active tags
-        let openedTagsStr = "";
-        for (let i = 0; i < activeTags.length; i++) {
-          openedTagsStr += `<${activeTags[i]}>`;
-        }
-
-        currentSegment = openedTagsStr;
+        
         lastIndex = splitMatch.index + punctuation.length;
       }
 
-      currentSegment += text.substring(lastIndex);
+      const remainder = text.substring(lastIndex);
+      currentSegment += remainder;
+      currentTextLength += remainder.length;
     }
   }
 

@@ -46,6 +46,40 @@ const GlossaryHighlight = ({ term, children }) => {
   );
 };
 
+const targetToHtml = (str) => {
+  if (!str) return "";
+  let html = str.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  html = html.replace(/&lt;(\/?\d+)&gt;/g, (match, tagInner) => {
+    return `<span class="inline-flex items-center justify-center bg-slate-700 text-sky-300 px-1.5 py-0.5 mx-0.5 rounded text-[10px] font-mono select-none" contenteditable="false" data-tag="${tagInner}">${tagInner}</span>`;
+  });
+  html = html.replace(/\n/g, "<br>");
+  return html;
+};
+
+const htmlToTarget = (element) => {
+  let result = "";
+  const traverse = (node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      // Convert non-breaking spaces back to normal spaces if any, though standard is fine
+      result += node.textContent;
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      if (node.tagName.toLowerCase() === "br") {
+        result += "\n";
+      } else if (node.tagName.toLowerCase() === "div") {
+        result += "\n";
+        node.childNodes.forEach(traverse);
+      } else if (node.hasAttribute("data-tag")) {
+        result += `<${node.getAttribute("data-tag")}>`;
+      } else {
+        node.childNodes.forEach(traverse);
+      }
+    }
+  };
+  element.childNodes.forEach(traverse);
+  // Clean up any leading newline from div wrapping
+  return result.replace(/^\n/, "");
+};
+
 export const SegmentCard = ({
   darkMode,
   index,
@@ -57,38 +91,49 @@ export const SegmentCard = ({
   onToggleVerify,
   onVerifyAndNext
 }) => {
-  const sourceRef = useRef(null);
   const targetRef = useRef(null);
-
-  useEffect(() => {
-    if (targetRef.current) {
-      targetRef.current.style.height = "auto";
-      targetRef.current.style.height = `${targetRef.current.scrollHeight}px`;
-    }
-  }, [segment.target]);
 
   const renderHighlightedSource = (text) => {
     if (!text) return null;
-    if (!translationGlossary || translationGlossary.length === 0) return text;
 
     let elements = [text];
     
-    translationGlossary.forEach((term) => {
-      if (!term.source) return;
-      const regex = new RegExp(`(${term.source.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')})`, 'gi');
-      
-      elements = elements.flatMap(el => {
-        if (typeof el === 'string') {
-          const parts = el.split(regex);
-          return parts.map((part, i) => {
-            if (i % 2 === 1) { // This is the match
-              return <GlossaryHighlight key={`${term.source}-${i}`} term={term}>{part}</GlossaryHighlight>;
-            }
-            return part;
-          });
-        }
-        return el;
+    if (translationGlossary && translationGlossary.length > 0) {
+      translationGlossary.forEach((term) => {
+        if (!term.source) return;
+        const regex = new RegExp(`(${term.source.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')})`, 'gi');
+        
+        elements = elements.flatMap(el => {
+          if (typeof el === 'string') {
+            const parts = el.split(regex);
+            return parts.map((part, i) => {
+              if (i % 2 === 1) { // This is the match
+                return <GlossaryHighlight key={`${term.source}-${i}`} term={term}>{part}</GlossaryHighlight>;
+              }
+              return part;
+            });
+          }
+          return el;
+        });
       });
+    }
+
+    elements = elements.flatMap(el => {
+      if (typeof el === 'string') {
+        const parts = el.split(/(<\/?\d+>)/g);
+        return parts.map((part, i) => {
+          if (/^<\/?\d+>$/.test(part)) {
+            const inner = part.replace(/[<>]/g, '');
+            return (
+              <span key={`ph-${i}-${inner}`} className="inline-flex items-center justify-center bg-slate-700/50 text-slate-400 px-1.5 py-0.5 mx-0.5 rounded text-[10px] font-mono select-none border border-white/5">
+                {inner}
+              </span>
+            );
+          }
+          return part;
+        });
+      }
+      return el;
     });
 
     return elements;
@@ -97,13 +142,17 @@ export const SegmentCard = ({
   const handleKeyDown = (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
+      const newTarget = htmlToTarget(e.currentTarget);
+      onUpdateTranslation(segment.id, newTarget);
       onVerifyAndNext();
     }
   };
 
-  const handleAutoResize = (e) => {
-    e.target.style.height = "auto";
-    e.target.style.height = `${e.target.scrollHeight}px`;
+  const handleBlur = (e) => {
+    const newTarget = htmlToTarget(e.currentTarget);
+    if (newTarget !== segment.target) {
+      onUpdateTranslation(segment.id, newTarget);
+    }
   };
 
   return (
@@ -147,7 +196,7 @@ export const SegmentCard = ({
         </div>
 
         <div
-          className={`min-h-[40px] w-full break-words rounded-xl border p-3 whitespace-pre-wrap ${theme.inputSoft}`}
+          className={`min-h-[40px] w-full break-words rounded-xl border p-3 whitespace-pre-wrap leading-relaxed ${theme.inputSoft}`}
         >
           {renderHighlightedSource(segment.source)}
         </div>
@@ -178,16 +227,16 @@ export const SegmentCard = ({
           </div>
         </div>
 
-        <textarea
+        <div
           id={`target-${segment.id}`}
           ref={targetRef}
           data-segment-target="true"
-          value={segment.target || ""}
-          onChange={(event) => onUpdateTranslation(segment.id, event.target.value)}
+          contentEditable={!segment.verified}
+          suppressContentEditableWarning={true}
+          onBlur={handleBlur}
           onKeyDown={handleKeyDown}
-          onInput={handleAutoResize}
-          placeholder="Translation will appear here... (Press Ctrl+Enter to verify and move to next)"
-          className={`min-h-[40px] w-full resize-none overflow-hidden rounded-xl border p-3 outline-none focus:ring-2 ${segment.verified ? 'focus:ring-teal-500' : 'focus:ring-sky-300'} ${theme.input}`}
+          dangerouslySetInnerHTML={{ __html: targetToHtml(segment.target || "") }}
+          className={`min-h-[40px] w-full break-words rounded-xl border p-3 outline-none focus:ring-2 whitespace-pre-wrap leading-relaxed ${segment.verified ? 'focus:ring-teal-500 bg-slate-800/50 cursor-not-allowed opacity-70' : 'focus:ring-sky-300'} ${theme.input} empty:before:content-['Translation_will_appear_here..._(Press_Ctrl+Enter_to_verify_and_move_to_next)'] empty:before:text-slate-500`}
         />
 
         {segment.qaIssues?.length > 0 && (
