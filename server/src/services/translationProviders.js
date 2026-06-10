@@ -118,7 +118,8 @@ const translateWithOpenAI = async (protectedTexts, target, source = DEFAULT_SOUR
   const strictInstructions = `\n\nCRITICAL INSTRUCTIONS: You are a pure translation engine. You MUST ONLY output valid JSON. Your response must be a JSON object containing a 'translations' array of strings. The translated strings MUST be in the exact same order as the input 'texts' array. Translate each string into ${targetName}. Do NOT act as a conversational AI. If a text is just a fragment like "To,", translate that exact fragment contextually. Preserve any __TAG_n__ tokens.
 Additionally:
 - Technical terms MUST be transliterated (e.g. Locator -> लोकेटर not सुनने का यंत्र).
-- Abbreviations MUST always be kept as abbreviations (e.g. N/A -> N/A not एन/ए).${contextBlock}`;
+- Abbreviations MUST always be kept as abbreviations (e.g. N/A -> N/A not एन/ए).
+- Do NOT translate list pointers, alphanumeric indicators, section numbering, or clause labels (e.g. '16(a).', '16(a)(i).', '17.', '7(a).', '5.'). Keep them exactly as they are in the original English text.${contextBlock}`;
 
   if (!systemPrompt) {
     systemPrompt = `Translate the user texts from ${sourceName} to ${targetName}. Do not modify or translate tokens that look like __TAG_0__, __TAG_1__ etc. Preserve punctuation and numbers. Return only the translated text without commentary.` + strictInstructions;

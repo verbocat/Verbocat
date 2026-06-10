@@ -16,14 +16,18 @@ const extractPlaceholders = (element, $, tagMap, tagCounter) => {
         clone.empty();
         const outer = $.html(clone); // e.g. <b class="x"></b>
         const openingTag = outer.replace(/<\/[^>]+>$/, ""); // <b class="x">
-        const closingTag = `</${child.name}>`;
+        
+        const isVoid = ["br", "img", "input", "hr", "meta", "link", "wbr", "col"].includes(child.name.toLowerCase());
+        const closingTag = isVoid ? "" : `</${child.name}>`;
 
         tagMap.set(`<${id}>`, openingTag);
         tagMap.set(`</${id}>`, closingTag);
 
         str += `<${id}>`;
         str += extractPlaceholders(child, $, tagMap, tagCounter);
-        str += `</${id}>`;
+        if (!isVoid) {
+          str += `</${id}>`;
+        }
       }
     });
   return str;
