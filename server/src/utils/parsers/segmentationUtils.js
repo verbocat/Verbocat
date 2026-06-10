@@ -8,7 +8,7 @@ const extractPlaceholders = (element, $, tagMap, tagCounter) => {
     .contents()
     .each((_, child) => {
       if (child.type === "text") {
-        str += $(child).text();
+        str += $(child).text().replace(/\s+/g, " ");
       } else if (child.type === "tag") {
         const id = tagCounter.value++;
 

@@ -92,6 +92,25 @@ export const SegmentCard = ({
   onVerifyAndNext
 }) => {
   const targetRef = useRef(null);
+  const lastSavedTargetRef = useRef(segment.target || "");
+
+  // Reset innerHTML when the segment ID changes (recycled by Virtuoso)
+  useEffect(() => {
+    if (targetRef.current) {
+      targetRef.current.innerHTML = targetToHtml(segment.target || "");
+      lastSavedTargetRef.current = segment.target || "";
+    }
+  }, [segment.id]);
+
+  // Sync external changes to target (e.g. from translation API or undo/redo)
+  useEffect(() => {
+    if (targetRef.current) {
+      if (segment.target !== lastSavedTargetRef.current) {
+        targetRef.current.innerHTML = targetToHtml(segment.target || "");
+        lastSavedTargetRef.current = segment.target || "";
+      }
+    }
+  }, [segment.target]);
 
   const renderHighlightedSource = (text) => {
     if (!text) return null;
@@ -143,6 +162,7 @@ export const SegmentCard = ({
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
       const newTarget = htmlToTarget(e.currentTarget);
+      lastSavedTargetRef.current = newTarget;
       onUpdateTranslation(segment.id, newTarget);
       onVerifyAndNext();
     }
@@ -150,6 +170,7 @@ export const SegmentCard = ({
 
   const handleBlur = (e) => {
     const newTarget = htmlToTarget(e.currentTarget);
+    lastSavedTargetRef.current = newTarget;
     if (newTarget !== segment.target) {
       onUpdateTranslation(segment.id, newTarget);
     }
@@ -235,8 +256,7 @@ export const SegmentCard = ({
           suppressContentEditableWarning={true}
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
-          dangerouslySetInnerHTML={{ __html: targetToHtml(segment.target || "") }}
-          className={`min-h-[40px] w-full break-words rounded-xl border p-3 outline-none focus:ring-2 whitespace-pre-wrap leading-relaxed ${segment.verified ? 'focus:ring-teal-500 bg-slate-800/50 cursor-not-allowed opacity-70' : 'focus:ring-sky-300'} ${theme.input} empty:before:content-['Translation_will_appear_here..._(Press_Ctrl+Enter_to_verify_and_move_to_next)'] empty:before:text-slate-500`}
+          className={`min-h-[40px] w-full break-words rounded-xl border p-3 outline-none focus:ring-2 whitespace-pre-wrap leading-relaxed ${segment.verified ? 'focus:ring-teal-500 bg-slate-800/50 cursor-not-allowed opacity-70' : 'focus:ring-sky-300'} ${theme.input} empty:before:content-['Translation_will_appear_here..._(Press_Ctrl_Enter_to_verify_and_move_to_next)'] empty:before:text-slate-500`}
         />
 
         {segment.qaIssues?.length > 0 && (
