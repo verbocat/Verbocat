@@ -61,8 +61,8 @@ const splitByPunctuation = (str) => {
     } else if (match[2]) {
       // It's text
       const text = match[2];
-      // Split by punctuation: . , ! ? : ; and line breaks
-      const splitRegex = /([.,!?;:\n]+[\s]*)/g;
+      // Only split on actual sentence boundaries: . (if followed by space/end), !, ?, and newlines
+      const splitRegex = /([!?]+[\s]*|[\n]+[\s]*|\.+(?=\s|$))/g;
 
       let lastIndex = 0;
       let splitMatch;
