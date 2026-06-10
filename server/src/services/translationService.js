@@ -70,7 +70,8 @@ const translateSegments = async (segments, target, sourceLang, contextSettings) 
   const sourceToIndex = new Map();
 
   segments.forEach((segment, index) => {
-    if (!segment.target || segment.target.trim() === "") {
+    const isTargetEmpty = !segment.target || segment.target.replace(/<\/?\d+>/g, "").trim() === "";
+    if (isTargetEmpty) {
       const source = segment.source;
       if (!tmMap[source] || !isSafeTmTranslation(source, tmMap[source].target_text)) {
         if (!sourceToIndex.has(source)) {
