@@ -1,12 +1,11 @@
 const fs = require('fs');
 const JSZip = require('jszip');
 const cheerio = require('cheerio');
-
-const normalizeSegmentText = (text) =>
-  (text || "").replace(/\u00a0/g, " ").replace(/[ \t\r\f\v]+/g, " ").replace(/\n\s*/g, "\n").trim();
-
-const escapeXml = (text) => 
-  String(text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+const {
+  extractPlaceholders,
+  splitByPunctuation,
+  restorePlaceholders,
+} = require('./segmentationUtils');
 
 const parseFile = async (filePath) => {
   const fileData = fs.readFileSync(filePath);
@@ -14,23 +13,35 @@ const parseFile = async (filePath) => {
   const segments = [];
   let segmentIndex = 0;
 
+  const tagMapGlobal = new Map();
+  const tagCounter = { value: 1 };
+
   for (const relativePath in zip.files) {
     if (relativePath.startsWith('ppt/slides/slide') && relativePath.endsWith('.xml')) {
       const xmlContent = await zip.file(relativePath).async('string');
       const $ = cheerio.load(xmlContent, { xmlMode: true });
       let modified = false;
 
-      $('a\\:t').each((_, element) => {
-        const rawText = $(element).text();
-        const source = normalizeSegmentText(rawText);
-        if (!source) return;
+      $('a\\:p').each((_, element) => {
+        const rawText = $(element).text().trim();
+        if (!rawText) return;
 
-        const leading = rawText.match(/^\s*/)?.[0] || "";
-        const trailing = rawText.match(/\s*$/)?.[0] || "";
-        const segmentId = segmentIndex++;
-        
-        $(element).text(`__SEG_${segmentId}__`);
-        segments.push({ id: segmentId, source, target: "", leading, trailing });
+        const placeholderStr = extractPlaceholders(element, $, tagMapGlobal, tagCounter);
+        const subSegments = splitByPunctuation(placeholderStr);
+
+        $(element).empty();
+
+        subSegments.forEach((subSeg) => {
+          const segmentId = segmentIndex++;
+          $(element).append(`__SEG_${segmentId}__`);
+          segments.push({
+            id: segmentId,
+            source: subSeg,
+            target: "",
+            leading: "",
+            trailing: "",
+          });
+        });
         modified = true;
       });
 
@@ -41,19 +52,38 @@ const parseFile = async (filePath) => {
   }
 
   const modifiedZipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
-  const template = modifiedZipBuffer.toString('base64');
+  
+  const templateData = {
+    zipBase64: modifiedZipBuffer.toString('base64'),
+    tagMap: Array.from(tagMapGlobal.entries()),
+  };
+  
+  const template = Buffer.from(JSON.stringify(templateData)).toString('base64');
 
   return { segments, template };
 };
 
 const exportFile = async (templateBase64, segments) => {
-  const zipBuffer = Buffer.from(templateBase64, 'base64');
+  let zipBase64 = "";
+  let tagMapGlobal = new Map();
+
+  try {
+    const templateData = JSON.parse(Buffer.from(templateBase64, 'base64').toString('utf-8'));
+    zipBase64 = templateData.zipBase64;
+    tagMapGlobal = new Map(templateData.tagMap || []);
+  } catch (e) {
+    // Fallback for old templates
+    zipBase64 = templateBase64;
+  }
+
+  const zipBuffer = Buffer.from(zipBase64, 'base64');
   const zip = await JSZip.loadAsync(zipBuffer);
 
   const segmentMap = new Map();
   segments.forEach((segment) => {
-    const replacement = escapeXml(segment.leading || "") + escapeXml(segment.target) + escapeXml(segment.trailing || "");
-    segmentMap.set(segment.id, replacement);
+    const targetText = segment.target || segment.source;
+    const restoredText = restorePlaceholders(targetText, tagMapGlobal);
+    segmentMap.set(segment.id, restoredText);
   });
 
   for (const relativePath in zip.files) {

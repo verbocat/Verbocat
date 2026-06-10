@@ -1,32 +1,17 @@
 const fs = require("fs");
 const zlib = require("zlib");
 const cheerio = require("cheerio");
+const {
+  extractPlaceholders,
+  splitByPunctuation,
+  restorePlaceholders,
+} = require("./segmentationUtils");
 
 const SKIP_SELECTOR = "script,style,noscript,svg,canvas";
-
-const normalizeSegmentText = (text) =>
-  (text || "")
-    .replace(/\u00a0/g, " ")
-    .replace(/[ \t\r\f\v]+/g, " ")
-    .replace(/\n\s*/g, "\n")
-    .trim();
-
-const escapeHtml = (text) =>
-  String(text || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-
-const stripVisibleTags = (text) =>
-  String(text || "")
-    .replace(/<\/?[^>]+>/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-const toHtmlText = (text) =>
-  escapeHtml(stripVisibleTags(text)).replace(/\n/g, "<br/>");
+const BLOCK_TAGS = [
+  "p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "th", "blockquote", 
+  "section", "article", "nav", "header", "footer", "figcaption", "address", "main"
+];
 
 const parseFile = async (filePath) => {
   const html = fs.readFileSync(filePath, "utf-8");
@@ -34,41 +19,81 @@ const parseFile = async (filePath) => {
   const segments = [];
   let segmentIndex = 0;
 
+  const tagMapGlobal = new Map();
+  const tagCounter = { value: 1 };
+  const processedBlocks = new Set();
+
   $("body").find("*").contents().each((_, element) => {
     if (element.type !== "text") return;
-    const $parent = $(element).parent();
-    if ($parent.closest(SKIP_SELECTOR).length > 0) return;
+    const rawText = $(element).text().trim();
+    if (!rawText) return;
 
-    const rawText = $(element).text();
-    const source = normalizeSegmentText(rawText);
-    if (!source) return;
+    let $block = $(element).closest(BLOCK_TAGS.join(","));
+    if ($block.length === 0) {
+      $block = $(element).parent();
+    }
 
-    const leading = rawText.match(/^\s*/)?.[0] || "";
-    const trailing = rawText.match(/\s*$/)?.[0] || "";
-    const segmentId = segmentIndex++;
-    
-    $(element).replaceWith(`__SEG_${segmentId}__`);
-    segments.push({ id: segmentId, source, target: "", leading, trailing });
+    if ($block.closest(SKIP_SELECTOR).length > 0) return;
+
+    const blockNode = $block[0];
+    if (processedBlocks.has(blockNode)) return;
+    processedBlocks.add(blockNode);
+
+    const placeholderStr = extractPlaceholders(blockNode, $, tagMapGlobal, tagCounter);
+    const subSegments = splitByPunctuation(placeholderStr);
+
+    $block.empty();
+
+    subSegments.forEach((subSeg) => {
+      const segmentId = segmentIndex++;
+      $block.append(`__SEG_${segmentId}__`);
+      segments.push({
+        id: segmentId,
+        source: subSeg,
+        target: "",
+        leading: "",
+        trailing: "",
+      });
+    });
   });
 
   const htmlString = $.html();
-  const template = zlib.gzipSync(Buffer.from(htmlString, "utf-8")).toString("base64");
+  const templateData = {
+    html: htmlString,
+    tagMap: Array.from(tagMapGlobal.entries()),
+  };
+  const template = zlib
+    .gzipSync(Buffer.from(JSON.stringify(templateData), "utf-8"))
+    .toString("base64");
+    
   return { segments, template };
 };
 
 const exportFile = async (templateBase64, segments) => {
   let html = "";
+  let tagMapGlobal = new Map();
+
   try {
     const buffer = Buffer.from(templateBase64, "base64");
-    html = zlib.gunzipSync(buffer).toString("utf-8");
+    const unzipped = zlib.gunzipSync(buffer).toString("utf-8");
+    try {
+      const templateData = JSON.parse(unzipped);
+      html = templateData.html;
+      tagMapGlobal = new Map(templateData.tagMap || []);
+    } catch (e) {
+      html = unzipped;
+    }
   } catch (err) {
     html = templateBase64;
   }
 
   const segmentMap = new Map();
   segments.forEach((segment) => {
-    const replacement = escapeHtml(segment.leading || "") + toHtmlText(segment.target) + escapeHtml(segment.trailing || "");
-    segmentMap.set(segment.id, replacement);
+    // If the target is empty, fallback to source
+    const targetText = segment.target || segment.source;
+    // Restore the tags using the global tag map
+    const restoredText = restorePlaceholders(targetText, tagMapGlobal);
+    segmentMap.set(segment.id, restoredText);
   });
 
   html = html.replace(/__SEG_(\d+)__/g, (match, idStr) => {
