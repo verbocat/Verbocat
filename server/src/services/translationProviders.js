@@ -119,7 +119,8 @@ const translateWithOpenAI = async (protectedTexts, target, source = DEFAULT_SOUR
 Additionally:
 - Technical terms MUST be transliterated (e.g. Locator -> लोकेटर not सुनने का यंत्र).
 - Abbreviations MUST always be kept as abbreviations (e.g. N/A -> N/A not एन/ए).
-- Do NOT translate list pointers, alphanumeric indicators, section numbering, or clause labels (e.g. '16(a).', '16(a)(i).', '17.', '7(a).', '5.'). Keep them exactly as they are in the original English text.${contextBlock}`;
+- Do NOT translate or transliterate alphanumeric list pointers, section numbers, or clause labels (e.g. '16(a).', '16(a)(i).', '17.', '7(a).', '7(b).', '5.'). Keep them exactly as they are in the original English text (use English letters and standard periods, not Devanagari characters or purna-viram '।').
+- Do NOT translate or transliterate contact prefixes or abbreviation labels like 'T', 'F', 'M', 'Tel', 'Mob', 'Fax', 'Email', 'Email ID'. Keep them exactly as they are in the original English text.${contextBlock}`;
 
   if (!systemPrompt) {
     systemPrompt = `Translate the user texts from ${sourceName} to ${targetName}. Do not modify or translate tokens that look like __TAG_0__, __TAG_1__ etc. Preserve punctuation and numbers. Return only the translated text without commentary.` + strictInstructions;

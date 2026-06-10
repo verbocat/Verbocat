@@ -44,6 +44,20 @@ const isSafeTmTranslation = (source, target) => {
     return false;
   }
 
+  // Ensure English alphanumeric list pointers and section numbers are preserved
+  const sourcePointers = normalizedSource.match(/\b\d+(?:\([a-zA-Z0-9]+\))+\.?|\b\d+\./g) || [];
+  const targetPointers = normalizedTarget.match(/\b\d+(?:\([a-zA-Z0-9]+\))+\.?|\b\d+\./g) || [];
+  if (sourcePointers.length !== targetPointers.length) {
+    return false;
+  }
+
+  // Ensure contact info prefix abbreviations (T, F, M, Tel, Mob, etc.) are kept in English
+  const hasTelPrefix = /\b[TFM]\b|\b(?:Tel|Mob|Fax|Email|Email ID)\b/i.test(normalizedSource);
+  const targetHasTelPrefix = /\b[TFM]\b|\b(?:Tel|Mob|Fax|Email|Email ID)\b/i.test(normalizedTarget);
+  if (hasTelPrefix && !targetHasTelPrefix) {
+    return false;
+  }
+
   return true;
 };
 
