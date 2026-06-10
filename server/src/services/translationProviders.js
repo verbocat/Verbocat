@@ -311,7 +311,7 @@ const translateChunk = async (texts, target, source = DEFAULT_SOURCE_LANG, provi
         setLimitedCache(failedCache, key, { createdAt: Date.now() }, FAILED_CACHE_LIMIT);
       }
 
-      const finalTranslation = stripVisibleTags(restoreProtectedTags(translated, tags));
+      const finalTranslation = restoreProtectedTags(translated, tags);
 
       if (currentProvider !== "Fallback") {
         setLimitedCache(successCache, key, { translated: finalTranslation, provider: currentProvider }, SUCCESS_CACHE_LIMIT);

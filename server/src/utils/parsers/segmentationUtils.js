@@ -32,7 +32,7 @@ const extractPlaceholders = (element, $, tagMap, tagCounter) => {
 // Splits a placeholder string into segments based on punctuation
 // Automatically balances active tags across segments
 const splitByPunctuation = (str) => {
-  const MIN_LENGTH = 150;
+  const MIN_LENGTH = 250;
   const segments = [];
   let currentSegment = "";
   let activeTags = []; // Stack of active tag IDs
@@ -128,8 +128,36 @@ const restorePlaceholders = (segmentedStr, tagMap) => {
   });
 };
 
+// Separates a segment string into leading tags, clean body, and trailing tags
+const extractSegmentTags = (str) => {
+  if (!str) return { leading: "", body: "", trailing: "" };
+
+  let leading = "";
+  let trailing = "";
+  let body = str;
+
+  // Match leading tags and spaces
+  const leadingRegex = /^(\s*<\/?\d+>\s*)+/;
+  const leadingMatch = body.match(leadingRegex);
+  if (leadingMatch) {
+    leading = leadingMatch[0];
+    body = body.substring(leading.length);
+  }
+
+  // Match trailing tags and spaces
+  const trailingRegex = /(\s*<\/?\d+>\s*)+$/;
+  const trailingMatch = body.match(trailingRegex);
+  if (trailingMatch) {
+    trailing = trailingMatch[0];
+    body = body.substring(0, body.length - trailing.length);
+  }
+
+  return { leading, body, trailing };
+};
+
 module.exports = {
   extractPlaceholders,
   splitByPunctuation,
   restorePlaceholders,
+  extractSegmentTags,
 };

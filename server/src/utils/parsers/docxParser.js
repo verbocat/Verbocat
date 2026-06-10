@@ -5,6 +5,7 @@ const {
   extractPlaceholders,
   splitByPunctuation,
   restorePlaceholders,
+  extractSegmentTags,
 } = require('./segmentationUtils');
 
 const parseFile = async (filePath) => {
@@ -44,12 +45,14 @@ const parseFile = async (filePath) => {
       
       $(element).append(`__SEG_${segmentId}__`);
       
+      const { leading, body, trailing } = extractSegmentTags(subSeg);
+      
       segments.push({
         id: segmentId,
-        source: subSeg,
+        source: body,
         target: "",
-        leading: "",
-        trailing: "",
+        leading,
+        trailing,
       });
     });
   });
@@ -88,7 +91,7 @@ const exportFile = async (templateBase64, segments) => {
 
   const segmentMap = new Map();
   segments.forEach((segment) => {
-    const targetText = segment.target || segment.source;
+    const targetText = (segment.leading || "") + (segment.target || segment.source) + (segment.trailing || "");
     const restoredText = restorePlaceholders(targetText, tagMapGlobal);
     segmentMap.set(segment.id, restoredText);
   });
