@@ -26,6 +26,10 @@ const parseFile = async (filePath) => {
 
   $("body").find("*").contents().each((_, element) => {
     if (element.type !== "text") return;
+
+    // Skip text nodes that have been detached from the body (already processed inside a block)
+    if ($(element).parents("body").length === 0) return;
+
     const rawText = $(element).text().trim();
     if (!rawText) return;
 
