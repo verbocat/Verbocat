@@ -28,6 +28,11 @@ const extractPlaceholders = (element, $, tagMap, tagCounter) => {
         if (!isVoid) {
           str += `</${id}>`;
         }
+      } else if (child.type === "comment") {
+        const id = tagCounter.value++;
+        tagMap.set(`<${id}>`, `<!--${child.data}-->`);
+        tagMap.set(`</${id}>`, "");
+        str += `<${id}></${id}>`;
       }
     });
   return str;
@@ -128,7 +133,7 @@ const splitByPunctuation = (str) => {
 // Replaces placeholders back with original HTML tags
 const restorePlaceholders = (segmentedStr, tagMap) => {
   return segmentedStr.replace(/<\/?\d+>/g, (match) => {
-    return tagMap.get(match) || match;
+    return tagMap.has(match) ? tagMap.get(match) : match;
   });
 };
 

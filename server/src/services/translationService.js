@@ -21,11 +21,46 @@ const hasVisibleMarkup = (text) => /<\/?[a-z][^>]*>/i.test(text || "");
 
 const digitString = (text) => String(text || "").replace(/\D/g, "");
 
-const isSafeTmTranslation = (source, target) => {
+const isSafeTmTranslation = (source, target, targetLang) => {
   const normalizedSource = normalizeText(source);
   const normalizedTarget = normalizeText(target);
 
   if (!normalizedTarget) {
+    return false;
+  }
+
+  // Reject Hindi target text containing Urdu/Arabic characters (range [\u0600-\u06FF])
+  if (targetLang === "hi" && /[\u0600-\u06FF]/.test(normalizedTarget)) {
+    return false;
+  }
+
+  // Reject identical translations unless they are purely numbers, punctuation, codes, list pointers, or URLs
+  if (normalizedSource.toLowerCase() === normalizedTarget.toLowerCase()) {
+    const clean = normalizedSource.trim();
+    
+    // Check if it's a URL
+    if (/https?:\/\/[^\s]+/i.test(clean)) {
+      return true;
+    }
+    
+    // Check if it has no letters at all (just numbers, punctuation, symbols)
+    if (!/[a-zA-Z]/.test(clean)) {
+      return true;
+    }
+    
+    // Check if it is a list pointer like (a), (vi), 1., 5.11.3.2, a., etc.
+    const isListPointer = /^\(?[a-zA-Z0-9]+\)?\.?$/i.test(clean) || /^\d+(\.\d+)*$/i.test(clean);
+    if (isListPointer) {
+      return true;
+    }
+    
+    // Check if it's a short alphanumeric code (uppercase letters, numbers, spaces allowed but short)
+    const isShortCode = /^[A-Z0-9\s:/-]+$/.test(clean) && clean.length <= 35;
+    if (isShortCode) {
+      return true;
+    }
+    
+    // Otherwise, if identical, it is untranslated English
     return false;
   }
 
@@ -87,7 +122,7 @@ const translateSegments = async (segments, target, sourceLang, contextSettings) 
     const isTargetEmpty = !segment.target || segment.target.replace(/<\/?\d+>/g, "").trim() === "";
     if (isTargetEmpty) {
       const source = segment.source;
-      if (!tmMap[source] || !isSafeTmTranslation(source, tmMap[source].target_text)) {
+      if (!tmMap[source] || !isSafeTmTranslation(source, tmMap[source].target_text, target)) {
         if (!sourceToIndex.has(source)) {
           sourceToIndex.set(source, []);
           uniqueMissingSources.push(source);
@@ -157,5 +192,6 @@ const translateSegments = async (segments, target, sourceLang, contextSettings) 
 };
 
 module.exports = {
-  translateSegments
+  translateSegments,
+  isSafeTmTranslation
 };
