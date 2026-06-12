@@ -40,7 +40,7 @@ const extractPlaceholders = (element, $, tagMap, tagCounter) => {
 
 // Splits a placeholder string into segments based on punctuation
 // Automatically balances active tags across segments
-const splitByPunctuation = (str) => {
+const splitByPunctuation = (str, tagMap) => {
   const MIN_LENGTH = 250;
   const segments = [];
   let currentSegment = "";
@@ -52,26 +52,31 @@ const splitByPunctuation = (str) => {
 
   while ((match = regex.exec(str)) !== null) {
     if (match[1]) {
-      // It's a tag placeholder
       const tagStr = match[1];
       const isClosing = tagStr.startsWith("</");
       const id = parseInt(tagStr.replace(/\D/g, ""), 10);
 
       if (isClosing) {
-        // Pop from active tags
         const index = activeTags.lastIndexOf(id);
         if (index !== -1) {
           activeTags.splice(index, 1);
         }
       } else {
-        activeTags.push(id);
+        let isVoid = false;
+        if (tagMap) {
+          const closingPlaceholder = `</${id}>`;
+          if (tagMap.get(closingPlaceholder) === "") {
+            isVoid = true;
+          }
+        }
+        if (!isVoid) {
+          activeTags.push(id);
+        }
       }
       currentSegment += tagStr;
     } else if (match[2]) {
-      // It's text
       const text = match[2];
-      // Only split on actual sentence boundaries: . (if followed by space/end), !, ?, and newlines
-      const splitRegex = /([!?]+[\s]*|[\n]+[\s]*|\.+(?=\s|$))/g;
+      const splitRegex = /([!?]+[\s]*|[\n]+[\s]*|\.+)/g;
 
       let lastIndex = 0;
       let splitMatch;
@@ -79,10 +84,15 @@ const splitByPunctuation = (str) => {
         const punctuation = splitMatch[0];
         const before = text.substring(lastIndex, splitMatch.index);
 
-        if (currentTextLength + before.length + punctuation.length >= MIN_LENGTH) {
+        const postPunctIndex = match.index + splitMatch.index + punctuation.length;
+        const remainder = str.substring(postPunctIndex);
+        const remainderNoTags = remainder.replace(/<\/?\d+>/g, "");
+        const isValidBoundary = remainderNoTags.length === 0 || /^\s/.test(remainderNoTags);
+        const hasTextRemainder = remainderNoTags.trim().length > 0;
+
+        if (isValidBoundary && hasTextRemainder && (currentTextLength + before.length + punctuation.length >= MIN_LENGTH)) {
           currentSegment += before + punctuation;
 
-          // Close all active tags before splitting
           let closedTagsStr = "";
           for (let i = activeTags.length - 1; i >= 0; i--) {
             closedTagsStr += `</${activeTags[i]}>`;
@@ -90,7 +100,6 @@ const splitByPunctuation = (str) => {
 
           segments.push(currentSegment + closedTagsStr);
 
-          // Start new segment and re-open active tags
           let openedTagsStr = "";
           for (let i = 0; i < activeTags.length; i++) {
             openedTagsStr += `<${activeTags[i]}>`;
@@ -113,7 +122,6 @@ const splitByPunctuation = (str) => {
   }
 
   if (currentSegment.trim() !== "") {
-    // Close any dangling tags in the last segment
     let closedTagsStr = "";
     for (let i = activeTags.length - 1; i >= 0; i--) {
       closedTagsStr += `</${activeTags[i]}>`;
@@ -121,13 +129,32 @@ const splitByPunctuation = (str) => {
     segments.push(currentSegment + closedTagsStr);
   }
 
-  // Filter out segments that contain only whitespace or tags with no text
-  return segments
-    .map((s) => s.trim())
-    .filter((s) => {
-      const textOnly = s.replace(/<\/?\d+>/g, "").trim();
-      return textOnly.length > 0;
-    });
+  const finalSegments = [];
+  let pendingTags = "";
+
+  segments.forEach((s) => {
+    const textOnly = s.replace(/<\/?\d+>/g, "").trim();
+    if (textOnly.length > 0) {
+      if (pendingTags) {
+        finalSegments.push(pendingTags + " " + s);
+        pendingTags = "";
+      } else {
+        finalSegments.push(s);
+      }
+    } else {
+      if (finalSegments.length > 0) {
+        finalSegments[finalSegments.length - 1] += " " + s;
+      } else {
+        pendingTags += (pendingTags ? " " : "") + s;
+      }
+    }
+  });
+
+  if (pendingTags) {
+    finalSegments.push(pendingTags);
+  }
+
+  return finalSegments.map(s => s.trim()).filter(s => s.length > 0);
 };
 
 // Replaces placeholders back with original HTML tags

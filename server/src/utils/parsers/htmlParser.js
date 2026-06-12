@@ -15,6 +15,21 @@ const BLOCK_TAGS = [
   "ul", "ol", "table", "tbody", "thead", "tr", "dl", "dt", "dd", "form", "fieldset"
 ];
 
+const isBlockNode = (node, $) => {
+  if (node.type !== "tag") return false;
+  const tagName = node.name.toLowerCase();
+  if (BLOCK_TAGS.includes(tagName)) return true;
+  
+  let hasBlockDescendant = false;
+  $(node).find("*").each((_, desc) => {
+    if (BLOCK_TAGS.includes(desc.name.toLowerCase())) {
+      hasBlockDescendant = true;
+      return false;
+    }
+  });
+  return hasBlockDescendant;
+};
+
 const wrapInlineSiblings = (element, $) => {
   $(element).children().each((_, child) => {
     wrapInlineSiblings(child, $);
@@ -30,10 +45,9 @@ const wrapInlineSiblings = (element, $) => {
         hasInline = true;
       }
     } else if (child.type === "tag") {
-      const tagName = child.name.toLowerCase();
-      if (BLOCK_TAGS.includes(tagName)) {
+      if (isBlockNode(child, $)) {
         hasBlock = true;
-      } else if (!["script", "style", "noscript"].includes(tagName)) {
+      } else if (!["script", "style", "noscript"].includes(child.name.toLowerCase())) {
         hasInline = true;
       }
     }
@@ -43,21 +57,14 @@ const wrapInlineSiblings = (element, $) => {
     let currentGroup = [];
     
     children.each((_, child) => {
-      let isBlock = false;
-      if (child.type === "tag") {
-        const tagName = child.name.toLowerCase();
-        if (BLOCK_TAGS.includes(tagName)) {
-          isBlock = true;
-        }
-      }
-      
+      const isBlock = child.type === "tag" && isBlockNode(child, $);
       const isWhitespaceText = child.type === "text" && !$(child).text().trim();
       const isIgnoredTag = child.type === "tag" && ["script", "style", "noscript"].includes(child.name.toLowerCase());
 
       if (isBlock || isIgnoredTag) {
         if (currentGroup.length > 0) {
           const wrapper = $("<div class='__temp-leaf-block__'></div>");
-          $(currentGroup[0]).before(wrapper);
+          $(currentGroup[0]).replaceWith(wrapper);
           currentGroup.forEach((node) => {
             wrapper.append(node);
           });
@@ -70,7 +77,7 @@ const wrapInlineSiblings = (element, $) => {
 
     if (currentGroup.length > 0) {
       const wrapper = $("<div class='__temp-leaf-block__'></div>");
-      $(currentGroup[0]).before(wrapper);
+      $(currentGroup[0]).replaceWith(wrapper);
       currentGroup.forEach((node) => {
         wrapper.append(node);
       });
@@ -117,7 +124,7 @@ const parseFile = async (filePath) => {
     processedBlocks.add(blockNode);
 
     const placeholderStr = extractPlaceholders(blockNode, $, tagMapGlobal, tagCounter);
-    const subSegments = splitByPunctuation(placeholderStr);
+    const subSegments = splitByPunctuation(placeholderStr, tagMapGlobal);
 
     $block.empty();
 
