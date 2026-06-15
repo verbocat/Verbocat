@@ -120,14 +120,29 @@ export default function App() {
     };
   }, [segments]);
 
+  const isJunkSegment = (text) => {
+    if (!text) return true;
+    const clean = text.replace(/__TAG_\d+__/g, "").trim();
+    // Purely numbers and punctuation
+    if (/^[^a-zA-Z]*$/.test(clean)) return true;
+    // Raw CSS like @page { ... }
+    if (/^\s*@(?:page|media|import|font-face)\s*\{/i.test(clean)) return true;
+    if (/(?:margin|padding|position|text-align)\s*:\s*[^;]+;/i.test(clean) && clean.includes("{") && clean.includes("}")) return true;
+    // Specific hardcoded junk
+    const lower = clean.toLowerCase();
+    if (lower === "waiting for translation") return true;
+    return false;
+  };
+
   const filteredSegments = useMemo(
     () =>
       segments.filter(
         (segment) =>
-          segment.source.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          !isJunkSegment(segment.source) &&
+          (segment.source.toLowerCase().includes(searchQuery.toLowerCase()) ||
           (segment.target || "")
             .toLowerCase()
-            .includes(searchQuery.toLowerCase())
+            .includes(searchQuery.toLowerCase()))
       ),
     [searchQuery, segments]
   );
@@ -231,8 +246,46 @@ export default function App() {
     try {
       showToast(`Relinking template...`);
       const data = await uploadFile(file);
+      
+      const cleanText = (text) => (text || "").replace(/<\/?\d+>/g, "").trim().toLowerCase();
+      
+      const sourceMap = new Map();
+      segments.forEach(seg => {
+        const key = cleanText(seg.source);
+        if (key && seg.target && seg.target.trim() !== "") {
+          if (!sourceMap.has(key)) {
+            sourceMap.set(key, seg.target);
+          }
+        }
+      });
+
+      let mappedCount = 0;
+      const extractTagsOnly = (str) => (str.match(/<\/?\d+>/g) || []).join(" ");
+      
+      const newSegments = data.segments.map((newSeg) => {
+        const key = cleanText(newSeg.source);
+        let mappedTarget = newSeg.target || extractTagsOnly(newSeg.source);
+        let isVerified = false;
+        
+        if (sourceMap.has(key)) {
+          mappedTarget = sourceMap.get(key);
+          isVerified = true;
+          mappedCount++;
+        }
+        
+        return {
+          ...newSeg,
+          target: mappedTarget,
+          verified: isVerified
+        };
+      });
+
+      setSegments(newSegments);
+      setHistory([]);
+      setFuture([]);
       setFileId(data.fileId || null);
-      showToast(`HTML Template relinked successfully! You can now Export.`);
+      setFileExtension(".html");
+      showToast(`Relinked successfully! Mapped ${mappedCount} segments.`);
     } catch (error) {
       console.log(error);
       showToast("Relink failed.", "error");
@@ -306,7 +359,7 @@ export default function App() {
     setProgress(0);
 
     const segmentsToTranslate = segments.filter(
-      (s) => !s.target || s.target.replace(/<\/?\d+>/g, "").trim() === ""
+      (s) => !isJunkSegment(s.source) && (!s.target || s.target.replace(/<\/?\d+>/g, "").trim() === "")
     );
 
     if (segmentsToTranslate.length === 0) {
@@ -731,6 +784,7 @@ export default function App() {
         onExportXliff={handleExportXliff}
         onExportTmx={handleExportTmx}
         onExportGlobalTmx={handleExportGlobalTmx}
+        onRelinkHtml={handleRelinkHtml}
         fileExtension={fileExtension}
         theme={theme}
         sourceLanguage={sourceLanguage}

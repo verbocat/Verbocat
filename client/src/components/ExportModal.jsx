@@ -7,6 +7,7 @@ export const ExportModal = ({
   onExportXliff,
   onExportTmx,
   onExportGlobalTmx,
+  onRelinkHtml,
   fileExtension,
   theme,
   sourceLanguage,
@@ -68,6 +69,34 @@ export const ExportModal = ({
               <Icons.Download /> Download
             </button>
           </div>
+
+          {/* Option: Export as HTML for XLF */}
+          {fileExtension !== ".html" && (
+            <div className="p-4 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 transition flex items-center justify-between">
+              <div className="space-y-1">
+                <div className="font-bold flex items-center gap-2 text-sm text-green-300">
+                  Export as HTML (.html)
+                </div>
+                <p className={`text-xs ${theme.muted}`}>
+                  To export this XLF as HTML, you must first relink the original HTML template.
+                </p>
+              </div>
+              <label className="bg-green-700 cursor-pointer text-white hover:bg-green-600 rounded-xl px-4 py-2 text-xs font-semibold flex items-center gap-1.5 transition">
+                <Icons.Upload /> Relink HTML
+                <input 
+                  type="file" 
+                  className="hidden" 
+                  accept=".html,.htm" 
+                  onChange={(e) => {
+                    if (onRelinkHtml) {
+                      onRelinkHtml(e);
+                      onClose();
+                    }
+                  }} 
+                />
+              </label>
+            </div>
+          )}
 
           {/* Option 3: TMX Current */}
           <div className="p-4 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 transition flex items-center justify-between">
