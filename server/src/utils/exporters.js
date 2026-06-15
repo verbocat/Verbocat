@@ -53,6 +53,15 @@ const generateTmx = (segments, sourceLang = "en", targetLang = "hi") => {
   return tmx;
 };
 
+const unescapeXml = (escaped) => {
+  return String(escaped || "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+};
+
 const parseXliff = (xmlContent) => {
   const $ = cheerio.load(xmlContent, { xmlMode: true });
   const segments = [];
@@ -60,8 +69,8 @@ const parseXliff = (xmlContent) => {
   $("trans-unit").each((_, tuEl) => {
     const tu = $(tuEl);
     const id = tu.attr("id") || "";
-    const source = tu.find("source").text().trim();
-    const target = tu.find("target").text().trim();
+    const source = unescapeXml(tu.find("source").html()?.trim());
+    const target = unescapeXml(tu.find("target").html()?.trim());
     
     if (source) {
       segments.push({
