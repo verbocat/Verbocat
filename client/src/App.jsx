@@ -212,60 +212,14 @@ export default function App() {
       setProgress(0);
       setIsUploading(true);
       
-      // Auto-Relink feature: If we have an active XLF/XLIFF project and the user uploads an HTML file, relink it automatically!
       const isHtmlUpload = file.name.endsWith(".html") || file.name.endsWith(".htm");
       const isCurrentXlf = fileExtension === ".xlf" || fileExtension === ".xliff" || fileExtension === ".sdlxliff";
+      const isAutoRelink = segments.length > 0 && isCurrentXlf && isHtmlUpload;
       
-      if (segments.length > 0 && isCurrentXlf && isHtmlUpload) {
+      if (isAutoRelink) {
         showToast(`Auto-relinking HTML template...`);
-        const data = await uploadFile(file);
-        
-        const cleanText = (text) => (text || "").replace(/<[^>]+>/g, "").replace(/__TAG_\d+__/g, "").replace(/\s+/g, " ").trim().toLowerCase();
-        
-        const sourceMap = new Map();
-        segments.forEach(seg => {
-          const key = cleanText(seg.source);
-          if (key && seg.target && seg.target.trim() !== "") {
-            if (!sourceMap.has(key)) {
-              sourceMap.set(key, seg.target);
-            }
-          }
-        });
-
-        let mappedCount = 0;
-        const extractTagsOnly = (str) => (str.match(/<\/?\d+>/g) || []).join(" ");
-        
-        const newSegments = data.segments.map((newSeg) => {
-          const key = cleanText(newSeg.source);
-          let mappedTarget = newSeg.target || extractTagsOnly(newSeg.source);
-          let isVerified = false;
-          
-          if (sourceMap.has(key)) {
-            mappedTarget = sourceMap.get(key);
-            // We do NOT mark it as verified so the user can freely edit the relinked segments
-            isVerified = false;
-            mappedCount++;
-          }
-          
-          return {
-            ...newSeg,
-            target: mappedTarget,
-            verified: isVerified
-          };
-        });
-
-        setSegments(newSegments);
-        setHistory([]);
-        setFuture([]);
-        setFileId(data.fileId || null);
-        setFileExtension(".html");
-        setFileName(data.originalName || file.name.replace(/\.[^/.]+$/, ""));
-        showToast(`Auto-Relinked successfully! Mapped ${mappedCount} segments.`);
-        setIsUploading(false);
-        return;
       }
 
-      // Standard Upload
       const data = await uploadFile(file);
       
       const extractTagsOnly = (str) => {
@@ -273,7 +227,16 @@ export default function App() {
       };
       
       const cleanText = (text) => {
-        return (text || "")
+        let decoded = (text || "")
+          .replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/&apos;/g, "'")
+          .replace(/&nbsp;/g, " ");
+
+        return decoded
           .replace(/<[^>]+>/g, "") // Strip ALL HTML tags including <mrk>, <g>, <1>
           .replace(/__TAG_\d+__/g, "") 
           .replace(/\s+/g, " ")
@@ -348,11 +311,18 @@ export default function App() {
       setHistory([]);
       setFuture([]);
       setFileId(data.fileId || null);
-      setFileExtension(`.${data.type}` || ".html");
-      setFileName(data.originalName || file.name.replace(/\.[^/.]+$/, ""));
-      setCurrentProvider("");
-      setShowQaPanel(false);
-      showToast(`File uploaded: ${file.name}`);
+      
+      if (isAutoRelink) {
+        setFileExtension(".html");
+        setFileName(data.originalName || file.name.replace(/\.[^/.]+$/, ""));
+        showToast(`Auto-Relinked successfully! Mapped ${mappedCount} segments.`);
+      } else {
+        setFileExtension(`.${data.type}` || ".html");
+        setFileName(data.originalName || file.name.replace(/\.[^/.]+$/, ""));
+        setCurrentProvider("");
+        setShowQaPanel(false);
+        showToast(`File uploaded: ${file.name}`);
+      }
     } catch (error) {
       console.log(error);
       showToast("Upload failed. Is the backend running?", "error");
