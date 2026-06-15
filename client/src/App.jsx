@@ -18,8 +18,12 @@ import { useGlossaryManager } from "./hooks/useGlossaryManager.js";
 import {
   exportFile,
   translateBatch,
-  uploadFile
+  uploadFile,
+  importXliff,
+  importTmx,
+  exportGlobalTm
 } from "./services/api.js";
+import { ExportModal } from "./components/ExportModal.jsx";
 import { applyGlossaryTerms } from "./utils/glossary.js";
 import { getTheme } from "./utils/theme.js";
 
@@ -47,6 +51,7 @@ export default function App() {
   
   const [showSearchReplace, setShowSearchReplace] = useState(false);
   const [showContextPanel, setShowContextPanel] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [contextSettings, setContextSettings] = useState({
     domain: "General",
     contentType: "General",
@@ -518,19 +523,113 @@ export default function App() {
     }
   };
 
-  const handleExportFile = async () => {
+  const handleExportDocument = async () => {
     try {
-      const blob = await exportFile(fileId, segments, fileExtension);
+      const blob = await exportFile(fileId, segments, fileExtension, sourceLanguage, targetLanguage, fileName);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
       link.setAttribute("download", `${fileName}_${targetLanguage}${fileExtension}`);
       document.body.appendChild(link);
       link.click();
-      showToast("File exported successfully!");
+      showToast("Document exported successfully!");
     } catch (error) {
       console.log(error);
       showToast("Export failed", "error");
+    }
+  };
+
+  const handleExportXliff = async () => {
+    try {
+      const blob = await exportFile(fileId, segments, ".xlf", sourceLanguage, targetLanguage, fileName);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `${fileName}_${targetLanguage}.xlf`);
+      document.body.appendChild(link);
+      link.click();
+      showToast("XLIFF exported successfully!");
+    } catch (error) {
+      console.log(error);
+      showToast("XLIFF export failed", "error");
+    }
+  };
+
+  const handleExportTmx = async () => {
+    try {
+      const blob = await exportFile(fileId, segments, ".tmx", sourceLanguage, targetLanguage, fileName);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `${fileName}_${targetLanguage}.tmx`);
+      document.body.appendChild(link);
+      link.click();
+      showToast("TMX memory exported successfully!");
+    } catch (error) {
+      console.log(error);
+      showToast("TMX export failed", "error");
+    }
+  };
+
+  const handleExportGlobalTmx = async () => {
+    try {
+      const blob = await exportGlobalTm(sourceLanguage, targetLanguage);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `global_tm_${sourceLanguage}_${targetLanguage}.tmx`);
+      document.body.appendChild(link);
+      link.click();
+      showToast("Global database TM exported successfully!");
+    } catch (error) {
+      console.log(error);
+      showToast("Global TM export failed", "error");
+    }
+  };
+
+  const handleImportXliff = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    try {
+      showToast("Importing XLIFF...");
+      const data = await importXliff(file);
+      if (data.segments && data.segments.length > 0) {
+        let mergedCount = 0;
+        const newSegments = segments.map((seg) => {
+          const match = data.segments.find(
+            (xs) => xs.source.trim().toLowerCase() === seg.source.trim().toLowerCase()
+          );
+          if (match && match.target) {
+            mergedCount++;
+            return {
+              ...seg,
+              target: match.target,
+              verified: true
+            };
+          }
+          return seg;
+        });
+        setSegments(newSegments);
+        showToast(`Successfully imported ${mergedCount} segments from XLIFF!`);
+      } else {
+        showToast("No translated segments found in XLIFF", "warn");
+      }
+    } catch (error) {
+      console.error(error);
+      showToast("XLIFF import failed", "error");
+    } finally {
+      if (event.target) event.target.value = "";
+    }
+  };
+
+  const handleImportTmx = async (file) => {
+    try {
+      showToast("Importing TMX to database...");
+      const data = await importTmx(file);
+      showToast(`Imported ${data.count} TM pairs to database!`);
+    } catch (error) {
+      console.error(error);
+      showToast("TMX import failed", "error");
     }
   };
 
@@ -622,6 +721,20 @@ export default function App() {
         show={showGlossary}
         canApplyGlossary={segments.length > 0}
         theme={theme}
+        onImportTmx={handleImportTmx}
+      />
+
+      <ExportModal
+        show={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        onExportDocument={handleExportDocument}
+        onExportXliff={handleExportXliff}
+        onExportTmx={handleExportTmx}
+        onExportGlobalTmx={handleExportGlobalTmx}
+        fileExtension={fileExtension}
+        theme={theme}
+        sourceLanguage={sourceLanguage}
+        targetLanguage={targetLanguage}
       />
 
       <ContextSettingsModal
@@ -672,12 +785,13 @@ export default function App() {
             <div className="shrink-0">
               <WorkspaceToolbar
                 onCloseProject={closeProject}
-                onExport={handleExportFile}
+                onExport={() => setShowExportModal(true)}
                 onLoadProject={loadProject}
                 onOpenGlossary={() => setShowGlossary(true)}
                 onOpenContext={() => setShowContextPanel(true)}
                 onSaveProject={saveProject}
                 onRelinkHtml={handleRelinkHtml}
+                onImportXliff={handleImportXliff}
                 onTranslate={handleTranslateSegments}
                 onToggleQa={() => setShowQaPanel((value) => !value)}
                 onCopyAllSource={copyAllSourceToTarget}

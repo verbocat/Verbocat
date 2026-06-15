@@ -93,6 +93,8 @@ export const SegmentCard = ({
 }) => {
   const targetRef = useRef(null);
   const lastSavedTargetRef = useRef(segment.target || "");
+  const [suggestions, setSuggestions] = useState([]);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
 
   // Reset innerHTML when the segment ID changes (recycled by Virtuoso)
   useEffect(() => {
@@ -158,7 +160,84 @@ export const SegmentCard = ({
     return elements;
   };
 
+  const handleInput = (e) => {
+    const text = htmlToTarget(e.currentTarget);
+    const words = text.split(/[\s\u00a0]+/);
+    const lastWord = words[words.length - 1] || "";
+    
+    if (lastWord.length >= 1 && translationGlossary && translationGlossary.length > 0) {
+      const filtered = translationGlossary.filter(term => 
+        (term.target && term.target.toLowerCase().startsWith(lastWord.toLowerCase())) ||
+        (term.source && term.source.toLowerCase().startsWith(lastWord.toLowerCase()))
+      );
+      setSuggestions(filtered.slice(0, 5));
+      setActiveSuggestionIndex(0);
+    } else {
+      setSuggestions([]);
+    }
+  };
+
+  const applySuggestion = (term) => {
+    if (!targetRef.current) return;
+    const text = htmlToTarget(targetRef.current);
+    const words = text.split(/(\s+)/);
+    
+    let wordIndex = -1;
+    for (let i = words.length - 1; i >= 0; i--) {
+      if (words[i].trim() !== "") {
+        wordIndex = i;
+        break;
+      }
+    }
+    
+    if (wordIndex !== -1) {
+      words[wordIndex] = term.target;
+    } else {
+      words.push(term.target);
+    }
+    
+    const newTarget = words.join("");
+    targetRef.current.innerHTML = targetToHtml(newTarget);
+    lastSavedTargetRef.current = newTarget;
+    onUpdateTranslation(segment.id, newTarget);
+    setSuggestions([]);
+    
+    setTimeout(() => {
+      if (!targetRef.current) return;
+      targetRef.current.focus();
+      const range = document.createRange();
+      const sel = window.getSelection();
+      range.selectNodeContents(targetRef.current);
+      range.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }, 10);
+  };
+
   const handleKeyDown = (e) => {
+    if (suggestions.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setActiveSuggestionIndex(prev => Math.min(prev + 1, suggestions.length - 1));
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setActiveSuggestionIndex(prev => Math.max(prev - 1, 0));
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        applySuggestion(suggestions[activeSuggestionIndex]);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setSuggestions([]);
+        return;
+      }
+    }
+
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
       const newTarget = htmlToTarget(e.currentTarget);
@@ -174,6 +253,9 @@ export const SegmentCard = ({
     if (newTarget !== segment.target) {
       onUpdateTranslation(segment.id, newTarget);
     }
+    setTimeout(() => {
+      setSuggestions([]);
+    }, 200);
   };
 
   return (
@@ -248,16 +330,45 @@ export const SegmentCard = ({
           </div>
         </div>
 
-        <div
-          id={`target-${segment.id}`}
-          ref={targetRef}
-          data-segment-target="true"
-          contentEditable={!segment.verified}
-          suppressContentEditableWarning={true}
-          onBlur={handleBlur}
-          onKeyDown={handleKeyDown}
-          className={`min-h-[40px] w-full break-words rounded-xl border p-3 outline-none focus:ring-2 whitespace-pre-wrap leading-relaxed ${segment.verified ? 'focus:ring-teal-500 bg-slate-800/50 cursor-not-allowed opacity-70' : 'focus:ring-sky-300'} ${theme.input} empty:before:content-['Translation_will_appear_here..._(Press_Ctrl_Enter_to_verify_and_move_to_next)'] empty:before:text-slate-500`}
-        />
+        <div className="relative">
+          <div
+            id={`target-${segment.id}`}
+            ref={targetRef}
+            data-segment-target="true"
+            contentEditable={!segment.verified}
+            suppressContentEditableWarning={true}
+            onBlur={handleBlur}
+            onInput={handleInput}
+            onKeyDown={handleKeyDown}
+            className={`min-h-[40px] w-full break-words rounded-xl border p-3 outline-none focus:ring-2 whitespace-pre-wrap leading-relaxed ${segment.verified ? 'focus:ring-teal-500 bg-slate-800/50 cursor-not-allowed opacity-70' : 'focus:ring-sky-300'} ${theme.input} empty:before:content-['Translation_will_appear_here..._(Press_Ctrl_Enter_to_verify_and_move_to_next)'] empty:before:text-slate-500`}
+          />
+
+          {suggestions.length > 0 && (
+            <div className="absolute left-0 right-0 z-[100] mt-1 rounded-xl border p-1.5 shadow-2xl bg-neutral-900 border-white/10 text-white flex flex-col gap-0.5 max-h-48 overflow-y-auto">
+              <div className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-neutral-500 border-b border-white/5 mb-1 flex justify-between items-center select-none">
+                <span>Glossary Suggestions</span>
+                <span>↑↓ Navigate · Enter/Tab Select</span>
+              </div>
+              {suggestions.map((term, i) => (
+                <button
+                  key={`sugg-${segment.id}-${i}`}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    applySuggestion(term);
+                  }}
+                  className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between transition ${
+                    i === activeSuggestionIndex 
+                      ? "bg-sky-600/30 text-sky-200 border border-sky-500/20" 
+                      : "hover:bg-white/5 border border-transparent"
+                  }`}
+                >
+                  <div className="font-semibold">{term.target}</div>
+                  <div className="text-[10px] text-neutral-400 font-mono">{term.source}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {segment.qaIssues?.length > 0 && (
           <div className="flex flex-wrap gap-2">

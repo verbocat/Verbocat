@@ -20,6 +20,7 @@ const normalizeTranslatedText = (text) =>
     .replace(/&#10;/g, " ")
     .replace(/\u00a0/g, " ")
     .replace(/\s+/g, " ")
+    .replace(/।([^\s])/g, "। $1")
     .trim();
 
 const stripVisibleTags = (text) =>
@@ -120,7 +121,12 @@ Additionally:
 - Technical terms MUST be transliterated (e.g. Locator -> लोकेटर not सुनने का यंत्र).
 - Abbreviations MUST always be kept as abbreviations (e.g. N/A -> N/A not एन/ए).
 - Do NOT translate or transliterate alphanumeric list pointers, section numbers, or clause labels (e.g. '16(a).', '16(a)(i).', '17.', '7(a).', '7(b).', '5.'). Keep them exactly as they are in the original English text (use English letters and standard periods, not Devanagari characters or purna-viram '।').
-- Do NOT translate or transliterate contact prefixes or abbreviation labels like 'T', 'F', 'M', 'Tel', 'Mob', 'Fax', 'Email', 'Email ID'. Keep them exactly as they are in the original English text.${contextBlock}`;
+- Do NOT translate or transliterate contact prefixes or abbreviation labels like 'T', 'F', 'M', 'Tel', 'Mob', 'Fax', 'Email', 'Email ID'. Keep them exactly as they are in the original English text.
+- Avoid literal, machine-like translations. Ensure the translation sounds natural, fluent, and idiomatic in the target language (especially in business, banking, and fintech contexts).
+- Avoid literal/duplicate translations of doublets (e.g. translate 'Safety & Security' as 'सुरक्षा और संरक्षा' rather than repeating 'सुरक्षा').
+- Translate common business/banking terms professionally (e.g. translate 'Earn ... interest' as 'ब्याज प्राप्त करें' instead of 'कमाएं', 'Collection' as 'वसूली' in a business/debt context rather than 'संग्रहण', 'Reimbursement' as 'प्रतिपूर्ति', 'IT professional' as 'आईटी विशेषज्ञ').
+- Maintain consistent terminology for recurring terms (e.g. choose between transliterated English or pure Hindi terms like 'रिटेलर' vs 'व्यापारी', 'व्यवसाय' vs 'बिजनेस', and maintain that preference across the texts).
+- Always place a space after the Hindi purna-viram ('।') full stop when starting a new sentence (e.g., 'है। हमारी' instead of 'है।हमारी').${contextBlock}`;
 
   if (!systemPrompt) {
     systemPrompt = `Translate the user texts from ${sourceName} to ${targetName}. Do not modify or translate tokens that look like __TAG_0__, __TAG_1__ etc. Preserve punctuation and numbers. Return only the translated text without commentary.` + strictInstructions;

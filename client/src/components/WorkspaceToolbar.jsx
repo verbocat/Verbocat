@@ -18,6 +18,7 @@ export const WorkspaceToolbar = ({
   onOpenContext,
   onSaveProject,
   onRelinkHtml,
+  onImportXliff,
   onTranslate,
   onToggleQa,
   isTranslating,
@@ -136,6 +137,24 @@ export const WorkspaceToolbar = ({
                 accept=".json"
                 onChange={onLoadProject}
                 className="hidden"
+              />
+            </label>
+
+            <label
+              title="Import XLIFF"
+              className={
+                segmentsCount === 0
+                  ? "inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition bg-slate-400/30 text-slate-300"
+                  : `inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition ${theme.buttonSecondary}`
+              }
+            >
+              <Icons.Upload className="text-sky-400" />
+              <input
+                type="file"
+                accept=".xlf,.xliff"
+                onChange={onImportXliff}
+                className="hidden"
+                disabled={segmentsCount === 0}
               />
             </label>
 

@@ -28,7 +28,8 @@ export const GlossaryModal = ({
   setGlossaryTargetLang,
   setGlossary,
   show,
-  theme
+  theme,
+  onImportTmx
 }) => {
   const languageNameMap = useMemo(
     () =>
@@ -233,6 +234,27 @@ export const GlossaryModal = ({
                     Upload CSV
                   </button>
                   
+                  <input
+                    type="file"
+                    accept=".tmx"
+                    id="tmx-import-file-input"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        onImportTmx(file);
+                      }
+                      e.target.value = "";
+                    }}
+                  />
+                  <button
+                    onClick={() => document.getElementById("tmx-import-file-input")?.click()}
+                    className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${theme.buttonSecondary}`}
+                    title="Import Translation Memory TMX file into database"
+                  >
+                    Import TMX
+                  </button>
+
                   <button
                     onClick={() => setIsEditing(!isEditing)}
                     className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${isEditing ? 'bg-sky-600 text-white' : theme.buttonSecondary}`}
