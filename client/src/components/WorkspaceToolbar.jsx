@@ -33,7 +33,8 @@ export const WorkspaceToolbar = ({
   onTargetLanguageChange,
   fileName,
   theme,
-  canTranslate = true
+  canTranslate = true,
+  fileExtension
 }) => (
   <section className={`rounded-2xl border p-4 ${theme.cardStrong}`}>
     <div className="space-y-4">
@@ -85,6 +86,22 @@ export const WorkspaceToolbar = ({
             <ActionButton onClick={onOpenGlossary} className={theme.accentSolid}>
               Glossary
             </ActionButton>
+            
+            {(fileExtension === ".xlf" || fileExtension === ".xliff" || fileExtension === ".sdlxliff") && (
+              <label
+                title="To Export as HTML, upload the source HTML file to relink it."
+                className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition bg-green-700 text-white hover:bg-green-600`}
+              >
+                <Icons.Upload /> Relink HTML
+                <input
+                  type="file"
+                  accept=".html,.htm"
+                  onChange={onRelinkHtml}
+                  className="hidden"
+                />
+              </label>
+            )}
+
             <ActionButton
               onClick={onTranslate}
               disabled={segmentsCount === 0 || isTranslating || !canTranslate}

@@ -211,6 +211,60 @@ export default function App() {
     try {
       setProgress(0);
       setIsUploading(true);
+      
+      // Auto-Relink feature: If we have an active XLF/XLIFF project and the user uploads an HTML file, relink it automatically!
+      const isHtmlUpload = file.name.endsWith(".html") || file.name.endsWith(".htm");
+      const isCurrentXlf = fileExtension === ".xlf" || fileExtension === ".xliff" || fileExtension === ".sdlxliff";
+      
+      if (segments.length > 0 && isCurrentXlf && isHtmlUpload) {
+        showToast(`Auto-relinking HTML template...`);
+        const data = await uploadFile(file);
+        
+        const cleanText = (text) => (text || "").replace(/<\/?\d+>/g, "").trim().toLowerCase();
+        
+        const sourceMap = new Map();
+        segments.forEach(seg => {
+          const key = cleanText(seg.source);
+          if (key && seg.target && seg.target.trim() !== "") {
+            if (!sourceMap.has(key)) {
+              sourceMap.set(key, seg.target);
+            }
+          }
+        });
+
+        let mappedCount = 0;
+        const extractTagsOnly = (str) => (str.match(/<\/?\d+>/g) || []).join(" ");
+        
+        const newSegments = data.segments.map((newSeg) => {
+          const key = cleanText(newSeg.source);
+          let mappedTarget = newSeg.target || extractTagsOnly(newSeg.source);
+          let isVerified = false;
+          
+          if (sourceMap.has(key)) {
+            mappedTarget = sourceMap.get(key);
+            isVerified = true;
+            mappedCount++;
+          }
+          
+          return {
+            ...newSeg,
+            target: mappedTarget,
+            verified: isVerified
+          };
+        });
+
+        setSegments(newSegments);
+        setHistory([]);
+        setFuture([]);
+        setFileId(data.fileId || null);
+        setFileExtension(".html");
+        setFileName(data.originalName || file.name.replace(/\.[^/.]+$/, ""));
+        showToast(`Auto-Relinked successfully! Mapped ${mappedCount} segments.`);
+        setIsUploading(false);
+        return;
+      }
+
+      // Standard Upload
       const data = await uploadFile(file);
       
       const extractTagsOnly = (str) => {
@@ -240,56 +294,7 @@ export default function App() {
   };
 
   const handleRelinkHtml = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    try {
-      showToast(`Relinking template...`);
-      const data = await uploadFile(file);
-      
-      const cleanText = (text) => (text || "").replace(/<\/?\d+>/g, "").trim().toLowerCase();
-      
-      const sourceMap = new Map();
-      segments.forEach(seg => {
-        const key = cleanText(seg.source);
-        if (key && seg.target && seg.target.trim() !== "") {
-          if (!sourceMap.has(key)) {
-            sourceMap.set(key, seg.target);
-          }
-        }
-      });
-
-      let mappedCount = 0;
-      const extractTagsOnly = (str) => (str.match(/<\/?\d+>/g) || []).join(" ");
-      
-      const newSegments = data.segments.map((newSeg) => {
-        const key = cleanText(newSeg.source);
-        let mappedTarget = newSeg.target || extractTagsOnly(newSeg.source);
-        let isVerified = false;
-        
-        if (sourceMap.has(key)) {
-          mappedTarget = sourceMap.get(key);
-          isVerified = true;
-          mappedCount++;
-        }
-        
-        return {
-          ...newSeg,
-          target: mappedTarget,
-          verified: isVerified
-        };
-      });
-
-      setSegments(newSegments);
-      setHistory([]);
-      setFuture([]);
-      setFileId(data.fileId || null);
-      setFileExtension(".html");
-      showToast(`Relinked successfully! Mapped ${mappedCount} segments.`);
-    } catch (error) {
-      console.log(error);
-      showToast("Relink failed.", "error");
-    }
+    handleFileProcessing(event.target.files[0]);
   };
 
   const handleUpload = (event) => {
@@ -853,6 +858,7 @@ export default function App() {
                 qaIssuesCount={qaIssuesList.length}
                 searchQuery={searchQuery}
                 segmentsCount={segments.length}
+                fileExtension={fileExtension}
                 setSearchQuery={setSearchQuery}
                 stats={stats}
                 sourceLanguage={sourceLanguage}
