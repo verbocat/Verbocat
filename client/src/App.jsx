@@ -220,7 +220,7 @@ export default function App() {
         showToast(`Auto-relinking HTML template...`);
         const data = await uploadFile(file);
         
-        const cleanText = (text) => (text || "").replace(/<\/?\d+>/g, "").trim().toLowerCase();
+        const cleanText = (text) => (text || "").replace(/<\/?\d+>/g, "").replace(/__TAG_\d+__/g, "").replace(/\s+/g, " ").trim().toLowerCase();
         
         const sourceMap = new Map();
         segments.forEach(seg => {
@@ -242,7 +242,8 @@ export default function App() {
           
           if (sourceMap.has(key)) {
             mappedTarget = sourceMap.get(key);
-            isVerified = true;
+            // We do NOT mark it as verified so the user can freely edit the relinked segments
+            isVerified = false;
             mappedCount++;
           }
           
@@ -462,30 +463,32 @@ export default function App() {
         segment.id === id ? { ...segment, verified: true } : segment
       );
       
-      const currentIndex = newSegments.findIndex((s) => s.id === id);
-      let nextIndex = currentIndex + 1;
-      
-      while (nextIndex < newSegments.length) {
-        if (!newSegments[nextIndex].verified) {
-          const nextId = newSegments[nextIndex].id;
-          
-          setTimeout(() => {
-            if (virtuosoRef.current) {
-              virtuosoRef.current.scrollToIndex({ index: nextIndex, align: 'center', behavior: 'smooth' });
-            }
+      const currentIndex = filteredSegments.findIndex((s) => s.id === id);
+      if (currentIndex !== -1) {
+        let nextIndex = currentIndex + 1;
+        
+        while (nextIndex < filteredSegments.length) {
+          if (!filteredSegments[nextIndex].verified) {
+            const nextId = filteredSegments[nextIndex].id;
+            
             setTimeout(() => {
-              const nextElement = document.getElementById(`segment-${nextId}`);
-              if (nextElement) {
-                nextElement.classList.add("ring-2", "ring-teal-500");
-                setTimeout(() => nextElement.classList.remove("ring-2", "ring-teal-500"), 1000);
+              if (virtuosoRef.current) {
+                virtuosoRef.current.scrollToIndex({ index: nextIndex, align: 'center', behavior: 'smooth' });
               }
-              const nextTa = document.getElementById(`target-${nextId}`);
-              if (nextTa) nextTa.focus();
-            }, 300);
-          }, 50);
-          break;
+              setTimeout(() => {
+                const nextElement = document.getElementById(`segment-${nextId}`);
+                if (nextElement) {
+                  nextElement.classList.add("ring-2", "ring-teal-500");
+                  setTimeout(() => nextElement.classList.remove("ring-2", "ring-teal-500"), 1000);
+                }
+                const nextTa = document.getElementById(`target-${nextId}`);
+                if (nextTa) nextTa.focus();
+              }, 300);
+            }, 50);
+            break;
+          }
+          nextIndex++;
         }
-        nextIndex++;
       }
       
       return newSegments;
