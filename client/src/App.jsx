@@ -122,7 +122,7 @@ export default function App() {
 
   const isJunkSegment = (text) => {
     if (!text) return true;
-    const clean = text.replace(/__TAG_\d+__/g, "").trim();
+    const clean = text.replace(/__TAG_\d+__/g, "").replace(/<[^>]+>/g, "").trim();
     // Purely numbers and punctuation
     if (/^[^a-zA-Z]*$/.test(clean)) return true;
     // Raw CSS like @page { ... }
@@ -220,7 +220,7 @@ export default function App() {
         showToast(`Auto-relinking HTML template...`);
         const data = await uploadFile(file);
         
-        const cleanText = (text) => (text || "").replace(/<\/?\d+>/g, "").replace(/__TAG_\d+__/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+        const cleanText = (text) => (text || "").replace(/<[^>]+>/g, "").replace(/__TAG_\d+__/g, "").replace(/\s+/g, " ").trim().toLowerCase();
         
         const sourceMap = new Map();
         segments.forEach(seg => {

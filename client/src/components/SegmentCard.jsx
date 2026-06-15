@@ -49,8 +49,18 @@ const GlossaryHighlight = ({ term, children }) => {
 const targetToHtml = (str) => {
   if (!str) return "";
   let html = str.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  html = html.replace(/&lt;(\/?\d+)&gt;/g, (match, tagInner) => {
-    return `<span class="inline-flex items-center justify-center bg-slate-700 text-sky-300 px-1.5 py-0.5 mx-0.5 rounded text-[10px] font-mono select-none" contenteditable="false" data-tag="${tagInner}">${tagInner}</span>`;
+  html = html.replace(/&lt;(\/?\d+|\/?(?:g|ph|x|bpt|ept|it)[^&>]*)&gt;/gi, (match, tagInner) => {
+    let displayName = tagInner;
+    if (!/^\/?\d+$/.test(tagInner)) {
+      const idMatch = tagInner.match(/id=(?:&quot;|"|')([^"']+)("|&quot;|')/i);
+      if (idMatch) {
+        const isClosing = tagInner.startsWith('/');
+        const tagName = tagInner.replace(/^\//, '').split(/[\s/]/)[0];
+        displayName = (isClosing ? '/' : '') + tagName + idMatch[1];
+      }
+    }
+    const escapedTagInner = tagInner.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    return `<span class="inline-flex items-center justify-center bg-slate-700 text-sky-300 px-1.5 py-0.5 mx-0.5 rounded text-[10px] font-mono select-none" contenteditable="false" data-tag="${escapedTagInner}">${displayName}</span>`;
   });
   html = html.replace(/\n/g, "<br>");
   return html;
@@ -141,13 +151,22 @@ export const SegmentCard = ({
 
     elements = elements.flatMap(el => {
       if (typeof el === 'string') {
-        const parts = el.split(/(<\/?\d+>)/g);
+        const parts = el.split(/(<\/?\d+>|<\/?(?:g|ph|x|bpt|ept|it)[^>]*>)/gi);
         return parts.map((part, i) => {
-          if (/^<\/?\d+>$/.test(part)) {
+          if (/^<\/?\d+>$/.test(part) || /^<\/?(?:g|ph|x|bpt|ept|it)[^>]*>$/i.test(part)) {
             const inner = part.replace(/[<>]/g, '');
+            let displayName = inner;
+            if (!/^\/?\d+$/.test(inner)) {
+              const idMatch = inner.match(/id=(?:&quot;|"|')([^"']+)("|&quot;|')/i);
+              if (idMatch) {
+                const isClosing = inner.startsWith('/');
+                const tagName = inner.replace(/^\//, '').split(/[\s/]/)[0];
+                displayName = (isClosing ? '/' : '') + tagName + idMatch[1];
+              }
+            }
             return (
-              <span key={`ph-${i}-${inner}`} className="inline-flex items-center justify-center bg-slate-700/50 text-slate-400 px-1.5 py-0.5 mx-0.5 rounded text-[10px] font-mono select-none border border-white/5">
-                {inner}
+              <span key={`ph-${i}-${inner}`} className="inline-flex items-center justify-center bg-slate-700/50 text-slate-400 px-1.5 py-0.5 mx-0.5 rounded text-[10px] font-mono select-none border border-white/5" title={inner}>
+                {displayName}
               </span>
             );
           }
