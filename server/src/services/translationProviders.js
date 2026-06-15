@@ -126,6 +126,7 @@ Additionally:
 - Avoid literal/duplicate translations of doublets (e.g. translate 'Safety & Security' as 'सुरक्षा और संरक्षा' rather than repeating 'सुरक्षा').
 - Translate common business/banking terms professionally (e.g. translate 'Earn ... interest' as 'ब्याज प्राप्त करें' instead of 'कमाएं', 'Collection' as 'वसूली' in a business/debt context rather than 'संग्रहण', 'Reimbursement' as 'प्रतिपूर्ति', 'IT professional' as 'आईटी विशेषज्ञ').
 - Maintain consistent terminology for recurring terms (e.g. choose between transliterated English or pure Hindi terms like 'रिटेलर' vs 'व्यापारी', 'व्यवसाय' vs 'बिजनेस', and maintain that preference across the texts).
+- If the target language is Hindi, you MUST write the output strictly in the Devanagari script. Do NOT use Perso-Arabic (Urdu) characters under any circumstances.
 - Always place a space after the Hindi purna-viram ('।') full stop when starting a new sentence (e.g., 'है। हमारी' instead of 'है।हमारी').${contextBlock}`;
 
   if (!systemPrompt) {

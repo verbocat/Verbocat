@@ -204,7 +204,7 @@ export default function App() {
 
       const newSegments = data.segments.map((segment) => ({
         ...segment,
-        target: extractTagsOnly(segment.source),
+        target: segment.target ? segment.target : extractTagsOnly(segment.source),
         verified: false
       }));
       setSegments(newSegments);
