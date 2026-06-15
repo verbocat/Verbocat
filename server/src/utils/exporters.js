@@ -63,7 +63,7 @@ const unescapeXml = (escaped) => {
 };
 
 const parseXliff = (xmlContent) => {
-  const $ = cheerio.load(xmlContent, { xmlMode: true });
+  const $ = cheerio.load(xmlContent, { xmlMode: true, decodeEntities: false });
   const segments = [];
   
   $("trans-unit").each((_, tuEl) => {

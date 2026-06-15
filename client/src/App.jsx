@@ -271,12 +271,79 @@ export default function App() {
       const extractTagsOnly = (str) => {
         return (str.match(/<\/?\d+>/g) || []).join(" ");
       };
+      
+      const cleanText = (text) => {
+        return (text || "")
+          .replace(/<[^>]+>/g, "") // Strip ALL HTML tags including <mrk>, <g>, <1>
+          .replace(/__TAG_\d+__/g, "") 
+          .replace(/\s+/g, " ")
+          .trim()
+          .toLowerCase();
+      };
+      
+      // Build source map from current segments
+      const sourceMap = new Map();
+      segments.forEach(seg => {
+        const key = cleanText(seg.source);
+        if (key && seg.target && seg.target.trim() !== "") {
+          if (!sourceMap.has(key)) {
+            sourceMap.set(key, seg.target);
+          }
+        }
+      });
 
-      const newSegments = data.segments.map((segment) => ({
-        ...segment,
-        target: segment.target ? segment.target : extractTagsOnly(segment.source),
-        verified: false
-      }));
+      let mappedCount = 0;
+      const mappedTargets = new Array(data.segments.length).fill(null);
+      const isVerifiedArr = new Array(data.segments.length).fill(false);
+      
+      for (let i = 0; i < data.segments.length; i++) {
+        if (mappedTargets[i] !== null) continue;
+        
+        let currentKey = cleanText(data.segments[i].source);
+        
+        if (sourceMap.has(currentKey)) {
+          mappedTargets[i] = sourceMap.get(currentKey);
+          isVerifiedArr[i] = false;
+          mappedCount++;
+          continue;
+        }
+        
+        // Advanced mapping: Try concatenating up to 5 adjacent segments to handle Trados merged segments
+        let combinedKey = currentKey;
+        let foundMatch = false;
+        
+        for (let j = 1; j <= 5 && i + j < data.segments.length; j++) {
+          combinedKey += " " + cleanText(data.segments[i + j].source);
+          if (sourceMap.has(combinedKey)) {
+            mappedTargets[i] = sourceMap.get(combinedKey);
+            isVerifiedArr[i] = false;
+            
+            // Set the merged adjacent segments to empty strings
+            for (let k = 1; k <= j; k++) {
+              mappedTargets[i + k] = "";
+              isVerifiedArr[i + k] = false;
+            }
+            
+            mappedCount += (j + 1);
+            foundMatch = true;
+            break;
+          }
+        }
+        
+        if (!foundMatch) {
+          mappedTargets[i] = data.segments[i].target || extractTagsOnly(data.segments[i].source);
+          isVerifiedArr[i] = false;
+        }
+      }
+      
+      const newSegments = data.segments.map((newSeg, i) => {
+        return {
+          ...newSeg,
+          target: mappedTargets[i],
+          verified: isVerifiedArr[i]
+        };
+      });
+
       setSegments(newSegments);
       setHistory([]);
       setFuture([]);
@@ -654,11 +721,20 @@ export default function App() {
     try {
       showToast("Importing XLIFF...");
       const data = await importXliff(file);
+      const cleanText = (text) => {
+        return (text || "")
+          .replace(/<[^>]+>/g, "") 
+          .replace(/__TAG_\d+__/g, "") 
+          .replace(/\s+/g, " ")
+          .trim()
+          .toLowerCase();
+      };
+
       if (data.segments && data.segments.length > 0) {
         let mergedCount = 0;
         const newSegments = segments.map((seg) => {
           const match = data.segments.find(
-            (xs) => xs.source.trim().toLowerCase() === seg.source.trim().toLowerCase()
+            (xs) => cleanText(xs.source) === cleanText(seg.source)
           );
           if (match && match.target) {
             mergedCount++;
