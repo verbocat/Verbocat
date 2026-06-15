@@ -154,7 +154,7 @@ const splitByPunctuation = (str, tagMap) => {
     finalSegments.push(pendingTags);
   }
 
-  return finalSegments.map(s => s.trim()).filter(s => s.length > 0);
+  return finalSegments.filter(s => s.trim().length > 0);
 };
 
 // Replaces placeholders back with original HTML tags
@@ -172,8 +172,8 @@ const extractSegmentTags = (str) => {
   let trailing = "";
   let body = str;
 
-  // Match leading tags and spaces
-  const leadingRegex = /^(\s*<\/?\d+>\s*)+/;
+  // Match leading tags, spaces, and bullet points
+  const leadingRegex = /^(\s*<\/?\d+>\s*|\s+|[•\-*]\s*)+/;
   const leadingMatch = body.match(leadingRegex);
   if (leadingMatch) {
     leading = leadingMatch[0];
@@ -181,7 +181,7 @@ const extractSegmentTags = (str) => {
   }
 
   // Match trailing tags and spaces
-  const trailingRegex = /(\s*<\/?\d+>\s*)+$/;
+  const trailingRegex = /(\s*<\/?\d+>\s*|\s+)+$/;
   const trailingMatch = body.match(trailingRegex);
   if (trailingMatch) {
     trailing = trailingMatch[0];
