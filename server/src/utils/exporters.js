@@ -69,8 +69,12 @@ const parseXliff = (xmlContent) => {
   $("trans-unit").each((_, tuEl) => {
     const tu = $(tuEl);
     const id = tu.attr("id") || "";
-    const source = unescapeXml(tu.find("source").html()?.trim());
-    const target = unescapeXml(tu.find("target").html()?.trim());
+    let source = unescapeXml(tu.find("source").html()?.trim());
+    let target = unescapeXml(tu.find("target").html()?.trim());
+    
+    // Strip <mrk> tags added by external CAT tools like Trados/Matecat
+    source = source.replace(/<\/?mrk[^>]*>/g, "");
+    target = target.replace(/<\/?mrk[^>]*>/g, "");
     
     if (source) {
       segments.push({
