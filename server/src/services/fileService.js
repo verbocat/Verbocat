@@ -1,4 +1,5 @@
 const path = require("path");
+const fs = require("fs");
 const { v4: uuidv4 } = require("uuid");
 const { supabase } = require("../config/supabase");
 
@@ -7,6 +8,25 @@ const docxParser = require("../utils/parsers/docxParser");
 const pptxParser = require("../utils/parsers/pptxParser");
 const xlsxParser = require("../utils/parsers/xlsxParser");
 const txtParser = require("../utils/parsers/txtParser");
+const { parseXliff, generateXliff } = require("../utils/exporters");
+
+const xliffParser = {
+  parseFile: async (filePath) => {
+    const xml = fs.readFileSync(filePath, "utf-8");
+    const segments = parseXliff(xml);
+    return {
+      segments: segments.map((seg, idx) => ({
+        id: seg.id || idx + 1,
+        source: seg.source,
+        target: seg.target || ""
+      })),
+      template: ""
+    };
+  },
+  exportFile: async (template, segments) => {
+    return Buffer.from(generateXliff(segments), "utf-8");
+  }
+};
 
 const getParser = (ext) => {
   switch (ext) {
@@ -15,6 +35,8 @@ const getParser = (ext) => {
     case '.pptx': return pptxParser;
     case '.xlsx': return xlsxParser;
     case '.txt': return txtParser;
+    case '.xlf':
+    case '.xliff': return xliffParser;
     default: return null;
   }
 };

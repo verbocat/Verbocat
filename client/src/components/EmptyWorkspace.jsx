@@ -22,7 +22,7 @@ export const EmptyWorkspace = ({
         Drop in your document and start translating in a cleaner workspace.
       </h2>
       <p className={`mx-auto mt-4 max-w-xl text-base ${theme.muted}`}>
-        HTML and DOCX uploads are supported. After upload, the editor keeps QA,
+        HTML, DOCX, and XLIFF uploads are supported. After upload, the editor keeps QA,
         glossary, save/load, search, and export available without changing your
         existing workflow.
       </p>
