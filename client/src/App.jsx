@@ -138,6 +138,7 @@ export default function App() {
     () =>
       segments.filter(
         (segment) =>
+          !segment.isMerged &&
           !isJunkSegment(segment.source) &&
           (segment.source.toLowerCase().includes(searchQuery.toLowerCase()) ||
           (segment.target || "")
@@ -258,6 +259,7 @@ export default function App() {
       let mappedCount = 0;
       const mappedTargets = new Array(data.segments.length).fill(null);
       const isVerifiedArr = new Array(data.segments.length).fill(false);
+      const isMergedArr = new Array(data.segments.length).fill(false);
       
       for (let i = 0; i < data.segments.length; i++) {
         if (mappedTargets[i] !== null) continue;
@@ -281,10 +283,13 @@ export default function App() {
             mappedTargets[i] = sourceMap.get(combinedKey);
             isVerifiedArr[i] = false;
             
-            // Set the merged adjacent segments to empty strings
+            // Set the merged adjacent segments to their tags or zero-width space to prevent fallback to english
             for (let k = 1; k <= j; k++) {
-              mappedTargets[i + k] = "";
+              let tags = extractTagsOnly(data.segments[i + k].source);
+              if (tags === "") tags = "\u200B"; // zero-width space
+              mappedTargets[i + k] = tags;
               isVerifiedArr[i + k] = false;
+              isMergedArr[i + k] = true;
             }
             
             mappedCount += (j + 1);
@@ -303,7 +308,8 @@ export default function App() {
         return {
           ...newSeg,
           target: mappedTargets[i],
-          verified: isVerifiedArr[i]
+          verified: isVerifiedArr[i],
+          isMerged: isMergedArr[i]
         };
       });
 
