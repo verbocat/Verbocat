@@ -36,7 +36,8 @@ const getParser = (ext) => {
     case '.xlsx': return xlsxParser;
     case '.txt': return txtParser;
     case '.xlf':
-    case '.xliff': return xliffParser;
+    case '.xliff':
+    case '.sdlxliff': return xliffParser;
     default: return null;
   }
 };
