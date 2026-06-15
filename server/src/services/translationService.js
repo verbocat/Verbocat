@@ -29,6 +29,11 @@ const isSafeTmTranslation = (source, target, targetLang) => {
     return false;
   }
 
+  // Reject any translation containing raw __TAG_ placeholders
+  if (/__TAG_/i.test(normalizedTarget)) {
+    return false;
+  }
+
   // Reject Hindi target text containing Urdu/Arabic characters (range [\u0600-\u06FF])
   if (targetLang === "hi" && /[\u0600-\u06FF]/.test(normalizedTarget)) {
     return false;
