@@ -691,6 +691,389 @@ export default function App() {
     }
   };
 
+  const handleExportLinguistTable = async () => {
+    try {
+      showToast("Generating Linguist Review Table...");
+      const docx = await import("docx");
+      const {
+        Document,
+        Packer,
+        Paragraph,
+        Table,
+        TableRow,
+        TableCell,
+        WidthType,
+        HeadingLevel,
+        TextRun,
+        AlignmentType,
+        BorderStyle
+      } = docx;
+
+      // Header cell shading & borders
+      const headerShading = { fill: "0F172A" }; // Deep Slate
+      const headerBorder = { style: BorderStyle.SINGLE, size: 8, color: "1E293B" };
+      const cellBorder = { style: BorderStyle.SINGLE, size: 4, color: "CBD5E1" };
+
+      // Helper function to create styled Paragraphs inside cells
+      const createTextParagraph = (text, options = {}) => {
+        return new Paragraph({
+          spacing: { before: 100, after: 100, line: 240 },
+          children: [
+            new TextRun({
+              text: text || "",
+              font: "Segoe UI",
+              size: options.size || 21, // 10.5 pt
+              bold: !!options.bold,
+              italic: !!options.italic,
+              color: options.color || "334155" // Slate
+            })
+          ],
+          alignment: options.alignment || AlignmentType.LEFT
+        });
+      };
+
+      // 1. Build Bilingual Rows
+      const bilingualRows = [
+        new TableRow({
+          children: [
+            new TableCell({
+              width: { size: 50, type: WidthType.PERCENTAGE },
+              shading: headerShading,
+              borders: { top: headerBorder, bottom: headerBorder, left: headerBorder, right: headerBorder },
+              children: [
+                new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  spacing: { before: 120, after: 120 },
+                  children: [
+                    new TextRun({
+                      text: `Source Text (${sourceLanguage.toUpperCase()})`,
+                      bold: true,
+                      color: "FFFFFF",
+                      font: "Segoe UI",
+                      size: 22
+                    })
+                  ]
+                })
+              ]
+            }),
+            new TableCell({
+              width: { size: 50, type: WidthType.PERCENTAGE },
+              shading: headerShading,
+              borders: { top: headerBorder, bottom: headerBorder, left: headerBorder, right: headerBorder },
+              children: [
+                new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  spacing: { before: 120, after: 120 },
+                  children: [
+                    new TextRun({
+                      text: `Machine Translation (${targetLanguage.toUpperCase()})`,
+                      bold: true,
+                      color: "FFFFFF",
+                      font: "Segoe UI",
+                      size: 22
+                    })
+                  ]
+                })
+              ]
+            })
+          ]
+        })
+      ];
+
+      // Add segment rows
+      segments.forEach((seg, idx) => {
+        const isEven = idx % 2 === 0;
+        const rowBg = isEven ? "FFFFFF" : "F8FAFC"; // Alternating white/gray shading
+        
+        bilingualRows.push(
+          new TableRow({
+            children: [
+              new TableCell({
+                width: { size: 50, type: WidthType.PERCENTAGE },
+                shading: { fill: rowBg },
+                borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+                children: [
+                  createTextParagraph(seg.source)
+                ]
+              }),
+              new TableCell({
+                width: { size: 50, type: WidthType.PERCENTAGE },
+                shading: { fill: rowBg },
+                borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+                children: [
+                  createTextParagraph(seg.target || seg.translation || "")
+                ]
+              })
+            ]
+          })
+        );
+      });
+
+      const bilingualTable = new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: bilingualRows
+      });
+
+      // 2. Build feedback form rows
+      const feedbackFields = [
+        { label: "Content Type", description: "Select: [ ] Marketing | [ ] Technical | [ ] Legal | [ ] General | [ ] Medical | [ ] Other" },
+        { label: "Accuracy", description: "Rating: [ ] Excellent | [ ] Good | [ ] Fair | [ ] Poor\nComments/Errors found:" },
+        { label: "Stylistic Fluency", description: "Rating: [ ] Excellent | [ ] Good | [ ] Fair | [ ] Poor\nComments on naturalness/flow:" },
+        { label: "Consistency", description: "Rating: [ ] Excellent | [ ] Good | [ ] Fair | [ ] Poor\nComments on terminology consistency:" },
+        { label: "Tone and Cultural Appropriateness", description: "Rating: [ ] Excellent | [ ] Good | [ ] Fair | [ ] Poor\nComments on tone suitability:" },
+        { label: "Spelling", description: "Rating: [ ] Excellent | [ ] Good | [ ] Fair | [ ] Poor\nComments on orthography/spelling:" },
+        { label: "Sentence Formation and Punctuation", description: "Rating: [ ] Excellent | [ ] Good | [ ] Fair | [ ] Poor\nComments on grammar and punctuation syntax:" },
+        { label: "Quality Level", description: "Overall Grade: [ ] Excellent | [ ] Good | [ ] Fair | [ ] Poor" },
+        { label: "Rating (out of 10)", description: "Score: ______ / 10" },
+        { label: "Overall Comment", description: "General summary of the quality evaluation:" },
+        { label: "Additional Comments", description: "Any other details or notes from the evaluation:" },
+        { label: "Qualitative Comment", description: "Describe the strengths and primary weaknesses of this MT output:" },
+        { label: "Suggestion or Improvement", description: "Specific ideas/rules to improve future translations:" }
+      ];
+
+      const feedbackRows = [
+        new TableRow({
+          children: [
+            new TableCell({
+              width: { size: 30, type: WidthType.PERCENTAGE },
+              shading: { fill: "E2E8F0" },
+              borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+              children: [
+                new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  spacing: { before: 100, after: 100 },
+                  children: [
+                    new TextRun({ text: "Evaluation Field", bold: true, font: "Segoe UI", size: 20, color: "0F172A" })
+                  ]
+                })
+              ]
+            }),
+            new TableCell({
+              width: { size: 70, type: WidthType.PERCENTAGE },
+              shading: { fill: "E2E8F0" },
+              borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+              children: [
+                new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  spacing: { before: 100, after: 100 },
+                  children: [
+                    new TextRun({ text: "Linguist Feedback & Scoring", bold: true, font: "Segoe UI", size: 20, color: "0F172A" })
+                  ]
+                })
+              ]
+            })
+          ]
+        })
+      ];
+
+      feedbackFields.forEach((field) => {
+        feedbackRows.push(
+          new TableRow({
+            children: [
+              new TableCell({
+                width: { size: 30, type: WidthType.PERCENTAGE },
+                shading: { fill: "F1F5F9" },
+                borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+                children: [
+                  new Paragraph({
+                    spacing: { before: 120, after: 120 },
+                    children: [
+                      new TextRun({ text: field.label, bold: true, font: "Segoe UI", size: 20, color: "1E293B" })
+                    ]
+                  })
+                ]
+              }),
+              new TableCell({
+                width: { size: 70, type: WidthType.PERCENTAGE },
+                shading: { fill: "FFFFFF" },
+                borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+                children: field.description.split("\n").map((line) => new Paragraph({
+                  spacing: { before: 80, after: 80 },
+                  children: [
+                    new TextRun({ text: line, font: "Segoe UI", size: 20, color: "475569" })
+                  ]
+                }))
+              })
+            ]
+          })
+        );
+      });
+
+      const feedbackTable = new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: feedbackRows
+      });
+
+      // 3. Document Metadata Table (Top of Document)
+      const metadataTable = new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: [
+          new TableRow({
+            children: [
+              new TableCell({
+                width: { size: 25, type: WidthType.PERCENTAGE },
+                shading: { fill: "F8FAFC" },
+                borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+                children: [new Paragraph({ children: [new TextRun({ text: "Document Name", bold: true, font: "Segoe UI", size: 18, color: "475569" })] })]
+              }),
+              new TableCell({
+                width: { size: 75, type: WidthType.PERCENTAGE },
+                borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+                children: [new Paragraph({ children: [new TextRun({ text: fileName || "Unnamed", font: "Segoe UI", size: 18, color: "1E293B" })] })]
+              })
+            ]
+          }),
+          new TableRow({
+            children: [
+              new TableCell({
+                shading: { fill: "F8FAFC" },
+                borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+                children: [new Paragraph({ children: [new TextRun({ text: "Language Pair", bold: true, font: "Segoe UI", size: 18, color: "475569" })] })]
+              }),
+              new TableCell({
+                borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+                children: [new Paragraph({ children: [new TextRun({ text: `${sourceLanguage.toUpperCase()} → ${targetLanguage.toUpperCase()}`, font: "Segoe UI", size: 18, color: "1E293B" })] })]
+              })
+            ]
+          }),
+          new TableRow({
+            children: [
+              new TableCell({
+                shading: { fill: "F8FAFC" },
+                borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+                children: [new Paragraph({ children: [new TextRun({ text: "Evaluation Date", bold: true, font: "Segoe UI", size: 18, color: "475569" })] })]
+              }),
+              new TableCell({
+                borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+                children: [new Paragraph({ children: [new TextRun({ text: new Date().toLocaleDateString(), font: "Segoe UI", size: 18, color: "1E293B" })] })]
+              })
+            ]
+          }),
+          new TableRow({
+            children: [
+              new TableCell({
+                shading: { fill: "F8FAFC" },
+                borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+                children: [new Paragraph({ children: [new TextRun({ text: "Linguist Name", bold: true, font: "Segoe UI", size: 18, color: "475569" })] })]
+              }),
+              new TableCell({
+                borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+                children: [new Paragraph({ children: [new TextRun({ text: "____________________________________", font: "Segoe UI", size: 18, color: "94A3B8" })] })]
+              })
+            ]
+          })
+        ]
+      });
+
+      // 4. Create Document structure
+      const doc = new Document({
+        sections: [
+          {
+            properties: {},
+            children: [
+              // Main title with elegant pink/blue styling
+              new Paragraph({
+                spacing: { before: 200, after: 100 },
+                alignment: AlignmentType.CENTER,
+                children: [
+                  new TextRun({
+                    text: "Linguist Review & Quality Evaluation Report",
+                    bold: true,
+                    size: 32, // 16 pt
+                    color: "0F172A",
+                    font: "Segoe UI"
+                  })
+                ]
+              }),
+              new Paragraph({
+                spacing: { after: 300 },
+                alignment: AlignmentType.CENTER,
+                children: [
+                  new TextRun({
+                    text: "Review and evaluate translations side-by-side. Please complete the review form at the end.",
+                    italic: true,
+                    size: 18, // 9 pt
+                    color: "64748B",
+                    font: "Segoe UI"
+                  })
+                ]
+              }),
+              
+              // Metadata
+              new Paragraph({ text: "Document Information", heading: HeadingLevel.HEADING_2, spacing: { before: 200, after: 100 } }),
+              metadataTable,
+              
+              // Section spacer
+              new Paragraph({ text: "", spacing: { after: 200 } }),
+
+              // Section: Translations
+              new Paragraph({
+                heading: HeadingLevel.HEADING_2,
+                spacing: { before: 300, after: 150 },
+                children: [
+                  new TextRun({
+                    text: "Translations Board",
+                    bold: true,
+                    size: 26,
+                    color: "0F172A",
+                    font: "Segoe UI"
+                  })
+                ]
+              }),
+              bilingualTable,
+
+              // Section spacer
+              new Paragraph({ text: "", spacing: { after: 300 } }),
+
+              // Section: Evaluation Feedback Form
+              new Paragraph({
+                heading: HeadingLevel.HEADING_1,
+                spacing: { before: 400, after: 200 },
+                children: [
+                  new TextRun({
+                    text: "Linguist Feedback & Review Form",
+                    bold: true,
+                    size: 28,
+                    color: "DB2777", // Pink-600
+                    font: "Segoe UI"
+                  })
+                ]
+              }),
+              new Paragraph({
+                spacing: { after: 200 },
+                children: [
+                  new TextRun({
+                    text: "Complete all sections below to submit your quality evaluation. Your feedback helps fine-tune translation models and processes.",
+                    italic: true,
+                    size: 18,
+                    color: "475569",
+                    font: "Segoe UI"
+                  })
+                ]
+              }),
+              feedbackTable
+            ]
+          }
+        ]
+      });
+
+      // 5. Build and save
+      const blob = await Packer.toBlob(doc);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `${fileName || "document"}_review_table.docx`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      showToast("Linguist review table exported successfully!");
+    } catch (error) {
+      console.error(error);
+      showToast("Review table export failed", "error");
+    }
+  };
+
   const handleImportXliff = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -844,6 +1227,7 @@ export default function App() {
         onExportXliff={handleExportXliff}
         onExportTmx={handleExportTmx}
         onExportGlobalTmx={handleExportGlobalTmx}
+        onExportLinguistTable={handleExportLinguistTable}
         onRelinkHtml={handleRelinkHtml}
         fileExtension={fileExtension}
         theme={theme}
