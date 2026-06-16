@@ -38,10 +38,23 @@ export const WorkspaceToolbar = ({
 }) => (
   <section className={`rounded-2xl border p-4 ${theme.cardStrong}`}>
     <div className="space-y-4">
-      <div className="flex items-center justify-between pb-2 border-b border-white/5">
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-white/5">
         <h2 className="text-sm font-semibold tracking-wide text-sky-200 uppercase truncate">
           File: {fileName}
         </h2>
+        {segmentsCount > 0 && stats && (
+          <div className="flex items-center gap-3 text-xs flex-wrap">
+            <span className="rounded-lg bg-white/5 px-2.5 py-1 text-slate-300 border border-white/10">
+              Total Words: <strong className="text-white">{stats.words}</strong>
+            </span>
+            <span className="rounded-lg bg-teal-500/10 px-2.5 py-1 text-teal-400 border border-teal-500/20">
+              Unique Words: <strong className="text-teal-300">{stats.uniqueWords}</strong>
+            </span>
+            <span className="rounded-lg bg-rose-500/10 px-2.5 py-1 text-rose-400 border border-rose-500/20">
+              Duplicate Words: <strong className="text-rose-300">{stats.duplicateWords}</strong>
+            </span>
+          </div>
+        )}
       </div>
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
         <div className="flex items-center gap-4 flex-wrap">

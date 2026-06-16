@@ -97,17 +97,43 @@ export default function App() {
   );
 
   const stats = useMemo(() => {
-    const stripTags = (text) => (text || "").replace(/<\/?\d+>/g, "");
-    
-    const sourceText = segments.map((segment) => stripTags(segment.source)).join(" ");
-    const targetText = segments.map((segment) => stripTags(segment.target)).join(" ");
+    const cleanString = (str) => {
+      if (!str) return "";
+      return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+    };
+
+    let words = 0;
+    let uniqueWords = 0;
+    let duplicateWords = 0;
+    const seenSourceTexts = new Set();
+
+    segments.forEach((seg) => {
+      const cleanedSource = cleanString(seg.source);
+      if (!cleanedSource) return;
+
+      const wordList = cleanedSource.split(" ").filter((w) => w.length > 0);
+      const segmentWordCount = wordList.length;
+
+      words += segmentWordCount;
+
+      if (seenSourceTexts.has(cleanedSource)) {
+        duplicateWords += segmentWordCount;
+      } else {
+        seenSourceTexts.add(cleanedSource);
+        uniqueWords += segmentWordCount;
+      }
+    });
+
+    const targetText = segments.map((segment) => cleanString(segment.target || segment.translation)).join(" ");
     const countWords = (text) =>
       text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
 
     return {
       segments: segments.length,
-      words: countWords(sourceText),
-      characters: sourceText.length,
+      words,
+      uniqueWords,
+      duplicateWords,
+      characters: segments.map((seg) => cleanString(seg.source)).join(" ").length,
       translatedWords: countWords(targetText),
       progress:
         segments.length > 0
