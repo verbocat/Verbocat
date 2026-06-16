@@ -709,37 +709,77 @@ export default function App() {
         BorderStyle
       } = docx;
 
-      // Header cell shading & borders
-      const headerShading = { fill: "0F172A" }; // Deep Slate
-      const headerBorder = { style: BorderStyle.SINGLE, size: 8, color: "1E293B" };
-      const cellBorder = { style: BorderStyle.SINGLE, size: 4, color: "CBD5E1" };
+      // Helper function to strip XML/HTML tags and normalize spaces
+      const cleanString = (str) => {
+        if (!str) return "";
+        return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+      };
+
+      // Calculate word counts
+      let totalWordCount = 0;
+      let uniqueWordCount = 0;
+      let duplicateWordCount = 0;
+      const seenSourceTexts = new Set();
+
+      segments.forEach((seg) => {
+        const cleanedSource = cleanString(seg.source);
+        if (!cleanedSource) return;
+
+        const wordList = cleanedSource.split(" ").filter((w) => w.length > 0);
+        const segmentWordCount = wordList.length;
+
+        totalWordCount += segmentWordCount;
+
+        if (seenSourceTexts.has(cleanedSource)) {
+          duplicateWordCount += segmentWordCount;
+        } else {
+          seenSourceTexts.add(cleanedSource);
+          uniqueWordCount += segmentWordCount;
+        }
+      });
+
+      // Cell borders
+      const cellBorders = {
+        top: { style: BorderStyle.SINGLE, size: 4, color: "CBD5E1" },
+        bottom: { style: BorderStyle.SINGLE, size: 4, color: "CBD5E1" },
+        left: { style: BorderStyle.SINGLE, size: 4, color: "CBD5E1" },
+        right: { style: BorderStyle.SINGLE, size: 4, color: "CBD5E1" }
+      };
+
+      // Header borders
+      const headerBorders = {
+        top: { style: BorderStyle.SINGLE, size: 8, color: "1E293B" },
+        bottom: { style: BorderStyle.SINGLE, size: 8, color: "1E293B" },
+        left: { style: BorderStyle.SINGLE, size: 8, color: "1E293B" },
+        right: { style: BorderStyle.SINGLE, size: 8, color: "1E293B" }
+      };
 
       // Helper function to create styled Paragraphs inside cells
       const createTextParagraph = (text, options = {}) => {
         return new Paragraph({
-          spacing: { before: 100, after: 100, line: 240 },
+          spacing: { before: 80, after: 80, line: 240 },
           children: [
             new TextRun({
               text: text || "",
               font: "Segoe UI",
-              size: options.size || 21, // 10.5 pt
+              size: options.size || 20, // 10 pt
               bold: !!options.bold,
               italic: !!options.italic,
-              color: options.color || "334155" // Slate
+              color: options.color || "334155" // Slate-700
             })
           ],
           alignment: options.alignment || AlignmentType.LEFT
         });
       };
 
-      // 1. Build Bilingual Rows
+      // 1. Build Bilingual Table Rows
       const bilingualRows = [
         new TableRow({
           children: [
             new TableCell({
-              width: { size: 50, type: WidthType.PERCENTAGE },
-              shading: headerShading,
-              borders: { top: headerBorder, bottom: headerBorder, left: headerBorder, right: headerBorder },
+              width: { size: 2500, type: WidthType.PERCENTAGE }, // 50%
+              shading: { fill: "0F172A" },
+              borders: headerBorders,
               children: [
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
@@ -757,9 +797,9 @@ export default function App() {
               ]
             }),
             new TableCell({
-              width: { size: 50, type: WidthType.PERCENTAGE },
-              shading: headerShading,
-              borders: { top: headerBorder, bottom: headerBorder, left: headerBorder, right: headerBorder },
+              width: { size: 2500, type: WidthType.PERCENTAGE }, // 50%
+              shading: { fill: "0F172A" },
+              borders: headerBorders,
               children: [
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
@@ -780,7 +820,7 @@ export default function App() {
         })
       ];
 
-      // Add segment rows
+      // Add cleaned segment rows
       segments.forEach((seg, idx) => {
         const isEven = idx % 2 === 0;
         const rowBg = isEven ? "FFFFFF" : "F8FAFC"; // Alternating white/gray shading
@@ -789,19 +829,19 @@ export default function App() {
           new TableRow({
             children: [
               new TableCell({
-                width: { size: 50, type: WidthType.PERCENTAGE },
+                width: { size: 2500, type: WidthType.PERCENTAGE },
                 shading: { fill: rowBg },
-                borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+                borders: cellBorders,
                 children: [
-                  createTextParagraph(seg.source)
+                  createTextParagraph(cleanString(seg.source))
                 ]
               }),
               new TableCell({
-                width: { size: 50, type: WidthType.PERCENTAGE },
+                width: { size: 2500, type: WidthType.PERCENTAGE },
                 shading: { fill: rowBg },
-                borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+                borders: cellBorders,
                 children: [
-                  createTextParagraph(seg.target || seg.translation || "")
+                  createTextParagraph(cleanString(seg.target || seg.translation || ""))
                 ]
               })
             ]
@@ -810,34 +850,35 @@ export default function App() {
       });
 
       const bilingualTable = new Table({
-        width: { size: 100, type: WidthType.PERCENTAGE },
+        width: { size: 5000, type: WidthType.PERCENTAGE }, // 100%
+        margins: { top: 120, bottom: 120, left: 180, right: 180 },
         rows: bilingualRows
       });
 
-      // 2. Build feedback form rows
+      // 2. Build Feedback Form Rows
       const feedbackFields = [
-        { label: "Content Type", description: "Select: [ ] Marketing | [ ] Technical | [ ] Legal | [ ] General | [ ] Medical | [ ] Other" },
-        { label: "Accuracy", description: "Rating: [ ] Excellent | [ ] Good | [ ] Fair | [ ] Poor\nComments/Errors found:" },
-        { label: "Stylistic Fluency", description: "Rating: [ ] Excellent | [ ] Good | [ ] Fair | [ ] Poor\nComments on naturalness/flow:" },
-        { label: "Consistency", description: "Rating: [ ] Excellent | [ ] Good | [ ] Fair | [ ] Poor\nComments on terminology consistency:" },
-        { label: "Tone and Cultural Appropriateness", description: "Rating: [ ] Excellent | [ ] Good | [ ] Fair | [ ] Poor\nComments on tone suitability:" },
-        { label: "Spelling", description: "Rating: [ ] Excellent | [ ] Good | [ ] Fair | [ ] Poor\nComments on orthography/spelling:" },
-        { label: "Sentence Formation and Punctuation", description: "Rating: [ ] Excellent | [ ] Good | [ ] Fair | [ ] Poor\nComments on grammar and punctuation syntax:" },
-        { label: "Quality Level", description: "Overall Grade: [ ] Excellent | [ ] Good | [ ] Fair | [ ] Poor" },
+        { label: "Content Type", description: "Select: [  ] Marketing  |  [  ] Technical  |  [  ] Legal  |  [  ] General  |  [  ] Medical  |  [  ] Other\n\nSpecify Content Type if other: ___________________________" },
+        { label: "Accuracy", description: "Rating: [  ] Excellent  |  [  ] Good  |  [  ] Fair  |  [  ] Poor\n\nIdentified mistranslations, omissions, or additions:\n____________________________________________________________________\n____________________________________________________________________" },
+        { label: "Stylistic Fluency", description: "Rating: [  ] Excellent  |  [  ] Good  |  [  ] Fair  |  [  ] Poor\n\nNotes on awkward phrasing, grammatical fluency, or flow:\n____________________________________________________________________" },
+        { label: "Consistency", description: "Rating: [  ] Excellent  |  [  ] Good  |  [  ] Fair  |  [  ] Poor\n\nNotes on inconsistent terminology or style across segments:\n____________________________________________________________________" },
+        { label: "Tone and Cultural Appropriateness", description: "Rating: [  ] Excellent  |  [  ] Good  |  [  ] Fair  |  [  ] Poor\n\nNotes on cultural nuances or tone discrepancies:\n____________________________________________________________________" },
+        { label: "Spelling", description: "Rating: [  ] Excellent  |  [  ] Good  |  [  ] Fair  |  [  ] Poor\n\nSpelling or typographical errors:\n____________________________________________________________________" },
+        { label: "Sentence Formation and Punctuation", description: "Rating: [  ] Excellent  |  [  ] Good  |  [  ] Fair  |  [  ] Poor\n\nNotes on punctuation, spacing, or sentence structure:\n____________________________________________________________________" },
+        { label: "Quality Level", description: "Overall Grade: [  ] Excellent  |  [  ] Good  |  [  ] Fair  |  [  ] Poor" },
         { label: "Rating (out of 10)", description: "Score: ______ / 10" },
-        { label: "Overall Comment", description: "General summary of the quality evaluation:" },
-        { label: "Additional Comments", description: "Any other details or notes from the evaluation:" },
-        { label: "Qualitative Comment", description: "Describe the strengths and primary weaknesses of this MT output:" },
-        { label: "Suggestion or Improvement", description: "Specific ideas/rules to improve future translations:" }
+        { label: "Overall Comment", description: "General summary of the quality evaluation:\n\n\n\n" },
+        { label: "Additional Comments", description: "Any other details or notes from the evaluation:\n\n\n" },
+        { label: "Qualitative Comment", description: "Describe the strengths and primary weaknesses of this MT output:\n\n\n" },
+        { label: "Suggestion or Improvement", description: "Specific ideas/rules to improve future translations:\n\n\n" }
       ];
 
       const feedbackRows = [
         new TableRow({
           children: [
             new TableCell({
-              width: { size: 30, type: WidthType.PERCENTAGE },
+              width: { size: 1500, type: WidthType.PERCENTAGE }, // 30%
               shading: { fill: "E2E8F0" },
-              borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+              borders: cellBorders,
               children: [
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
@@ -849,9 +890,9 @@ export default function App() {
               ]
             }),
             new TableCell({
-              width: { size: 70, type: WidthType.PERCENTAGE },
+              width: { size: 3500, type: WidthType.PERCENTAGE }, // 70%
               shading: { fill: "E2E8F0" },
-              borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+              borders: cellBorders,
               children: [
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
@@ -871,9 +912,9 @@ export default function App() {
           new TableRow({
             children: [
               new TableCell({
-                width: { size: 30, type: WidthType.PERCENTAGE },
+                width: { size: 1500, type: WidthType.PERCENTAGE },
                 shading: { fill: "F1F5F9" },
-                borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+                borders: cellBorders,
                 children: [
                   new Paragraph({
                     spacing: { before: 120, after: 120 },
@@ -884,9 +925,9 @@ export default function App() {
                 ]
               }),
               new TableCell({
-                width: { size: 70, type: WidthType.PERCENTAGE },
+                width: { size: 3500, type: WidthType.PERCENTAGE },
                 shading: { fill: "FFFFFF" },
-                borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+                borders: cellBorders,
                 children: field.description.split("\n").map((line) => new Paragraph({
                   spacing: { before: 80, after: 80 },
                   children: [
@@ -900,25 +941,27 @@ export default function App() {
       });
 
       const feedbackTable = new Table({
-        width: { size: 100, type: WidthType.PERCENTAGE },
+        width: { size: 5000, type: WidthType.PERCENTAGE },
+        margins: { top: 120, bottom: 120, left: 180, right: 180 },
         rows: feedbackRows
       });
 
       // 3. Document Metadata Table (Top of Document)
       const metadataTable = new Table({
-        width: { size: 100, type: WidthType.PERCENTAGE },
+        width: { size: 5000, type: WidthType.PERCENTAGE },
+        margins: { top: 100, bottom: 100, left: 150, right: 150 },
         rows: [
           new TableRow({
             children: [
               new TableCell({
-                width: { size: 25, type: WidthType.PERCENTAGE },
+                width: { size: 1500, type: WidthType.PERCENTAGE }, // 30%
                 shading: { fill: "F8FAFC" },
-                borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+                borders: cellBorders,
                 children: [new Paragraph({ children: [new TextRun({ text: "Document Name", bold: true, font: "Segoe UI", size: 18, color: "475569" })] })]
               }),
               new TableCell({
-                width: { size: 75, type: WidthType.PERCENTAGE },
-                borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+                width: { size: 3500, type: WidthType.PERCENTAGE }, // 70%
+                borders: cellBorders,
                 children: [new Paragraph({ children: [new TextRun({ text: fileName || "Unnamed", font: "Segoe UI", size: 18, color: "1E293B" })] })]
               })
             ]
@@ -927,11 +970,11 @@ export default function App() {
             children: [
               new TableCell({
                 shading: { fill: "F8FAFC" },
-                borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+                borders: cellBorders,
                 children: [new Paragraph({ children: [new TextRun({ text: "Language Pair", bold: true, font: "Segoe UI", size: 18, color: "475569" })] })]
               }),
               new TableCell({
-                borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+                borders: cellBorders,
                 children: [new Paragraph({ children: [new TextRun({ text: `${sourceLanguage.toUpperCase()} → ${targetLanguage.toUpperCase()}`, font: "Segoe UI", size: 18, color: "1E293B" })] })]
               })
             ]
@@ -940,11 +983,11 @@ export default function App() {
             children: [
               new TableCell({
                 shading: { fill: "F8FAFC" },
-                borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+                borders: cellBorders,
                 children: [new Paragraph({ children: [new TextRun({ text: "Evaluation Date", bold: true, font: "Segoe UI", size: 18, color: "475569" })] })]
               }),
               new TableCell({
-                borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+                borders: cellBorders,
                 children: [new Paragraph({ children: [new TextRun({ text: new Date().toLocaleDateString(), font: "Segoe UI", size: 18, color: "1E293B" })] })]
               })
             ]
@@ -953,11 +996,50 @@ export default function App() {
             children: [
               new TableCell({
                 shading: { fill: "F8FAFC" },
-                borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+                borders: cellBorders,
+                children: [new Paragraph({ children: [new TextRun({ text: "Total Word Count", bold: true, font: "Segoe UI", size: 18, color: "475569" })] })]
+              }),
+              new TableCell({
+                borders: cellBorders,
+                children: [new Paragraph({ children: [new TextRun({ text: `${totalWordCount} words`, font: "Segoe UI", size: 18, color: "1E293B" })] })]
+              })
+            ]
+          }),
+          new TableRow({
+            children: [
+              new TableCell({
+                shading: { fill: "F8FAFC" },
+                borders: cellBorders,
+                children: [new Paragraph({ children: [new TextRun({ text: "Unique Segments Word Count", bold: true, font: "Segoe UI", size: 18, color: "475569" })] })]
+              }),
+              new TableCell({
+                borders: cellBorders,
+                children: [new Paragraph({ children: [new TextRun({ text: `${uniqueWordCount} words`, font: "Segoe UI", size: 18, color: "1E293B" })] })]
+              })
+            ]
+          }),
+          new TableRow({
+            children: [
+              new TableCell({
+                shading: { fill: "F8FAFC" },
+                borders: cellBorders,
+                children: [new Paragraph({ children: [new TextRun({ text: "Duplicate Segments Word Count", bold: true, font: "Segoe UI", size: 18, color: "475569" })] })]
+              }),
+              new TableCell({
+                borders: cellBorders,
+                children: [new Paragraph({ children: [new TextRun({ text: `${duplicateWordCount} words`, font: "Segoe UI", size: 18, color: "1E293B" })] })]
+              })
+            ]
+          }),
+          new TableRow({
+            children: [
+              new TableCell({
+                shading: { fill: "F8FAFC" },
+                borders: cellBorders,
                 children: [new Paragraph({ children: [new TextRun({ text: "Linguist Name", bold: true, font: "Segoe UI", size: 18, color: "475569" })] })]
               }),
               new TableCell({
-                borders: { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder },
+                borders: cellBorders,
                 children: [new Paragraph({ children: [new TextRun({ text: "____________________________________", font: "Segoe UI", size: 18, color: "94A3B8" })] })]
               })
             ]
@@ -969,9 +1051,18 @@ export default function App() {
       const doc = new Document({
         sections: [
           {
-            properties: {},
+            properties: {
+              page: {
+                margin: {
+                  top: 1440,    // 1 inch
+                  bottom: 1440,
+                  left: 1440,
+                  right: 1440
+                }
+              }
+            },
             children: [
-              // Main title with elegant pink/blue styling
+              // Main title with elegant styling
               new Paragraph({
                 spacing: { before: 200, after: 100 },
                 alignment: AlignmentType.CENTER,
