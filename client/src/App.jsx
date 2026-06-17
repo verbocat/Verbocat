@@ -1503,7 +1503,7 @@ export default function App() {
                   onTargetLanguageChange={setTargetLanguage}
                   fileName={fileName}
                   theme={theme}
-                  canTranslate={user ? (user.role !== "linguist" && user.hasTranslateAccess && user.status === "active") : false}
+                  canTranslate={user ? (user.hasTranslateAccess && user.status === "active") : false}
                 />
               </div>
 

@@ -13,9 +13,13 @@ authRouter.post("/register", async (request, response) => {
     }
 
     // Call Supabase signup (triggers verification email by default)
+    const redirectTo = `${request.headers.origin || "http://localhost:5173"}/`;
     const { data, error } = await supabase.auth.signUp({
       email,
-      password
+      password,
+      options: {
+        emailRedirectTo: redirectTo
+      }
     });
 
     if (error) {
