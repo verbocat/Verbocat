@@ -95,151 +95,15 @@ export const Header = ({
             )}
           </div>
 
-          {/* Word Credits Counter */}
-          {creditsAllowed !== undefined && (
-            <div className="bg-slate-950/20 border border-white/5 rounded-xl p-3 space-y-1.5">
-              <div className="flex justify-between items-center text-[9px] uppercase tracking-wider text-slate-500 font-bold">
-                <span>Word Credits</span>
-                <span>{Math.round((creditsConsumed / creditsAllowed) * 100)}% Used</span>
-              </div>
-              <div className="text-xs font-black text-slate-200">
-                {creditsConsumed.toLocaleString()} / {creditsAllowed.toLocaleString()} words
-              </div>
-              <div className="h-1.5 w-full bg-slate-950/50 rounded-full overflow-hidden">
-                <div 
-                  className={`h-full rounded-full transition-all duration-300 ${
-                    creditsConsumed / creditsAllowed > 0.9 ? "bg-rose-500" : "bg-indigo-500"
-                  }`}
-                  style={{ width: `${Math.min((creditsConsumed / creditsAllowed) * 100, 100)}%` }}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Languages Selectors */}
-          <div className="space-y-2.5">
-            <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-slate-500 select-none block">Languages</span>
-            <div className="space-y-2 bg-slate-950/20 p-2 rounded-xl border border-white/5">
-              <label className="block">
-                <span className="text-[8px] font-bold text-slate-500 uppercase tracking-wider block">Source</span>
-                <select
-                  value={sourceLanguage}
-                  onChange={(e) => onSourceLanguageChange(e.target.value)}
-                  className="w-full bg-transparent border-0 py-0.5 text-xs font-bold outline-none cursor-pointer text-slate-300 focus:text-white"
-                >
-                  {LANGUAGES.map((lang) => (
-                    <option key={`src-${lang.code}`} value={lang.code} className="bg-slate-900 text-slate-100">
-                      {lang.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="h-px bg-white/5" />
-              <label className="block">
-                <span className="text-[8px] font-bold text-slate-500 uppercase tracking-wider block">Target</span>
-                <select
-                  value={targetLanguage}
-                  onChange={(e) => onTargetLanguageChange(e.target.value)}
-                  className="w-full bg-transparent border-0 py-0.5 text-xs font-bold outline-none cursor-pointer text-slate-300 focus:text-white"
-                >
-                  {LANGUAGES.map((lang) => (
-                    <option key={`tgt-${lang.code}`} value={lang.code} className="bg-slate-900 text-slate-100">
-                      {lang.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </div>
-
-          {/* Word Stats Grid */}
-          {stats && (
-            <div className="space-y-1.5">
-              <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-slate-500 select-none block">Statistics</span>
-              <div className="grid grid-cols-1 gap-1.5">
-                <div className="flex justify-between items-center bg-slate-950/15 border border-white/5 rounded-xl px-3 py-2">
-                  <span className="text-[10px] text-slate-500 font-semibold select-none">Total Words</span>
-                  <strong className="text-xs text-slate-200">{stats.words}</strong>
-                </div>
-                <div className="flex justify-between items-center bg-slate-950/15 border border-white/5 rounded-xl px-3 py-2">
-                  <span className="text-[10px] text-slate-500 font-semibold select-none">Unique Words</span>
-                  <strong className="text-xs text-indigo-400">{stats.uniqueWords}</strong>
-                </div>
-                <div className="flex justify-between items-center bg-slate-950/15 border border-white/5 rounded-xl px-3 py-2">
-                  <span className="text-[10px] text-slate-500 font-semibold select-none">Duplicates</span>
-                  <strong className="text-xs text-rose-400">{stats.duplicateWords}</strong>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Configuration / Tools */}
-          <div className="space-y-1.5 pt-2 border-t border-white/5">
-            <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-slate-500 select-none block">Configurations</span>
-            {isAdmin && onOpenAdmin && (
+          {/* Admin Control Button (visible only in sidebar if Admin/Manager) */}
+          {isAdmin && onOpenAdmin && (
+            <div className="pt-3 border-t border-white/5">
               <SidebarButton onClick={onOpenAdmin} className="bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-600/25">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-400"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
                 Admin Control
               </SidebarButton>
-            )}
-            <SidebarButton onClick={onOpenContext} className={theme.buttonSecondary}>
-              <Icons.Settings className="w-3.5 h-3.5 text-indigo-400" /> Settings Engine
-            </SidebarButton>
-            <SidebarButton onClick={onOpenGlossary} className={theme.buttonSecondary}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-400"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-              Glossary Database
-            </SidebarButton>
-          </div>
-
-          {/* Sync operations */}
-          <div className="space-y-1.5 pt-2 border-t border-white/5">
-            <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-slate-500 select-none block">Project Operations</span>
-            <SidebarButton onClick={onSaveProject} className={theme.buttonSecondary}>
-              <Icons.Save className="w-3.5 h-3.5 text-slate-400" /> Save JSON Project
-            </SidebarButton>
-            
-            <label className={`w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold border cursor-pointer hover:bg-white/10 ${theme.buttonSecondary}`}>
-              <Icons.FileJson className="w-3.5 h-3.5 text-slate-400" /> Load JSON Project
-              <input
-                type="file"
-                accept=".json"
-                onChange={onLoadProject}
-                className="hidden"
-              />
-            </label>
-
-            <label className={`w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold border cursor-pointer hover:bg-white/10 ${theme.buttonSecondary}`}>
-              <Icons.Upload className="w-3.5 h-3.5 text-indigo-400" /> Import XLIFF
-              <input
-                type="file"
-                accept=".xlf,.xliff"
-                onChange={onImportXliff}
-                className="hidden"
-              />
-            </label>
-
-            <label className={`w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold border cursor-pointer hover:bg-white/10 ${theme.buttonSecondary}`}>
-              <Icons.Upload className="w-3.5 h-3.5 text-slate-400" /> Relink Template
-              <input
-                type="file"
-                accept=".html,.docx,.pptx,.xlsx,.txt"
-                onChange={onRelinkHtml}
-                className="hidden"
-              />
-            </label>
-
-            {(fileExtension === ".xlf" || fileExtension === ".xliff" || fileExtension === ".sdlxliff") && (
-              <label className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 border border-emerald-500/20 cursor-pointer shadow-sm">
-                <Icons.Upload className="w-3.5 h-3.5" /> Relink HTML
-                <input
-                  type="file"
-                  accept=".html,.htm"
-                  onChange={onRelinkHtml}
-                  className="hidden"
-                />
-              </label>
-            )}
-          </div>
+            </div>
+          )}
 
         </div>
 
@@ -254,13 +118,6 @@ export const Header = ({
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
             Log Out
           </SidebarButton>
-
-          <button
-            onClick={onCloseProject}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-rose-600/10 hover:bg-rose-600/20 border border-rose-500/20 text-rose-400 py-2.5 text-xs font-bold transition-all duration-150 active:scale-95 cursor-pointer"
-          >
-            <Icons.X className="w-3.5 h-3.5" /> Close Workspace
-          </button>
         </div>
       </aside>
     );
@@ -282,12 +139,6 @@ export const Header = ({
               </span>
             </div>
             
-            {/* Show credits allowed to linguist */}
-            {creditsAllowed !== undefined && (
-              <span className="rounded-lg bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 text-xs font-semibold text-indigo-400">
-                Word Credits: {creditsConsumed.toLocaleString()} / {creditsAllowed.toLocaleString()}
-              </span>
-            )}
           </div>
 
           <div className="flex items-center gap-2">
