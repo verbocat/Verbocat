@@ -75,7 +75,10 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
         }, 3000);
       }
     } catch (err) {
-      console.error(err);
+      console.error("DEBUG LOGINSCREEN ERROR:", err);
+      if (err.response) {
+        console.log("DEBUG ERROR RESPONSE DATA:", err.response.data);
+      }
       const serverErr = err.response?.data?.error;
       const errorText = typeof serverErr === "object" && serverErr !== null
         ? (serverErr.message || JSON.stringify(serverErr))
@@ -180,13 +183,13 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
             {/* Alert boxes */}
             {error && (
               <div className="rounded-xl bg-rose-500/10 py-3 px-4 text-xs font-semibold text-rose-400 border border-rose-500/20">
-                {error}
+                {typeof error === "object" ? JSON.stringify(error) : String(error)}
               </div>
             )}
 
             {successMsg && (
               <div className="rounded-xl bg-emerald-500/10 py-3 px-4 text-xs font-semibold text-emerald-400 border border-emerald-500/20 leading-relaxed">
-                {successMsg}
+                {typeof successMsg === "object" ? JSON.stringify(successMsg) : String(successMsg)}
               </div>
             )}
 
