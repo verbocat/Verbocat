@@ -5,6 +5,7 @@ const { processUploadedFile, exportHtml } = require("../services/fileService");
 const { translateSegments } = require("../services/translationService");
 const { getProviderStatus } = require("../services/translationProviders");
 const { supabase } = require("../config/supabase");
+const { checkAuth, checkTranslateAccess } = require("../utils/authMiddleware");
 const {
   generateXliff,
   generateTmx,
@@ -35,15 +36,39 @@ apiRouter.post("/upload", upload.single("file"), async (request, response) => {
   }
 });
 
-apiRouter.post("/translate-batch", async (request, response) => {
+apiRouter.post("/translate-batch", checkAuth, checkTranslateAccess, async (request, response) => {
   try {
-    const { segments, target, source, contextSettings } = request.body;
+    const { segments, target, source, contextSettings, fileName } = request.body;
     const result = await translateSegments(segments, target, source, contextSettings);
+    
+    // Log credit consumption and update database profiles
+    const wordCount = request.wordCount || 0;
+    if (wordCount > 0) {
+      const email = request.profile.email;
+      const userId = request.profile.id;
+
+      // 1. Log credit entry in credit_logs
+      await supabase.from("credit_logs").insert({
+        user_id: userId,
+        email: email,
+        action: "translate-batch",
+        word_count: wordCount,
+        file_name: fileName || "document"
+      });
+
+      // 2. Increment credits_consumed in profiles
+      const newConsumed = request.profile.credits_consumed + wordCount;
+      await supabase
+        .from("profiles")
+        .update({ credits_consumed: newConsumed })
+        .eq("id", userId);
+    }
+
     response.json(result);
   } catch (error) {
     console.log(error);
     response.status(500).json({
-      error: "Batch translation failed"
+      error: error.message || "Batch translation failed"
     });
   }
 });
