@@ -6,6 +6,15 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || ""
 });
 
+// Automatically inject JWT authentication token to headers
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem("verbocat_token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 export const uploadFile = async (file) => {
   const formData = new FormData();
   formData.append("file", file);
@@ -54,3 +63,24 @@ export const importTmx = async (file) => {
   const response = await api.post("/api/import-tmx", formData);
   return response.data;
 };
+
+export const fetchAdminUsers = async () => {
+  const response = await api.get("/api/admin/users");
+  return response.data;
+};
+
+export const updateAdminUser = async (id, data) => {
+  const response = await api.put(`/api/admin/users/${id}`, data);
+  return response.data;
+};
+
+export const deleteAdminUser = async (id) => {
+  const response = await api.delete(`/api/admin/users/${id}`);
+  return response.data;
+};
+
+export const fetchAdminCreditLogs = async () => {
+  const response = await api.get("/api/admin/credit-logs");
+  return response.data;
+};
+

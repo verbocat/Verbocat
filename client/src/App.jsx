@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { Header } from "./components/Header.jsx";
-import { ScreenLock } from "./components/ScreenLock.jsx";
+import { LoginScreen } from "./components/LoginScreen.jsx";
+import { AdminDashboard } from "./components/AdminDashboard.jsx";
 import { DragOverlay } from "./components/DragOverlay.jsx";
 import { Toast } from "./components/Toast.jsx";
 import { GlossaryModal } from "./components/GlossaryModal.jsx";
@@ -15,6 +16,7 @@ import { ContextSettingsModal } from "./components/ContextSettingsModal.jsx";
 import { SearchReplaceModal } from "./components/SearchReplaceModal.jsx";
 import { LANGUAGES } from "./constants/languages.js";
 import { useGlossaryManager } from "./hooks/useGlossaryManager.js";
+import { useUserStore } from "./services/userStore.js";
 import {
   exportFile,
   translateBatch,
@@ -46,9 +48,44 @@ export default function App() {
   const [showQaPanel, setShowQaPanel] = useState(false);
   const [fileName, setFileName] = useState("document");
   const [isUploading, setIsUploading] = useState(false);
-  const [locked, setLocked] = useState(true);
-  const [userRole, setUserRole] = useState(null);
-  
+
+  // Zustand Session Store hook
+  const { isAuth, fetchProfile, token, logout, user } = useUserStore();
+  const [resetMode, setResetMode] = useState(false);
+  const [showAdminDashboard, setShowAdminDashboard] = useState(false);
+
+  // Sync profile details on start if session token is cached
+  useEffect(() => {
+    if (isAuth) {
+      fetchProfile();
+    }
+  }, [isAuth]);
+
+  // Intercept hashes in URL redirect (Supabase password recovery / registration)
+  useEffect(() => {
+    const hash = window.location.hash;
+    const path = window.location.pathname;
+
+    if (hash && hash.includes("access_token=") && (hash.includes("type=recovery") || hash.includes("type=signup"))) {
+      const params = new URLSearchParams(hash.replace("#", "?"));
+      const accessToken = params.get("access_token");
+      
+      if (accessToken) {
+        localStorage.setItem("verbocat_token", accessToken);
+        if (hash.includes("type=recovery")) {
+          setResetMode(true);
+        } else {
+          fetchProfile(); // signup confirmation redirect
+        }
+      }
+      window.location.hash = "";
+    }
+    
+    if (path === "/reset-password") {
+      setResetMode(true);
+    }
+  }, []);
+
   const [showSearchReplace, setShowSearchReplace] = useState(false);
   const [showContextPanel, setShowContextPanel] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -191,12 +228,6 @@ export default function App() {
   const showToast = (message, type = "success") => {
     setToast({ message, type });
     window.setTimeout(() => setToast(null), 3000);
-  };
-
-  const handleUnlock = (role) => {
-    setUserRole(role);
-    setLocked(false);
-    showToast(`Unlocked as ${role}`);
   };
 
   const updateSegmentsWithHistory = (updater) => {
@@ -1281,183 +1312,233 @@ export default function App() {
     }, 2000);
   };
 
+  // Guard screens for authentication & password resets
+  if (resetMode) {
+    return (
+      <div className={`h-screen w-screen flex items-center justify-center ${theme.bg} overflow-hidden`}>
+        <Toast toast={toast} />
+        <LoginScreen mode="reset" onResetSuccess={() => setResetMode(false)} />
+      </div>
+    );
+  }
+
+  if (!isAuth) {
+    return (
+      <div className={`h-screen w-screen flex items-center justify-center ${theme.bg} overflow-hidden`}>
+        <Toast toast={toast} />
+        <LoginScreen mode="login" />
+      </div>
+    );
+  }
+
+  const showSidebar = segments.length > 0;
+
   return (
     <div
-      className={`h-screen flex flex-col overflow-hidden ${theme.bg} ${theme.text} font-sans transition-colors duration-300`}
+      className={`h-screen flex ${showSidebar ? "flex-row" : "flex-col"} overflow-hidden ${theme.bg} ${theme.text} font-sans transition-colors duration-300`}
     >
-      <DragOverlay isDragging={isDragging} />
-      <LoadingOverlay isUploading={isUploading} theme={theme} />
-      <Toast toast={toast} />
-
+      {/* Sidebar header (left-aligned) or compact horizontal header (top-aligned) */}
       <Header
         currentProvider={currentProvider}
         darkMode={darkMode}
         onOpenGlossary={() => setShowGlossary(true)}
         onLoadProject={loadProject}
         onToggleDarkMode={() => setDarkMode((value) => !value)}
-        onLock={() => setLocked(true)}
         qaIssuesCount={qaIssuesList.length}
         segmentsCount={segments.length}
         progress={stats.progress}
         theme={theme}
-      />
-
-      {locked && <ScreenLock onUnlock={handleUnlock} />}
-
-      <GlossaryModal
-        darkMode={darkMode}
-        glossary={glossary}
-        glossaryKey={glossaryKey}
-        glossaryLanguagePairs={glossaryLanguagePairs}
-        glossarySourceLang={glossarySourceLang}
-        glossaryTargetLang={glossaryTargetLang}
-        languages={LANGUAGES}
-        onAddRow={addGlossaryRow}
-        onClearCurrentGlossary={clearCurrentGlossary}
-        onClearSelection={clearGlossarySelection}
-        onClose={() => setShowGlossary(false)}
-        onDeleteLanguagePair={deleteLanguagePairGlossary}
-        onDeleteSelected={deleteSelectedGlossaryRows}
-        onPasteGlossary={pasteGlossary}
-        onApplyGlossary={handleApplyGlossary}
-        onSelectAll={selectAllGlossaryRows}
-        onSelectPair={(source, target) => {
-          setGlossarySourceLang(source);
-          setGlossaryTargetLang(target);
-        }}
-        onToggleRow={toggleGlossaryRow}
-        onUpdateGlossary={updateGlossary}
-        selectedGlossaryRows={selectedGlossaryRows}
-        setGlossarySourceLang={setGlossarySourceLang}
-        setGlossaryTargetLang={setGlossaryTargetLang}
-        setGlossary={glossaryManager.setGlossary}
-        show={showGlossary}
-        canApplyGlossary={segments.length > 0}
-        theme={theme}
-        onImportTmx={handleImportTmx}
-      />
-
-      <ExportModal
-        show={showExportModal}
-        onClose={() => setShowExportModal(false)}
-        onExportDocument={handleExportDocument}
-        onExportXliff={handleExportXliff}
-        onExportTmx={handleExportTmx}
-        onExportGlobalTmx={handleExportGlobalTmx}
-        onExportLinguistTable={handleExportLinguistTable}
-        onRelinkHtml={handleRelinkHtml}
+        isSidebar={showSidebar}
+        fileName={fileName}
         fileExtension={fileExtension}
-        theme={theme}
         sourceLanguage={sourceLanguage}
+        onSourceLanguageChange={setSourceLanguage}
         targetLanguage={targetLanguage}
+        onTargetLanguageChange={setTargetLanguage}
+        stats={stats}
+        onCloseProject={closeProject}
+        onSaveProject={saveProject}
+        onRelinkHtml={handleRelinkHtml}
+        onImportXliff={handleImportXliff}
+        onOpenContext={() => setShowContextPanel(true)}
+        userRole={user ? user.role : ""}
+        creditsAllowed={user ? user.creditsAllowed : 50000}
+        creditsConsumed={user ? user.creditsConsumed : 0}
+        onLogout={logout}
+        onOpenAdmin={() => setShowAdminDashboard(true)}
       />
 
-      <ContextSettingsModal
-        show={showContextPanel}
-        onClose={() => setShowContextPanel(false)}
-        contextSettings={contextSettings}
-        setContextSettings={setContextSettings}
-        theme={theme}
-      />
+      {/* Main app panel wrapper */}
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <DragOverlay isDragging={isDragging} />
+        <LoadingOverlay isUploading={isUploading} theme={theme} />
+        <Toast toast={toast} />
 
-      <SearchReplaceModal
-        show={showSearchReplace}
-        onClose={() => setShowSearchReplace(false)}
-        onReplaceAll={handleReplaceAll}
-        theme={theme}
-      />
+        <GlossaryModal
+          darkMode={darkMode}
+          glossary={glossary}
+          glossaryKey={glossaryKey}
+          glossaryLanguagePairs={glossaryLanguagePairs}
+          glossarySourceLang={glossarySourceLang}
+          glossaryTargetLang={glossaryTargetLang}
+          languages={LANGUAGES}
+          onAddRow={addGlossaryRow}
+          onClearCurrentGlossary={clearCurrentGlossary}
+          onClearSelection={clearGlossarySelection}
+          onClose={() => setShowGlossary(false)}
+          onDeleteLanguagePair={deleteLanguagePairGlossary}
+          onDeleteSelected={deleteSelectedGlossaryRows}
+          onPasteGlossary={pasteGlossary}
+          onApplyGlossary={handleApplyGlossary}
+          onSelectAll={selectAllGlossaryRows}
+          onSelectPair={(source, target) => {
+            setGlossarySourceLang(source);
+            setGlossaryTargetLang(target);
+          }}
+          onToggleRow={toggleGlossaryRow}
+          onUpdateGlossary={updateGlossary}
+          selectedGlossaryRows={selectedGlossaryRows}
+          setGlossarySourceLang={setGlossarySourceLang}
+          setGlossaryTargetLang={setGlossaryTargetLang}
+          setGlossary={glossaryManager.setGlossary}
+          show={showGlossary}
+          canApplyGlossary={segments.length > 0}
+          theme={theme}
+          onImportTmx={handleImportTmx}
+        />
 
-      <div className="w-full flex-1 overflow-hidden flex flex-col px-2 pb-4 pt-2 sm:px-4">
-        {isTranslating && (
-          <div className="fixed bottom-8 right-8 z-50 w-80 overflow-hidden rounded-xl border border-white/10 bg-slate-950/95 p-4 text-white shadow-2xl shadow-slate-950/40 backdrop-blur-xl">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold uppercase tracking-[0.22em] text-sky-200">
-                Translating
-              </span>
-              <span className="font-mono text-sm">{progress}%</span>
-            </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-sky-400 to-slate-300 transition-all duration-300"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
+        <ExportModal
+          show={showExportModal}
+          onClose={() => setShowExportModal(false)}
+          onExportDocument={handleExportDocument}
+          onExportXliff={handleExportXliff}
+          onExportTmx={handleExportTmx}
+          onExportGlobalTmx={handleExportGlobalTmx}
+          onExportLinguistTable={handleExportLinguistTable}
+          onRelinkHtml={handleRelinkHtml}
+          fileExtension={fileExtension}
+          theme={theme}
+          sourceLanguage={sourceLanguage}
+          targetLanguage={targetLanguage}
+        />
+
+        <ContextSettingsModal
+          show={showContextPanel}
+          onClose={() => setShowContextPanel(false)}
+          contextSettings={contextSettings}
+          setContextSettings={setContextSettings}
+          theme={theme}
+        />
+
+        <SearchReplaceModal
+          show={showSearchReplace}
+          onClose={() => setShowSearchReplace(false)}
+          onReplaceAll={handleReplaceAll}
+          theme={theme}
+        />
+
+        {showAdminDashboard && (
+          <AdminDashboard 
+            onClose={() => {
+              setShowAdminDashboard(false);
+              fetchProfile();
+            }} 
+            theme={theme} 
+          />
         )}
 
-        {segments.length === 0 ? (
-          <main className="mx-auto max-w-4xl">
-            <EmptyWorkspace
-              darkMode={darkMode}
-              onLoadProject={loadProject}
-              onOpenGlossary={() => setShowGlossary(true)}
-              onUpload={handleUpload}
-              theme={theme}
-            />
-          </main>
-        ) : (
-          <main className="flex-1 flex flex-col gap-4 overflow-hidden">
-            <div className="shrink-0">
-              <WorkspaceToolbar
-                onCloseProject={closeProject}
-                onExport={() => setShowExportModal(true)}
+        <div className="w-full flex-1 overflow-hidden flex flex-col px-2 pb-4 pt-2 sm:px-4">
+          {isTranslating && (
+            <div className="fixed bottom-8 right-8 z-50 w-80 overflow-hidden rounded-xl border border-white/10 bg-slate-950/95 p-4 text-white shadow-2xl shadow-slate-950/40 backdrop-blur-xl">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold uppercase tracking-[0.22em] text-sky-200">
+                  Translating
+                </span>
+                <span className="font-mono text-sm">{progress}%</span>
+              </div>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-sky-400 to-slate-300 transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {segments.length === 0 ? (
+            <main className="mx-auto max-w-4xl">
+              <EmptyWorkspace
+                darkMode={darkMode}
                 onLoadProject={loadProject}
                 onOpenGlossary={() => setShowGlossary(true)}
-                onOpenContext={() => setShowContextPanel(true)}
-                onSaveProject={saveProject}
-                onRelinkHtml={handleRelinkHtml}
-                onImportXliff={handleImportXliff}
-                onTranslate={handleTranslateSegments}
-                onToggleQa={() => setShowQaPanel((value) => !value)}
-                onCopyAllSource={copyAllSourceToTarget}
-                isTranslating={isTranslating}
-                qaIssuesCount={qaIssuesList.length}
-                searchQuery={searchQuery}
-                segmentsCount={segments.length}
-                fileExtension={fileExtension}
-                setSearchQuery={setSearchQuery}
-                stats={stats}
-                sourceLanguage={sourceLanguage}
-                onSourceLanguageChange={setSourceLanguage}
-                targetLanguage={targetLanguage}
-                onTargetLanguageChange={setTargetLanguage}
-                fileName={fileName}
+                onUpload={handleUpload}
                 theme={theme}
-                canTranslate={userRole === "office"}
               />
-            </div>
+            </main>
+          ) : (
+            <main className="flex-1 flex flex-col gap-4 overflow-hidden">
+              <div className="shrink-0">
+                <WorkspaceToolbar
+                  onCloseProject={closeProject}
+                  onExport={() => setShowExportModal(true)}
+                  onLoadProject={loadProject}
+                  onOpenGlossary={() => setShowGlossary(true)}
+                  onOpenContext={() => setShowContextPanel(true)}
+                  onSaveProject={saveProject}
+                  onRelinkHtml={handleRelinkHtml}
+                  onImportXliff={handleImportXliff}
+                  onTranslate={handleTranslateSegments}
+                  onToggleQa={() => setShowQaPanel((value) => !value)}
+                  onCopyAllSource={copyAllSourceToTarget}
+                  isTranslating={isTranslating}
+                  qaIssuesCount={qaIssuesList.length}
+                  searchQuery={searchQuery}
+                  segmentsCount={segments.length}
+                  fileExtension={fileExtension}
+                  setSearchQuery={setSearchQuery}
+                  stats={stats}
+                  sourceLanguage={sourceLanguage}
+                  onSourceLanguageChange={setSourceLanguage}
+                  targetLanguage={targetLanguage}
+                  onTargetLanguageChange={setTargetLanguage}
+                  fileName={fileName}
+                  theme={theme}
+                  canTranslate={user ? (user.role !== "linguist" && user.hasTranslateAccess && user.status === "active") : false}
+                />
+              </div>
 
-            <QAPanel
-              qaIssuesList={qaIssuesList}
-              showQaPanel={showQaPanel}
-              theme={theme}
-              onGoToSegment={goToSegment}
-            />
-
-            <SegmentBoard theme={theme}>
-              <Virtuoso
-                ref={virtuosoRef}
-                style={{ height: "100%" }}
-                data={filteredSegments}
-                components={{ Footer: () => <div className="h-32" /> }}
-                itemContent={(index, segment) => (
-                  <SegmentCard
-                    key={segment.id}
-                    darkMode={darkMode}
-                    index={index}
-                    segment={segment}
-                    theme={theme}
-                    translationGlossary={translationGlossary}
-                    onCopy={copyToClipboard}
-                    onUpdateTranslation={updateTranslation}
-                    onToggleVerify={() => toggleVerify(segment.id)}
-                    onVerifyAndNext={() => verifyAndNextSegment(segment.id)}
-                  />
-                )}
+              <QAPanel
+                qaIssuesList={qaIssuesList}
+                showQaPanel={showQaPanel}
+                theme={theme}
+                onGoToSegment={goToSegment}
               />
-            </SegmentBoard>
-          </main>
-        )}
+
+              <SegmentBoard theme={theme}>
+                <Virtuoso
+                  ref={virtuosoRef}
+                  style={{ height: "100%" }}
+                  data={filteredSegments}
+                  components={{ Footer: () => <div className="h-32" /> }}
+                  itemContent={(index, segment) => (
+                    <SegmentCard
+                      key={segment.id}
+                      darkMode={darkMode}
+                      index={index}
+                      segment={segment}
+                      theme={theme}
+                      translationGlossary={translationGlossary}
+                      onCopy={copyToClipboard}
+                      onUpdateTranslation={updateTranslation}
+                      onToggleVerify={() => toggleVerify(segment.id)}
+                      onVerifyAndNext={() => verifyAndNextSegment(segment.id)}
+                    />
+                  )}
+                />
+              </SegmentBoard>
+            </main>
+          )}
+        </div>
       </div>
     </div>
   );
