@@ -2,7 +2,7 @@ import { useState } from "react";
 import axios from "axios";
 import { useUserStore } from "../services/userStore";
 
-const API_URL = "http://localhost:3000/api";
+const API_URL = "/api";
 
 export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => {
   const loginAction = useUserStore((state) => state.login);

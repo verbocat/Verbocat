@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import axios from "axios";
 
-const API_URL = "http://localhost:3000/api"; // Express server endpoint
+const API_URL = "/api"; // Express server endpoint
 
 export const useUserStore = create((set, get) => ({
   token: localStorage.getItem("verbocat_token") || null,
