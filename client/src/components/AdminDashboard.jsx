@@ -45,18 +45,26 @@ export const AdminDashboard = ({ onClose, theme }) => {
       setLogs(logsData.logs || []);
     } catch (err) {
       console.error(err);
-      setError(err.response?.data?.error || "Failed to load administrative data");
+      const serverErr = err.response?.data?.error;
+      const errorText = typeof serverErr === "object" && serverErr !== null
+        ? (serverErr.message || JSON.stringify(serverErr))
+        : (serverErr || err.message || "Failed to load administrative data");
+      setError(errorText);
     } finally {
       setLoading(false);
     }
   };
 
   const showToast = (msg, isError = false) => {
+    let formattedMsg = msg;
+    if (typeof msg === "object" && msg !== null) {
+      formattedMsg = msg.message || JSON.stringify(msg);
+    }
     if (isError) {
-      setError(msg);
+      setError(formattedMsg);
       setTimeout(() => setError(""), 4000);
     } else {
-      setSuccess(msg);
+      setSuccess(formattedMsg);
       setTimeout(() => setSuccess(""), 3000);
     }
   };

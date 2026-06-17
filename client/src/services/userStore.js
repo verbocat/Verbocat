@@ -1,7 +1,9 @@
 import { create } from "zustand";
 import axios from "axios";
 
-const API_URL = "/api"; // Express server endpoint
+const API_URL = import.meta.env.VITE_API_URL 
+  ? `${import.meta.env.VITE_API_URL}/api` 
+  : "/api";
 
 export const useUserStore = create((set, get) => ({
   token: localStorage.getItem("verbocat_token") || null,
@@ -41,7 +43,11 @@ export const useUserStore = create((set, get) => ({
       // Auto log out if token is expired or unauthorized
       if (err.response && (err.response.status === 401 || err.response.status === 403)) {
         logout();
-        set({ error: err.response.data?.error || "Session expired. Please log in again." });
+        const serverErr = err.response.data?.error;
+        const errorText = typeof serverErr === "object" && serverErr !== null
+          ? (serverErr.message || JSON.stringify(serverErr))
+          : (serverErr || "Session expired. Please log in again.");
+        set({ error: errorText, loading: false });
       } else {
         set({ error: "Failed to connect to authentication server", loading: false });
       }

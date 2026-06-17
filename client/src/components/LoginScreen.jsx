@@ -2,7 +2,9 @@ import { useState } from "react";
 import axios from "axios";
 import { useUserStore } from "../services/userStore";
 
-const API_URL = "/api";
+const API_URL = import.meta.env.VITE_API_URL 
+  ? `${import.meta.env.VITE_API_URL}/api` 
+  : "/api";
 
 export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => {
   const loginAction = useUserStore((state) => state.login);
@@ -74,7 +76,11 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
       }
     } catch (err) {
       console.error(err);
-      setError(err.response?.data?.error || err.message || "An unexpected error occurred");
+      const serverErr = err.response?.data?.error;
+      const errorText = typeof serverErr === "object" && serverErr !== null
+        ? (serverErr.message || JSON.stringify(serverErr))
+        : (serverErr || err.message || "An unexpected error occurred");
+      setError(errorText);
     } finally {
       setLoading(false);
     }
