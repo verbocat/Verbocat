@@ -1,6 +1,27 @@
 {
-  "cleanUrls": true,
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+  "builds": [
+    {
+      "src": "client/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "http://localhost:5000/api/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "client/$1",
+      "continue": true
+    },
+    {
+      "source": "/(.*)",
+      "destination": "client/index.html"
+    }
   ]
 }
+
