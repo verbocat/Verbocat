@@ -50,7 +50,7 @@ export default function App() {
   const [isUploading, setIsUploading] = useState(false);
 
   // Zustand Session Store hook
-  const { isAuth, fetchProfile, token, logout, user } = useUserStore();
+  const { isAuth, fetchProfile, token, logout, user, loading } = useUserStore();
   const [resetMode, setResetMode] = useState(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
 
@@ -1324,6 +1324,14 @@ export default function App() {
       <div className={`h-screen w-screen flex items-center justify-center ${theme.bg} overflow-hidden`}>
         <Toast toast={toast} />
         <LoginScreen key="reset" mode="reset" onResetSuccess={() => setResetMode(false)} />
+      </div>
+    );
+  }
+
+  if (isAuth && (!user || loading)) {
+    return (
+      <div className={`h-screen w-screen flex flex-col items-center justify-center ${theme.bg} overflow-hidden gap-4`}>
+        <LoadingOverlay message="Verifying secure session..." />
       </div>
     );
   }

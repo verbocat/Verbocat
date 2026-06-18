@@ -38,3 +38,39 @@ code,
 .font-mono {
   font-family: "IBM Plex Mono", monospace;
 }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes floatGlowOne {
+  0%, 100% { transform: translate(0px, 0px) scale(1); }
+  50% { transform: translate(15px, -15px) scale(1.1); }
+}
+
+@keyframes floatGlowTwo {
+  0%, 100% { transform: translate(0px, 0px) scale(1.1); }
+  50% { transform: translate(-15px, 15px) scale(0.9); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-float-glow-1 {
+  animation: floatGlowOne 8s ease-in-out infinite;
+}
+
+.animate-float-glow-2 {
+  animation: floatGlowTwo 10s ease-in-out infinite;
+}

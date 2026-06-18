@@ -106,12 +106,56 @@ authRouter.post("/login", async (request, response) => {
   }
 });
 
+// Simple in-memory rate limiter for password reset emails
+const emailLimits = new Map(); // key: email -> timestamp
+const ipLimits = new Map();    // key: IP -> timestamp
+const LIMIT_WINDOW_MS = 2 * 60 * 1000; // 2 minutes rate limit
+
 // 3. Request Password Reset (Forgot Password)
 authRouter.post("/forgot-password", async (request, response) => {
   try {
     const { email } = request.body;
     if (!email) {
       return response.status(400).json({ error: "Email address is required" });
+    }
+
+    // Rate Limiting Checks
+    const clientIp = request.ip || request.headers['x-forwarded-for'] || request.socket.remoteAddress;
+
+    // Check IP rate limit
+    if (clientIp) {
+      const lastIpSent = ipLimits.get(clientIp);
+      if (lastIpSent && Date.now() - lastIpSent < LIMIT_WINDOW_MS) {
+        const remainingSec = Math.ceil((LIMIT_WINDOW_MS - (Date.now() - lastIpSent)) / 1000);
+        return response.status(429).json({ 
+          error: `Too many password reset requests from this IP. Please wait ${remainingSec} seconds.` 
+        });
+      }
+    }
+
+    // Check Email rate limit
+    const lastEmailSent = emailLimits.get(email.toLowerCase());
+    if (lastEmailSent && Date.now() - lastEmailSent < LIMIT_WINDOW_MS) {
+      const remainingSec = Math.ceil((LIMIT_WINDOW_MS - (Date.now() - lastEmailSent)) / 1000);
+      return response.status(429).json({ 
+        error: `A password reset email was recently sent to this address. Please wait ${remainingSec} seconds.` 
+      });
+    }
+
+    // Check if the user exists in profiles table
+    const { data: profile, error: profileErr } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("email", email)
+      .maybeSingle();
+
+    if (profileErr) {
+      console.error("Forgot Password Check Error:", profileErr);
+      return response.status(500).json({ error: "Database verification failed" });
+    }
+
+    if (!profile) {
+      return response.status(404).json({ error: "No account found with this email address." });
     }
 
     let redirectTo = request.headers.origin || "http://localhost:5173";
@@ -139,6 +183,12 @@ authRouter.post("/forgot-password", async (request, response) => {
       return response.status(400).json({ error: error.message });
     }
 
+    // Update rate limit timestamps on success
+    if (clientIp) {
+      ipLimits.set(clientIp, Date.now());
+    }
+    emailLimits.set(email.toLowerCase(), Date.now());
+
     response.json({
       message: "Password reset link sent! Please check your email inbox."
     });
@@ -149,7 +199,7 @@ authRouter.post("/forgot-password", async (request, response) => {
 });
 
 // 4. Reset Password (Authenticated via JWT recovery token)
-authRouter.post("/reset-password", checkAuth, async (request, response) => {
+authRouter.post("/reset-password", async (request, response) => {
   try {
     const { password } = request.body;
     if (!password) {
@@ -159,7 +209,20 @@ authRouter.post("/reset-password", checkAuth, async (request, response) => {
       return response.status(400).json({ error: "Password must be at least 6 characters long" });
     }
 
-    const userId = request.user.id;
+    // Extract Bearer token
+    const authHeader = request.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return response.status(401).json({ error: "Missing or malformed Authorization header" });
+    }
+    const token = authHeader.split(" ")[1];
+
+    // Verify token with Supabase Auth
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return response.status(401).json({ error: "Invalid or expired session/recovery token" });
+    }
+
+    const userId = user.id;
 
     // Update the password in Supabase Auth using admin privileges
     const { error } = await supabase.auth.admin.updateUserById(userId, {

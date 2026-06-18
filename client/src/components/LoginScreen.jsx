@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { useUserStore } from "../services/userStore";
+import { Eye, EyeOff, Lock, Mail, ArrowLeft, CheckCircle, AlertCircle, Sparkles } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL 
   ? `${import.meta.env.VITE_API_URL}/api` 
@@ -10,16 +11,20 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
   const loginAction = useUserStore((state) => state.login);
   
   const [mode, setMode] = useState(initialMode); // 'login', 'register', 'forgot', 'reset'
-  
-  useEffect(() => {
-    setMode(initialMode);
-  }, [initialMode]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+
+  useEffect(() => {
+    setMode(initialMode);
+    setError("");
+    setSuccessMsg("");
+  }, [initialMode]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -29,12 +34,10 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
 
     try {
       if (mode === "login") {
-        // Log In Request
         const response = await axios.post(`${API_URL}/auth/login`, { email, password });
         loginAction(response.data.token, response.data.user);
       } 
       else if (mode === "register") {
-        // Sign Up Request
         if (password !== confirmPassword) {
           throw new Error("Passwords do not match");
         }
@@ -48,13 +51,11 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
         setConfirmPassword("");
       } 
       else if (mode === "forgot") {
-        // Forgot Password Request
         const response = await axios.post(`${API_URL}/auth/forgot-password`, { email });
         setSuccessMsg(response.data.message);
         setEmail("");
       }
       else if (mode === "reset") {
-        // Reset Password Request
         if (password !== confirmPassword) {
           throw new Error("Passwords do not match");
         }
@@ -80,9 +81,6 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
       }
     } catch (err) {
       console.error("DEBUG LOGINSCREEN ERROR:", err);
-      if (err.response) {
-        console.log("DEBUG ERROR RESPONSE DATA:", err.response.data);
-      }
       const serverErr = err.response?.data?.error;
       const errorText = typeof serverErr === "object" && serverErr !== null
         ? (serverErr.message || JSON.stringify(serverErr))
@@ -94,76 +92,117 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#05070c]/85 backdrop-blur-md p-4 transition-all duration-500 animate-fade-in">
-      <div className="relative w-full max-w-md overflow-hidden rounded-[32px] border border-white/10 bg-slate-900/60 p-8 shadow-[0_20px_50px_rgba(0,0,0,0.5)] backdrop-blur-2xl">
-        <div className="absolute -top-12 -left-12 h-36 w-36 rounded-full bg-indigo-500/10 blur-[50px] pointer-events-none" />
-        <div className="absolute -bottom-12 -right-12 h-36 w-36 rounded-full bg-cyan-500/10 blur-[50px] pointer-events-none" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#03060f]/90 backdrop-blur-lg p-4 transition-all duration-500 animate-fade-in overflow-hidden">
+      
+      {/* Animated Glowing Orbs */}
+      <div className="absolute top-1/4 left-1/4 h-[300px] w-[300px] rounded-full bg-indigo-500/10 blur-[120px] pointer-events-none animate-float-glow-1" />
+      <div className="absolute bottom-1/4 right-1/4 h-[350px] w-[350px] rounded-full bg-violet-600/10 blur-[130px] pointer-events-none animate-float-glow-2" />
+      
+      {/* Frosted Glass card */}
+      <div className="relative w-full max-w-[440px] overflow-hidden rounded-3xl border border-white/5 bg-slate-950/40 p-8 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] backdrop-blur-3xl animate-slide-up">
+        
+        {/* Subtle top border illumination */}
+        <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-indigo-500/30 to-transparent" />
 
         <div className="relative flex flex-col items-center">
-          {/* Logo Brand Title */}
-          <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/15 animate-pulse-glow">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
+          
+          {/* Logo Header */}
+          <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 text-white shadow-xl shadow-indigo-500/10 relative group">
+            <Sparkles className="h-6 w-6 animate-pulse" />
+            <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 blur-md opacity-45 -z-10 group-hover:opacity-75 transition-opacity" />
           </div>
           
-          <h3 className="mb-1 text-2xl font-black tracking-tight text-white">VerboCat Editor</h3>
-          <p className="mb-6 text-xs text-slate-400 text-center">
-            {mode === "login" && "Enter credentials to access translation workspace."}
-            {mode === "register" && "Create a secure account to join translation projects."}
-            {mode === "forgot" && "Recover your password using your registered email address."}
-            {mode === "reset" && "Create a strong new password for your account."}
+          <h3 className="mb-1.5 text-2xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-transparent">
+            {mode === "login" && "Welcome Back"}
+            {mode === "register" && "Create Account"}
+            {mode === "forgot" && "Recover Access"}
+            {mode === "reset" && "Update Password"}
+          </h3>
+          
+          <p className="mb-6 text-xs text-slate-400/80 text-center leading-relaxed max-w-[280px]">
+            {mode === "login" && "Enter your credentials to enter the VerboCat workspace."}
+            {mode === "register" && "Get started with custom translation projects."}
+            {mode === "forgot" && "Confirm your email address to receive a recovery link."}
+            {mode === "reset" && "Update your credentials with a new secure password."}
           </p>
 
           <form onSubmit={handleSubmit} className="w-full space-y-4">
             
-            {/* Input Email (hidden in reset mode) */}
+            {/* Input Email (skip in reset mode) */}
             {mode !== "reset" && (
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 select-none">Email Address</label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@company.com"
-                  className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-3 text-slate-100 outline-none transition-all placeholder:text-slate-600 focus:border-indigo-500/50 focus:bg-black/60 focus:ring-2 focus:ring-indigo-500/20 text-sm"
-                />
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400/80 select-none">Email Address</label>
+                <div className="relative group">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-500 group-focus-within:text-indigo-400 transition-colors">
+                    <Mail className="h-4 w-4" />
+                  </span>
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="name@company.com"
+                    className="w-full rounded-2xl border border-white/5 bg-slate-900/40 pl-11 pr-4 py-3 text-slate-100 outline-none transition-all placeholder:text-slate-600 focus:border-indigo-500/50 focus:bg-slate-950/60 focus:ring-4 focus:ring-indigo-500/10 text-sm"
+                  />
+                </div>
               </div>
             )}
 
             {/* Input Password (skip in forgot password) */}
             {mode !== "forgot" && (
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 select-none">
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400/80 select-none">
                   {mode === "reset" ? "New Password" : "Password"}
                 </label>
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-3 text-slate-100 outline-none transition-all placeholder:text-slate-600 focus:border-indigo-500/50 focus:bg-black/60 focus:ring-2 focus:ring-indigo-500/20 text-sm"
-                />
+                <div className="relative group">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-500 group-focus-within:text-indigo-400 transition-colors">
+                    <Lock className="h-4 w-4" />
+                  </span>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full rounded-2xl border border-white/5 bg-slate-900/40 pl-11 pr-11 py-3 text-slate-100 outline-none transition-all placeholder:text-slate-600 focus:border-indigo-500/50 focus:bg-slate-950/60 focus:ring-4 focus:ring-indigo-500/10 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-500 hover:text-slate-300 transition-colors cursor-pointer"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
             )}
 
             {/* Confirm Password (register and reset modes only) */}
             {(mode === "register" || mode === "reset") && (
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 select-none">
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400/80 select-none">
                   Confirm Password
                 </label>
-                <input
-                  type="password"
-                  required
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-3 text-slate-100 outline-none transition-all placeholder:text-slate-600 focus:border-indigo-500/50 focus:bg-black/60 focus:ring-2 focus:ring-indigo-500/20 text-sm"
-                />
+                <div className="relative group">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-500 group-focus-within:text-indigo-400 transition-colors">
+                    <Lock className="h-4 w-4" />
+                  </span>
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full rounded-2xl border border-white/5 bg-slate-900/40 pl-11 pr-11 py-3 text-slate-100 outline-none transition-all placeholder:text-slate-600 focus:border-indigo-500/50 focus:bg-slate-950/60 focus:ring-4 focus:ring-indigo-500/10 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-500 hover:text-slate-300 transition-colors cursor-pointer"
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -177,23 +216,26 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
                     setSuccessMsg("");
                     setMode("forgot");
                   }}
-                  className="text-indigo-400 hover:text-indigo-300 font-semibold cursor-pointer"
+                  className="text-indigo-400 hover:text-indigo-300 font-semibold cursor-pointer transition-colors"
                 >
                   Forgot Password?
                 </button>
               </div>
             )}
 
-            {/* Alert boxes */}
+            {/* Error Message banner */}
             {error && (
-              <div className="rounded-xl bg-rose-500/10 py-3 px-4 text-xs font-semibold text-rose-400 border border-rose-500/20">
-                {typeof error === "object" ? JSON.stringify(error) : String(error)}
+              <div className="rounded-2xl bg-rose-500/5 py-3 px-4 text-xs font-medium text-rose-400 border border-rose-500/15 flex items-start gap-2.5 animate-slide-up">
+                <AlertCircle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
+                <span className="leading-relaxed">{typeof error === "object" ? JSON.stringify(error) : String(error)}</span>
               </div>
             )}
 
+            {/* Success Message banner */}
             {successMsg && (
-              <div className="rounded-xl bg-emerald-500/10 py-3 px-4 text-xs font-semibold text-emerald-400 border border-emerald-500/20 leading-relaxed">
-                {typeof successMsg === "object" ? JSON.stringify(successMsg) : String(successMsg)}
+              <div className="rounded-2xl bg-emerald-500/5 py-3 px-4 text-xs font-medium text-emerald-400 border border-emerald-500/15 flex items-start gap-2.5 animate-slide-up">
+                <CheckCircle className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                <span className="leading-relaxed">{typeof successMsg === "object" ? JSON.stringify(successMsg) : String(successMsg)}</span>
               </div>
             )}
 
@@ -201,7 +243,7 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
             <button
               type="submit"
               disabled={loading}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 py-3.5 font-bold text-white shadow-lg shadow-indigo-500/15 transition-all hover:from-indigo-500 hover:to-violet-500 focus:outline-none disabled:opacity-50 active:scale-95 cursor-pointer text-sm"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 py-3.5 font-bold text-white shadow-xl shadow-indigo-500/15 transition-all duration-300 hover:brightness-110 active:scale-[0.98] disabled:opacity-50 cursor-pointer text-sm"
             >
               {loading ? (
                 <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -220,10 +262,10 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
 
             {/* Account toggle link (hidden in reset mode) */}
             {mode !== "reset" && (
-              <div className="pt-2 text-center text-xs text-slate-500">
+              <div className="pt-3 text-center text-xs text-slate-500/90 border-t border-white/5 mt-4">
                 {mode === "login" && (
                   <span>
-                    Don't have an account?{" "}
+                    New to VerboCat?{" "}
                     <button
                       type="button"
                       onClick={() => {
@@ -231,7 +273,7 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
                         setSuccessMsg("");
                         setMode("register");
                       }}
-                      className="text-indigo-400 hover:text-indigo-300 font-bold cursor-pointer"
+                      className="text-indigo-400 hover:text-indigo-300 font-bold cursor-pointer transition-colors pl-0.5"
                     >
                       Register here
                     </button>
@@ -248,7 +290,7 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
                         setSuccessMsg("");
                         setMode("login");
                       }}
-                      className="text-indigo-400 hover:text-indigo-300 font-bold cursor-pointer"
+                      className="text-indigo-400 hover:text-indigo-300 font-bold cursor-pointer transition-colors pl-0.5"
                     >
                       Sign In
                     </button>
@@ -263,8 +305,9 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
                       setSuccessMsg("");
                       setMode("login");
                     }}
-                    className="text-indigo-400 hover:text-indigo-300 font-bold cursor-pointer"
+                    className="inline-flex items-center gap-1.5 text-indigo-400 hover:text-indigo-300 font-bold cursor-pointer transition-colors"
                   >
+                    <ArrowLeft className="h-3.5 w-3.5" />
                     Back to Login
                   </button>
                 )}
