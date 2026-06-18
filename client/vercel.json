@@ -1,6 +1,8 @@
 {
   "cleanUrls": true,
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/api/(.*)", "destination": "https://verbocat-myhh.onrender.com/api/$1" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
+

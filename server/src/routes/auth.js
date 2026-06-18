@@ -179,7 +179,7 @@ authRouter.get("/me", checkAuth, async (request, response) => {
       status: profile.status
     });
   } catch (error) {
-    console.error("Get Session Profile Error:", error);cd .
+    console.error("Get Session Profile Error:", error);
 
     response.status(500).json({ error: "Could not fetch user session profile" });
   }

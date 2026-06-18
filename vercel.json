@@ -11,17 +11,17 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "http://localhost:5000/api/$1"
+      "dest": "https://verbocat-myhh.onrender.com/api/$1"
     },
     {
-      "src": "/(.*)",
-      "dest": "client/$1",
-      "continue": true
+      "src": "/assets/(.*)",
+      "dest": "/assets/$1"
     },
     {
-      "source": "/(.*)",
-      "destination": "client/index.html"
+      "src": "/((?!api/).*)",
+      "dest": "/index.html"
     }
   ]
 }
+
 
