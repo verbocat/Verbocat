@@ -114,7 +114,18 @@ authRouter.post("/forgot-password", async (request, response) => {
       return response.status(400).json({ error: "Email address is required" });
     }
 
-    const redirectTo = `${request.headers.origin}/reset-password`;
+    let redirectTo = `${request.headers.origin}/reset-password`;
+    const referer = request.headers.referer;
+    if (referer) {
+      try {
+        const refererUrl = new URL(referer);
+        if (refererUrl.pathname.startsWith("/client")) {
+          redirectTo = `${refererUrl.origin}/client/reset-password`;
+        }
+      } catch (e) {
+        // Ignore parsing errors
+      }
+    }
 
     // Supabase reset password email delivery
     const { error } = await supabase.auth.resetPasswordForEmail(email, {

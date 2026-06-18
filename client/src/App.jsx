@@ -81,7 +81,13 @@ export default function App() {
       window.location.hash = "";
     }
     
-    if (path === "/reset-password" || path === "/reset_password") {
+    const cleanPath = path.replace(/\/$/, "");
+    if (
+      cleanPath === "/reset-password" ||
+      cleanPath === "/reset_password" ||
+      cleanPath === "/client/reset-password" ||
+      cleanPath === "/client/reset_password"
+    ) {
       setResetMode(true);
     }
   }, []);
