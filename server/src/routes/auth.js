@@ -23,7 +23,10 @@ authRouter.post("/register", async (request, response) => {
     });
 
     if (error) {
-      return response.status(400).json({ error: error.message });
+      console.error("Supabase Signup Error Details:", error);
+      return response.status(400).json({ 
+        error: error.message || "Email confirmation mail could not be sent. Please check SMTP settings." 
+      });
     }
 
     response.json({
@@ -31,7 +34,7 @@ authRouter.post("/register", async (request, response) => {
       user: data.user
     });
   } catch (error) {
-    console.error("Register Router Error:", error);
+    console.error("Register Router Exception:", error);
     response.status(500).json({ error: "Registration failed on server" });
   }
 });
