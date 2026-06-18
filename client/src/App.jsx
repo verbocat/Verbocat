@@ -81,7 +81,7 @@ export default function App() {
       window.location.hash = "";
     }
     
-    if (path === "/reset-password") {
+    if (path === "/reset-password" || path === "/reset_password") {
       setResetMode(true);
     }
   }, []);

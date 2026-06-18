@@ -18,10 +18,11 @@
       "dest": "/assets/$1"
     },
     {
-      "src": "/((?!api/).*)",
+      "src": "/(.*)",
       "dest": "/index.html"
     }
   ]
 }
+
 
 
