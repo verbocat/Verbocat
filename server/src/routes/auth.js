@@ -114,13 +114,16 @@ authRouter.post("/forgot-password", async (request, response) => {
       return response.status(400).json({ error: "Email address is required" });
     }
 
-    let redirectTo = `${request.headers.origin}/reset-password`;
+    let redirectTo = request.headers.origin || "http://localhost:5173";
+    if (!redirectTo.endsWith("/")) {
+      redirectTo += "/";
+    }
     const referer = request.headers.referer;
     if (referer) {
       try {
         const refererUrl = new URL(referer);
         if (refererUrl.pathname.startsWith("/client")) {
-          redirectTo = `${refererUrl.origin}/client/reset-password`;
+          redirectTo = `${refererUrl.origin}/client/`;
         }
       } catch (e) {
         // Ignore parsing errors
