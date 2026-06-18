@@ -11,8 +11,6 @@ import {
   Upload, 
   Download, 
   Trash2, 
-  Copy,
-  ChevronRight,
   RefreshCw
 } from "lucide-react";
 
@@ -61,7 +59,7 @@ export const WorkspaceToolbar = ({
   fileExtension
 }) => {
   return (
-    <section className="space-y-4 select-none">
+    <section className="space-y-5 select-none">
       
       {/* ========================================================
           1. STATS DASHBOARD HEADER ROW
@@ -70,7 +68,7 @@ export const WorkspaceToolbar = ({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           
           {/* Active File Details Card */}
-          <div className="bg-[#0b0c11]/50 border border-white/5 rounded-2xl p-4 flex items-center gap-3.5 shadow-lg">
+          <div className="bg-[#0b0c11]/40 border border-white/5 rounded-2xl p-4 flex items-center gap-3.5 shadow-lg">
             <div className="h-10 w-10 rounded-xl bg-violet-600/10 border border-violet-500/20 flex items-center justify-center text-violet-400 shrink-0">
               <FileText className="h-5 w-5" />
             </div>
@@ -87,7 +85,7 @@ export const WorkspaceToolbar = ({
           </div>
 
           {/* Stats Card 1: Total Words */}
-          <div className="bg-[#0b0c11]/50 border border-white/5 rounded-2xl p-4 flex items-center gap-3.5 shadow-lg">
+          <div className="bg-[#0b0c11]/40 border border-white/5 rounded-2xl p-4 flex items-center gap-3.5 shadow-lg">
             <div className="h-10 w-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
             </div>
@@ -100,7 +98,7 @@ export const WorkspaceToolbar = ({
           </div>
 
           {/* Stats Card 2: Unique Words */}
-          <div className="bg-[#0b0c11]/50 border border-white/5 rounded-2xl p-4 flex items-center gap-3.5 shadow-lg">
+          <div className="bg-[#0b0c11]/40 border border-white/5 rounded-2xl p-4 flex items-center gap-3.5 shadow-lg">
             <div className="h-10 w-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9.09 9 1.24 5.12c.07.29.35.48.64.48h2.06c.29 0 .57-.19.64-.48L14.91 9"/></svg>
             </div>
@@ -113,7 +111,7 @@ export const WorkspaceToolbar = ({
           </div>
 
           {/* Stats Card 3: Duplicate Words */}
-          <div className="bg-[#0b0c11]/50 border border-white/5 rounded-2xl p-4 flex items-center gap-3.5 shadow-lg">
+          <div className="bg-[#0b0c11]/40 border border-white/5 rounded-2xl p-4 flex items-center gap-3.5 shadow-lg">
             <div className="h-10 w-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
             </div>
@@ -129,104 +127,106 @@ export const WorkspaceToolbar = ({
       )}
 
       {/* ========================================================
-          2. TOOLBAR MIDDLE ROW (Selectors, Modes & Actions)
+          2. TOOLBAR MIDDLE ROW (Grouped with Dividers)
           ======================================================== */}
-      <div className="bg-[#0b0c11]/30 border border-white/5 rounded-2xl p-4 flex flex-col xl:flex-row items-center justify-between gap-4 shadow-md">
-        
-        {/* Source & Target Language Selectors */}
-        <div className="flex items-center gap-3 w-full xl:w-auto">
-          <div className="relative flex items-center">
-            <select
-              value={sourceLanguage}
-              onChange={(e) => onSourceLanguageChange(e.target.value)}
-              className="bg-neutral-950/40 border border-white/5 rounded-xl pl-3 pr-8 py-2 text-xs font-bold text-neutral-200 outline-none focus:ring-1 focus:ring-violet-500/30 appearance-none cursor-pointer min-w-[130px]"
-            >
-              {LANGUAGES.map((lang) => (
-                <option key={`src-${lang.code}`} value={lang.code}>
-                  {lang.name.substring(0, 10)} ({lang.code})
-                </option>
-              ))}
-            </select>
-            <span className="absolute right-3 text-neutral-500 pointer-events-none text-[8px] font-bold">▼</span>
-          </div>
-
-          <div className="h-8 w-8 rounded-full border border-white/5 bg-neutral-950/20 flex items-center justify-center text-neutral-500 shrink-0">
-            <ArrowRight className="h-4.5 w-4.5" />
-          </div>
-
-          <div className="relative flex items-center">
-            <select
-              value={targetLanguage}
-              onChange={(e) => onTargetLanguageChange(e.target.value)}
-              className="bg-neutral-950/40 border border-white/5 rounded-xl pl-3 pr-8 py-2 text-xs font-bold text-neutral-200 outline-none focus:ring-1 focus:ring-violet-500/30 appearance-none cursor-pointer min-w-[130px]"
-            >
-              {LANGUAGES.map((lang) => (
-                <option key={`tgt-${lang.code}`} value={lang.code}>
-                  {lang.name.substring(0, 10)} ({lang.code})
-                </option>
-              ))}
-            </select>
-            <span className="absolute right-3 text-neutral-500 pointer-events-none text-[8px] font-bold">▼</span>
-          </div>
-        </div>
-
-        {/* Mode Buttons Row */}
-        <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+      <div className="bg-[#0b0c11]/25 border border-white/5 rounded-2xl p-4 flex flex-col lg:flex-row items-center justify-between gap-4 shadow-md">
+        <div className="flex flex-wrap lg:flex-nowrap items-center justify-between gap-4 w-full">
           
-          <button
-            onClick={onOpenContext}
-            className="bg-violet-950/40 border border-violet-500/35 text-violet-300 rounded-xl px-4 py-2.5 text-xs font-bold flex items-center gap-2 hover:bg-violet-900/30 transition-all cursor-pointer"
-          >
-            <SettingsIcon className="w-3.5 h-3.5 text-violet-400" />
-            <span>Context</span>
-          </button>
+          {/* GROUP 1: Language Pair Selectors */}
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="relative flex items-center">
+              <select
+                value={sourceLanguage}
+                onChange={(e) => onSourceLanguageChange(e.target.value)}
+                className="bg-neutral-950/40 border border-white/5 rounded-xl pl-3 pr-8 py-2.5 text-xs font-bold text-neutral-200 outline-none focus:ring-1 focus:ring-violet-500/30 appearance-none cursor-pointer min-w-[130px]"
+              >
+                {LANGUAGES.map((lang) => (
+                  <option key={`src-${lang.code}`} value={lang.code}>
+                    {lang.name.substring(0, 10)} ({lang.code})
+                  </option>
+                ))}
+              </select>
+              <span className="absolute right-3 text-neutral-500 pointer-events-none text-[8px] font-bold">▼</span>
+            </div>
 
-          <button
-            onClick={onOpenGlossary}
-            className="bg-neutral-950/25 border border-white/8 text-neutral-300 rounded-xl px-4 py-2.5 text-xs font-bold flex items-center gap-2 hover:bg-white/5 transition-all cursor-pointer"
-          >
-            <BookOpen className="w-3.5 h-3.5 text-neutral-500" />
-            <span>Glossary</span>
-          </button>
+            <div className="h-8 w-8 rounded-full border border-white/5 bg-neutral-950/20 flex items-center justify-center text-neutral-500 shrink-0">
+              <ArrowRight className="h-4 w-4" />
+            </div>
 
-          <button
-            onClick={onTranslate}
-            disabled={segmentsCount === 0 || isTranslating || !canTranslate}
-            className={`border rounded-xl px-4 py-2.5 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
-              segmentsCount === 0 || isTranslating || !canTranslate
-                ? "border-white/5 bg-slate-400/5 text-slate-500 cursor-not-allowed opacity-50"
-                : "border-white/8 bg-neutral-950/25 text-neutral-300 hover:bg-white/5"
-            }`}
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isTranslating ? 'animate-spin' : ''}`} />
-            <span>{isTranslating ? "Translating" : "Translate"}</span>
-          </button>
+            <div className="relative flex items-center">
+              <select
+                value={targetLanguage}
+                onChange={(e) => onTargetLanguageChange(e.target.value)}
+                className="bg-neutral-950/40 border border-white/5 rounded-xl pl-3 pr-8 py-2.5 text-xs font-bold text-neutral-200 outline-none focus:ring-1 focus:ring-violet-500/30 appearance-none cursor-pointer min-w-[130px]"
+              >
+                {LANGUAGES.map((lang) => (
+                  <option key={`tgt-${lang.code}`} value={lang.code}>
+                    {lang.name.substring(0, 10)} ({lang.code})
+                  </option>
+                ))}
+              </select>
+              <span className="absolute right-3 text-neutral-500 pointer-events-none text-[8px] font-bold">▼</span>
+            </div>
+          </div>
 
-          <button
-            onClick={onToggleQa}
-            disabled={segmentsCount === 0}
-            className={`border rounded-xl px-4 py-2.5 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
-              segmentsCount === 0
-                ? "border-white/5 bg-slate-400/5 text-slate-500 cursor-not-allowed opacity-50"
-                : "border-white/8 bg-neutral-950/25 text-neutral-300 hover:bg-white/5"
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>QA</span>
-            {qaIssuesCount > 0 && (
-              <span className="ml-1 rounded-full bg-rose-500/20 px-2 py-0.5 text-[10px] text-rose-300 font-bold">
-                {qaIssuesCount}
-              </span>
-            )}
-          </button>
+          {/* Divider 1 */}
+          <div className="hidden lg:block h-6 w-px bg-white/10 mx-1 shrink-0" />
 
-        </div>
+          {/* GROUP 2: Mode Switches (Context, Glossary, Translate, QA) */}
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              onClick={onOpenContext}
+              className="bg-violet-950/40 border border-violet-500/35 text-violet-300 rounded-xl px-4 py-2.5 text-xs font-bold flex items-center gap-2 hover:bg-violet-900/30 transition-all cursor-pointer"
+            >
+              <SettingsIcon className="w-3.5 h-3.5 text-violet-400" />
+              <span>Context</span>
+            </button>
 
-        {/* Action Icon Controls & Main Buttons */}
-        <div className="flex flex-wrap items-center gap-2 xl:justify-end w-full xl:w-auto">
-          
-          <div className="flex items-center gap-2">
-            
+            <button
+              onClick={onOpenGlossary}
+              className="bg-neutral-950/25 border border-white/8 text-neutral-300 rounded-xl px-4 py-2.5 text-xs font-bold flex items-center gap-2 hover:bg-white/5 transition-all cursor-pointer"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-neutral-500" />
+              <span>Glossary</span>
+            </button>
+
+            <button
+              onClick={onTranslate}
+              disabled={segmentsCount === 0 || isTranslating || !canTranslate}
+              className={`border rounded-xl px-4 py-2.5 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                segmentsCount === 0 || isTranslating || !canTranslate
+                  ? "border-white/5 bg-slate-400/5 text-slate-500 cursor-not-allowed opacity-50"
+                  : "border-white/8 bg-neutral-950/25 text-neutral-300 hover:bg-white/5"
+              }`}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isTranslating ? 'animate-spin' : ''}`} />
+              <span>{isTranslating ? "Translating" : "Translate"}</span>
+            </button>
+
+            <button
+              onClick={onToggleQa}
+              disabled={segmentsCount === 0}
+              className={`border rounded-xl px-4 py-2.5 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                segmentsCount === 0
+                  ? "border-white/5 bg-slate-400/5 text-slate-500 cursor-not-allowed opacity-50"
+                  : "border-white/8 bg-neutral-950/25 text-neutral-300 hover:bg-white/5"
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>QA</span>
+              {qaIssuesCount > 0 && (
+                <span className="ml-1 rounded-full bg-rose-500/20 px-2 py-0.5 text-[10px] text-rose-300 font-bold">
+                  {qaIssuesCount}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Divider 2 */}
+          <div className="hidden lg:block h-6 w-px bg-white/10 mx-1 shrink-0" />
+
+          {/* GROUP 3: Project Actions (Save, Import, Relink) */}
+          <div className="flex items-center gap-2 shrink-0">
             {/* Save icon button */}
             <UtilityIconButton onClick={onSaveProject} disabled={segmentsCount === 0} title="Save project session">
               <Save className="h-4 w-4" />
@@ -257,7 +257,11 @@ export const WorkspaceToolbar = ({
             </label>
           </div>
 
-          <div className="flex items-center gap-2 ml-auto xl:ml-0">
+          {/* Divider 3 */}
+          <div className="hidden lg:block h-6 w-px bg-white/10 mx-1 shrink-0" />
+
+          {/* GROUP 4: Outputs (Export & Session Closing) */}
+          <div className="flex items-center gap-2 shrink-0 ml-auto lg:ml-0">
             {/* Export File (Green Gradient Button) */}
             <ActionButton
               onClick={onExport}
@@ -286,7 +290,6 @@ export const WorkspaceToolbar = ({
           </div>
 
         </div>
-
       </div>
 
       {/* ========================================================

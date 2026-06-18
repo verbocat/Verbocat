@@ -50,6 +50,7 @@ export const Header = ({
   onRelinkHtml,
   onImportXliff,
   onOpenContext,
+  onOpenSettings, // New Settings trigger callback
   userRole,
   onOpenAdmin,
   creditsAllowed,
@@ -80,7 +81,7 @@ export const Header = ({
                 <ellipse cx="38" cy="48" rx="4.5" ry="5.5" fill="currentColor" />
                 <ellipse cx="62" cy="48" rx="4.5" ry="5.5" fill="currentColor" />
                 <polygon points="46,58 54,58 50,62" fill="currentColor" />
-                <path d="M 44,68 C 47,72 50,72 50,68 C 50,72 53,72 56,68" strokeWidth="4" />
+                <path d="M 44,68 C 47,72 50,72 50,68 Q 50,72 56,68" strokeWidth="4" />
               </svg>
             </div>
             <span className="text-lg font-black tracking-tight text-white font-sans">
@@ -102,11 +103,6 @@ export const Header = ({
             <span className="text-[9px] font-extrabold uppercase tracking-[0.22em] text-neutral-500 block mb-3 px-3">
               WORKSPACE
             </span>
-            
-            <SidebarButton isActive={false}>
-              <LayoutDashboard className="w-4 h-4 text-neutral-500" />
-              <span>Dashboard</span>
-            </SidebarButton>
 
             <SidebarButton isActive={true}>
               <Folder className="w-4 h-4 text-violet-400" />
@@ -127,7 +123,7 @@ export const Header = ({
               <span>Team</span>
             </SidebarButton>
 
-            <SidebarButton isActive={false} onClick={onOpenContext}>
+            <SidebarButton isActive={false} onClick={onOpenSettings}>
               <SettingsIcon className="w-4 h-4 text-neutral-500" />
               <span>Settings</span>
             </SidebarButton>

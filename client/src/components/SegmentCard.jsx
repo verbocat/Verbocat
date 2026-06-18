@@ -285,18 +285,18 @@ export const SegmentCard = ({
             : 'border-l-2 border-l-neutral-700/60'
       }`}
     >
-      <div className="flex flex-col md:grid md:grid-cols-[64px_minmax(0,1fr)_auto_minmax(0,1fr)_auto] md:items-center gap-4">
+      <div className="flex flex-col md:grid md:grid-cols-[48px_minmax(0,1fr)_auto_minmax(0,1fr)_auto] md:items-center gap-4">
         
         {/* ========================================================
-            COLUMN 1: Segment Number Card
+            COLUMN 1: Segment Number Badge (Minimalist)
             ======================================================== */}
-        <div className="flex md:flex-col items-center justify-between md:justify-center gap-2 shrink-0 select-none">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-600/10 border border-violet-500/20 text-lg font-black text-violet-400">
-            {index + 1}
+        <div className="flex md:flex-col items-center justify-between md:justify-center gap-1.5 shrink-0 select-none">
+          <div className="text-[10px] font-mono font-bold text-neutral-400 bg-neutral-950/40 border border-white/5 px-2.5 py-1 rounded-md min-w-[32px] text-center shadow-inner">
+            {String(index + 1).padStart(2, "0")}
           </div>
           
           {/* Fuzzy matching & QA issue badges */}
-          <div className="flex items-center md:flex-col gap-1.5">
+          <div className="flex items-center md:flex-col gap-1">
             {segment.fuzzyScore && (
               <span className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold text-amber-200" title={`Fuzzy match score: ${segment.fuzzyScore}%`}>
                 {segment.fuzzyScore}%

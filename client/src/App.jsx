@@ -14,6 +14,7 @@ import { SegmentBoard } from "./components/SegmentBoard.jsx";
 import { LoadingOverlay } from "./components/LoadingOverlay.jsx";
 import { ContextSettingsModal } from "./components/ContextSettingsModal.jsx";
 import { SearchReplaceModal } from "./components/SearchReplaceModal.jsx";
+import { SettingsModal } from "./components/SettingsModal.jsx";
 import { LANGUAGES } from "./constants/languages.js";
 import { useGlossaryManager } from "./hooks/useGlossaryManager.js";
 import { useUserStore } from "./services/userStore.js";
@@ -95,6 +96,7 @@ export default function App() {
   const [showSearchReplace, setShowSearchReplace] = useState(false);
   const [showContextPanel, setShowContextPanel] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [contextSettings, setContextSettings] = useState({
     domain: "General",
     contentType: "General",
@@ -1381,6 +1383,7 @@ export default function App() {
         onLogout={logout}
         onOpenAdmin={() => setShowAdminDashboard(true)}
         onUpload={handleUpload}
+        onOpenSettings={() => setShowSettingsModal(true)}
       />
 
       {/* Main app panel wrapper */}
@@ -1449,6 +1452,17 @@ export default function App() {
           show={showSearchReplace}
           onClose={() => setShowSearchReplace(false)}
           onReplaceAll={handleReplaceAll}
+          theme={theme}
+        />
+
+        <SettingsModal
+          show={showSettingsModal}
+          onClose={() => setShowSettingsModal(false)}
+          darkMode={darkMode}
+          onToggleDarkMode={() => setDarkMode((value) => !value)}
+          onLogout={logout}
+          userRole={user ? user.role : ""}
+          userEmail={user ? user.email : ""}
           theme={theme}
         />
 
