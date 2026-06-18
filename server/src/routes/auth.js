@@ -222,10 +222,27 @@ authRouter.post("/reset-password", async (request, response) => {
       return response.status(401).json({ error: "Invalid or expired session/recovery token" });
     }
 
-    const userId = user.id;
+    // Create a temporary client authenticated as the user using their token
+    const { createClient } = require("@supabase/supabase-js");
+    const userSupabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false
+      }
+    });
 
-    // Update the password in Supabase Auth using admin privileges
-    const { error } = await supabase.auth.admin.updateUserById(userId, {
+    // Set the session using the recovery token
+    const { error: sessionError } = await userSupabase.auth.setSession({
+      access_token: token,
+      refresh_token: token
+    });
+
+    if (sessionError) {
+      return response.status(401).json({ error: "Failed to establish user auth session" });
+    }
+
+    // Update the password using the user-level client
+    const { error } = await userSupabase.auth.updateUser({
       password
     });
 
