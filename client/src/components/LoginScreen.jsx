@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
 import { useUserStore } from "../services/userStore";
 
@@ -10,6 +10,10 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
   const loginAction = useUserStore((state) => state.login);
   
   const [mode, setMode] = useState(initialMode); // 'login', 'register', 'forgot', 'reset'
+  
+  useEffect(() => {
+    setMode(initialMode);
+  }, [initialMode]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");

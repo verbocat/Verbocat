@@ -1323,7 +1323,7 @@ export default function App() {
     return (
       <div className={`h-screen w-screen flex items-center justify-center ${theme.bg} overflow-hidden`}>
         <Toast toast={toast} />
-        <LoginScreen mode="reset" onResetSuccess={() => setResetMode(false)} />
+        <LoginScreen key="reset" mode="reset" onResetSuccess={() => setResetMode(false)} />
       </div>
     );
   }
@@ -1332,7 +1332,7 @@ export default function App() {
     return (
       <div className={`h-screen w-screen flex items-center justify-center ${theme.bg} overflow-hidden`}>
         <Toast toast={toast} />
-        <LoginScreen mode="login" />
+        <LoginScreen key="login" mode="login" />
       </div>
     );
   }
