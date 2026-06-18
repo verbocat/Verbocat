@@ -23,9 +23,12 @@ authRouter.post("/register", async (request, response) => {
     });
 
     if (error) {
-      console.error("Supabase Signup Error Details:", error);
-      return response.status(400).json({ 
-        error: error.message || "Email confirmation mail could not be sent. Please check SMTP settings." 
+      console.error("Supabase Signup Error:");
+      console.error(JSON.stringify(error, null, 2));
+      return response.status(400).json({
+        error: error.message,
+        code: error.code,
+        details: error
       });
     }
 
