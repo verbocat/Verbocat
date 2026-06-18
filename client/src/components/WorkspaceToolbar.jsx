@@ -1,10 +1,34 @@
 import { LANGUAGES } from "../constants/languages.js";
-import { Icons } from "./Icons.jsx";
+import { 
+  FileText, 
+  ArrowRight, 
+  Search, 
+  Filter, 
+  Settings as SettingsIcon, 
+  BookOpen, 
+  Sparkles, 
+  Save, 
+  Upload, 
+  Download, 
+  Trash2, 
+  Copy,
+  ChevronRight,
+  RefreshCw
+} from "lucide-react";
 
 const ActionButton = ({ children, className = "", ...props }) => (
   <button
     {...props}
-    className={`inline-flex items-center justify-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition ${className}`}
+    className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all duration-200 cursor-pointer ${className}`}
+  >
+    {children}
+  </button>
+);
+
+const UtilityIconButton = ({ children, className = "", ...props }) => (
+  <button
+    {...props}
+    className={`inline-flex items-center justify-center rounded-xl p-2.5 border border-white/5 bg-neutral-900/40 text-neutral-400 hover:text-white hover:bg-white/5 transition-all duration-200 cursor-pointer active:scale-95 ${className}`}
   >
     {children}
   </button>
@@ -35,150 +59,182 @@ export const WorkspaceToolbar = ({
   theme,
   canTranslate = true,
   fileExtension
-}) => (
-  <section className={`rounded-2xl border p-4 ${theme.cardStrong}`}>
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-white/5">
-        <h2 className="text-sm font-semibold tracking-wide text-sky-200 uppercase truncate">
-          File: {fileName}
-        </h2>
-        {segmentsCount > 0 && stats && (
-          <div className="flex items-center gap-3 text-xs flex-wrap">
-            <span className="rounded-lg bg-white/5 px-2.5 py-1 text-slate-300 border border-white/10">
-              Total Words: <strong className="text-white">{stats.words}</strong>
-            </span>
-            <span className="rounded-lg bg-teal-500/10 px-2.5 py-1 text-teal-400 border border-teal-500/20">
-              Unique Words: <strong className="text-teal-300">{stats.uniqueWords}</strong>
-            </span>
-            <span className="rounded-lg bg-rose-500/10 px-2.5 py-1 text-rose-400 border border-rose-500/20">
-              Duplicate Words: <strong className="text-rose-300">{stats.duplicateWords}</strong>
-            </span>
+}) => {
+  return (
+    <section className="space-y-4 select-none">
+      
+      {/* ========================================================
+          1. STATS DASHBOARD HEADER ROW
+          ======================================================== */}
+      {segmentsCount > 0 && stats && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          
+          {/* Active File Details Card */}
+          <div className="bg-[#0b0c11]/50 border border-white/5 rounded-2xl p-4 flex items-center gap-3.5 shadow-lg">
+            <div className="h-10 w-10 rounded-xl bg-violet-600/10 border border-violet-500/20 flex items-center justify-center text-violet-400 shrink-0">
+              <FileText className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-[10px] font-mono text-neutral-500 uppercase tracking-wider block select-none">Active File</span>
+              <h4 className="text-xs font-extrabold text-white truncate mt-0.5" title={fileName}>
+                {fileName.toUpperCase()}
+              </h4>
+              <div className="flex items-center gap-1.5 text-[9px] text-neutral-400 font-mono mt-0.5">
+                <span>Auto-saved</span>
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              </div>
+            </div>
           </div>
-        )}
-      </div>
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span className={`text-xs font-semibold ${theme.muted}`}>
-              Source
-            </span>
+
+          {/* Stats Card 1: Total Words */}
+          <div className="bg-[#0b0c11]/50 border border-white/5 rounded-2xl p-4 flex items-center gap-3.5 shadow-lg">
+            <div className="h-10 w-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            </div>
+            <div>
+              <span className="text-[10px] font-mono text-neutral-500 uppercase tracking-wider block select-none">Total Words</span>
+              <span className="text-xl font-black text-white mt-0.5 block leading-none">
+                {stats.words}
+              </span>
+            </div>
+          </div>
+
+          {/* Stats Card 2: Unique Words */}
+          <div className="bg-[#0b0c11]/50 border border-white/5 rounded-2xl p-4 flex items-center gap-3.5 shadow-lg">
+            <div className="h-10 w-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9.09 9 1.24 5.12c.07.29.35.48.64.48h2.06c.29 0 .57-.19.64-.48L14.91 9"/></svg>
+            </div>
+            <div>
+              <span className="text-[10px] font-mono text-neutral-500 uppercase tracking-wider block select-none">Unique Words</span>
+              <span className="text-xl font-black text-white mt-0.5 block leading-none">
+                {stats.uniqueWords}
+              </span>
+            </div>
+          </div>
+
+          {/* Stats Card 3: Duplicate Words */}
+          <div className="bg-[#0b0c11]/50 border border-white/5 rounded-2xl p-4 flex items-center gap-3.5 shadow-lg">
+            <div className="h-10 w-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            </div>
+            <div>
+              <span className="text-[10px] font-mono text-neutral-500 uppercase tracking-wider block select-none">Duplicate Words</span>
+              <span className="text-xl font-black text-white mt-0.5 block leading-none">
+                {stats.duplicateWords}
+              </span>
+            </div>
+          </div>
+
+        </div>
+      )}
+
+      {/* ========================================================
+          2. TOOLBAR MIDDLE ROW (Selectors, Modes & Actions)
+          ======================================================== */}
+      <div className="bg-[#0b0c11]/30 border border-white/5 rounded-2xl p-4 flex flex-col xl:flex-row items-center justify-between gap-4 shadow-md">
+        
+        {/* Source & Target Language Selectors */}
+        <div className="flex items-center gap-3 w-full xl:w-auto">
+          <div className="relative flex items-center">
             <select
               value={sourceLanguage}
               onChange={(e) => onSourceLanguageChange(e.target.value)}
-              className={`rounded-lg border px-3 py-1.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-sky-500/50 ${theme.inputSoft}`}
+              className="bg-neutral-950/40 border border-white/5 rounded-xl pl-3 pr-8 py-2 text-xs font-bold text-neutral-200 outline-none focus:ring-1 focus:ring-violet-500/30 appearance-none cursor-pointer min-w-[130px]"
             >
               {LANGUAGES.map((lang) => (
                 <option key={`src-${lang.code}`} value={lang.code}>
-                  {lang.name} ({lang.code})
+                  {lang.name.substring(0, 10)} ({lang.code})
                 </option>
               ))}
             </select>
-            <Icons.ArrowRight />
-            <span className={`text-xs font-semibold ${theme.muted}`}>
-              Target
-            </span>
+            <span className="absolute right-3 text-neutral-500 pointer-events-none text-[8px] font-bold">▼</span>
+          </div>
+
+          <div className="h-8 w-8 rounded-full border border-white/5 bg-neutral-950/20 flex items-center justify-center text-neutral-500 shrink-0">
+            <ArrowRight className="h-4.5 w-4.5" />
+          </div>
+
+          <div className="relative flex items-center">
             <select
               value={targetLanguage}
               onChange={(e) => onTargetLanguageChange(e.target.value)}
-              className={`rounded-lg border px-3 py-1.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-sky-500/50 ${theme.inputSoft}`}
+              className="bg-neutral-950/40 border border-white/5 rounded-xl pl-3 pr-8 py-2 text-xs font-bold text-neutral-200 outline-none focus:ring-1 focus:ring-violet-500/30 appearance-none cursor-pointer min-w-[130px]"
             >
               {LANGUAGES.map((lang) => (
                 <option key={`tgt-${lang.code}`} value={lang.code}>
-                  {lang.name} ({lang.code})
+                  {lang.name.substring(0, 10)} ({lang.code})
                 </option>
               ))}
             </select>
+            <span className="absolute right-3 text-neutral-500 pointer-events-none text-[8px] font-bold">▼</span>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-          <div className="flex items-center gap-2 border-r border-white/10 pr-3">
-            <ActionButton onClick={onOpenContext} className={theme.accentSolid}>
-              <Icons.Settings /> Context
-            </ActionButton>
-            <ActionButton onClick={onOpenGlossary} className={theme.accentSolid}>
-              Glossary
-            </ActionButton>
-            
-            {(fileExtension === ".xlf" || fileExtension === ".xliff" || fileExtension === ".sdlxliff") && (
-              <label
-                title="To Export as HTML, upload the source HTML file to relink it."
-                className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition bg-green-700 text-white hover:bg-green-600`}
-              >
-                <Icons.Upload /> Relink HTML
-                <input
-                  type="file"
-                  accept=".html,.htm"
-                  onChange={onRelinkHtml}
-                  className="hidden"
-                />
-              </label>
+        {/* Mode Buttons Row */}
+        <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+          
+          <button
+            onClick={onOpenContext}
+            className="bg-violet-950/40 border border-violet-500/35 text-violet-300 rounded-xl px-4 py-2.5 text-xs font-bold flex items-center gap-2 hover:bg-violet-900/30 transition-all cursor-pointer"
+          >
+            <SettingsIcon className="w-3.5 h-3.5 text-violet-400" />
+            <span>Context</span>
+          </button>
+
+          <button
+            onClick={onOpenGlossary}
+            className="bg-neutral-950/25 border border-white/8 text-neutral-300 rounded-xl px-4 py-2.5 text-xs font-bold flex items-center gap-2 hover:bg-white/5 transition-all cursor-pointer"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-neutral-500" />
+            <span>Glossary</span>
+          </button>
+
+          <button
+            onClick={onTranslate}
+            disabled={segmentsCount === 0 || isTranslating || !canTranslate}
+            className={`border rounded-xl px-4 py-2.5 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              segmentsCount === 0 || isTranslating || !canTranslate
+                ? "border-white/5 bg-slate-400/5 text-slate-500 cursor-not-allowed opacity-50"
+                : "border-white/8 bg-neutral-950/25 text-neutral-300 hover:bg-white/5"
+            }`}
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isTranslating ? 'animate-spin' : ''}`} />
+            <span>{isTranslating ? "Translating" : "Translate"}</span>
+          </button>
+
+          <button
+            onClick={onToggleQa}
+            disabled={segmentsCount === 0}
+            className={`border rounded-xl px-4 py-2.5 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              segmentsCount === 0
+                ? "border-white/5 bg-slate-400/5 text-slate-500 cursor-not-allowed opacity-50"
+                : "border-white/8 bg-neutral-950/25 text-neutral-300 hover:bg-white/5"
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <span>QA</span>
+            {qaIssuesCount > 0 && (
+              <span className="ml-1 rounded-full bg-rose-500/20 px-2 py-0.5 text-[10px] text-rose-300 font-bold">
+                {qaIssuesCount}
+              </span>
             )}
+          </button>
 
-            <ActionButton
-              onClick={onTranslate}
-              disabled={segmentsCount === 0 || isTranslating || !canTranslate}
-              className={
-                segmentsCount === 0 || isTranslating || !canTranslate
-                  ? "cursor-not-allowed bg-slate-400/30 text-slate-300"
-                  : "bg-sky-700 text-white hover:bg-sky-600"
-              }
-              title={canTranslate ? "" : "You do not have permission to translate"}
-            >
-              {isTranslating ? "Translating..." : "Translate"}
-            </ActionButton>
-          </div>
+        </div>
 
-          <div className="flex items-center gap-2 border-r border-white/10 pr-3">
-            <ActionButton
-              onClick={onToggleQa}
-              disabled={segmentsCount === 0}
-              className={
-                segmentsCount === 0
-                  ? "cursor-not-allowed bg-slate-400/30 text-slate-300"
-                  : "bg-amber-700 text-white hover:bg-amber-600"
-              }
-            >
-              QA {qaIssuesCount > 0 ? `(${qaIssuesCount})` : ""}
-            </ActionButton>
-          </div>
-
-          <div className="flex items-center gap-2 pr-3">
-            <ActionButton
-              onClick={onSaveProject}
-              disabled={segmentsCount === 0}
-              title="Save Project"
-              className={
-                segmentsCount === 0
-                  ? "cursor-not-allowed bg-slate-400/30 text-slate-300"
-                  : theme.buttonSecondary
-              }
-            >
-              <Icons.Save />
-            </ActionButton>
+        {/* Action Icon Controls & Main Buttons */}
+        <div className="flex flex-wrap items-center gap-2 xl:justify-end w-full xl:w-auto">
+          
+          <div className="flex items-center gap-2">
             
-            <label
-              title="Load Project"
-              className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition ${theme.buttonSecondary}`}
-            >
-              <Icons.FileJson />
-              <input
-                type="file"
-                accept=".json"
-                onChange={onLoadProject}
-                className="hidden"
-              />
-            </label>
+            {/* Save icon button */}
+            <UtilityIconButton onClick={onSaveProject} disabled={segmentsCount === 0} title="Save project session">
+              <Save className="h-4 w-4" />
+            </UtilityIconButton>
 
-            <label
-              title="Import XLIFF"
-              className={
-                segmentsCount === 0
-                  ? "inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition bg-slate-400/30 text-slate-300"
-                  : `inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition ${theme.buttonSecondary}`
-              }
-            >
-              <Icons.Upload className="text-sky-400" />
+            {/* Import XLIFF icon button */}
+            <label className={`inline-flex items-center justify-center rounded-xl p-2.5 border border-white/5 bg-neutral-900/40 text-neutral-400 hover:text-white hover:bg-white/5 transition-all duration-200 cursor-pointer ${segmentsCount === 0 ? 'opacity-50 pointer-events-none' : ''}`} title="Import XLIFF file">
+              <Upload className="h-4 w-4" />
               <input
                 type="file"
                 accept=".xlf,.xliff"
@@ -188,73 +244,72 @@ export const WorkspaceToolbar = ({
               />
             </label>
 
-            <label
-              title="Relink Template"
-              className={
-                segmentsCount === 0
-                  ? "inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition bg-slate-400/30 text-slate-300"
-                  : `inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition ${theme.buttonSecondary}`
-              }
-            >
-              <Icons.Upload />
+            {/* Relink Document template */}
+            <label className={`inline-flex items-center justify-center rounded-xl p-2.5 border border-white/5 bg-neutral-900/40 text-neutral-400 hover:text-white hover:bg-white/5 transition-all duration-200 cursor-pointer ${segmentsCount === 0 ? 'opacity-50 pointer-events-none' : ''}`} title="Upload source template to relink">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               <input
                 type="file"
-                accept=".html,.docx,.pptx,.xlsx,.txt"
+                accept=".html,.htm,.docx,.pptx,.xlsx,.txt"
                 onChange={onRelinkHtml}
                 className="hidden"
                 disabled={segmentsCount === 0}
               />
             </label>
+          </div>
 
+          <div className="flex items-center gap-2 ml-auto xl:ml-0">
+            {/* Export File (Green Gradient Button) */}
             <ActionButton
               onClick={onExport}
               disabled={segmentsCount === 0}
-              title="Export File"
-              className={
+              className={`py-2.5 px-4 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-lg transition-all ${
                 segmentsCount === 0
-                  ? "cursor-not-allowed bg-slate-400/30 text-slate-300"
-                  : "bg-emerald-600 text-white hover:bg-emerald-500"
-              }
+                  ? "bg-slate-400/5 text-slate-500 border border-white/5 cursor-not-allowed opacity-50"
+                  : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/10 hover:scale-[1.01] active:scale-[0.98]"
+              }`}
             >
-              <Icons.Download /> Export
+              <Download className="h-4 w-4" />
+              <span>Export</span>
             </ActionButton>
+
+            {/* Close Project (Red Close Icon Button) */}
+            <UtilityIconButton
+              onClick={onCloseProject}
+              disabled={segmentsCount === 0}
+              title="Close project database session"
+              className={`bg-rose-700/10 border border-rose-500/20 text-rose-400 hover:bg-rose-600 hover:text-white ${
+                segmentsCount === 0 ? "opacity-50 pointer-events-none" : ""
+              }`}
+            >
+              <Trash2 className="h-4 w-4" />
+            </UtilityIconButton>
           </div>
 
-          <ActionButton
-            onClick={onCloseProject}
-            disabled={segmentsCount === 0}
-            title="Close Project"
-            className={
-              segmentsCount === 0
-                ? "cursor-not-allowed bg-slate-400/30 text-slate-300"
-                : "bg-rose-700 text-white hover:bg-rose-600 px-3 py-2"
-            }
-          >
-            <Icons.X />
-          </ActionButton>
         </div>
+
       </div>
 
-      <div>
-        <label className="space-y-2 block">
-          <span className={`text-xs uppercase tracking-[0.22em] ${theme.muted}`}>
-            Search
-          </span>
-          <div className={`flex items-center gap-3 rounded-xl border px-3.5 py-2.5 ${theme.inputSoft}`}>
-            <span className={theme.muted}>
-              <Icons.Search />
-            </span>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search source or target text..."
-              className="w-full bg-transparent outline-none"
-            />
-          </div>
-        </label>
+      {/* ========================================================
+          3. SEARCH & FILTERS BOTTOM BAR
+          ======================================================== */}
+      <div className="grid grid-cols-[1fr_auto] items-center gap-3">
+        <div className="flex items-center gap-3 bg-neutral-950/45 border border-white/5 rounded-xl px-4 py-2.5 focus-within:border-violet-500/25 focus-within:bg-neutral-950/70 transition-all duration-300">
+          <Search className="h-4.5 w-4.5 text-neutral-500" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search source or target text..."
+            className="w-full bg-transparent border-none outline-none text-white text-xs font-semibold placeholder-neutral-500"
+          />
+        </div>
+
+        <button className="bg-neutral-900 border border-white/8 hover:bg-white/5 hover:border-white/12 text-neutral-300 rounded-xl px-4 py-2.5 text-xs font-bold flex items-center gap-2 cursor-pointer transition-all duration-200 active:scale-95">
+          <Filter className="h-4 w-4 text-neutral-400" />
+          <span>Filters</span>
+        </button>
       </div>
 
-    </div>
-  </section>
-);
+    </section>
+  );
+};

@@ -1,10 +1,26 @@
 import { LANGUAGES } from "../constants/languages.js";
-import { Icons } from "./Icons.jsx";
+import { 
+  LayoutDashboard, 
+  Folder, 
+  BookOpen, 
+  Users, 
+  Settings as SettingsIcon, 
+  Sun, 
+  Moon, 
+  LogOut, 
+  Plus,
+  Lock,
+  LockKeyhole
+} from "lucide-react";
 
-const SidebarButton = ({ children, className = "", ...props }) => (
+const SidebarButton = ({ children, className = "", isActive = false, ...props }) => (
   <button
     {...props}
-    className={`w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold transition-all duration-150 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${className}`}
+    className={`w-full flex items-center gap-3 rounded-xl px-4 py-2.5 text-xs font-bold transition-all duration-200 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+      isActive 
+        ? "bg-violet-950/40 text-violet-300 border-l-2 border-violet-500/80 shadow-inner" 
+        : "text-neutral-400 hover:text-neutral-200 hover:bg-white/5"
+    } ${className}`}
   >
     {children}
   </button>
@@ -38,116 +54,155 @@ export const Header = ({
   onOpenAdmin,
   creditsAllowed,
   creditsConsumed,
-  onLogout
+  onLogout,
+  onUpload // File uploader trigger
 }) => {
+  const isManager = userRole === "admin" || userRole === "manager";
   
-  // Render as LEFT-ORIENTED SIDEBAR Control Panel
+  // ========================================================
+  // 1. SIDEBAR MODE (Left-oriented navigation control panel)
+  // ========================================================
   if (isSidebar) {
-    const isOffice = userRole === "office";
-    const isAdmin = userRole === "admin" || userRole === "manager";
-    
     return (
-      <aside className={`w-64 border-r flex flex-col justify-between shrink-0 p-4 min-h-0 backdrop-blur-xl transition-all duration-300 ${theme.shell}`}>
-        <div className="space-y-5 flex-1 flex flex-col min-h-0 overflow-y-auto pr-0.5">
+      <aside className="w-64 border-r border-white/5 flex flex-col justify-between shrink-0 p-5 min-h-0 bg-[#05060b] shadow-[4px_0_24px_rgba(0,0,0,0.3)] select-none">
+        
+        {/* Top Section */}
+        <div className="space-y-6 flex-1 flex flex-col min-h-0 overflow-y-auto pr-0.5 custom-scrollbar">
           
-          {/* Logo & Connection State */}
-          <div className="flex items-center justify-between pb-3 border-b border-white/5">
-            <div className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 px-3 py-1.5 rounded-xl text-white font-black text-xs tracking-wider shadow-md shadow-indigo-500/15">
-              <span>VerboCat</span>
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-              </span>
+          {/* Logo Brand Row */}
+          <div className="flex items-center gap-3 pb-2 select-none">
+            {/* Custom Outline Cat SVG */}
+            <div className="h-8 w-8 flex items-center justify-center shrink-0">
+              <svg viewBox="0 0 100 100" className="w-7 h-7 text-violet-500" fill="none" stroke="currentColor" strokeWidth="6.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M 22,38 L 22,12 L 48,28" />
+                <path d="M 78,38 L 78,12 L 52,28" />
+                <path d="M 22,38 C 22,64 32,80 50,80 C 68,80 78,64 78,38" />
+                <ellipse cx="38" cy="48" rx="4.5" ry="5.5" fill="currentColor" />
+                <ellipse cx="62" cy="48" rx="4.5" ry="5.5" fill="currentColor" />
+                <polygon points="46,58 54,58 50,62" fill="currentColor" />
+                <path d="M 44,68 C 47,72 50,72 50,68 C 50,72 53,72 56,68" strokeWidth="4" />
+              </svg>
             </div>
-            
-            {currentProvider && (
-              <span className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[9px] font-bold text-emerald-400 animate-pulse">
-                {currentProvider}
-              </span>
-            )}
+            <span className="text-lg font-black tracking-tight text-white font-sans">
+              VerboCat
+            </span>
           </div>
 
-          {/* Active File Details */}
+          {/* New Project Upload Button */}
           <div>
-            <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-slate-500 select-none block">Active File</span>
-            <div className="text-xs font-black text-slate-200 mt-1 truncate" title={fileName}>
-              {fileName}
-            </div>
-            <div className="text-[10px] text-slate-500 mt-0.5 font-mono select-none">{fileExtension} format</div>
+            <label className="w-full flex items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 py-3 px-4 text-xs font-bold text-white shadow-lg shadow-violet-500/10 hover:shadow-violet-500/20 cursor-pointer transition-all duration-300 hover:scale-[1.01] active:scale-[0.98]">
+              <Plus className="w-4.5 h-4.5" />
+              <span>New Project</span>
+              <input type="file" onChange={onUpload} className="hidden" />
+            </label>
           </div>
 
-          {/* User Role Badge */}
-          <div className="bg-slate-950/35 border border-white/5 rounded-xl p-2.5 flex items-center justify-between gap-2">
-            <div>
-              <span className="text-[8px] font-bold uppercase tracking-wider text-slate-500 block select-none">Role</span>
-              <span className="text-[10px] font-bold text-indigo-400 capitalize">
-                {userRole?.replace("_", " ")}
-              </span>
-            </div>
-            {onLock && (
-              <button
-                onClick={onLock}
-                className="rounded-lg p-1.5 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all active:scale-95"
-                title="Lock Workspace"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-              </button>
-            )}
-          </div>
+          {/* Navigation Items (WORKSPACE Section) */}
+          <div className="space-y-1">
+            <span className="text-[9px] font-extrabold uppercase tracking-[0.22em] text-neutral-500 block mb-3 px-3">
+              WORKSPACE
+            </span>
+            
+            <SidebarButton isActive={false}>
+              <LayoutDashboard className="w-4 h-4 text-neutral-500" />
+              <span>Dashboard</span>
+            </SidebarButton>
 
-          {/* Admin Control Button (visible only in sidebar if Admin/Manager) */}
-          {isAdmin && onOpenAdmin && (
-            <div className="pt-3 border-t border-white/5">
-              <SidebarButton onClick={onOpenAdmin} className="bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-600/25">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-400"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
-                Admin Control
-              </SidebarButton>
-            </div>
-          )}
+            <SidebarButton isActive={true}>
+              <Folder className="w-4 h-4 text-violet-400" />
+              <span>Projects</span>
+            </SidebarButton>
+
+            <SidebarButton isActive={false} onClick={onOpenGlossary}>
+              <BookOpen className="w-4 h-4 text-neutral-500" />
+              <span>Glossary</span>
+            </SidebarButton>
+
+            <SidebarButton 
+              isActive={false} 
+              onClick={isManager && onOpenAdmin ? onOpenAdmin : undefined}
+              disabled={!isManager}
+            >
+              <Users className="w-4 h-4 text-neutral-500" />
+              <span>Team</span>
+            </SidebarButton>
+
+            <SidebarButton isActive={false} onClick={onOpenContext}>
+              <SettingsIcon className="w-4 h-4 text-neutral-500" />
+              <span>Settings</span>
+            </SidebarButton>
+          </div>
 
         </div>
 
-        {/* Sidebar Footer: Mode Toggle, Close Project */}
-        <div className="pt-3 border-t border-white/5 space-y-2 shrink-0">
-          <SidebarButton onClick={onToggleDarkMode} className={theme.buttonSecondary}>
-            {darkMode ? <Icons.Sun className="w-3.5 h-3.5" /> : <Icons.Moon className="w-3.5 h-3.5" />}
-            {darkMode ? "Switch to Light" : "Switch to Dark"}
+        {/* Sidebar Footer Operations */}
+        <div className="pt-4 border-t border-white/5 space-y-1.5 shrink-0">
+          
+          {/* Workspace Lock Lockbox */}
+          {onLock && (
+            <SidebarButton onClick={onLock} className="text-neutral-500 hover:text-neutral-300">
+              <LockKeyhole className="w-4 h-4 text-neutral-500" />
+              <span>Lock Screen</span>
+            </SidebarButton>
+          )}
+
+          {/* Theme Switcher Toggle */}
+          <SidebarButton onClick={onToggleDarkMode}>
+            {darkMode ? (
+              <>
+                <Sun className="w-4 h-4 text-neutral-500" />
+                <span>Switch to Light</span>
+              </>
+            ) : (
+              <>
+                <Moon className="w-4 h-4 text-neutral-500" />
+                <span>Switch to Dark</span>
+              </>
+            )}
           </SidebarButton>
 
-          <SidebarButton onClick={onLogout} className={theme.buttonSecondary}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-            Log Out
+          {/* Log Out */}
+          <SidebarButton onClick={onLogout} className="hover:text-rose-400 hover:bg-rose-950/10">
+            <LogOut className="w-4 h-4 text-neutral-500" />
+            <span>Log Out</span>
           </SidebarButton>
         </div>
       </aside>
     );
   }
 
-  // Render as COMPACT HORIZONTAL TOP NAVBAR (when empty state)
+  // ========================================================
+  // 2. HORIZONTAL COMPACT NAVBAR MODE (Empty workspace header)
+  // ========================================================
   return (
-    <header className="sticky top-0 z-40 px-4 pt-4 sm:px-6 lg:px-8">
-      <div
-        className={`mx-auto w-full rounded-[24px] border backdrop-blur-xl overflow-hidden transition-all duration-300 ${theme.shell}`}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2 rounded-xl text-white font-black text-sm tracking-wider shadow-md shadow-indigo-500/15">
-              <span>VerboCat</span>
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-            </div>
-            
+    <header className="sticky top-0 z-45 px-4 pt-4 sm:px-6 lg:px-8 bg-transparent">
+      <div className={`mx-auto w-full rounded-[24px] border backdrop-blur-xl overflow-hidden transition-all duration-300 ${theme.shell}`}>
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
+          
+          {/* Logo */}
+          <div className="flex items-center gap-2">
+            <svg viewBox="0 0 100 100" className="w-6.5 h-6.5 text-violet-500" fill="none" stroke="currentColor" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M 22,38 L 22,12 L 48,28" />
+              <path d="M 78,38 L 78,12 L 52,28" />
+              <path d="M 22,38 C 22,64 32,80 50,80 C 68,80 78,64 78,38" />
+              <ellipse cx="38" cy="48" rx="4.5" ry="5.5" fill="currentColor" />
+              <ellipse cx="62" cy="48" rx="4.5" ry="5.5" fill="currentColor" />
+              <polygon points="46,58 54,58 50,62" fill="currentColor" />
+              <path d="M 44,68 C 47,72 50,72 50,68 C 50,72 53,72 56,68" strokeWidth="4" />
+            </svg>
+            <span className="text-md font-extrabold tracking-wider text-white">
+              VerboCat
+            </span>
           </div>
 
+          {/* Action Row */}
           <div className="flex items-center gap-2">
             
-            {/* Admin Dashboard trigger link */}
-            {(userRole === "admin" || userRole === "manager") && onOpenAdmin && (
+            {/* Admin control panel link */}
+            {isManager && onOpenAdmin && (
               <button
                 onClick={onOpenAdmin}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-600/25 px-4 py-2.5 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-600/25 px-4 py-2.5 text-xs font-bold transition-all duration-200"
               >
                 Admin Control
               </button>
@@ -155,15 +210,14 @@ export const Header = ({
 
             <button
               onClick={onOpenGlossary}
-              className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${theme.buttonSecondary}`}
+              className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${theme.buttonSecondary}`}
             >
               Glossary
             </button>
-            <label
-              className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${theme.buttonSecondary}`}
-            >
-              <Icons.FileJson />
-              Load Project
+            
+            <label className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${theme.buttonSecondary}`}>
+              <Plus className="w-3.5 h-3.5" />
+              <span>Load Project</span>
               <input
                 type="file"
                 accept=".json"
@@ -174,28 +228,19 @@ export const Header = ({
 
             <button
               onClick={onToggleDarkMode}
-              className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 transition-all duration-200 hover:-translate-y-0.5 ${theme.buttonSecondary}`}
+              className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 transition ${theme.buttonSecondary}`}
             >
-              {darkMode ? <Icons.Sun /> : <Icons.Moon />}
-              <span className="text-sm font-semibold hidden sm:inline">{darkMode ? "Light" : "Dark"}</span>
+              {darkMode ? <Sun className="w-4 h-4 text-neutral-400" /> : <Moon className="w-4 h-4 text-neutral-400" />}
             </button>
 
             <button
               onClick={onLogout}
-              className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 transition-all duration-200 hover:-translate-y-0.5 ${theme.buttonSecondary}`}
+              className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${theme.buttonSecondary}`}
             >
               Log Out
             </button>
-            
-            {onLock && (
-              <button
-                onClick={onLock}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950/20 hover:bg-slate-950/40 border border-white/5 text-slate-300 hover:text-white px-4 py-2.5 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5"
-              >
-                Lock
-              </button>
-            )}
           </div>
+          
         </div>
       </div>
     </header>

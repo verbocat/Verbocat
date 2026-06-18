@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Icons } from "./Icons.jsx";
+import { Copy, Check, ArrowRight, CornerDownRight, AlertTriangle } from "lucide-react";
 
 const GlossaryHighlight = ({ term, children }) => {
   const [show, setShow] = useState(false);
@@ -25,20 +25,20 @@ const GlossaryHighlight = ({ term, children }) => {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      <mark className="bg-amber-200 text-amber-900 rounded-sm px-0.5 cursor-pointer">{children}</mark>
+      <mark className="bg-amber-500/20 text-amber-200 border-b border-amber-400/50 rounded-sm px-0.5 cursor-pointer">{children}</mark>
       {show && (
         <span 
-          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-slate-800 text-white font-semibold text-xs rounded shadow-lg z-50 whitespace-nowrap cursor-text select-text flex items-center gap-2 border border-white/10"
+          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1 bg-slate-950 text-white font-semibold text-[11px] rounded-lg shadow-2xl z-50 whitespace-nowrap cursor-text select-text flex items-center gap-2 border border-white/10"
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
-          {term.target}
+          <span>{term.target}</span>
           <button 
             onClick={handleCopy}
-            className="p-1 hover:bg-white/20 rounded transition text-sky-300"
+            className="p-1 hover:bg-white/15 rounded text-sky-400 transition"
             title="Copy to clipboard"
           >
-            <Icons.Copy className="w-3 h-3" />
+            <Copy className="w-3 h-3" />
           </button>
         </span>
       )}
@@ -60,7 +60,7 @@ const targetToHtml = (str) => {
       }
     }
     const escapedTagInner = tagInner.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-    return `<span class="inline-flex items-center justify-center bg-slate-700 text-sky-300 px-1.5 py-0.5 mx-0.5 rounded text-[10px] font-mono select-none" contenteditable="false" data-tag="${escapedTagInner}">${displayName}</span>`;
+    return `<span class="inline-flex items-center justify-center bg-neutral-900 border border-white/8 text-violet-300 px-1.5 py-0.5 mx-0.5 rounded text-[10px] font-mono select-none" contenteditable="false" data-tag="${escapedTagInner}">${displayName}</span>`;
   });
   html = html.replace(/\n/g, "<br>");
   return html;
@@ -70,7 +70,6 @@ const htmlToTarget = (element) => {
   let result = "";
   const traverse = (node) => {
     if (node.nodeType === Node.TEXT_NODE) {
-      // Convert non-breaking spaces back to normal spaces if any, though standard is fine
       result += node.textContent;
     } else if (node.nodeType === Node.ELEMENT_NODE) {
       if (node.tagName.toLowerCase() === "br") {
@@ -86,7 +85,6 @@ const htmlToTarget = (element) => {
     }
   };
   element.childNodes.forEach(traverse);
-  // Clean up any leading newline from div wrapping
   return result.replace(/^\n/, "");
 };
 
@@ -106,7 +104,7 @@ export const SegmentCard = ({
   const [suggestions, setSuggestions] = useState([]);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
 
-  // Reset innerHTML when the segment ID changes (recycled by Virtuoso)
+  // Sync state recycles by Virtuoso
   useEffect(() => {
     if (targetRef.current) {
       targetRef.current.innerHTML = targetToHtml(segment.target || "");
@@ -114,7 +112,6 @@ export const SegmentCard = ({
     }
   }, [segment.id]);
 
-  // Sync external changes to target (e.g. from translation API or undo/redo)
   useEffect(() => {
     if (targetRef.current) {
       if (segment.target !== lastSavedTargetRef.current) {
@@ -132,13 +129,13 @@ export const SegmentCard = ({
     if (translationGlossary && translationGlossary.length > 0) {
       translationGlossary.forEach((term) => {
         if (!term.source) return;
-        const regex = new RegExp(`(${term.source.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')})`, 'gi');
+        const regex = new RegExp(`(${term.source.replace(/[.*+?^${}()|[\\]\\]/g, '\\\\$&')})`, 'gi');
         
         elements = elements.flatMap(el => {
           if (typeof el === 'string') {
             const parts = el.split(regex);
             return parts.map((part, i) => {
-              if (i % 2 === 1) { // This is the match
+              if (i % 2 === 1) {
                 return <GlossaryHighlight key={`${term.source}-${i}`} term={term}>{part}</GlossaryHighlight>;
               }
               return part;
@@ -165,7 +162,7 @@ export const SegmentCard = ({
               }
             }
             return (
-              <span key={`ph-${i}-${inner}`} className="inline-flex items-center justify-center bg-slate-700/50 text-slate-400 px-1.5 py-0.5 mx-0.5 rounded text-[10px] font-mono select-none border border-white/5" title={inner}>
+              <span key={`ph-${i}-${inner}`} className="inline-flex items-center justify-center bg-neutral-900 border border-white/5 text-neutral-400 px-1.5 py-0.5 mx-0.5 rounded text-[10px] font-mono select-none" title={inner}>
                 {displayName}
               </span>
             );
@@ -278,131 +275,197 @@ export const SegmentCard = ({
   };
 
   return (
-  <article
-    id={`segment-${segment.id}`}
-    className={`border-l-4 ${segment.verified ? 'border-teal-500' : segment.target ? theme.status.translated : theme.status.empty}`}
-  >
-    <div className="grid gap-3 px-3 py-3 lg:grid-cols-[72px_minmax(0,1fr)_minmax(0,1fr)]">
-      <div className="flex items-start justify-between lg:block">
-        <div className="text-xl font-bold">{index + 1}</div>
-        <div className="mt-0 flex flex-wrap gap-2 lg:mt-3 lg:flex-col">
-          {segment.fuzzyScore && (
-            <span className="rounded-lg bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-200 ring-1 ring-amber-300/20">
-              Fuzzy {segment.fuzzyScore}%
-            </span>
-          )}
-          {segment.qaIssues?.length > 0 && (
-            <span className="rounded-lg bg-rose-500/10 px-2.5 py-1 text-xs font-semibold text-rose-300 ring-1 ring-rose-400/20">
-              {segment.qaIssues.length} QA
-            </span>
-          )}
+    <article
+      id={`segment-${segment.id}`}
+      className={`relative overflow-hidden rounded-2xl border transition-all duration-300 bg-[#090b11]/30 border-white/5 px-4 py-5 md:px-5 md:py-6 ${
+        segment.verified 
+          ? 'border-l-2 border-l-emerald-500/80 shadow-[0_0_15px_rgba(16,185,129,0.02)]' 
+          : segment.target 
+            ? 'border-l-2 border-l-violet-500/60 shadow-[0_0_15px_rgba(139,92,246,0.02)]' 
+            : 'border-l-2 border-l-neutral-700/60'
+      }`}
+    >
+      <div className="flex flex-col md:grid md:grid-cols-[64px_minmax(0,1fr)_auto_minmax(0,1fr)_auto] md:items-center gap-4">
+        
+        {/* ========================================================
+            COLUMN 1: Segment Number Card
+            ======================================================== */}
+        <div className="flex md:flex-col items-center justify-between md:justify-center gap-2 shrink-0 select-none">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-600/10 border border-violet-500/20 text-lg font-black text-violet-400">
+            {index + 1}
+          </div>
+          
+          {/* Fuzzy matching & QA issue badges */}
+          <div className="flex items-center md:flex-col gap-1.5">
+            {segment.fuzzyScore && (
+              <span className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold text-amber-200" title={`Fuzzy match score: ${segment.fuzzyScore}%`}>
+                {segment.fuzzyScore}%
+              </span>
+            )}
+            {segment.qaIssues?.length > 0 && (
+              <span className="rounded-lg bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 text-[9px] font-bold text-rose-300 flex items-center gap-0.5" title={`${segment.qaIssues.length} QA issue detected`}>
+                <AlertTriangle className="h-2.5 w-2.5 text-rose-400" />
+                <span>QA</span>
+              </span>
+            )}
+          </div>
         </div>
-      </div>
 
-      <section className="space-y-3">
-        <div className="flex items-center justify-end gap-2">
-          <button
-            onClick={() => onUpdateTranslation(segment.id, segment.source)}
-            title="Copy Source to Target"
-            className={`rounded-lg p-2 transition text-slate-400 hover:text-white ${theme.buttonSecondary}`}
-          >
-            <Icons.ArrowRight />
-          </button>
+        {/* ========================================================
+            COLUMN 2: Source Text Block
+            ======================================================== */}
+        <div className="relative min-h-[64px] w-full bg-neutral-950/45 border border-white/5 rounded-xl p-4 pr-12 text-white leading-relaxed text-[13px] font-medium">
+          <div className="break-words select-text">{renderHighlightedSource(segment.source)}</div>
+          
           <button
             onClick={() => onCopy(segment.source)}
+            className="absolute right-3 top-3 p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-white/5 transition-all duration-200 cursor-pointer"
             title="Copy Source Text"
-            className={`rounded-lg p-2 transition text-slate-400 hover:text-white ${theme.buttonSecondary}`}
           >
-            <Icons.Copy />
+            <Copy className="h-3.5 w-3.5" />
           </button>
         </div>
 
-        <div
-          className={`min-h-[40px] w-full break-words rounded-xl border p-3 whitespace-pre-wrap leading-relaxed ${theme.inputSoft}`}
-        >
-          {renderHighlightedSource(segment.source)}
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className={`text-sm ${theme.muted}`}>
-            {segment.verified ? (
-              <span className="text-teal-500 font-bold flex items-center gap-1"><Icons.Check /> Verified</span>
-            ) : segment.target ? "Ready to edit" : "Waiting for translation"}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onToggleVerify}
-              title={segment.verified ? 'Unverify' : 'Verify'}
-              className={`rounded-lg p-2 transition ${segment.verified ? 'bg-teal-700 text-white hover:bg-teal-600' : `text-slate-400 hover:text-white ${theme.buttonSecondary}`}`}
-            >
-              <Icons.Check />
-            </button>
-            <button
-              onClick={() => onCopy(segment.target || "")}
-              title="Copy Target Text"
-              className={`rounded-lg p-2 transition text-slate-400 hover:text-white ${theme.buttonSecondary}`}
-            >
-              <Icons.Copy />
-            </button>
-          </div>
+        {/* ========================================================
+            COLUMN 3: Middle Link Arrow
+            ======================================================== */}
+        <div className="flex items-center justify-center rotate-90 md:rotate-0 shrink-0 select-none">
+          <button
+            onClick={() => onUpdateTranslation(segment.id, segment.source)}
+            className="h-10 w-10 rounded-full border border-violet-500/35 bg-violet-950/30 hover:bg-violet-600 hover:text-white hover:border-violet-500 flex items-center justify-center text-violet-400 transition-all duration-200 cursor-pointer active:scale-95 shadow-md shadow-violet-500/10"
+            title="Copy Source to Target"
+          >
+            <ArrowRight className="h-4.5 w-4.5" />
+          </button>
         </div>
 
-        <div className="relative">
-          <div
-            id={`target-${segment.id}`}
-            ref={targetRef}
-            data-segment-target="true"
-            contentEditable={!segment.verified}
-            suppressContentEditableWarning={true}
-            onBlur={handleBlur}
-            onInput={handleInput}
-            onKeyDown={handleKeyDown}
-            className={`min-h-[40px] w-full break-words rounded-xl border p-3 outline-none focus:ring-2 whitespace-pre-wrap leading-relaxed ${segment.verified ? 'focus:ring-teal-500 bg-slate-800/50 cursor-not-allowed opacity-70' : 'focus:ring-sky-300'} ${theme.input} empty:before:content-['Translation_will_appear_here..._(Press_Ctrl_Enter_to_verify_and_move_to_next)'] empty:before:text-slate-500`}
-          />
+        {/* ========================================================
+            COLUMN 4: Target Translation Block
+            ======================================================== */}
+        <div className="flex flex-col w-full min-w-0">
+          
+          {/* Status badge row */}
+          <div className="flex items-center gap-1.5 mb-2 select-none text-[10px] font-bold">
+            <span className={`h-1.5 w-1.5 rounded-full ${
+              segment.verified 
+                ? 'bg-emerald-500 animate-pulse' 
+                : segment.target 
+                  ? 'bg-indigo-400' 
+                  : 'bg-violet-500'
+            }`} />
+            <span className={`${
+              segment.verified 
+                ? 'text-emerald-400' 
+                : segment.target 
+                  ? 'text-indigo-300' 
+                  : 'text-violet-400'
+            }`}>
+              {segment.verified ? "Verified" : segment.target ? "Ready to verify" : "Waiting for translation"}
+            </span>
+          </div>
 
-          {suggestions.length > 0 && (
-            <div className="absolute left-0 right-0 z-[100] mt-1 rounded-xl border p-1.5 shadow-2xl bg-neutral-900 border-white/10 text-white flex flex-col gap-0.5 max-h-48 overflow-y-auto">
-              <div className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-neutral-500 border-b border-white/5 mb-1 flex justify-between items-center select-none">
-                <span>Glossary Suggestions</span>
-                <span>↑↓ Navigate · Enter/Tab Select</span>
+          {/* Autocomplete Input Container */}
+          <div className="relative">
+            <div
+              id={`target-${segment.id}`}
+              ref={targetRef}
+              data-segment-target="true"
+              contentEditable={!segment.verified}
+              suppressContentEditableWarning={true}
+              onBlur={handleBlur}
+              onInput={handleInput}
+              onKeyDown={handleKeyDown}
+              className={`min-h-[64px] w-full break-words rounded-xl border border-white/5 bg-neutral-950/45 p-4 outline-none focus:border-violet-500/35 focus:ring-2 focus:ring-violet-500/10 whitespace-pre-wrap leading-relaxed text-[13px] font-medium text-white transition-all duration-300 ${
+                segment.verified ? 'bg-slate-900/10 cursor-not-allowed opacity-60' : 'empty:before:content-["Translation_will_appear_here..."]'
+              }`}
+            />
+
+            {/* Glossary Suggestions Overlay */}
+            {suggestions.length > 0 && (
+              <div className="absolute left-0 right-0 z-[100] mt-1 rounded-xl border border-white/8 p-1.5 shadow-2xl bg-[#0d0e14] text-white flex flex-col gap-0.5 max-h-48 overflow-y-auto custom-scrollbar">
+                <div className="px-2 py-1 text-[8px] font-mono uppercase tracking-wider text-neutral-500 border-b border-white/5 mb-1 flex justify-between items-center select-none">
+                  <span>Glossary Suggestions</span>
+                  <span>↑↓ Navigate · Enter Select</span>
+                </div>
+                {suggestions.map((term, i) => (
+                  <button
+                    key={`sugg-${segment.id}-${i}`}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      applySuggestion(term);
+                    }}
+                    className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between transition ${
+                      i === activeSuggestionIndex 
+                        ? "bg-violet-600/35 text-violet-200 border border-violet-500/30" 
+                        : "hover:bg-white/5 border border-transparent"
+                    }`}
+                  >
+                    <div className="font-semibold">{term.target}</div>
+                    <div className="text-[10px] text-neutral-400 font-mono">{term.source}</div>
+                  </button>
+                ))}
               </div>
-              {suggestions.map((term, i) => (
-                <button
-                  key={`sugg-${segment.id}-${i}`}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    applySuggestion(term);
-                  }}
-                  className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between transition ${
-                    i === activeSuggestionIndex 
-                      ? "bg-sky-600/30 text-sky-200 border border-sky-500/20" 
-                      : "hover:bg-white/5 border border-transparent"
-                  }`}
-                >
-                  <div className="font-semibold">{term.target}</div>
-                  <div className="text-[10px] text-neutral-400 font-mono">{term.source}</div>
-                </button>
-              ))}
-            </div>
+            )}
+          </div>
+
+          {/* Help instructions (Ctrl+Enter indicator) */}
+          {!segment.verified && (
+            <span className="text-[9px] text-neutral-500 font-mono mt-1 px-1 select-none">
+              Press Ctrl Enter to verify and move to next
+            </span>
           )}
         </div>
 
-        {segment.qaIssues?.length > 0 && (
+        {/* ========================================================
+            COLUMN 5: Action Verification Buttons
+            ======================================================== */}
+        <div className="flex items-center gap-2 justify-end md:justify-center shrink-0">
+          
+          {/* Verify Check Button */}
+          <button
+            onClick={onToggleVerify}
+            title={segment.verified ? 'Unverify segment' : 'Verify segment'}
+            className={`rounded-xl p-3 border transition-all duration-200 cursor-pointer active:scale-95 ${
+              segment.verified 
+                ? 'bg-violet-600 border-violet-500 text-white shadow-lg shadow-violet-500/10' 
+                : 'bg-neutral-900/40 border-white/5 text-neutral-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <Check className="h-4.5 w-4.5" />
+          </button>
+
+          {/* Copy Target Button */}
+          <button
+            onClick={() => onCopy(segment.target || "")}
+            title="Copy Target Translation"
+            className="rounded-xl p-3 border border-white/5 bg-neutral-900/40 text-neutral-400 hover:text-white hover:bg-white/5 transition-all duration-200 cursor-pointer active:scale-95"
+          >
+            <Copy className="h-4.5 w-4.5" />
+          </button>
+
+        </div>
+
+      </div>
+
+      {/* Inline QA Errors panel underneath card */}
+      {segment.qaIssues?.length > 0 && (
+        <div className="mt-4 border-t border-white/5 pt-3 space-y-1.5 select-none">
+          <span className="text-[9px] font-mono uppercase tracking-widest text-rose-400 block px-1">
+            QA checks failed:
+          </span>
           <div className="flex flex-wrap gap-2">
             {segment.qaIssues.map((issue, issueIndex) => (
               <span
                 key={`${segment.id}-issue-${issueIndex}`}
-                className="rounded-lg bg-rose-500/10 px-2.5 py-1 text-xs font-semibold text-rose-300 ring-1 ring-rose-400/20"
+                className="rounded-lg bg-rose-500/10 border border-rose-500/15 py-1 px-2.5 text-[10px] font-semibold text-rose-300"
               >
                 {issue}
               </span>
             ))}
           </div>
-        )}
-      </section>
-    </div>
-  </article>
-);
+        </div>
+      )}
+
+    </article>
+  );
 };

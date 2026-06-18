@@ -74,3 +74,120 @@ code,
 .animate-float-glow-2 {
   animation: floatGlowTwo 10s ease-in-out infinite;
 }
+
+.bg-auth-space {
+  background: 
+    radial-gradient(circle at 10% 20%, rgba(139, 92, 246, 0.12), transparent 50%),
+    radial-gradient(circle at 90% 80%, rgba(59, 130, 246, 0.12), transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.06), transparent 60%),
+    linear-gradient(180deg, #030408 0%, #080a14 50%, #020305 100%);
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+}
+
+/* Glassmorphism & High-tech elements */
+.high-tech-card {
+  background: rgba(10, 11, 20, 0.55);
+  backdrop-filter: blur(28px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 
+    0 24px 60px -15px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 40px rgba(139, 92, 246, 0.03);
+}
+
+.high-tech-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    135deg, 
+    rgba(255, 255, 255, 0.12) 0%, 
+    rgba(255, 255, 255, 0.02) 40%, 
+    rgba(139, 92, 246, 0.1) 60%, 
+    rgba(59, 130, 246, 0.15) 100%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.bg-grid-pattern {
+  background-image: 
+    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px), 
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.bg-grid-pattern-fine {
+  background-image: 
+    linear-gradient(rgba(255, 255, 255, 0.006) 1px, transparent 1px), 
+    linear-gradient(90deg, rgba(255, 255, 255, 0.006) 1px, transparent 1px);
+  background-size: 8px 8px;
+}
+
+/* Premium Sliding Animation Easing */
+.sliding-container {
+  transition: transform 0.85s cubic-bezier(0.76, 0, 0.24, 1);
+}
+
+.sliding-content {
+  transition: transform 0.85s cubic-bezier(0.76, 0, 0.24, 1), opacity 0.85s cubic-bezier(0.76, 0, 0.24, 1);
+}
+
+.form-transition {
+  transition: transform 0.65s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.65s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Input Fields Transition */
+.input-focus-glow {
+  transition: border-color 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease;
+}
+.input-focus-glow:focus-within {
+  border-color: rgba(139, 92, 246, 0.45);
+  box-shadow: 
+    0 0 15px rgba(139, 92, 246, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  background-color: rgba(6, 6, 10, 0.75);
+}
+
+/* Glowing Border Accent */
+@keyframes borderGlowPulse {
+  0%, 100% { border-color: rgba(255, 255, 255, 0.07); }
+  50% { border-color: rgba(139, 92, 246, 0.25); }
+}
+
+.animate-border-glow {
+  animation: borderGlowPulse 6s ease-in-out infinite;
+}
+
+/* Floating animation for subtle design depth */
+@keyframes floatY {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.animate-float-y {
+  animation: floatY 6s ease-in-out infinite;
+}
+
+/* Micro-scrollbars for forms */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 99px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+

@@ -1380,6 +1380,7 @@ export default function App() {
         creditsConsumed={user ? user.creditsConsumed : 0}
         onLogout={logout}
         onOpenAdmin={() => setShowAdminDashboard(true)}
+        onUpload={handleUpload}
       />
 
       {/* Main app panel wrapper */}
