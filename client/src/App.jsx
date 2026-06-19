@@ -1508,8 +1508,8 @@ export default function App() {
             onToggleQa={() => setShowQaPanel((value) => !value)}
             isTranslating={isTranslating}
             qaIssuesCount={qaIssuesList.length}
-            searchQuery={searchQuery}
             segmentsCount={segments.length}
+            searchQuery={searchQuery}
             fileExtension={fileExtension}
             setSearchQuery={setSearchQuery}
             stats={stats}
@@ -1533,29 +1533,31 @@ export default function App() {
             onGoToSegment={goToSegment}
           />
 
-          {/* Zone 3: Segment editor (table rows) */}
+          {/* Zone 3: Segment editor */}
           <div className="segment-table">
+
+            {/* Column headers */}
+            <div className="seg-header">
+              <div className="seg-header-cell">#</div>
+              <div className="seg-header-cell">Source</div>
+              <div className="seg-header-cell" style={{ justifyContent: "center" }}>→</div>
+              <div className="seg-header-cell">Translation</div>
+              <div className="seg-header-cell" style={{ borderRight: "none", justifyContent: "center" }}>Act.</div>
+            </div>
+
             {/* Translation progress toast */}
             {isTranslating && (
               <div className="progress-toast">
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: "#7dd3fc" }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--sky)" }}>
                     Translating
                   </span>
                   <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "var(--text-primary)" }}>
                     {progress}%
                   </span>
                 </div>
-                <div style={{ marginTop: 10, height: 3, borderRadius: 99, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
-                  <div
-                    style={{
-                      height: "100%",
-                      borderRadius: 99,
-                      background: "linear-gradient(90deg, #6366f1, #38bdf8)",
-                      width: `${progress}%`,
-                      transition: "width 0.3s ease"
-                    }}
-                  />
+                <div className="progress-track">
+                  <div className="progress-fill" style={{ width: `${progress}%` }} />
                 </div>
               </div>
             )}

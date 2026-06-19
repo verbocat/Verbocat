@@ -1,126 +1,124 @@
-import { Icons } from "./Icons.jsx";
+import { X, Download, Upload, FileText, Link2 } from "lucide-react";
+
+const ExportOption = ({ title, desc, accentColor, btnLabel, btnColor, btnBg, btnBorder, onAction, isLabel = false, children }) => (
+  <div className="export-row">
+    <div style={{ minWidth: 0 }}>
+      <div className="export-row-title" style={{ color: accentColor || "var(--text-primary)" }}>{title}</div>
+      <div className="export-row-desc">{desc}</div>
+    </div>
+    {isLabel ? (
+      <label className="export-btn" style={{
+        color: btnColor || "#fff",
+        background: btnBg || "var(--accent)",
+        borderColor: btnBorder || "rgba(91,106,240,0.4)",
+        cursor: "pointer"
+      }}>
+        {children}
+      </label>
+    ) : (
+      <button className="export-btn" onClick={onAction} style={{
+        color: btnColor || "#fff",
+        background: btnBg || "var(--accent)",
+        borderColor: btnBorder || "rgba(91,106,240,0.4)",
+      }}>
+        {children}
+      </button>
+    )}
+  </div>
+);
 
 export const ExportModal = ({
-  show,
-  onClose,
-  onExportDocument,
-  onExportXliff,
-  onExportTmx,
-  onExportGlobalTmx,
-  onExportLinguistTable,
-  onRelinkHtml,
-  fileExtension,
-  theme,
-  sourceLanguage,
-  targetLanguage
+  show, onClose, onExportDocument, onExportXliff, onExportTmx,
+  onExportGlobalTmx, onExportLinguistTable, onRelinkHtml,
+  fileExtension, theme, sourceLanguage, targetLanguage
 }) => {
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm">
-      <div className={`w-full max-w-lg rounded-2xl border shadow-[0_30px_120px_rgba(2,6,23,0.5)] p-6 ${theme.cardStrong}`}>
-        <div className="flex items-center justify-between mb-5 border-b border-white/10 pb-3">
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <Icons.Download className="text-sky-400" /> Export Translations & TM
-          </h2>
-          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition">
-            <Icons.X />
+    <div className="modal-overlay">
+      <div className="modal-card" style={{ maxWidth: 520 }}>
+
+        {/* Header */}
+        <div className="modal-header">
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 8,
+              background: "rgba(34,197,94,0.08)",
+              border: "1px solid rgba(34,197,94,0.2)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: "var(--emerald)"
+            }}>
+              <Download style={{ width: 15, height: 15 }} />
+            </div>
+            <div className="modal-title">Export</div>
+          </div>
+          <button className="modal-close" onClick={onClose}>
+            <X style={{ width: 15, height: 15 }} />
           </button>
         </div>
 
-        <div className="space-y-4">
-          {/* Option 1: Original Format */}
-          <div className="p-4 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 transition flex items-center justify-between">
-            <div className="space-y-1">
-              <div className="font-bold flex items-center gap-2 text-sm">
-                Translated Document ({fileExtension})
-              </div>
-              <p className={`text-xs ${theme.muted}`}>
-                Export the final translated file with the original layout preserved.
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                onExportDocument();
-                onClose();
-              }}
-              className="bg-emerald-600 text-white hover:bg-emerald-500 rounded-xl px-4 py-2 text-xs font-semibold flex items-center gap-1.5 transition"
-            >
-              <Icons.Download /> Download
-            </button>
-          </div>
+        {/* Options */}
+        <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
 
-          {/* Option 2: XLIFF */}
-          <div className="p-4 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 transition flex items-center justify-between">
-            <div className="space-y-1">
-              <div className="font-bold flex items-center gap-2 text-sm text-sky-300">
-                Bilingual XLIFF (.xlf)
-              </div>
-              <p className={`text-xs ${theme.muted}`}>
-                Standard XML format containing source & target segments for CAT tools.
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                onExportXliff();
-                onClose();
-              }}
-              className="bg-sky-700 text-white hover:bg-sky-600 rounded-xl px-4 py-2 text-xs font-semibold flex items-center gap-1.5 transition"
-            >
-              <Icons.Download /> Download
-            </button>
-          </div>
+          {/* Translated Document */}
+          <ExportOption
+            title={`Translated Document ${fileExtension || ""}`}
+            desc="Export the final translated file with original layout preserved."
+            accentColor="var(--text-primary)"
+            onAction={() => { onExportDocument(); onClose(); }}
+          >
+            <Download style={{ width: 12, height: 12 }} />
+            Download
+          </ExportOption>
 
-          {/* Option: Export as HTML for XLF */}
+          {/* XLIFF */}
+          <ExportOption
+            title="Bilingual XLIFF (.xlf)"
+            desc="Standard XML format with source & target segments for CAT tools."
+            accentColor="var(--sky)"
+            btnBg="rgba(56,189,248,0.1)"
+            btnBorder="rgba(56,189,248,0.3)"
+            btnColor="var(--sky)"
+            onAction={() => { onExportXliff(); onClose(); }}
+          >
+            <Download style={{ width: 12, height: 12 }} />
+            Download
+          </ExportOption>
+
+          {/* HTML relink (only for XLF files) */}
           {fileExtension !== ".html" && (
-            <div className="p-4 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 transition flex items-center justify-between">
-              <div className="space-y-1">
-                <div className="font-bold flex items-center gap-2 text-sm text-green-300">
-                  Export as HTML (.html)
-                </div>
-                <p className={`text-xs ${theme.muted}`}>
-                  To export this XLF as HTML, you must first relink the original HTML template.
-                </p>
-              </div>
-              <label className="bg-green-700 cursor-pointer text-white hover:bg-green-600 rounded-xl px-4 py-2 text-xs font-semibold flex items-center gap-1.5 transition">
-                <Icons.Upload /> Relink HTML
-                <input 
-                  type="file" 
-                  className="hidden" 
-                  accept=".html,.htm" 
-                  onChange={(e) => {
-                    if (onRelinkHtml) {
-                      onRelinkHtml(e);
-                      onClose();
-                    }
-                  }} 
-                />
-              </label>
-            </div>
+            <ExportOption
+              title="Export as HTML (.html)"
+              desc="Relink the original HTML template to generate an HTML output."
+              accentColor="var(--text-emerald)"
+              btnBg="rgba(34,197,94,0.08)"
+              btnBorder="rgba(34,197,94,0.25)"
+              btnColor="var(--text-emerald)"
+              isLabel
+            >
+              <Upload style={{ width: 12, height: 12 }} />
+              Relink HTML
+              <input
+                type="file" className="hidden" accept=".html,.htm"
+                onChange={(e) => { if (onRelinkHtml) { onRelinkHtml(e); onClose(); } }}
+              />
+            </ExportOption>
           )}
 
+          {/* Linguist Review */}
+          <ExportOption
+            title="Linguist Review Table (.docx)"
+            desc="Export source & target side-by-side in Word with a quality feedback form."
+            accentColor="#f472b6"
+            btnBg="rgba(244,114,182,0.08)"
+            btnBorder="rgba(244,114,182,0.25)"
+            btnColor="#f472b6"
+            onAction={() => { onExportLinguistTable(); onClose(); }}
+          >
+            <Download style={{ width: 12, height: 12 }} />
+            Download
+          </ExportOption>
 
-
-          {/* Option 5: Linguist Review Table (.docx) */}
-          <div className="p-4 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 transition flex items-center justify-between">
-            <div className="space-y-1">
-              <div className="font-bold flex items-center gap-2 text-sm text-pink-400">
-                Linguist Review Table (.docx)
-              </div>
-              <p className={`text-xs ${theme.muted}`}>
-                Export source and target translations side-by-side in a Word file with a feedback form.
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                onExportLinguistTable();
-                onClose();
-              }}
-              className="bg-pink-700 text-white hover:bg-pink-600 rounded-xl px-4 py-2 text-xs font-semibold flex items-center gap-1.5 transition"
-            >
-              <Icons.Download /> Download
-            </button>
-          </div>
         </div>
       </div>
     </div>

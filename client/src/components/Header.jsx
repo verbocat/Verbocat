@@ -1,105 +1,40 @@
 import { LANGUAGES } from "../constants/languages.js";
 import {
-  LayoutDashboard,
-  BookOpen,
-  Users,
-  Settings as SettingsIcon,
-  Sun,
-  Moon,
-  LogOut,
-  Plus,
-  LockKeyhole,
-  Sliders,
-  ChevronRight,
-  FileText
+  BookOpen, Users, Settings as SettingsIcon,
+  Sun, Moon, LogOut, Plus, LockKeyhole, Sliders,
+  ChevronRight, FileText, LayoutDashboard
 } from "lucide-react";
 
-// Tiny icon button for topbar right-side nav
-const NavBtn = ({ children, onClick, disabled = false, title = "" }) => (
+const NavBtn = ({ children, onClick, disabled = false, title = "", iconOnly = false }) => (
   <button
     onClick={onClick}
     disabled={disabled}
     title={title}
-    style={{
-      display: "inline-flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 5,
-      height: 28,
-      padding: "0 9px",
-      borderRadius: 7,
-      fontSize: 11,
-      fontWeight: 600,
-      border: "1px solid transparent",
-      cursor: disabled ? "not-allowed" : "pointer",
-      opacity: disabled ? 0.35 : 1,
-      transition: "background 0.15s, border-color 0.15s, color 0.15s",
-      color: "var(--text-secondary)",
-      background: "transparent",
-      whiteSpace: "nowrap"
-    }}
-    onMouseEnter={e => {
-      if (!disabled) {
-        e.currentTarget.style.background = "var(--bg-hover)";
-        e.currentTarget.style.borderColor = "var(--border-subtle)";
-        e.currentTarget.style.color = "var(--text-primary)";
-      }
-    }}
-    onMouseLeave={e => {
-      e.currentTarget.style.background = "transparent";
-      e.currentTarget.style.borderColor = "transparent";
-      e.currentTarget.style.color = "var(--text-secondary)";
-    }}
+    className={iconOnly ? "nav-btn-icon" : "nav-btn"}
   >
     {children}
   </button>
 );
 
 export const Header = ({
-  currentProvider,
-  darkMode,
-  onLoadProject,
-  onOpenGlossary,
-  onToggleDarkMode,
-  qaIssuesCount,
-  segmentsCount,
-  progress,
-  theme,
-  onLock,
-  isSidebar = false,        // kept for compat, ignored — always topbar now
-  fileName,
-  fileExtension,
-  sourceLanguage,
-  onSourceLanguageChange,
-  targetLanguage,
-  onTargetLanguageChange,
-  stats,
-  onCloseProject,
-  onSaveProject,
-  onRelinkHtml,
-  onImportXliff,
-  onOpenContext,
-  onOpenSettings,
-  userRole,
-  onOpenAdmin,
-  creditsAllowed,
-  creditsConsumed,
-  onLogout,
-  onUpload
+  currentProvider, darkMode, onLoadProject, onOpenGlossary, onToggleDarkMode,
+  qaIssuesCount, segmentsCount, progress, theme, onLock, isSidebar = false,
+  fileName, fileExtension, sourceLanguage, onSourceLanguageChange,
+  targetLanguage, onTargetLanguageChange, stats, onCloseProject, onSaveProject,
+  onRelinkHtml, onImportXliff, onOpenContext, onOpenSettings,
+  userRole, onOpenAdmin, creditsAllowed, creditsConsumed, onLogout, onUpload
 }) => {
   const isManager = userRole === "admin" || userRole === "manager";
-
+  const hasFile = segmentsCount > 0;
   const srcLang = LANGUAGES.find(l => l.code === sourceLanguage);
   const tgtLang = LANGUAGES.find(l => l.code === targetLanguage);
-
-  const hasFile = segmentsCount > 0;
 
   return (
     <header className="topbar">
 
-      {/* ─── Brand ─── */}
+      {/* Brand */}
       <div className="topbar-brand">
-        <svg viewBox="0 0 100 100" style={{ width: 22, height: 22, color: "#6366f1", flexShrink: 0 }}
+        <svg viewBox="0 0 100 100" style={{ width: 22, height: 22, color: "var(--accent)", flexShrink: 0 }}
           fill="none" stroke="currentColor" strokeWidth="6.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M 22,38 L 22,12 L 48,28" />
           <path d="M 78,38 L 78,12 L 52,28" />
@@ -114,56 +49,38 @@ export const Header = ({
 
       <div className="topbar-divider" />
 
-      {/* ─── Live breadcrumb (only when file loaded) ─── */}
+      {/* Live breadcrumb */}
       {hasFile ? (
-        <div className="topbar-breadcrumb">
+        <div className="topbar-crumb">
           <FileText style={{ width: 12, height: 12, color: "var(--text-muted)", flexShrink: 0 }} />
           <span className="topbar-filename" title={fileName}>{fileName}</span>
-          {fileExtension && (
-            <span className="topbar-ext">{fileExtension.toUpperCase()}</span>
-          )}
+          {fileExtension && <span className="topbar-badge">{fileExtension.replace(".", "")}</span>}
           {srcLang && tgtLang && (
             <>
-              <span className="topbar-divider" style={{ margin: "0 4px" }} />
-              <div className="topbar-lang-pair">
+              <span className="topbar-sep-dot">·</span>
+              <div className="topbar-langpair">
                 <span>{srcLang.flag} {srcLang.code.toUpperCase()}</span>
-                <ChevronRight style={{ width: 10, height: 10, opacity: 0.4 }} />
+                <ChevronRight style={{ width: 9, height: 9, opacity: 0.4, flexShrink: 0 }} />
                 <span>{tgtLang.flag} {tgtLang.code.toUpperCase()}</span>
               </div>
             </>
           )}
           {progress !== undefined && (
-            <span className="topbar-progress-badge">{progress}% done</span>
+            <span className="topbar-progress">{progress}% done</span>
           )}
         </div>
       ) : (
         <div style={{ flex: 1 }} />
       )}
 
-      {/* ─── Right nav actions ─── */}
+      {/* Right nav */}
       <div className="topbar-actions">
 
-        {/* Upload new file (when no file loaded — primary CTA) */}
+        {/* Primary upload CTA when no file */}
         {!hasFile && (
-          <label style={{ cursor: "pointer" }}>
-            <span style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              height: 28,
-              padding: "0 12px",
-              borderRadius: 7,
-              fontSize: 11,
-              fontWeight: 700,
-              background: "var(--accent-primary)",
-              color: "#fff",
-              border: "1px solid rgba(99,102,241,0.5)",
-              cursor: "pointer",
-              boxShadow: "0 2px 8px rgba(99,102,241,0.22)"
-            }}>
-              <Plus style={{ width: 12, height: 12 }} />
-              Open File
-            </span>
+          <label className="btn-cta" style={{ cursor: "pointer" }}>
+            <Plus style={{ width: 13, height: 13 }} />
+            Open File
             <input type="file" onChange={onUpload} className="hidden" />
           </label>
         )}
@@ -174,39 +91,38 @@ export const Header = ({
           <span>Glossary</span>
         </NavBtn>
 
-        {/* Context Settings */}
+        {/* Context */}
         <NavBtn onClick={onOpenContext} title="Translation Context">
           <Sliders style={{ width: 13, height: 13 }} />
           <span>Context</span>
         </NavBtn>
 
-        {/* Team / Admin */}
+        {/* Admin Panel — NOT "Team" */}
         {isManager && onOpenAdmin && (
-          <NavBtn onClick={onOpenAdmin} title="Admin Dashboard">
-            <Users style={{ width: 13, height: 13 }} />
-            <span>Team</span>
+          <NavBtn onClick={onOpenAdmin} title="Admin Panel">
+            <LayoutDashboard style={{ width: 13, height: 13 }} />
+            <span>Admin Panel</span>
           </NavBtn>
         )}
 
         <div className="topbar-divider" />
 
-        {/* Dark / light mode */}
-        <NavBtn onClick={onToggleDarkMode} title={darkMode ? "Switch to Light" : "Switch to Dark"}>
+        {/* Dark/Light */}
+        <NavBtn onClick={onToggleDarkMode} title={darkMode ? "Switch to Light" : "Switch to Dark"} iconOnly>
           {darkMode
-            ? <Sun style={{ width: 13, height: 13 }} />
-            : <Moon style={{ width: 13, height: 13 }} />
-          }
+            ? <Sun style={{ width: 14, height: 14 }} />
+            : <Moon style={{ width: 14, height: 14 }} />}
         </NavBtn>
 
         {/* Settings */}
-        <NavBtn onClick={onOpenSettings} title="Settings">
-          <SettingsIcon style={{ width: 13, height: 13 }} />
+        <NavBtn onClick={onOpenSettings} title="Settings" iconOnly>
+          <SettingsIcon style={{ width: 14, height: 14 }} />
         </NavBtn>
 
-        {/* Lock screen */}
+        {/* Lock */}
         {onLock && (
-          <NavBtn onClick={onLock} title="Lock Screen">
-            <LockKeyhole style={{ width: 13, height: 13 }} />
+          <NavBtn onClick={onLock} title="Lock Screen" iconOnly>
+            <LockKeyhole style={{ width: 14, height: 14 }} />
           </NavBtn>
         )}
 

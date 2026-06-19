@@ -1,73 +1,37 @@
 import { useState, useRef, useEffect } from "react";
 import { Copy, Check, ArrowRight, AlertTriangle } from "lucide-react";
 
-// ─── Glossary highlight tooltip ───────────────────────────────────
+/* ── Glossary highlight tooltip ─────────────────────────────── */
 const GlossaryHighlight = ({ term, children }) => {
   const [show, setShow] = useState(false);
-  const timeoutRef = useRef(null);
-
-  const handleMouseEnter = () => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    setShow(true);
-  };
-  const handleMouseLeave = () => {
-    timeoutRef.current = setTimeout(() => setShow(false), 800);
-  };
-  const handleCopy = (e) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(term.target);
-  };
+  const t = useRef(null);
+  const enter = () => { if (t.current) clearTimeout(t.current); setShow(true); };
+  const leave = () => { t.current = setTimeout(() => setShow(false), 800); };
+  const copy = (e) => { e.stopPropagation(); navigator.clipboard.writeText(term.target); };
 
   return (
-    <span className="relative inline-block" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
-      <mark style={{
-        background: "rgba(245,158,11,0.18)",
-        color: "#fde68a",
-        borderBottom: "1px solid rgba(245,158,11,0.45)",
-        borderRadius: 2,
-        padding: "0 2px",
-        cursor: "pointer"
-      }}>
-        {children}
-      </mark>
+    <span className="relative inline-block" onMouseEnter={enter} onMouseLeave={leave}>
+      <mark className="gloss-mark">{children}</mark>
       {show && (
         <span
           style={{
-            position: "absolute",
-            bottom: "100%",
-            left: "50%",
-            transform: "translateX(-50%)",
-            marginBottom: 6,
-            padding: "4px 8px",
-            background: "var(--bg-panel)",
+            position: "absolute", bottom: "100%", left: "50%",
+            transform: "translateX(-50%)", marginBottom: 6,
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "4px 8px", borderRadius: 7,
+            background: "var(--bg-surface)",
             border: "1px solid var(--border-medium)",
-            borderRadius: 7,
-            fontSize: 11,
-            fontWeight: 600,
-            color: "#fff",
-            whiteSpace: "nowrap",
-            zIndex: 999,
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.5)"
+            boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+            fontSize: 11, fontWeight: 600, color: "#fff",
+            whiteSpace: "nowrap", zIndex: 999
           }}
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
+          onMouseEnter={enter} onMouseLeave={leave}
         >
           <span>{term.target}</span>
-          <button
-            onClick={handleCopy}
-            style={{
-              padding: 3,
-              borderRadius: 4,
-              background: "transparent",
-              border: "none",
-              cursor: "pointer",
-              color: "#818cf8"
-            }}
-            title="Copy"
-          >
+          <button onClick={copy} style={{
+            padding: 3, borderRadius: 4, background: "transparent",
+            border: "none", cursor: "pointer", color: "var(--text-accent)"
+          }}>
             <Copy style={{ width: 10, height: 10 }} />
           </button>
         </span>
@@ -76,188 +40,149 @@ const GlossaryHighlight = ({ term, children }) => {
   );
 };
 
-// ─── Tag rendering helpers ────────────────────────────────────────
+/* ── Tag conversion helpers ──────────────────────────────────── */
 const targetToHtml = (str) => {
   if (!str) return "";
   let html = str.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  html = html.replace(/&lt;(\/?[^&>]*)\&gt;|&lt;(\/?(?:g|ph|x|bpt|ept|it)[^&>]*)&gt;/gi, (match, tagInner) => {
-    if (!tagInner) return match;
-    let displayName = tagInner;
-    if (!/^\/?\d+$/.test(tagInner)) {
-      const idMatch = tagInner.match(/id=(?:&quot;|"|')([^"']+)("|&quot;|')/i);
-      if (idMatch) {
-        const isClosing = tagInner.startsWith("/");
-        const tagName = tagInner.replace(/^\//, "").split(/[\s/]/)[0];
-        displayName = (isClosing ? "/" : "") + tagName + idMatch[1];
+  html = html.replace(/&lt;(\/?[^&>]*)\&gt;/gi, (match, inner) => {
+    if (!inner) return match;
+    let display = inner;
+    if (!/^\/?\d+$/.test(inner)) {
+      const m = inner.match(/id=(?:&quot;|"|')([^"']+)("|&quot;|')/i);
+      if (m) {
+        const closing = inner.startsWith("/");
+        const name = inner.replace(/^\//, "").split(/[\s/]/)[0];
+        display = (closing ? "/" : "") + name + m[1];
       }
     }
-    const escapedTagInner = tagInner.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-    return `<span class="seg-tag" contenteditable="false" data-tag="${escapedTagInner}">${displayName}</span>`;
+    const esc = inner.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    return `<span class="seg-tag" contenteditable="false" data-tag="${esc}">${display}</span>`;
   });
-  html = html.replace(/\n/g, "<br>");
-  return html;
+  return html.replace(/\n/g, "<br>");
 };
 
-const htmlToTarget = (element) => {
-  let result = "";
-  const traverse = (node) => {
-    if (node.nodeType === Node.TEXT_NODE) {
-      result += node.textContent;
-    } else if (node.nodeType === Node.ELEMENT_NODE) {
-      if (node.tagName.toLowerCase() === "br") {
-        result += "\n";
-      } else if (node.tagName.toLowerCase() === "div") {
-        result += "\n";
-        node.childNodes.forEach(traverse);
-      } else if (node.hasAttribute("data-tag")) {
-        result += `<${node.getAttribute("data-tag")}>`;
-      } else {
-        node.childNodes.forEach(traverse);
-      }
+const htmlToTarget = (el) => {
+  let r = "";
+  const walk = (n) => {
+    if (n.nodeType === Node.TEXT_NODE) { r += n.textContent; }
+    else if (n.nodeType === Node.ELEMENT_NODE) {
+      const tag = n.tagName.toLowerCase();
+      if (tag === "br") r += "\n";
+      else if (tag === "div") { r += "\n"; n.childNodes.forEach(walk); }
+      else if (n.hasAttribute("data-tag")) r += `<${n.getAttribute("data-tag")}>`;
+      else n.childNodes.forEach(walk);
     }
   };
-  element.childNodes.forEach(traverse);
-  return result.replace(/^\n/, "");
+  el.childNodes.forEach(walk);
+  return r.replace(/^\n/, "");
 };
 
-// ─── SegmentCard ──────────────────────────────────────────────────
+/* ── Main component ──────────────────────────────────────────── */
 export const SegmentCard = ({
-  darkMode,
-  index,
-  segment,
-  theme,
-  translationGlossary = [],
-  onCopy,
-  onUpdateTranslation,
-  onToggleVerify,
-  onVerifyAndNext
+  darkMode, index, segment, theme, translationGlossary = [],
+  onCopy, onUpdateTranslation, onToggleVerify, onVerifyAndNext
 }) => {
-  const targetRef = useRef(null);
-  const lastSavedTargetRef = useRef(segment.target || "");
+  const editorRef = useRef(null);
+  const lastSaved = useRef(segment.target || "");
   const [suggestions, setSuggestions] = useState([]);
-  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
+  const [activeIdx, setActiveIdx] = useState(0);
 
-  // Sync when virtuoso recycles the row
+  // Sync on row recycle
   useEffect(() => {
-    if (targetRef.current) {
-      targetRef.current.innerHTML = targetToHtml(segment.target || "");
-      lastSavedTargetRef.current = segment.target || "";
+    if (editorRef.current) {
+      editorRef.current.innerHTML = targetToHtml(segment.target || "");
+      lastSaved.current = segment.target || "";
     }
   }, [segment.id]);
 
   useEffect(() => {
-    if (targetRef.current && segment.target !== lastSavedTargetRef.current) {
-      targetRef.current.innerHTML = targetToHtml(segment.target || "");
-      lastSavedTargetRef.current = segment.target || "";
+    if (editorRef.current && segment.target !== lastSaved.current) {
+      editorRef.current.innerHTML = targetToHtml(segment.target || "");
+      lastSaved.current = segment.target || "";
     }
   }, [segment.target]);
 
-  // ── Source text renderer (glossary highlights + inline tags) ──
-  const renderHighlightedSource = (text) => {
+  /* ── Source renderer ── */
+  const renderSource = (text) => {
     if (!text) return null;
-    let elements = [text];
+    let els = [text];
 
-    if (translationGlossary && translationGlossary.length > 0) {
+    if (translationGlossary?.length) {
       translationGlossary.forEach((term) => {
         if (!term.source) return;
-        const regex = new RegExp(
-          `(${term.source.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`,
-          "gi"
+        const rx = new RegExp(`(${term.source.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
+        els = els.flatMap((el) =>
+          typeof el === "string"
+            ? el.split(rx).map((p, i) => i % 2 === 1
+                ? <GlossaryHighlight key={`${term.source}-${i}`} term={term}>{p}</GlossaryHighlight>
+                : p)
+            : el
         );
-        elements = elements.flatMap((el) => {
-          if (typeof el === "string") {
-            return el.split(regex).map((part, i) =>
-              i % 2 === 1
-                ? <GlossaryHighlight key={`${term.source}-${i}`} term={term}>{part}</GlossaryHighlight>
-                : part
-            );
-          }
-          return el;
-        });
       });
     }
 
-    elements = elements.flatMap((el) => {
+    els = els.flatMap((el) => {
       if (typeof el === "string") {
         const parts = el.split(/(<\/?[\d]+>|<\/?(?:g|ph|x|bpt|ept|it)[^>]*>)/gi);
-        return parts.map((part, i) => {
-          if (/^<\/?[\d]+>$/.test(part) || /^<\/?(?:g|ph|x|bpt|ept|it)[^>]*>$/i.test(part)) {
-            const inner = part.replace(/[<>]/g, "");
-            let displayName = inner;
+        return parts.map((p, i) => {
+          if (/^<\/?[\d]+>$/.test(p) || /^<\/?(?:g|ph|x|bpt|ept|it)[^>]*>$/i.test(p)) {
+            const inner = p.replace(/[<>]/g, "");
+            let display = inner;
             if (!/^\/?\d+$/.test(inner)) {
-              const idMatch = inner.match(/id=(?:&quot;|"|')([^"']+)("|&quot;|')/i);
-              if (idMatch) {
-                const isClosing = inner.startsWith("/");
-                const tagName = inner.replace(/^\//, "").split(/[\s/]/)[0];
-                displayName = (isClosing ? "/" : "") + tagName + idMatch[1];
+              const m = inner.match(/id=(?:&quot;|"|')([^"']+)("|&quot;|')/i);
+              if (m) {
+                const closing = inner.startsWith("/");
+                const name = inner.replace(/^\//, "").split(/[\s/]/)[0];
+                display = (closing ? "/" : "") + name + m[1];
               }
             }
-            return (
-              <span key={`ph-${i}`} style={{
-                display: "inline-flex",
-                alignItems: "center",
-                background: "var(--bg-elevated)",
-                border: "1px solid var(--border-subtle)",
-                color: "var(--text-accent)",
-                padding: "0 4px",
-                margin: "0 1px",
-                borderRadius: 3,
-                fontSize: 9,
-                fontFamily: "'IBM Plex Mono', monospace",
-                userSelect: "none"
-              }} title={inner}>
-                {displayName}
-              </span>
-            );
+            return <span key={`tag-${i}`} className="seg-tag" title={inner}>{display}</span>;
           }
-          return part;
+          return p;
         });
       }
       return el;
     });
 
-    return elements;
+    return els;
   };
 
-  // ── Input handlers ────────────────────────────────────────────
+  /* ── Input handlers ── */
   const handleInput = (e) => {
     const text = htmlToTarget(e.currentTarget);
     const words = text.split(/[\s\u00a0]+/);
-    const lastWord = words[words.length - 1] || "";
-    if (lastWord.length >= 1 && translationGlossary && translationGlossary.length > 0) {
-      const filtered = translationGlossary.filter(
-        (term) =>
-          (term.target && term.target.toLowerCase().startsWith(lastWord.toLowerCase())) ||
-          (term.source && term.source.toLowerCase().startsWith(lastWord.toLowerCase()))
+    const last = words[words.length - 1] || "";
+    if (last.length >= 1 && translationGlossary?.length) {
+      setSuggestions(
+        translationGlossary.filter(t =>
+          (t.target?.toLowerCase().startsWith(last.toLowerCase())) ||
+          (t.source?.toLowerCase().startsWith(last.toLowerCase()))
+        ).slice(0, 5)
       );
-      setSuggestions(filtered.slice(0, 5));
-      setActiveSuggestionIndex(0);
+      setActiveIdx(0);
     } else {
       setSuggestions([]);
     }
   };
 
   const applySuggestion = (term) => {
-    if (!targetRef.current) return;
-    const text = htmlToTarget(targetRef.current);
+    if (!editorRef.current) return;
+    const text = htmlToTarget(editorRef.current);
     const words = text.split(/(\s+)/);
-    let wordIndex = -1;
-    for (let i = words.length - 1; i >= 0; i--) {
-      if (words[i].trim() !== "") { wordIndex = i; break; }
-    }
-    if (wordIndex !== -1) words[wordIndex] = term.target;
-    else words.push(term.target);
-    const newTarget = words.join("");
-    targetRef.current.innerHTML = targetToHtml(newTarget);
-    lastSavedTargetRef.current = newTarget;
-    onUpdateTranslation(segment.id, newTarget);
+    let wi = -1;
+    for (let i = words.length - 1; i >= 0; i--) { if (words[i].trim()) { wi = i; break; } }
+    if (wi !== -1) words[wi] = term.target; else words.push(term.target);
+    const next = words.join("");
+    editorRef.current.innerHTML = targetToHtml(next);
+    lastSaved.current = next;
+    onUpdateTranslation(segment.id, next);
     setSuggestions([]);
     setTimeout(() => {
-      if (!targetRef.current) return;
-      targetRef.current.focus();
+      if (!editorRef.current) return;
+      editorRef.current.focus();
       const range = document.createRange();
       const sel = window.getSelection();
-      range.selectNodeContents(targetRef.current);
+      range.selectNodeContents(editorRef.current);
       range.collapse(false);
       sel.removeAllRanges();
       sel.addRange(range);
@@ -265,82 +190,59 @@ export const SegmentCard = ({
   };
 
   const handleKeyDown = (e) => {
-    if (suggestions.length > 0) {
-      if (e.key === "ArrowDown") { e.preventDefault(); setActiveSuggestionIndex((p) => Math.min(p + 1, suggestions.length - 1)); return; }
-      if (e.key === "ArrowUp")   { e.preventDefault(); setActiveSuggestionIndex((p) => Math.max(p - 1, 0)); return; }
-      if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); applySuggestion(suggestions[activeSuggestionIndex]); return; }
-      if (e.key === "Escape")    { e.preventDefault(); setSuggestions([]); return; }
+    if (suggestions.length) {
+      if (e.key === "ArrowDown")  { e.preventDefault(); setActiveIdx(p => Math.min(p+1, suggestions.length-1)); return; }
+      if (e.key === "ArrowUp")    { e.preventDefault(); setActiveIdx(p => Math.max(p-1, 0)); return; }
+      if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); applySuggestion(suggestions[activeIdx]); return; }
+      if (e.key === "Escape")     { e.preventDefault(); setSuggestions([]); return; }
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
-      const newTarget = htmlToTarget(e.currentTarget);
-      lastSavedTargetRef.current = newTarget;
-      onUpdateTranslation(segment.id, newTarget);
+      const t = htmlToTarget(e.currentTarget);
+      lastSaved.current = t;
+      onUpdateTranslation(segment.id, t);
       onVerifyAndNext();
     }
   };
 
   const handleBlur = (e) => {
-    const newTarget = htmlToTarget(e.currentTarget);
-    lastSavedTargetRef.current = newTarget;
-    if (newTarget !== segment.target) onUpdateTranslation(segment.id, newTarget);
+    const t = htmlToTarget(e.currentTarget);
+    lastSaved.current = t;
+    if (t !== segment.target) onUpdateTranslation(segment.id, t);
     setTimeout(() => setSuggestions([]), 200);
   };
 
-  // ── Status ────────────────────────────────────────────────────
-  const statusClass = segment.verified
-    ? "seg-verified"
-    : segment.target
-    ? "seg-translated"
-    : "seg-untranslated";
-
-  const dotClass = segment.verified
-    ? "verified"
-    : segment.target
-    ? "translated"
-    : "pending";
+  const statusClass = segment.verified ? "seg-verified" : segment.target ? "seg-translated" : "seg-untranslated";
+  const dotClass = segment.verified ? "dot-verified" : segment.target ? "dot-translated" : "dot-pending";
 
   return (
     <article id={`segment-${segment.id}`} className={`seg-row ${statusClass}`}>
 
-      {/* Col 1: Number + status */}
+      {/* Col 1: Number */}
       <div className="seg-num">
         <span className="seg-num-label">{String(index + 1).padStart(2, "0")}</span>
-        <span className={`seg-status-dot ${dotClass}`} />
+        <span className={`seg-dot ${dotClass}`} />
         {segment.fuzzyScore && (
           <span style={{
-            fontSize: 8,
-            fontWeight: 700,
-            fontFamily: "'IBM Plex Mono', monospace",
-            color: "#fbbf24",
-            background: "rgba(245,158,11,0.1)",
+            fontSize: 8, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace",
+            color: "var(--text-amber)",
+            background: "rgba(245,158,11,0.08)",
             border: "1px solid rgba(245,158,11,0.2)",
-            borderRadius: 3,
-            padding: "0 3px"
+            borderRadius: 3, padding: "0 3px"
           }} title={`Fuzzy: ${segment.fuzzyScore}%`}>
             {segment.fuzzyScore}%
           </span>
         )}
         {segment.qaIssues?.length > 0 && (
-          <span style={{
-            fontSize: 8,
-            color: "#fb7185",
-            display: "flex",
-            alignItems: "center"
-          }} title={`${segment.qaIssues.length} QA issue`}>
-            <AlertTriangle style={{ width: 9, height: 9 }} />
-          </span>
+          <AlertTriangle style={{ width: 9, height: 9, color: "var(--text-rose)" }}
+            title={`${segment.qaIssues.length} QA issue`} />
         )}
       </div>
 
-      {/* Col 2: Source text */}
+      {/* Col 2: Source */}
       <div className="seg-source">
-        <div className="seg-source-text">{renderHighlightedSource(segment.source)}</div>
-        <button
-          className="seg-copy-btn"
-          onClick={() => onCopy(segment.source)}
-          title="Copy source"
-        >
+        <div className="seg-source-text">{renderSource(segment.source)}</div>
+        <button className="seg-src-copy" onClick={() => onCopy(segment.source)} title="Copy source">
           <Copy style={{ width: 9, height: 9 }} />
         </button>
       </div>
@@ -351,81 +253,35 @@ export const SegmentCard = ({
       </div>
 
       {/* Col 4: Target editor */}
-      <div className="seg-target-wrap">
+      <div className="seg-target">
         <div className="relative">
           <div
             id={`target-${segment.id}`}
-            ref={targetRef}
+            ref={editorRef}
             data-segment-target="true"
             contentEditable={!segment.verified}
-            suppressContentEditableWarning={true}
+            suppressContentEditableWarning
             onBlur={handleBlur}
             onInput={handleInput}
             onKeyDown={handleKeyDown}
-            className="seg-target-editor"
-            style={segment.verified ? { opacity: 0.5, cursor: "default", pointerEvents: "none" } : {}}
+            className="seg-editor"
+            style={segment.verified ? { opacity: 0.55, cursor: "default", pointerEvents: "none" } : {}}
           />
 
-          {/* Glossary autocomplete suggestions */}
           {suggestions.length > 0 && (
-            <div style={{
-              position: "absolute",
-              left: 0,
-              right: 0,
-              top: "100%",
-              zIndex: 100,
-              marginTop: 3,
-              background: "var(--bg-panel)",
-              border: "1px solid var(--border-medium)",
-              borderRadius: 8,
-              padding: 4,
-              boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
-              maxHeight: 180,
-              overflowY: "auto"
-            }}>
-              <div style={{
-                padding: "2px 8px 4px",
-                fontSize: 9,
-                fontFamily: "'IBM Plex Mono', monospace",
-                fontWeight: 700,
-                textTransform: "uppercase",
-                letterSpacing: "0.1em",
-                color: "var(--text-muted)",
-                borderBottom: "1px solid var(--border-subtle)",
-                marginBottom: 3,
-                display: "flex",
-                justifyContent: "space-between"
-              }}>
+            <div className="glossary-dropdown">
+              <div className="glossary-header">
                 <span>Glossary Suggestions</span>
-                <span>↑↓ · Enter</span>
+                <span>↑↓ Navigate · Enter/Tab Select</span>
               </div>
               {suggestions.map((term, i) => (
                 <button
-                  key={`sugg-${segment.id}-${i}`}
+                  key={`sug-${segment.id}-${i}`}
+                  className={`glossary-item ${i === activeIdx ? "active-suggestion" : ""}`}
                   onMouseDown={(e) => { e.preventDefault(); applySuggestion(term); }}
-                  style={{
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "5px 8px",
-                    borderRadius: 6,
-                    fontSize: 11,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    background: i === activeSuggestionIndex
-                      ? "rgba(99,102,241,0.12)"
-                      : "transparent",
-                    border: i === activeSuggestionIndex
-                      ? "1px solid rgba(99,102,241,0.25)"
-                      : "1px solid transparent",
-                    color: i === activeSuggestionIndex
-                      ? "#a5b4fc"
-                      : "var(--text-secondary)",
-                    cursor: "pointer"
-                  }}
                 >
                   <span style={{ fontWeight: 600 }}>{term.target}</span>
-                  <span style={{ fontSize: 9, fontFamily: "'IBM Plex Mono', monospace", color: "var(--text-muted)" }}>
+                  <span style={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace", color: "var(--text-muted)" }}>
                     {term.source}
                   </span>
                 </button>
@@ -435,37 +291,13 @@ export const SegmentCard = ({
         </div>
 
         {!segment.verified && (
-          <span style={{
-            fontSize: 9,
-            color: "var(--text-muted)",
-            fontFamily: "'IBM Plex Mono', monospace",
-            marginTop: 2,
-            userSelect: "none"
-          }}>
-            Ctrl+Enter to verify
-          </span>
+          <span className="seg-hint">Ctrl+Enter to verify and advance</span>
         )}
 
-        {/* QA issues inline */}
         {segment.qaIssues?.length > 0 && (
-          <div style={{
-            marginTop: 4,
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 3
-          }}>
+          <div className="seg-qa-chips">
             {segment.qaIssues.map((issue, i) => (
-              <span key={`qa-${segment.id}-${i}`} style={{
-                fontSize: 9,
-                fontWeight: 600,
-                color: "#fb7185",
-                background: "rgba(244,63,94,0.08)",
-                border: "1px solid rgba(244,63,94,0.15)",
-                borderRadius: 4,
-                padding: "1px 5px"
-              }}>
-                {issue}
-              </span>
+              <span key={`qa-${segment.id}-${i}`} className="seg-qa-chip">{issue}</span>
             ))}
           </div>
         )}
@@ -473,21 +305,14 @@ export const SegmentCard = ({
 
       {/* Col 5: Actions */}
       <div className="seg-actions">
-        {/* Verify */}
         <button
           onClick={onToggleVerify}
-          title={segment.verified ? "Unverify" : "Verify segment"}
-          className={`seg-action-btn ${segment.verified ? "verified" : ""}`}
+          title={segment.verified ? "Unverify" : "Verify"}
+          className={`seg-btn ${segment.verified ? "active" : ""}`}
         >
           <Check style={{ width: 12, height: 12 }} />
         </button>
-
-        {/* Copy target */}
-        <button
-          onClick={() => onCopy(segment.target || "")}
-          title="Copy translation"
-          className="seg-action-btn"
-        >
+        <button onClick={() => onCopy(segment.target || "")} title="Copy translation" className="seg-btn">
           <Copy style={{ width: 11, height: 11 }} />
         </button>
       </div>

@@ -1,182 +1,155 @@
 import { useState } from "react";
-import { X, Sun, Moon, LogOut, Sliders, User, ShieldCheck, HelpCircle } from "lucide-react";
+import { X, Sun, Moon, LogOut, User, ShieldCheck, Sliders } from "lucide-react";
+
+const Toggle = ({ on, onToggle }) => (
+  <button type="button" onClick={onToggle} className={`toggle ${on ? "on" : "off"}`}>
+    <div className="toggle-knob" />
+  </button>
+);
 
 export const SettingsModal = ({
-  show,
-  onClose,
-  darkMode,
-  onToggleDarkMode,
-  onLogout,
-  userRole,
-  userEmail,
-  theme
+  show, onClose, darkMode, onToggleDarkMode, onLogout, userRole, userEmail, theme
 }) => {
-  const [autocompleteEnabled, setAutocompleteEnabled] = useState(true);
-  const [fontSize, setFontSize] = useState("medium"); // small, medium, large
+  const [autocomplete, setAutocomplete] = useState(true);
   const [autoPropagate, setAutoPropagate] = useState(true);
+  const [fontSize, setFontSize] = useState("medium");
 
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-fade-in">
-      
-      {/* Settings Dialog Card */}
-      <div className="relative w-full max-w-lg rounded-2xl border border-white/10 bg-[#0b0c12]/95 p-6 md:p-8 shadow-2xl text-white">
-        
+    <div className="modal-overlay">
+      <div className="modal-card" style={{ maxWidth: 480 }}>
+
         {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-white/5 select-none">
-          <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-lg bg-violet-600/10 border border-violet-500/25 flex items-center justify-center text-violet-400">
-              <Sliders className="h-4.5 w-4.5" />
+        <div className="modal-header">
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 8,
+              background: "rgba(91,106,240,0.1)",
+              border: "1px solid rgba(91,106,240,0.22)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: "var(--accent)"
+            }}>
+              <Sliders style={{ width: 15, height: 15 }} />
             </div>
             <div>
-              <h3 className="text-sm font-extrabold tracking-wide">Workspace Settings</h3>
-              <p className="text-[10px] text-neutral-400 font-mono mt-0.5">VERBOCAT_CONFIG_v1.2</p>
+              <div className="modal-title">Workspace Settings</div>
+              <div style={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace", color: "var(--text-muted)", marginTop: 1 }}>
+                VERBOCAT v1.2
+              </div>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-white transition-all cursor-pointer"
-          >
-            <X className="h-4 w-4" />
+          <button className="modal-close" onClick={onClose}>
+            <X style={{ width: 15, height: 15 }} />
           </button>
         </div>
 
-        {/* Content Tabs / Sections */}
-        <div className="mt-6 space-y-6">
-          
-          {/* Section 1: Appearance */}
-          <div className="space-y-3">
-            <span className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-500 font-mono block select-none">
-              Appearance
-            </span>
-            <div className="bg-neutral-950/40 border border-white/5 rounded-xl p-4 flex items-center justify-between">
-              <div className="min-w-0">
-                <h4 className="text-xs font-bold text-white">Interface Theme</h4>
-                <p className="text-[10px] text-neutral-400 mt-1">Switch between clean light mode and deep space dark mode.</p>
+        {/* Body */}
+        <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+          {/* Appearance */}
+          <div>
+            <span className="settings-section-label">Appearance</span>
+            <div className="settings-row" style={{ borderRadius: "var(--radius-md)" }}>
+              <div>
+                <span className="settings-label">Interface Theme</span>
+                <span className="settings-desc">Switch between light and dark mode</span>
               </div>
               <button
-                type="button"
                 onClick={onToggleDarkMode}
-                className="flex items-center gap-2 rounded-xl border border-white/10 bg-neutral-900/60 px-3.5 py-2 text-xs font-bold text-neutral-200 hover:text-white hover:bg-white/5 transition-all cursor-pointer active:scale-95 shadow-sm"
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "6px 12px", borderRadius: "var(--radius-sm)",
+                  background: "var(--bg-input)",
+                  border: "1px solid var(--border-medium)",
+                  color: "var(--text-primary)",
+                  fontSize: 11.5, fontWeight: 600, cursor: "pointer",
+                  transition: "background 0.12s",
+                  flexShrink: 0
+                }}
               >
-                {darkMode ? (
-                  <>
-                    <Sun className="h-4 w-4 text-amber-400" />
-                    <span>Light Mode</span>
-                  </>
-                ) : (
-                  <>
-                    <Moon className="h-4 w-4 text-violet-400" />
-                    <span>Dark Mode</span>
-                  </>
-                )}
+                {darkMode
+                  ? <><Sun style={{ width: 13, height: 13, color: "var(--amber)" }} />Light Mode</>
+                  : <><Moon style={{ width: 13, height: 13, color: "var(--accent)" }} />Dark Mode</>}
               </button>
             </div>
           </div>
 
-          {/* Section 2: Editor Preferences */}
-          <div className="space-y-3">
-            <span className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-500 font-mono block select-none">
-              Editor Preferences
-            </span>
-            <div className="bg-neutral-950/40 border border-white/5 rounded-xl p-4 space-y-4">
-              
-              {/* Option: Autocomplete */}
-              <div className="flex items-center justify-between">
+          {/* Editor Preferences */}
+          <div>
+            <span className="settings-section-label">Editor Preferences</span>
+            <div>
+              <div className="settings-row" style={{ borderRadius: "var(--radius-md) var(--radius-md) 0 0" }}>
                 <div>
-                  <h4 className="text-xs font-bold text-white">Glossary Autocomplete</h4>
-                  <p className="text-[9px] text-neutral-400 mt-0.5">Show terminology suggestions while typing.</p>
+                  <span className="settings-label">Glossary Autocomplete</span>
+                  <span className="settings-desc">Show terminology suggestions while typing</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setAutocompleteEnabled(!autocompleteEnabled)}
-                  className={`w-10 h-6 rounded-full p-1 transition-all duration-300 cursor-pointer ${
-                    autocompleteEnabled ? 'bg-violet-600' : 'bg-neutral-800'
-                  }`}
-                >
-                  <div className={`bg-white w-4 h-4 rounded-full shadow-md transition-transform duration-300 ${
-                    autocompleteEnabled ? 'translate-x-4' : 'translate-x-0'
-                  }`} />
-                </button>
+                <Toggle on={autocomplete} onToggle={() => setAutocomplete(v => !v)} />
               </div>
-
-              {/* Option: Auto Propagate */}
-              <div className="flex items-center justify-between border-t border-white/5 pt-3">
+              <div className="settings-row" style={{ borderTop: "none", borderRadius: 0 }}>
                 <div>
-                  <h4 className="text-xs font-bold text-white">Auto-Propagate Segments</h4>
-                  <p className="text-[9px] text-neutral-400 mt-0.5">Automatically apply duplicates across identical source texts.</p>
+                  <span className="settings-label">Auto-Propagate Segments</span>
+                  <span className="settings-desc">Apply translations across identical source texts</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setAutoPropagate(!autoPropagate)}
-                  className={`w-10 h-6 rounded-full p-1 transition-all duration-300 cursor-pointer ${
-                    autoPropagate ? 'bg-violet-600' : 'bg-neutral-800'
-                  }`}
-                >
-                  <div className={`bg-white w-4 h-4 rounded-full shadow-md transition-transform duration-300 ${
-                    autoPropagate ? 'translate-x-4' : 'translate-x-0'
-                  }`} />
-                </button>
+                <Toggle on={autoPropagate} onToggle={() => setAutoPropagate(v => !v)} />
               </div>
-
-              {/* Option: Font Size */}
-              <div className="flex items-center justify-between border-t border-white/5 pt-3">
+              <div className="settings-row" style={{ borderTop: "none", borderRadius: "0 0 var(--radius-md) var(--radius-md)" }}>
                 <div>
-                  <h4 className="text-xs font-bold text-white">Editor Font Size</h4>
-                  <p className="text-[9px] text-neutral-400 mt-0.5">Set the default text size for translation cards.</p>
+                  <span className="settings-label">Editor Font Size</span>
+                  <span className="settings-desc">Default text size in translation rows</span>
                 </div>
-                <div className="flex bg-neutral-900 border border-white/5 rounded-lg p-0.5">
-                  {["small", "medium", "large"].map((size) => (
-                    <button
-                      key={size}
-                      type="button"
-                      onClick={() => setFontSize(size)}
-                      className={`px-2.5 py-1 rounded-md text-[10px] font-bold capitalize transition-all cursor-pointer ${
-                        fontSize === size 
-                          ? "bg-violet-600 text-white shadow-sm" 
-                          : "text-neutral-400 hover:text-white"
-                      }`}
-                    >
-                      {size}
+                <div className="seg-control">
+                  {["small", "medium", "large"].map(s => (
+                    <button key={s} type="button"
+                      className={`seg-control-btn ${fontSize === s ? "active" : ""}`}
+                      onClick={() => setFontSize(s)}>
+                      {s}
                     </button>
                   ))}
                 </div>
               </div>
-
             </div>
           </div>
 
-          {/* Section 3: Profile & Session Account */}
-          <div className="space-y-3">
-            <span className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-500 font-mono block select-none">
-              Account Session
-            </span>
-            <div className="bg-neutral-950/40 border border-white/5 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="h-9 w-9 rounded-lg bg-neutral-900 border border-white/5 flex items-center justify-center text-neutral-400 shrink-0">
-                  <User className="h-4 w-4" />
+          {/* Account */}
+          <div>
+            <span className="settings-section-label">Account Session</span>
+            <div className="settings-row" style={{
+              borderRadius: "var(--radius-md)",
+              flexWrap: "wrap", gap: 12
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                <div style={{
+                  width: 34, height: 34, borderRadius: 8,
+                  background: "var(--bg-input)",
+                  border: "1px solid var(--border-subtle)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  color: "var(--text-muted)", flexShrink: 0
+                }}>
+                  <User style={{ width: 15, height: 15 }} />
                 </div>
-                <div className="min-w-0">
-                  <span className="text-xs font-extrabold text-white block truncate">
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {userEmail || "anonymous@verbolabs.com"}
-                  </span>
-                  <span className="text-[9px] font-mono text-indigo-400 uppercase tracking-wider block mt-0.5">
-                    Role: {userRole || "translator"}
-                  </span>
+                  </div>
+                  <div style={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace", color: "var(--accent)", marginTop: 2, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    {userRole || "linguist"}
+                  </div>
                 </div>
               </div>
-              
               <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onLogout();
+                onClick={() => { onClose(); onLogout(); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "7px 14px", borderRadius: "var(--radius-sm)",
+                  background: "rgba(244,63,94,0.08)",
+                  border: "1px solid rgba(244,63,94,0.2)",
+                  color: "var(--text-rose)", fontSize: 12, fontWeight: 600,
+                  cursor: "pointer", transition: "background 0.12s", flexShrink: 0
                 }}
-                className="flex items-center justify-center gap-2 rounded-xl bg-rose-700/10 border border-rose-500/20 px-4 py-2.5 text-xs font-bold text-rose-400 hover:bg-rose-600 hover:text-white transition-all cursor-pointer active:scale-95 shadow-md shadow-rose-950/5 shrink-0"
               >
-                <LogOut className="h-4 w-4" />
-                <span>Log Out</span>
+                <LogOut style={{ width: 13, height: 13 }} />
+                Log Out
               </button>
             </div>
           </div>
@@ -184,16 +157,21 @@ export const SettingsModal = ({
         </div>
 
         {/* Footer */}
-        <div className="mt-8 pt-4 border-t border-white/5 flex items-center justify-between text-[8px] font-mono text-neutral-500 select-none">
-          <span className="flex items-center gap-1">
-            <ShieldCheck className="h-3 w-3 text-emerald-500" />
-            <span>SESSION_ENCRYPTED_SSL</span>
+        <div style={{
+          padding: "12px 22px",
+          borderTop: "1px solid var(--border-subtle)",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          fontSize: 9.5, fontFamily: "'IBM Plex Mono', monospace",
+          color: "var(--text-muted)", userSelect: "none"
+        }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <ShieldCheck style={{ width: 11, height: 11, color: "var(--text-emerald)" }} />
+            SESSION_ENCRYPTED_SSL
           </span>
           <span>SYSTEM_STABLE</span>
         </div>
 
       </div>
-
     </div>
   );
 };
