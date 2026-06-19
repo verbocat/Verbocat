@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
-import { Copy, Check, ArrowRight, CornerDownRight, AlertTriangle } from "lucide-react";
+import { Copy, Check, ArrowRight, AlertTriangle } from "lucide-react";
 
+// ─── Glossary highlight tooltip ───────────────────────────────────
 const GlossaryHighlight = ({ term, children }) => {
   const [show, setShow] = useState(false);
   const timeoutRef = useRef(null);
@@ -9,36 +10,65 @@ const GlossaryHighlight = ({ term, children }) => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     setShow(true);
   };
-
   const handleMouseLeave = () => {
     timeoutRef.current = setTimeout(() => setShow(false), 800);
   };
-
   const handleCopy = (e) => {
     e.stopPropagation();
     navigator.clipboard.writeText(term.target);
   };
 
   return (
-    <span 
-      className="relative inline-block group"
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
-      <mark className="bg-amber-500/20 text-amber-200 border-b border-amber-400/50 rounded-sm px-0.5 cursor-pointer">{children}</mark>
+    <span className="relative inline-block" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+      <mark style={{
+        background: "rgba(245,158,11,0.18)",
+        color: "#fde68a",
+        borderBottom: "1px solid rgba(245,158,11,0.45)",
+        borderRadius: 2,
+        padding: "0 2px",
+        cursor: "pointer"
+      }}>
+        {children}
+      </mark>
       {show && (
-        <span 
-          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1 bg-slate-950 text-white font-semibold text-[11px] rounded-lg shadow-2xl z-50 whitespace-nowrap cursor-text select-text flex items-center gap-2 border border-white/10"
+        <span
+          style={{
+            position: "absolute",
+            bottom: "100%",
+            left: "50%",
+            transform: "translateX(-50%)",
+            marginBottom: 6,
+            padding: "4px 8px",
+            background: "var(--bg-panel)",
+            border: "1px solid var(--border-medium)",
+            borderRadius: 7,
+            fontSize: 11,
+            fontWeight: 600,
+            color: "#fff",
+            whiteSpace: "nowrap",
+            zIndex: 999,
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.5)"
+          }}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
           <span>{term.target}</span>
-          <button 
+          <button
             onClick={handleCopy}
-            className="p-1 hover:bg-white/15 rounded text-sky-400 transition"
-            title="Copy to clipboard"
+            style={{
+              padding: 3,
+              borderRadius: 4,
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              color: "#818cf8"
+            }}
+            title="Copy"
           >
-            <Copy className="w-3 h-3" />
+            <Copy style={{ width: 10, height: 10 }} />
           </button>
         </span>
       )}
@@ -46,21 +76,23 @@ const GlossaryHighlight = ({ term, children }) => {
   );
 };
 
+// ─── Tag rendering helpers ────────────────────────────────────────
 const targetToHtml = (str) => {
   if (!str) return "";
   let html = str.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  html = html.replace(/&lt;(\/?\d+|\/?(?:g|ph|x|bpt|ept|it)[^&>]*)&gt;/gi, (match, tagInner) => {
+  html = html.replace(/&lt;(\/?[^&>]*)\&gt;|&lt;(\/?(?:g|ph|x|bpt|ept|it)[^&>]*)&gt;/gi, (match, tagInner) => {
+    if (!tagInner) return match;
     let displayName = tagInner;
     if (!/^\/?\d+$/.test(tagInner)) {
       const idMatch = tagInner.match(/id=(?:&quot;|"|')([^"']+)("|&quot;|')/i);
       if (idMatch) {
-        const isClosing = tagInner.startsWith('/');
-        const tagName = tagInner.replace(/^\//, '').split(/[\s/]/)[0];
-        displayName = (isClosing ? '/' : '') + tagName + idMatch[1];
+        const isClosing = tagInner.startsWith("/");
+        const tagName = tagInner.replace(/^\//, "").split(/[\s/]/)[0];
+        displayName = (isClosing ? "/" : "") + tagName + idMatch[1];
       }
     }
     const escapedTagInner = tagInner.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-    return `<span class="inline-flex items-center justify-center bg-neutral-900 border border-white/8 text-violet-300 px-1.5 py-0.5 mx-0.5 rounded text-[10px] font-mono select-none" contenteditable="false" data-tag="${escapedTagInner}">${displayName}</span>`;
+    return `<span class="seg-tag" contenteditable="false" data-tag="${escapedTagInner}">${displayName}</span>`;
   });
   html = html.replace(/\n/g, "<br>");
   return html;
@@ -88,6 +120,7 @@ const htmlToTarget = (element) => {
   return result.replace(/^\n/, "");
 };
 
+// ─── SegmentCard ──────────────────────────────────────────────────
 export const SegmentCard = ({
   darkMode,
   index,
@@ -104,7 +137,7 @@ export const SegmentCard = ({
   const [suggestions, setSuggestions] = useState([]);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
 
-  // Sync state recycles by Virtuoso
+  // Sync when virtuoso recycles the row
   useEffect(() => {
     if (targetRef.current) {
       targetRef.current.innerHTML = targetToHtml(segment.target || "");
@@ -113,56 +146,66 @@ export const SegmentCard = ({
   }, [segment.id]);
 
   useEffect(() => {
-    if (targetRef.current) {
-      if (segment.target !== lastSavedTargetRef.current) {
-        targetRef.current.innerHTML = targetToHtml(segment.target || "");
-        lastSavedTargetRef.current = segment.target || "";
-      }
+    if (targetRef.current && segment.target !== lastSavedTargetRef.current) {
+      targetRef.current.innerHTML = targetToHtml(segment.target || "");
+      lastSavedTargetRef.current = segment.target || "";
     }
   }, [segment.target]);
 
+  // ── Source text renderer (glossary highlights + inline tags) ──
   const renderHighlightedSource = (text) => {
     if (!text) return null;
-
     let elements = [text];
-    
+
     if (translationGlossary && translationGlossary.length > 0) {
       translationGlossary.forEach((term) => {
         if (!term.source) return;
-        const regex = new RegExp(`(${term.source.replace(/[.*+?^${}()|[\\]\\]/g, '\\\\$&')})`, 'gi');
-        
-        elements = elements.flatMap(el => {
-          if (typeof el === 'string') {
-            const parts = el.split(regex);
-            return parts.map((part, i) => {
-              if (i % 2 === 1) {
-                return <GlossaryHighlight key={`${term.source}-${i}`} term={term}>{part}</GlossaryHighlight>;
-              }
-              return part;
-            });
+        const regex = new RegExp(
+          `(${term.source.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`,
+          "gi"
+        );
+        elements = elements.flatMap((el) => {
+          if (typeof el === "string") {
+            return el.split(regex).map((part, i) =>
+              i % 2 === 1
+                ? <GlossaryHighlight key={`${term.source}-${i}`} term={term}>{part}</GlossaryHighlight>
+                : part
+            );
           }
           return el;
         });
       });
     }
 
-    elements = elements.flatMap(el => {
-      if (typeof el === 'string') {
-        const parts = el.split(/(<\/?\d+>|<\/?(?:g|ph|x|bpt|ept|it)[^>]*>)/gi);
+    elements = elements.flatMap((el) => {
+      if (typeof el === "string") {
+        const parts = el.split(/(<\/?[\d]+>|<\/?(?:g|ph|x|bpt|ept|it)[^>]*>)/gi);
         return parts.map((part, i) => {
-          if (/^<\/?\d+>$/.test(part) || /^<\/?(?:g|ph|x|bpt|ept|it)[^>]*>$/i.test(part)) {
-            const inner = part.replace(/[<>]/g, '');
+          if (/^<\/?[\d]+>$/.test(part) || /^<\/?(?:g|ph|x|bpt|ept|it)[^>]*>$/i.test(part)) {
+            const inner = part.replace(/[<>]/g, "");
             let displayName = inner;
             if (!/^\/?\d+$/.test(inner)) {
               const idMatch = inner.match(/id=(?:&quot;|"|')([^"']+)("|&quot;|')/i);
               if (idMatch) {
-                const isClosing = inner.startsWith('/');
-                const tagName = inner.replace(/^\//, '').split(/[\s/]/)[0];
-                displayName = (isClosing ? '/' : '') + tagName + idMatch[1];
+                const isClosing = inner.startsWith("/");
+                const tagName = inner.replace(/^\//, "").split(/[\s/]/)[0];
+                displayName = (isClosing ? "/" : "") + tagName + idMatch[1];
               }
             }
             return (
-              <span key={`ph-${i}-${inner}`} className="inline-flex items-center justify-center bg-neutral-900 border border-white/5 text-neutral-400 px-1.5 py-0.5 mx-0.5 rounded text-[10px] font-mono select-none" title={inner}>
+              <span key={`ph-${i}`} style={{
+                display: "inline-flex",
+                alignItems: "center",
+                background: "var(--bg-elevated)",
+                border: "1px solid var(--border-subtle)",
+                color: "var(--text-accent)",
+                padding: "0 4px",
+                margin: "0 1px",
+                borderRadius: 3,
+                fontSize: 9,
+                fontFamily: "'IBM Plex Mono', monospace",
+                userSelect: "none"
+              }} title={inner}>
                 {displayName}
               </span>
             );
@@ -176,15 +219,16 @@ export const SegmentCard = ({
     return elements;
   };
 
+  // ── Input handlers ────────────────────────────────────────────
   const handleInput = (e) => {
     const text = htmlToTarget(e.currentTarget);
     const words = text.split(/[\s\u00a0]+/);
     const lastWord = words[words.length - 1] || "";
-    
     if (lastWord.length >= 1 && translationGlossary && translationGlossary.length > 0) {
-      const filtered = translationGlossary.filter(term => 
-        (term.target && term.target.toLowerCase().startsWith(lastWord.toLowerCase())) ||
-        (term.source && term.source.toLowerCase().startsWith(lastWord.toLowerCase()))
+      const filtered = translationGlossary.filter(
+        (term) =>
+          (term.target && term.target.toLowerCase().startsWith(lastWord.toLowerCase())) ||
+          (term.source && term.source.toLowerCase().startsWith(lastWord.toLowerCase()))
       );
       setSuggestions(filtered.slice(0, 5));
       setActiveSuggestionIndex(0);
@@ -197,27 +241,17 @@ export const SegmentCard = ({
     if (!targetRef.current) return;
     const text = htmlToTarget(targetRef.current);
     const words = text.split(/(\s+)/);
-    
     let wordIndex = -1;
     for (let i = words.length - 1; i >= 0; i--) {
-      if (words[i].trim() !== "") {
-        wordIndex = i;
-        break;
-      }
+      if (words[i].trim() !== "") { wordIndex = i; break; }
     }
-    
-    if (wordIndex !== -1) {
-      words[wordIndex] = term.target;
-    } else {
-      words.push(term.target);
-    }
-    
+    if (wordIndex !== -1) words[wordIndex] = term.target;
+    else words.push(term.target);
     const newTarget = words.join("");
     targetRef.current.innerHTML = targetToHtml(newTarget);
     lastSavedTargetRef.current = newTarget;
     onUpdateTranslation(segment.id, newTarget);
     setSuggestions([]);
-    
     setTimeout(() => {
       if (!targetRef.current) return;
       targetRef.current.focus();
@@ -232,28 +266,11 @@ export const SegmentCard = ({
 
   const handleKeyDown = (e) => {
     if (suggestions.length > 0) {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setActiveSuggestionIndex(prev => Math.min(prev + 1, suggestions.length - 1));
-        return;
-      }
-      if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setActiveSuggestionIndex(prev => Math.max(prev - 1, 0));
-        return;
-      }
-      if (e.key === "Enter" || e.key === "Tab") {
-        e.preventDefault();
-        applySuggestion(suggestions[activeSuggestionIndex]);
-        return;
-      }
-      if (e.key === "Escape") {
-        e.preventDefault();
-        setSuggestions([]);
-        return;
-      }
+      if (e.key === "ArrowDown") { e.preventDefault(); setActiveSuggestionIndex((p) => Math.min(p + 1, suggestions.length - 1)); return; }
+      if (e.key === "ArrowUp")   { e.preventDefault(); setActiveSuggestionIndex((p) => Math.max(p - 1, 0)); return; }
+      if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); applySuggestion(suggestions[activeSuggestionIndex]); return; }
+      if (e.key === "Escape")    { e.preventDefault(); setSuggestions([]); return; }
     }
-
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
       const newTarget = htmlToTarget(e.currentTarget);
@@ -266,208 +283,214 @@ export const SegmentCard = ({
   const handleBlur = (e) => {
     const newTarget = htmlToTarget(e.currentTarget);
     lastSavedTargetRef.current = newTarget;
-    if (newTarget !== segment.target) {
-      onUpdateTranslation(segment.id, newTarget);
-    }
-    setTimeout(() => {
-      setSuggestions([]);
-    }, 200);
+    if (newTarget !== segment.target) onUpdateTranslation(segment.id, newTarget);
+    setTimeout(() => setSuggestions([]), 200);
   };
 
+  // ── Status ────────────────────────────────────────────────────
+  const statusClass = segment.verified
+    ? "seg-verified"
+    : segment.target
+    ? "seg-translated"
+    : "seg-untranslated";
+
+  const dotClass = segment.verified
+    ? "verified"
+    : segment.target
+    ? "translated"
+    : "pending";
+
   return (
-    <article
-      id={`segment-${segment.id}`}
-      className={`relative overflow-hidden rounded-2xl border transition-all duration-300 bg-[#090b11]/30 border-white/5 px-3 py-3 md:px-4 md:py-3.5 ${
-        segment.verified 
-          ? 'border-l-2 border-l-emerald-500/80 shadow-[0_0_15px_rgba(16,185,129,0.02)]' 
-          : segment.target 
-            ? 'border-l-2 border-l-violet-500/60 shadow-[0_0_15px_rgba(139,92,246,0.02)]' 
-            : 'border-l-2 border-l-neutral-700/60'
-      }`}
-    >
-      <div className="flex flex-col md:grid md:grid-cols-[48px_minmax(0,1fr)_auto_minmax(0,1fr)_auto] md:items-center gap-4">
-        
-        {/* ========================================================
-            COLUMN 1: Segment Number Badge (Minimalist)
-            ======================================================== */}
-        <div className="flex md:flex-col items-center justify-between md:justify-center gap-1.5 shrink-0 select-none">
-          <div className="text-[10px] font-mono font-bold text-neutral-400 bg-neutral-950/40 border border-white/5 px-2 py-0.5 rounded-lg min-w-[32px] text-center shadow-inner">
-            {String(index + 1).padStart(2, "0")}
-          </div>
-          
-          {/* Fuzzy matching & QA issue badges */}
-          <div className="flex items-center md:flex-col gap-1">
-            {segment.fuzzyScore && (
-              <span className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold text-amber-200" title={`Fuzzy match score: ${segment.fuzzyScore}%`}>
-                {segment.fuzzyScore}%
-              </span>
-            )}
-            {segment.qaIssues?.length > 0 && (
-              <span className="rounded-lg bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 text-[9px] font-bold text-rose-300 flex items-center gap-0.5" title={`${segment.qaIssues.length} QA issue detected`}>
-                <AlertTriangle className="h-2.5 w-2.5 text-rose-400" />
-                <span>QA</span>
-              </span>
-            )}
-          </div>
-        </div>
+    <article id={`segment-${segment.id}`} className={`seg-row ${statusClass}`}>
 
-        {/* ========================================================
-            COLUMN 2: Source Text Block
-            ======================================================== */}
-        <div className="relative min-h-[32px] w-full bg-neutral-950/45 border border-white/5 rounded-xl p-2 pr-8 text-white leading-relaxed text-[11px] font-medium">
-          <div className="break-words select-text">{renderHighlightedSource(segment.source)}</div>
-          
-          <button
-            onClick={() => onCopy(segment.source)}
-            className="absolute right-2 top-2 p-1 rounded-lg text-neutral-500 hover:text-white hover:bg-white/5 transition-all duration-200 cursor-pointer"
-            title="Copy source text to clipboard"
-          >
-            <Copy className="h-3 w-3" />
-          </button>
-        </div>
+      {/* Col 1: Number + status */}
+      <div className="seg-num">
+        <span className="seg-num-label">{String(index + 1).padStart(2, "0")}</span>
+        <span className={`seg-status-dot ${dotClass}`} />
+        {segment.fuzzyScore && (
+          <span style={{
+            fontSize: 8,
+            fontWeight: 700,
+            fontFamily: "'IBM Plex Mono', monospace",
+            color: "#fbbf24",
+            background: "rgba(245,158,11,0.1)",
+            border: "1px solid rgba(245,158,11,0.2)",
+            borderRadius: 3,
+            padding: "0 3px"
+          }} title={`Fuzzy: ${segment.fuzzyScore}%`}>
+            {segment.fuzzyScore}%
+          </span>
+        )}
+        {segment.qaIssues?.length > 0 && (
+          <span style={{
+            fontSize: 8,
+            color: "#fb7185",
+            display: "flex",
+            alignItems: "center"
+          }} title={`${segment.qaIssues.length} QA issue`}>
+            <AlertTriangle style={{ width: 9, height: 9 }} />
+          </span>
+        )}
+      </div>
 
-        {/* ========================================================
-            COLUMN 3: Middle Link Arrow (Static Indicator)
-            ======================================================== */}
-        <div className="flex items-center justify-center rotate-90 md:rotate-0 shrink-0 select-none text-neutral-600">
-          <ArrowRight className="h-4 w-4" />
-        </div>
+      {/* Col 2: Source text */}
+      <div className="seg-source">
+        <div className="seg-source-text">{renderHighlightedSource(segment.source)}</div>
+        <button
+          className="seg-copy-btn"
+          onClick={() => onCopy(segment.source)}
+          title="Copy source"
+        >
+          <Copy style={{ width: 9, height: 9 }} />
+        </button>
+      </div>
 
-        {/* ========================================================
-            COLUMN 4: Target Translation Block
-            ======================================================== */}
-        <div className="flex flex-col w-full min-w-0">
-          
-          {/* Status badge row */}
-          <div className="flex items-center gap-1.5 mb-1.5 select-none text-[9px] font-bold">
-            <span className={`h-1.5 w-1.5 rounded-full ${
-              segment.verified 
-                ? 'bg-emerald-500 animate-pulse' 
-                : segment.target 
-                  ? 'bg-indigo-400' 
-                  : 'bg-violet-500'
-            }`} />
-            <span className={`${
-              segment.verified 
-                ? 'text-emerald-400' 
-                : segment.target 
-                  ? 'text-indigo-300' 
-                  : 'text-violet-400'
-            }`}>
-              {segment.verified ? "Verified" : segment.target ? "Ready to verify" : "Waiting for translation"}
-            </span>
-          </div>
+      {/* Col 3: Arrow */}
+      <div className="seg-arrow">
+        <ArrowRight style={{ width: 11, height: 11 }} />
+      </div>
 
-          {/* Autocomplete Input Container */}
-          <div className="relative">
-            <div
-              id={`target-${segment.id}`}
-              ref={targetRef}
-              data-segment-target="true"
-              contentEditable={!segment.verified}
-              suppressContentEditableWarning={true}
-              onBlur={handleBlur}
-              onInput={handleInput}
-              onKeyDown={handleKeyDown}
-              className={`min-h-[38px] w-full break-words rounded-xl border border-white/5 bg-neutral-950/45 p-2.5 outline-none focus:border-violet-500/35 focus:ring-2 focus:ring-violet-500/10 whitespace-pre-wrap leading-relaxed text-[12px] font-medium text-white transition-all duration-300 ${
-                segment.verified ? 'bg-slate-900/10 cursor-not-allowed opacity-60' : 'empty:before:content-["Translation_will_appear_here..."]'
-              }`}
-            />
+      {/* Col 4: Target editor */}
+      <div className="seg-target-wrap">
+        <div className="relative">
+          <div
+            id={`target-${segment.id}`}
+            ref={targetRef}
+            data-segment-target="true"
+            contentEditable={!segment.verified}
+            suppressContentEditableWarning={true}
+            onBlur={handleBlur}
+            onInput={handleInput}
+            onKeyDown={handleKeyDown}
+            className="seg-target-editor"
+            style={segment.verified ? { opacity: 0.5, cursor: "default", pointerEvents: "none" } : {}}
+          />
 
-            {/* Glossary Suggestions Overlay */}
-            {suggestions.length > 0 && (
-              <div className="absolute left-0 right-0 z-[100] mt-1 rounded-xl border border-white/8 p-1.5 shadow-2xl bg-[#0d0e14] text-white flex flex-col gap-0.5 max-h-48 overflow-y-auto custom-scrollbar">
-                <div className="px-2 py-1 text-[8px] font-mono uppercase tracking-wider text-neutral-500 border-b border-white/5 mb-1 flex justify-between items-center select-none">
-                  <span>Glossary Suggestions</span>
-                  <span>↑↓ Navigate · Enter Select</span>
-                </div>
-                {suggestions.map((term, i) => (
-                  <button
-                    key={`sugg-${segment.id}-${i}`}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      applySuggestion(term);
-                    }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between transition ${
-                      i === activeSuggestionIndex 
-                        ? "bg-violet-600/35 text-violet-200 border border-violet-500/30" 
-                        : "hover:bg-white/5 border border-transparent"
-                    }`}
-                  >
-                    <div className="font-semibold">{term.target}</div>
-                    <div className="text-[10px] text-neutral-400 font-mono">{term.source}</div>
-                  </button>
-                ))}
+          {/* Glossary autocomplete suggestions */}
+          {suggestions.length > 0 && (
+            <div style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              top: "100%",
+              zIndex: 100,
+              marginTop: 3,
+              background: "var(--bg-panel)",
+              border: "1px solid var(--border-medium)",
+              borderRadius: 8,
+              padding: 4,
+              boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
+              maxHeight: 180,
+              overflowY: "auto"
+            }}>
+              <div style={{
+                padding: "2px 8px 4px",
+                fontSize: 9,
+                fontFamily: "'IBM Plex Mono', monospace",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                color: "var(--text-muted)",
+                borderBottom: "1px solid var(--border-subtle)",
+                marginBottom: 3,
+                display: "flex",
+                justifyContent: "space-between"
+              }}>
+                <span>Glossary Suggestions</span>
+                <span>↑↓ · Enter</span>
               </div>
-            )}
-          </div>
-
-          {/* Help instructions (Ctrl+Enter indicator) */}
-          {!segment.verified && (
-            <span className="text-[9px] text-neutral-500 font-mono mt-1 px-1 select-none">
-              Press Ctrl Enter to verify and move to next
-            </span>
+              {suggestions.map((term, i) => (
+                <button
+                  key={`sugg-${segment.id}-${i}`}
+                  onMouseDown={(e) => { e.preventDefault(); applySuggestion(term); }}
+                  style={{
+                    width: "100%",
+                    textAlign: "left",
+                    padding: "5px 8px",
+                    borderRadius: 6,
+                    fontSize: 11,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    background: i === activeSuggestionIndex
+                      ? "rgba(99,102,241,0.12)"
+                      : "transparent",
+                    border: i === activeSuggestionIndex
+                      ? "1px solid rgba(99,102,241,0.25)"
+                      : "1px solid transparent",
+                    color: i === activeSuggestionIndex
+                      ? "#a5b4fc"
+                      : "var(--text-secondary)",
+                    cursor: "pointer"
+                  }}
+                >
+                  <span style={{ fontWeight: 600 }}>{term.target}</span>
+                  <span style={{ fontSize: 9, fontFamily: "'IBM Plex Mono', monospace", color: "var(--text-muted)" }}>
+                    {term.source}
+                  </span>
+                </button>
+              ))}
+            </div>
           )}
         </div>
 
-        {/* ========================================================
-            COLUMN 5: Action Verification Buttons
-            ======================================================== */}
-        <div className="flex items-center gap-1.5 justify-end md:justify-center shrink-0">
-          
-          {/* Copy Source to Target Button */}
-          <button
-            onClick={() => onUpdateTranslation(segment.id, segment.source)}
-            title="Copy source text to target editor"
-            className="rounded-lg p-2 border border-white/5 bg-neutral-900/40 text-neutral-400 hover:text-white hover:bg-white/5 transition-all duration-200 cursor-pointer active:scale-95"
-          >
-            <CornerDownRight className="h-4 w-4" />
-          </button>
-
-          {/* Verify Check Button */}
-          <button
-            onClick={onToggleVerify}
-            title={segment.verified ? 'Unverify segment' : 'Verify segment'}
-            className={`rounded-lg p-2 border transition-all duration-200 cursor-pointer active:scale-95 ${
-              segment.verified 
-                ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg shadow-emerald-500/10' 
-                : 'bg-neutral-900/40 border-white/5 text-neutral-400 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Check className="h-4 w-4" />
-          </button>
-
-          {/* Copy Target Button */}
-          <button
-            onClick={() => onCopy(segment.target || "")}
-            title="Copy target translation to clipboard"
-            className="rounded-lg p-2 border border-white/5 bg-neutral-900/40 text-neutral-400 hover:text-white hover:bg-white/5 transition-all duration-200 cursor-pointer active:scale-95"
-          >
-            <Copy className="h-4 w-4" />
-          </button>
-
-        </div>
-
-      </div>
-
-      {/* Inline QA Errors panel underneath card */}
-      {segment.qaIssues?.length > 0 && (
-        <div className="mt-4 border-t border-white/5 pt-3 space-y-1.5 select-none">
-          <span className="text-[9px] font-mono uppercase tracking-widest text-rose-400 block px-1">
-            QA checks failed:
+        {!segment.verified && (
+          <span style={{
+            fontSize: 9,
+            color: "var(--text-muted)",
+            fontFamily: "'IBM Plex Mono', monospace",
+            marginTop: 2,
+            userSelect: "none"
+          }}>
+            Ctrl+Enter to verify
           </span>
-          <div className="flex flex-wrap gap-2">
-            {segment.qaIssues.map((issue, issueIndex) => (
-              <span
-                key={`${segment.id}-issue-${issueIndex}`}
-                className="rounded-lg bg-rose-500/10 border border-rose-500/15 py-1 px-2.5 text-[10px] font-semibold text-rose-300"
-              >
+        )}
+
+        {/* QA issues inline */}
+        {segment.qaIssues?.length > 0 && (
+          <div style={{
+            marginTop: 4,
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 3
+          }}>
+            {segment.qaIssues.map((issue, i) => (
+              <span key={`qa-${segment.id}-${i}`} style={{
+                fontSize: 9,
+                fontWeight: 600,
+                color: "#fb7185",
+                background: "rgba(244,63,94,0.08)",
+                border: "1px solid rgba(244,63,94,0.15)",
+                borderRadius: 4,
+                padding: "1px 5px"
+              }}>
                 {issue}
               </span>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
+
+      {/* Col 5: Actions */}
+      <div className="seg-actions">
+        {/* Verify */}
+        <button
+          onClick={onToggleVerify}
+          title={segment.verified ? "Unverify" : "Verify segment"}
+          className={`seg-action-btn ${segment.verified ? "verified" : ""}`}
+        >
+          <Check style={{ width: 12, height: 12 }} />
+        </button>
+
+        {/* Copy target */}
+        <button
+          onClick={() => onCopy(segment.target || "")}
+          title="Copy translation"
+          className="seg-action-btn"
+        >
+          <Copy style={{ width: 11, height: 11 }} />
+        </button>
+      </div>
 
     </article>
   );

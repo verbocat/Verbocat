@@ -1,27 +1,55 @@
 import { LANGUAGES } from "../constants/languages.js";
-import { 
-  LayoutDashboard, 
-  Folder, 
-  BookOpen, 
-  Users, 
-  Settings as SettingsIcon, 
-  Sun, 
-  Moon, 
-  LogOut, 
+import {
+  LayoutDashboard,
+  BookOpen,
+  Users,
+  Settings as SettingsIcon,
+  Sun,
+  Moon,
+  LogOut,
   Plus,
-  Lock,
   LockKeyhole,
-  Sliders
+  Sliders,
+  ChevronRight,
+  FileText
 } from "lucide-react";
 
-const SidebarButton = ({ children, className = "", isActive = false, ...props }) => (
+// Tiny icon button for topbar right-side nav
+const NavBtn = ({ children, onClick, disabled = false, title = "" }) => (
   <button
-    {...props}
-    className={`w-full flex items-center gap-3 rounded-xl px-4 py-2.5 text-xs font-bold transition-all duration-200 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
-      isActive 
-        ? "bg-violet-950/40 text-violet-300 border-l-2 border-violet-500/80 shadow-inner" 
-        : "text-neutral-400 hover:text-neutral-200 hover:bg-white/5"
-    } ${className}`}
+    onClick={onClick}
+    disabled={disabled}
+    title={title}
+    style={{
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 5,
+      height: 28,
+      padding: "0 9px",
+      borderRadius: 7,
+      fontSize: 11,
+      fontWeight: 600,
+      border: "1px solid transparent",
+      cursor: disabled ? "not-allowed" : "pointer",
+      opacity: disabled ? 0.35 : 1,
+      transition: "background 0.15s, border-color 0.15s, color 0.15s",
+      color: "var(--text-secondary)",
+      background: "transparent",
+      whiteSpace: "nowrap"
+    }}
+    onMouseEnter={e => {
+      if (!disabled) {
+        e.currentTarget.style.background = "var(--bg-hover)";
+        e.currentTarget.style.borderColor = "var(--border-subtle)";
+        e.currentTarget.style.color = "var(--text-primary)";
+      }
+    }}
+    onMouseLeave={e => {
+      e.currentTarget.style.background = "transparent";
+      e.currentTarget.style.borderColor = "transparent";
+      e.currentTarget.style.color = "var(--text-secondary)";
+    }}
   >
     {children}
   </button>
@@ -38,7 +66,7 @@ export const Header = ({
   progress,
   theme,
   onLock,
-  isSidebar = false,
+  isSidebar = false,        // kept for compat, ignored — always topbar now
   fileName,
   fileExtension,
   sourceLanguage,
@@ -51,199 +79,145 @@ export const Header = ({
   onRelinkHtml,
   onImportXliff,
   onOpenContext,
-  onOpenSettings, // New Settings trigger callback
+  onOpenSettings,
   userRole,
   onOpenAdmin,
   creditsAllowed,
   creditsConsumed,
   onLogout,
-  onUpload // File uploader trigger
+  onUpload
 }) => {
   const isManager = userRole === "admin" || userRole === "manager";
-  
-  // ========================================================
-  // 1. SIDEBAR MODE (Left-oriented navigation control panel)
-  // ========================================================
-  if (isSidebar) {
-    return (
-      <aside className="w-64 border-r border-white/5 flex flex-col justify-between shrink-0 p-5 min-h-0 bg-[#05060b] shadow-[4px_0_24px_rgba(0,0,0,0.3)] select-none">
-        
-        {/* Top Section */}
-        <div className="space-y-6 flex-1 flex flex-col min-h-0 overflow-y-auto pr-0.5 custom-scrollbar">
-          
-          {/* Logo Brand Row */}
-          <div className="flex items-center gap-3 pb-2 select-none">
-            {/* Custom Outline Cat SVG */}
-            <div className="h-8 w-8 flex items-center justify-center shrink-0">
-              <svg viewBox="0 0 100 100" className="w-7 h-7 text-violet-500" fill="none" stroke="currentColor" strokeWidth="6.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M 22,38 L 22,12 L 48,28" />
-                <path d="M 78,38 L 78,12 L 52,28" />
-                <path d="M 22,38 C 22,64 32,80 50,80 C 68,80 78,64 78,38" />
-                <ellipse cx="38" cy="48" rx="4.5" ry="5.5" fill="currentColor" />
-                <ellipse cx="62" cy="48" rx="4.5" ry="5.5" fill="currentColor" />
-                <polygon points="46,58 54,58 50,62" fill="currentColor" />
-                <path d="M 44,68 C 47,72 50,72 50,68 Q 50,72 56,68" strokeWidth="4" />
-              </svg>
-            </div>
-            <span className="text-lg font-black tracking-tight text-white font-sans">
-              VerboCat
-            </span>
-          </div>
 
-          {/* New File Upload Button */}
-          <div>
-            <label className="w-full flex items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 py-3 px-4 text-xs font-bold text-white shadow-lg shadow-violet-500/10 hover:shadow-violet-500/20 cursor-pointer transition-all duration-300 hover:scale-[1.01] active:scale-[0.98]">
-              <Plus className="w-4.5 h-4.5" />
-              <span>New File</span>
-              <input type="file" onChange={onUpload} className="hidden" />
-            </label>
-          </div>
+  const srcLang = LANGUAGES.find(l => l.code === sourceLanguage);
+  const tgtLang = LANGUAGES.find(l => l.code === targetLanguage);
 
-          {/* Navigation Items (WORKSPACE Section) */}
-          <div className="space-y-1">
-            <span className="text-[9px] font-extrabold uppercase tracking-[0.22em] text-neutral-500 block mb-3 px-3">
-              WORKSPACE
-            </span>
+  const hasFile = segmentsCount > 0;
 
-            <SidebarButton isActive={true}>
-              <Folder className="w-4 h-4 text-violet-400" />
-              <span>Files</span>
-            </SidebarButton>
-
-            <SidebarButton isActive={false} onClick={onOpenGlossary}>
-              <BookOpen className="w-4 h-4 text-neutral-500" />
-              <span>Glossary</span>
-            </SidebarButton>
-
-            <SidebarButton isActive={false} onClick={onOpenContext}>
-              <Sliders className="w-4 h-4 text-neutral-500" />
-              <span>Translation Context</span>
-            </SidebarButton>
-
-            <SidebarButton 
-              isActive={false} 
-              onClick={isManager && onOpenAdmin ? onOpenAdmin : undefined}
-              disabled={!isManager}
-            >
-              <Users className="w-4 h-4 text-neutral-500" />
-              <span>Team</span>
-            </SidebarButton>
-
-            <SidebarButton isActive={false} onClick={onOpenSettings}>
-              <SettingsIcon className="w-4 h-4 text-neutral-500" />
-              <span>Settings</span>
-            </SidebarButton>
-          </div>
-
-        </div>
-
-        {/* Sidebar Footer Operations */}
-        <div className="pt-4 border-t border-white/5 space-y-1.5 shrink-0">
-          
-          {/* Workspace Lock Lockbox */}
-          {onLock && (
-            <SidebarButton onClick={onLock} className="text-neutral-500 hover:text-neutral-300">
-              <LockKeyhole className="w-4 h-4 text-neutral-500" />
-              <span>Lock Screen</span>
-            </SidebarButton>
-          )}
-
-          {/* Theme Switcher Toggle */}
-          <SidebarButton onClick={onToggleDarkMode}>
-            {darkMode ? (
-              <>
-                <Sun className="w-4 h-4 text-neutral-500" />
-                <span>Switch to Light</span>
-              </>
-            ) : (
-              <>
-                <Moon className="w-4 h-4 text-neutral-500" />
-                <span>Switch to Dark</span>
-              </>
-            )}
-          </SidebarButton>
-
-          {/* Log Out */}
-          <SidebarButton onClick={onLogout} className="hover:text-rose-400 hover:bg-rose-950/10">
-            <LogOut className="w-4 h-4 text-neutral-500" />
-            <span>Log Out</span>
-          </SidebarButton>
-        </div>
-      </aside>
-    );
-  }
-
-  // ========================================================
-  // 2. HORIZONTAL COMPACT NAVBAR MODE (Empty workspace header)
-  // ========================================================
   return (
-    <header className="sticky top-0 z-45 px-4 pt-4 sm:px-6 lg:px-8 bg-transparent">
-      <div className={`mx-auto w-full rounded-[24px] border backdrop-blur-xl overflow-hidden transition-all duration-300 ${theme.shell}`}>
-        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
-          
-          {/* Logo */}
-          <div className="flex items-center gap-2">
-            <svg viewBox="0 0 100 100" className="w-6.5 h-6.5 text-violet-500" fill="none" stroke="currentColor" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M 22,38 L 22,12 L 48,28" />
-              <path d="M 78,38 L 78,12 L 52,28" />
-              <path d="M 22,38 C 22,64 32,80 50,80 C 68,80 78,64 78,38" />
-              <ellipse cx="38" cy="48" rx="4.5" ry="5.5" fill="currentColor" />
-              <ellipse cx="62" cy="48" rx="4.5" ry="5.5" fill="currentColor" />
-              <polygon points="46,58 54,58 50,62" fill="currentColor" />
-              <path d="M 44,68 C 47,72 50,72 50,68 C 50,72 53,72 56,68" strokeWidth="4" />
-            </svg>
-            <span className="text-md font-extrabold tracking-wider text-white">
-              VerboCat
-            </span>
-          </div>
+    <header className="topbar">
 
-          {/* Action Row */}
-          <div className="flex items-center gap-2">
-            
-            {/* Admin control panel link */}
-            {isManager && onOpenAdmin && (
-              <button
-                onClick={onOpenAdmin}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-600/25 px-4 py-2.5 text-xs font-bold transition-all duration-200"
-              >
-                Admin Control
-              </button>
-            )}
+      {/* ─── Brand ─── */}
+      <div className="topbar-brand">
+        <svg viewBox="0 0 100 100" style={{ width: 22, height: 22, color: "#6366f1", flexShrink: 0 }}
+          fill="none" stroke="currentColor" strokeWidth="6.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M 22,38 L 22,12 L 48,28" />
+          <path d="M 78,38 L 78,12 L 52,28" />
+          <path d="M 22,38 C 22,64 32,80 50,80 C 68,80 78,64 78,38" />
+          <ellipse cx="38" cy="48" rx="4.5" ry="5.5" fill="currentColor" />
+          <ellipse cx="62" cy="48" rx="4.5" ry="5.5" fill="currentColor" />
+          <polygon points="46,58 54,58 50,62" fill="currentColor" />
+          <path d="M 44,68 C 47,72 50,72 50,68 Q 50,72 56,68" strokeWidth="4" />
+        </svg>
+        <span className="topbar-brand-name">VerboCat</span>
+      </div>
 
-            <button
-              onClick={onOpenGlossary}
-              className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${theme.buttonSecondary}`}
-            >
-              Glossary
-            </button>
-            
-            <label className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${theme.buttonSecondary}`}>
-              <Plus className="w-3.5 h-3.5" />
-              <span>Load File</span>
-              <input
-                type="file"
-                accept=".json"
-                onChange={onLoadProject}
-                className="hidden"
-              />
-            </label>
+      <div className="topbar-divider" />
 
-            <button
-              onClick={onToggleDarkMode}
-              className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 transition ${theme.buttonSecondary}`}
-            >
-              {darkMode ? <Sun className="w-4 h-4 text-neutral-400" /> : <Moon className="w-4 h-4 text-neutral-400" />}
-            </button>
-
-            <button
-              onClick={onLogout}
-              className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${theme.buttonSecondary}`}
-            >
-              Log Out
-            </button>
-          </div>
-          
+      {/* ─── Live breadcrumb (only when file loaded) ─── */}
+      {hasFile ? (
+        <div className="topbar-breadcrumb">
+          <FileText style={{ width: 12, height: 12, color: "var(--text-muted)", flexShrink: 0 }} />
+          <span className="topbar-filename" title={fileName}>{fileName}</span>
+          {fileExtension && (
+            <span className="topbar-ext">{fileExtension.toUpperCase()}</span>
+          )}
+          {srcLang && tgtLang && (
+            <>
+              <span className="topbar-divider" style={{ margin: "0 4px" }} />
+              <div className="topbar-lang-pair">
+                <span>{srcLang.flag} {srcLang.code.toUpperCase()}</span>
+                <ChevronRight style={{ width: 10, height: 10, opacity: 0.4 }} />
+                <span>{tgtLang.flag} {tgtLang.code.toUpperCase()}</span>
+              </div>
+            </>
+          )}
+          {progress !== undefined && (
+            <span className="topbar-progress-badge">{progress}% done</span>
+          )}
         </div>
+      ) : (
+        <div style={{ flex: 1 }} />
+      )}
+
+      {/* ─── Right nav actions ─── */}
+      <div className="topbar-actions">
+
+        {/* Upload new file (when no file loaded — primary CTA) */}
+        {!hasFile && (
+          <label style={{ cursor: "pointer" }}>
+            <span style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              height: 28,
+              padding: "0 12px",
+              borderRadius: 7,
+              fontSize: 11,
+              fontWeight: 700,
+              background: "var(--accent-primary)",
+              color: "#fff",
+              border: "1px solid rgba(99,102,241,0.5)",
+              cursor: "pointer",
+              boxShadow: "0 2px 8px rgba(99,102,241,0.22)"
+            }}>
+              <Plus style={{ width: 12, height: 12 }} />
+              Open File
+            </span>
+            <input type="file" onChange={onUpload} className="hidden" />
+          </label>
+        )}
+
+        {/* Glossary */}
+        <NavBtn onClick={onOpenGlossary} title="Glossary">
+          <BookOpen style={{ width: 13, height: 13 }} />
+          <span>Glossary</span>
+        </NavBtn>
+
+        {/* Context Settings */}
+        <NavBtn onClick={onOpenContext} title="Translation Context">
+          <Sliders style={{ width: 13, height: 13 }} />
+          <span>Context</span>
+        </NavBtn>
+
+        {/* Team / Admin */}
+        {isManager && onOpenAdmin && (
+          <NavBtn onClick={onOpenAdmin} title="Admin Dashboard">
+            <Users style={{ width: 13, height: 13 }} />
+            <span>Team</span>
+          </NavBtn>
+        )}
+
+        <div className="topbar-divider" />
+
+        {/* Dark / light mode */}
+        <NavBtn onClick={onToggleDarkMode} title={darkMode ? "Switch to Light" : "Switch to Dark"}>
+          {darkMode
+            ? <Sun style={{ width: 13, height: 13 }} />
+            : <Moon style={{ width: 13, height: 13 }} />
+          }
+        </NavBtn>
+
+        {/* Settings */}
+        <NavBtn onClick={onOpenSettings} title="Settings">
+          <SettingsIcon style={{ width: 13, height: 13 }} />
+        </NavBtn>
+
+        {/* Lock screen */}
+        {onLock && (
+          <NavBtn onClick={onLock} title="Lock Screen">
+            <LockKeyhole style={{ width: 13, height: 13 }} />
+          </NavBtn>
+        )}
+
+        <div className="topbar-divider" />
+
+        {/* Logout */}
+        <NavBtn onClick={onLogout} title="Log Out">
+          <LogOut style={{ width: 13, height: 13 }} />
+          <span>Log Out</span>
+        </NavBtn>
+
       </div>
     </header>
   );

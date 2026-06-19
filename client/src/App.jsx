@@ -1361,13 +1361,99 @@ export default function App() {
     );
   }
 
-  const showSidebar = segments.length > 0;
-
   return (
-    <div
-      className={`h-screen flex ${showSidebar ? "flex-row" : "flex-col"} overflow-hidden ${theme.bg} ${theme.text} font-sans transition-colors duration-300`}
-    >
-      {/* Sidebar header (left-aligned) or compact horizontal header (top-aligned) */}
+    <div className="workspace-shell" style={{ color: "var(--text-primary)" }}>
+
+      {/* ── Global overlays & modals ── */}
+      <DragOverlay isDragging={isDragging} />
+      <LoadingOverlay isUploading={isUploading} theme={theme} />
+      <Toast toast={toast} />
+
+      <GlossaryModal
+        darkMode={darkMode}
+        glossary={glossary}
+        glossaryKey={glossaryKey}
+        glossaryLanguagePairs={glossaryLanguagePairs}
+        glossarySourceLang={glossarySourceLang}
+        glossaryTargetLang={glossaryTargetLang}
+        languages={LANGUAGES}
+        onAddRow={addGlossaryRow}
+        onClearCurrentGlossary={clearCurrentGlossary}
+        onClearSelection={clearGlossarySelection}
+        onClose={() => setShowGlossary(false)}
+        onDeleteLanguagePair={deleteLanguagePairGlossary}
+        onDeleteSelected={deleteSelectedGlossaryRows}
+        onPasteGlossary={pasteGlossary}
+        onApplyGlossary={handleApplyGlossary}
+        onSelectAll={selectAllGlossaryRows}
+        onSelectPair={(source, target) => {
+          setGlossarySourceLang(source);
+          setGlossaryTargetLang(target);
+        }}
+        onToggleRow={toggleGlossaryRow}
+        onUpdateGlossary={updateGlossary}
+        selectedGlossaryRows={selectedGlossaryRows}
+        setGlossarySourceLang={setGlossarySourceLang}
+        setGlossaryTargetLang={setGlossaryTargetLang}
+        setGlossary={glossaryManager.setGlossary}
+        show={showGlossary}
+        canApplyGlossary={segments.length > 0}
+        theme={theme}
+        onImportTmx={handleImportTmx}
+      />
+
+      <ExportModal
+        show={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        onExportDocument={handleExportDocument}
+        onExportXliff={handleExportXliff}
+        onExportTmx={handleExportTmx}
+        onExportGlobalTmx={handleExportGlobalTmx}
+        onExportLinguistTable={handleExportLinguistTable}
+        onRelinkHtml={handleRelinkHtml}
+        fileExtension={fileExtension}
+        theme={theme}
+        sourceLanguage={sourceLanguage}
+        targetLanguage={targetLanguage}
+      />
+
+      <ContextSettingsModal
+        show={showContextPanel}
+        onClose={() => setShowContextPanel(false)}
+        contextSettings={contextSettings}
+        setContextSettings={setContextSettings}
+        theme={theme}
+      />
+
+      <SearchReplaceModal
+        show={showSearchReplace}
+        onClose={() => setShowSearchReplace(false)}
+        onReplaceAll={handleReplaceAll}
+        theme={theme}
+      />
+
+      <SettingsModal
+        show={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        darkMode={darkMode}
+        onToggleDarkMode={() => setDarkMode((value) => !value)}
+        onLogout={logout}
+        userRole={user ? user.role : ""}
+        userEmail={user ? user.email : ""}
+        theme={theme}
+      />
+
+      {showAdminDashboard && (
+        <AdminDashboard
+          onClose={() => {
+            setShowAdminDashboard(false);
+            fetchProfile();
+          }}
+          theme={theme}
+        />
+      )}
+
+      {/* ── Zone 1: Topbar (always visible) ── */}
       <Header
         currentProvider={currentProvider}
         darkMode={darkMode}
@@ -1378,7 +1464,6 @@ export default function App() {
         segmentsCount={segments.length}
         progress={stats.progress}
         theme={theme}
-        isSidebar={showSidebar}
         fileName={fileName}
         fileExtension={fileExtension}
         sourceLanguage={sourceLanguage}
@@ -1400,188 +1485,104 @@ export default function App() {
         onOpenSettings={() => setShowSettingsModal(true)}
       />
 
-      {/* Main app panel wrapper */}
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <DragOverlay isDragging={isDragging} />
-        <LoadingOverlay isUploading={isUploading} theme={theme} />
-        <Toast toast={toast} />
-
-        <GlossaryModal
+      {/* ── Zone 2+3: Action bar + Editor (or empty state) ── */}
+      {segments.length === 0 ? (
+        <EmptyWorkspace
           darkMode={darkMode}
-          glossary={glossary}
-          glossaryKey={glossaryKey}
-          glossaryLanguagePairs={glossaryLanguagePairs}
-          glossarySourceLang={glossarySourceLang}
-          glossaryTargetLang={glossaryTargetLang}
-          languages={LANGUAGES}
-          onAddRow={addGlossaryRow}
-          onClearCurrentGlossary={clearCurrentGlossary}
-          onClearSelection={clearGlossarySelection}
-          onClose={() => setShowGlossary(false)}
-          onDeleteLanguagePair={deleteLanguagePairGlossary}
-          onDeleteSelected={deleteSelectedGlossaryRows}
-          onPasteGlossary={pasteGlossary}
-          onApplyGlossary={handleApplyGlossary}
-          onSelectAll={selectAllGlossaryRows}
-          onSelectPair={(source, target) => {
-            setGlossarySourceLang(source);
-            setGlossaryTargetLang(target);
-          }}
-          onToggleRow={toggleGlossaryRow}
-          onUpdateGlossary={updateGlossary}
-          selectedGlossaryRows={selectedGlossaryRows}
-          setGlossarySourceLang={setGlossarySourceLang}
-          setGlossaryTargetLang={setGlossaryTargetLang}
-          setGlossary={glossaryManager.setGlossary}
-          show={showGlossary}
-          canApplyGlossary={segments.length > 0}
-          theme={theme}
-          onImportTmx={handleImportTmx}
-        />
-
-        <ExportModal
-          show={showExportModal}
-          onClose={() => setShowExportModal(false)}
-          onExportDocument={handleExportDocument}
-          onExportXliff={handleExportXliff}
-          onExportTmx={handleExportTmx}
-          onExportGlobalTmx={handleExportGlobalTmx}
-          onExportLinguistTable={handleExportLinguistTable}
-          onRelinkHtml={handleRelinkHtml}
-          fileExtension={fileExtension}
-          theme={theme}
-          sourceLanguage={sourceLanguage}
-          targetLanguage={targetLanguage}
-        />
-
-        <ContextSettingsModal
-          show={showContextPanel}
-          onClose={() => setShowContextPanel(false)}
-          contextSettings={contextSettings}
-          setContextSettings={setContextSettings}
+          onLoadProject={loadProject}
+          onOpenGlossary={() => setShowGlossary(true)}
+          onUpload={handleUpload}
           theme={theme}
         />
-
-        <SearchReplaceModal
-          show={showSearchReplace}
-          onClose={() => setShowSearchReplace(false)}
-          onReplaceAll={handleReplaceAll}
-          theme={theme}
-        />
-
-        <SettingsModal
-          show={showSettingsModal}
-          onClose={() => setShowSettingsModal(false)}
-          darkMode={darkMode}
-          onToggleDarkMode={() => setDarkMode((value) => !value)}
-          onLogout={logout}
-          userRole={user ? user.role : ""}
-          userEmail={user ? user.email : ""}
-          theme={theme}
-        />
-
-        {showAdminDashboard && (
-          <AdminDashboard 
-            onClose={() => {
-              setShowAdminDashboard(false);
-              fetchProfile();
-            }} 
-            theme={theme} 
+      ) : (
+        <>
+          {/* Zone 2: Action bar */}
+          <WorkspaceToolbar
+            onCloseProject={closeProject}
+            onExport={() => setShowExportModal(true)}
+            onLoadProject={loadProject}
+            onSaveProject={saveProject}
+            onRelinkHtml={handleRelinkHtml}
+            onImportXliff={handleImportXliff}
+            onTranslate={handleTranslateSegments}
+            onToggleQa={() => setShowQaPanel((value) => !value)}
+            isTranslating={isTranslating}
+            qaIssuesCount={qaIssuesList.length}
+            searchQuery={searchQuery}
+            segmentsCount={segments.length}
+            fileExtension={fileExtension}
+            setSearchQuery={setSearchQuery}
+            stats={stats}
+            sourceLanguage={sourceLanguage}
+            onSourceLanguageChange={setSourceLanguage}
+            targetLanguage={targetLanguage}
+            onTargetLanguageChange={setTargetLanguage}
+            fileName={fileName}
+            theme={theme}
+            canTranslate={user ? (user.hasTranslateAccess && user.status === "active") : false}
+            filterStatus={filterStatus}
+            setFilterStatus={setFilterStatus}
+            onUpload={handleUpload}
           />
-        )}
 
-        <div className="w-full flex-1 overflow-hidden flex flex-col px-2 pb-4 pt-2 sm:px-4">
-          {isTranslating && (
-            <div className="fixed bottom-8 right-8 z-50 w-80 overflow-hidden rounded-xl border border-white/10 bg-slate-950/95 p-4 text-white shadow-2xl shadow-slate-950/40 backdrop-blur-xl">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold uppercase tracking-[0.22em] text-sky-200">
-                  Translating
-                </span>
-                <span className="font-mono text-sm">{progress}%</span>
-              </div>
-              <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-sky-400 to-slate-300 transition-all duration-300"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-            </div>
-          )}
+          {/* QA panel (collapsible) */}
+          <QAPanel
+            qaIssuesList={qaIssuesList}
+            showQaPanel={showQaPanel}
+            theme={theme}
+            onGoToSegment={goToSegment}
+          />
 
-          {segments.length === 0 ? (
-            <main className="mx-auto max-w-4xl">
-              <EmptyWorkspace
-                darkMode={darkMode}
-                onLoadProject={loadProject}
-                onOpenGlossary={() => setShowGlossary(true)}
-                onUpload={handleUpload}
-                theme={theme}
-              />
-            </main>
-          ) : (
-            <main className="flex-1 flex flex-col gap-4 overflow-hidden">
-              <div className="shrink-0">
-                <WorkspaceToolbar
-                  onCloseProject={closeProject}
-                  onExport={() => setShowExportModal(true)}
-                  onLoadProject={loadProject}
-                  onSaveProject={saveProject}
-                  onRelinkHtml={handleRelinkHtml}
-                  onImportXliff={handleImportXliff}
-                  onTranslate={handleTranslateSegments}
-                  onToggleQa={() => setShowQaPanel((value) => !value)}
-                  isTranslating={isTranslating}
-                  qaIssuesCount={qaIssuesList.length}
-                  searchQuery={searchQuery}
-                  segmentsCount={segments.length}
-                  fileExtension={fileExtension}
-                  setSearchQuery={setSearchQuery}
-                  stats={stats}
-                  sourceLanguage={sourceLanguage}
-                  onSourceLanguageChange={setSourceLanguage}
-                  targetLanguage={targetLanguage}
-                  onTargetLanguageChange={setTargetLanguage}
-                  fileName={fileName}
+          {/* Zone 3: Segment editor (table rows) */}
+          <div className="segment-table">
+            {/* Translation progress toast */}
+            {isTranslating && (
+              <div className="progress-toast">
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: "#7dd3fc" }}>
+                    Translating
+                  </span>
+                  <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "var(--text-primary)" }}>
+                    {progress}%
+                  </span>
+                </div>
+                <div style={{ marginTop: 10, height: 3, borderRadius: 99, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+                  <div
+                    style={{
+                      height: "100%",
+                      borderRadius: 99,
+                      background: "linear-gradient(90deg, #6366f1, #38bdf8)",
+                      width: `${progress}%`,
+                      transition: "width 0.3s ease"
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            <Virtuoso
+              ref={virtuosoRef}
+              style={{ height: "100%" }}
+              data={filteredSegments}
+              components={{ Footer: () => <div style={{ height: 80 }} /> }}
+              itemContent={(index, segment) => (
+                <SegmentCard
+                  key={segment.id}
+                  darkMode={darkMode}
+                  index={index}
+                  segment={segment}
                   theme={theme}
-                  canTranslate={user ? (user.hasTranslateAccess && user.status === "active") : false}
-                  filterStatus={filterStatus}
-                  setFilterStatus={setFilterStatus}
+                  translationGlossary={translationGlossary}
+                  onCopy={copyToClipboard}
+                  onUpdateTranslation={updateTranslation}
+                  onToggleVerify={() => toggleVerify(segment.id)}
+                  onVerifyAndNext={() => verifyAndNextSegment(segment.id)}
                 />
-              </div>
-
-              <QAPanel
-                qaIssuesList={qaIssuesList}
-                showQaPanel={showQaPanel}
-                theme={theme}
-                onGoToSegment={goToSegment}
-              />
-
-              <SegmentBoard theme={theme}>
-                <Virtuoso
-                  ref={virtuosoRef}
-                  style={{ height: "100%" }}
-                  data={filteredSegments}
-                  components={{ Footer: () => <div className="h-32" /> }}
-                  itemContent={(index, segment) => (
-                    <SegmentCard
-                      key={segment.id}
-                      darkMode={darkMode}
-                      index={index}
-                      segment={segment}
-                      theme={theme}
-                      translationGlossary={translationGlossary}
-                      onCopy={copyToClipboard}
-                      onUpdateTranslation={updateTranslation}
-                      onToggleVerify={() => toggleVerify(segment.id)}
-                      onVerifyAndNext={() => verifyAndNextSegment(segment.id)}
-                    />
-                  )}
-                />
-              </SegmentBoard>
-            </main>
-          )}
-        </div>
-      </div>
+              )}
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 }
