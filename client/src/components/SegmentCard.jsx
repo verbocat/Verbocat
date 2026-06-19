@@ -247,9 +247,17 @@ export const SegmentCard = ({
         </button>
       </div>
 
-      {/* Col 3: Arrow */}
+      {/* Col 3: Arrow / Copy Source to Target */}
       <div className="seg-arrow">
-        <ArrowRight style={{ width: 11, height: 11 }} />
+        <button
+          onClick={() => onUpdateTranslation(segment.id, segment.source)}
+          className="seg-arrow-btn"
+          title="Copy source to target"
+          disabled={segment.verified}
+          style={segment.verified ? { opacity: 0.35, pointerEvents: "none" } : {}}
+        >
+          <ArrowRight style={{ width: 12, height: 12 }} />
+        </button>
       </div>
 
       {/* Col 4: Target editor */}
@@ -291,7 +299,16 @@ export const SegmentCard = ({
         </div>
 
         {!segment.verified && (
-          <span className="seg-hint">Ctrl+Enter to verify and advance</span>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 4 }}>
+            <span className="seg-hint">Ctrl+Enter to verify and advance</span>
+            <button
+              onClick={onVerifyAndNext}
+              className="seg-verify-next-btn"
+              title="Verify segment and move to next"
+            >
+              Verify & Next
+            </button>
+          </div>
         )}
 
         {segment.qaIssues?.length > 0 && (

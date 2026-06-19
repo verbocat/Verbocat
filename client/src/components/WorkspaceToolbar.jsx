@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { LANGUAGES } from "../constants/languages.js";
 import {
   FileText, ArrowRight, Search, Filter, Sparkles,
-  Save, Upload, Download, Trash2, RefreshCw, ChevronDown, Plus, Link2
+  Save, Upload, Download, Trash2, RefreshCw, ChevronDown, Plus, Link2,
+  FolderOpen, Sliders
 } from "lucide-react";
 
 export const WorkspaceToolbar = ({
@@ -11,7 +12,8 @@ export const WorkspaceToolbar = ({
   isTranslating, qaIssuesCount, searchQuery, segmentsCount,
   setSearchQuery, stats, sourceLanguage, onSourceLanguageChange,
   targetLanguage, onTargetLanguageChange, fileName, theme,
-  canTranslate = true, fileExtension, filterStatus, setFilterStatus, onUpload
+  canTranslate = true, fileExtension, filterStatus, setFilterStatus, onUpload,
+  onOpenContext
 }) => {
   const [showDocMenu, setShowDocMenu] = useState(false);
   const docMenuRef = useRef(null);
@@ -74,6 +76,12 @@ export const WorkspaceToolbar = ({
           )}
         </button>
 
+        {/* Context */}
+        <button onClick={onOpenContext} disabled={!canAct} className="ab ab-context">
+          <Sliders style={{ width: 12, height: 12, flexShrink: 0 }} />
+          <span>Context</span>
+        </button>
+
         {/* Document dropdown */}
         <div className="relative" ref={docMenuRef}>
           <button onClick={() => setShowDocMenu(!showDocMenu)} className="ab">
@@ -84,6 +92,14 @@ export const WorkspaceToolbar = ({
 
           {showDocMenu && (
             <div className="dropdown-menu" style={{ top: "calc(100% + 4px)", left: 0 }}>
+              <label className="dropdown-item cursor-pointer">
+                <FolderOpen style={{ width: 13, height: 13, opacity: 0.65, flexShrink: 0 }} />
+                Load Saved File
+                <input type="file" accept=".json"
+                  onChange={(e) => { onLoadProject(e); setShowDocMenu(false); }}
+                  className="hidden" />
+              </label>
+
               <button className="dropdown-item" disabled={!canAct}
                 onClick={() => { onSaveProject(); setShowDocMenu(false); }}>
                 <Save style={{ width: 13, height: 13, opacity: 0.65, flexShrink: 0 }} />
@@ -105,17 +121,17 @@ export const WorkspaceToolbar = ({
                   onChange={(e) => { onRelinkHtml(e); setShowDocMenu(false); }}
                   className="hidden" disabled={!canAct} />
               </label>
-
-              <div className="dropdown-sep" />
-
-              <button className="dropdown-item danger" disabled={!canAct}
-                onClick={() => { onCloseProject(); setShowDocMenu(false); }}>
-                <Trash2 style={{ width: 13, height: 13, flexShrink: 0 }} />
-                Close File
-              </button>
             </div>
           )}
         </div>
+
+        {/* Close File */}
+        {canAct && (
+          <button onClick={onCloseProject} className="ab ab-close-file" title="Close File">
+            <Trash2 style={{ width: 12, height: 12, flexShrink: 0 }} />
+            <span>Close File</span>
+          </button>
+        )}
 
         {/* ── Stats strip — restored ── */}
         {canAct && stats && (

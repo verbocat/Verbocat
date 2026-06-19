@@ -1523,6 +1523,7 @@ export default function App() {
             filterStatus={filterStatus}
             setFilterStatus={setFilterStatus}
             onUpload={handleUpload}
+            onOpenContext={() => setShowContextPanel(true)}
           />
 
           {/* QA panel (collapsible) */}

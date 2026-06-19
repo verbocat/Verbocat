@@ -107,13 +107,6 @@ export const Header = ({
 
         <div className="topbar-divider" />
 
-        {/* Dark/Light */}
-        <NavBtn onClick={onToggleDarkMode} title={darkMode ? "Switch to Light" : "Switch to Dark"} iconOnly>
-          {darkMode
-            ? <Sun style={{ width: 14, height: 14 }} />
-            : <Moon style={{ width: 14, height: 14 }} />}
-        </NavBtn>
-
         {/* Settings */}
         <NavBtn onClick={onOpenSettings} title="Settings" iconOnly>
           <SettingsIcon style={{ width: 14, height: 14 }} />

@@ -26,10 +26,6 @@ export const EmptyWorkspace = ({ darkMode, onLoadProject, onOpenGlossary, onUplo
           Load Saved File
           <input type="file" accept=".json" onChange={onLoadProject} className="hidden" />
         </label>
-
-        <button className="empty-sec-btn" onClick={onOpenGlossary}>
-          Open Glossary
-        </button>
       </div>
 
       <p className="empty-hint">Or drag and drop a file anywhere on this page</p>

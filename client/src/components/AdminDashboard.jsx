@@ -158,7 +158,7 @@ export const AdminDashboard = ({ onClose, theme }) => {
   const isManager = currentUser?.role === "manager";
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[#05070c]/95 backdrop-blur-xl text-slate-100 overflow-hidden font-sans">
+    <div className="fixed inset-0 z-[200] flex flex-col bg-[#05070c]/95 backdrop-blur-xl text-slate-100 overflow-hidden font-sans">
       
       {/* Header Bar */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-slate-900/50 backdrop-blur-md">

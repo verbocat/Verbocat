@@ -47,33 +47,7 @@ export const SettingsModal = ({
         {/* Body */}
         <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-          {/* Appearance */}
-          <div>
-            <span className="settings-section-label">Appearance</span>
-            <div className="settings-row" style={{ borderRadius: "var(--radius-md)" }}>
-              <div>
-                <span className="settings-label">Interface Theme</span>
-                <span className="settings-desc">Switch between light and dark mode</span>
-              </div>
-              <button
-                onClick={onToggleDarkMode}
-                style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  padding: "6px 12px", borderRadius: "var(--radius-sm)",
-                  background: "var(--bg-input)",
-                  border: "1px solid var(--border-medium)",
-                  color: "var(--text-primary)",
-                  fontSize: 11.5, fontWeight: 600, cursor: "pointer",
-                  transition: "background 0.12s",
-                  flexShrink: 0
-                }}
-              >
-                {darkMode
-                  ? <><Sun style={{ width: 13, height: 13, color: "var(--amber)" }} />Light Mode</>
-                  : <><Moon style={{ width: 13, height: 13, color: "var(--accent)" }} />Dark Mode</>}
-              </button>
-            </div>
-          </div>
+
 
           {/* Editor Preferences */}
           <div>

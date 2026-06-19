@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Icons } from "./Icons.jsx";
+import { X, Sliders, Check } from "lucide-react";
 
 const DOMAINS = ["General", "Marketing", "Legal", "Medical", "Pharmaceutical", "Financial", "Banking", "Insurance", "Technical", "Software", "IT & Cybersecurity", "E-commerce", "Automotive", "Manufacturing", "Engineering", "Telecommunications", "Gaming", "Education", "Government", "HR & Recruitment", "Travel & Tourism", "Hospitality", "Retail", "Energy & Utilities", "Real Estate", "Life Sciences", "Healthcare", "Aerospace", "Agriculture", "Media & Entertainment"];
 
@@ -37,89 +37,129 @@ export const ContextSettingsModal = ({ show, onClose, contextSettings, setContex
     }
   };
 
-  const InputWrapper = ({ label, children }) => (
-    <label className="space-y-1.5 flex flex-col">
-      <span className={`text-[10px] uppercase tracking-[0.1em] font-semibold ${theme.muted}`}>{label}</span>
-      {children}
-    </label>
-  );
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-      <div className={`w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border shadow-2xl ${theme.cardStrong} p-6`}>
-        <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/10">
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <Icons.Settings /> Translation Context Engine
-          </h2>
-          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition">
-            <Icons.X />
+    <div className="modal-overlay">
+      <div className="modal-card" style={{ maxWidth: 720 }}>
+
+        {/* Header */}
+        <div className="modal-header">
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 8,
+              background: "rgba(91,106,240,0.1)",
+              border: "1px solid rgba(91,106,240,0.22)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: "var(--accent)"
+            }}>
+              <Sliders style={{ width: 15, height: 15 }} />
+            </div>
+            <div>
+              <div className="modal-title">Translation Context Engine</div>
+              <div style={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace", color: "var(--text-muted)", marginTop: 1 }}>
+                CONTEXT_AWARE_MT_TUNING
+              </div>
+            </div>
+          </div>
+          <button className="modal-close" onClick={onClose}>
+            <X style={{ width: 15, height: 15 }} />
           </button>
         </div>
 
-        <div className="mb-6 space-y-2">
-           <span className={`text-xs uppercase tracking-[0.2em] font-bold text-sky-400`}>Translation Profiles (Presets)</span>
-           <div className="flex flex-wrap gap-2 mt-2">
-             {Object.keys(PROFILES).map(profile => (
-               <button 
-                 key={profile}
-                 onClick={() => handleProfileSelect(profile)}
-                 className={`px-3 py-1.5 rounded-lg text-sm transition font-medium border ${activeProfile === profile ? 'bg-sky-600 border-sky-500 text-white shadow-lg shadow-sky-600/30' : `bg-transparent border-white/20 hover:bg-white/10 ${theme.text}`}`}
-               >
-                 {profile}
-               </button>
-             ))}
-           </div>
+        {/* Body */}
+        <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          
+          {/* Preset profiles */}
+          <div>
+            <span className="settings-section-label">Translation Profiles (Presets)</span>
+            <div style={{ marginTop: 8 }}>
+              <div className="seg-control" style={{ display: "flex", flexWrap: "wrap", width: "100%", gap: 2, height: "auto", padding: 2 }}>
+                {Object.keys(PROFILES).map(profile => (
+                  <button 
+                    key={profile}
+                    type="button"
+                    onClick={() => handleProfileSelect(profile)}
+                    className={`seg-control-btn ${activeProfile === profile ? 'active' : ''}`}
+                    style={{ flex: "1 1 auto", padding: "6px 12px", height: "auto" }}
+                  >
+                    {profile}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Context Options Grid */}
+          <div>
+            <span className="settings-section-label">Context Variables</span>
+            <div className="context-grid" style={{ marginTop: 8 }}>
+              
+              <div className="context-select-wrap">
+                <span className="context-label">Domain</span>
+                <select value={contextSettings.domain || "General"} onChange={e => handleChange('domain', e.target.value)} className="context-select">
+                  {DOMAINS.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+
+              <div className="context-select-wrap">
+                <span className="context-label">Content Type</span>
+                <select value={contextSettings.contentType || "General"} onChange={e => handleChange('contentType', e.target.value)} className="context-select">
+                  {CONTENT_TYPES.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+
+              <div className="context-select-wrap">
+                <span className="context-label">Target Audience</span>
+                <select value={contextSettings.audience || "General"} onChange={e => handleChange('audience', e.target.value)} className="context-select">
+                  {AUDIENCES.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+
+              <div className="context-select-wrap">
+                <span className="context-label">Purpose</span>
+                <select value={contextSettings.purpose || "General"} onChange={e => handleChange('purpose', e.target.value)} className="context-select">
+                  {PURPOSES.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+
+              <div className="context-select-wrap">
+                <span className="context-label">Tone</span>
+                <select value={contextSettings.tone || "General"} onChange={e => handleChange('tone', e.target.value)} className="context-select">
+                  {TONES.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+
+              <div className="context-select-wrap">
+                <span className="context-label">Formality</span>
+                <select value={contextSettings.formality || "Neutral"} onChange={e => handleChange('formality', e.target.value)} className="context-select">
+                  {["Very Formal", "Formal", "Neutral", "Informal", "Very Informal"].map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+
+              <div className="context-select-wrap">
+                <span className="context-label">Terminology Strictness</span>
+                <select value={contextSettings.terminologyStrictness || "Flexible"} onChange={e => handleChange('terminologyStrictness', e.target.value)} className="context-select">
+                  {["Flexible", "Balanced", "Strict"].map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+
+            </div>
+          </div>
+
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-           <InputWrapper label="Domain">
-             <select value={contextSettings.domain || "General"} onChange={e => handleChange('domain', e.target.value)} className={`rounded-xl border px-3 py-2 outline-none ${theme.input}`}>
-               {DOMAINS.map(d => <option key={d} value={d}>{d}</option>)}
-             </select>
-           </InputWrapper>
-
-           <InputWrapper label="Content Type">
-             <select value={contextSettings.contentType || "General"} onChange={e => handleChange('contentType', e.target.value)} className={`rounded-xl border px-3 py-2 outline-none ${theme.input}`}>
-               {CONTENT_TYPES.map(d => <option key={d} value={d}>{d}</option>)}
-             </select>
-           </InputWrapper>
-
-           <InputWrapper label="Audience">
-             <select value={contextSettings.audience || "General"} onChange={e => handleChange('audience', e.target.value)} className={`rounded-xl border px-3 py-2 outline-none ${theme.input}`}>
-               {AUDIENCES.map(d => <option key={d} value={d}>{d}</option>)}
-             </select>
-           </InputWrapper>
-
-           <InputWrapper label="Purpose">
-             <select value={contextSettings.purpose || "General"} onChange={e => handleChange('purpose', e.target.value)} className={`rounded-xl border px-3 py-2 outline-none ${theme.input}`}>
-               {PURPOSES.map(d => <option key={d} value={d}>{d}</option>)}
-             </select>
-           </InputWrapper>
-
-           <InputWrapper label="Tone">
-             <select value={contextSettings.tone || "General"} onChange={e => handleChange('tone', e.target.value)} className={`rounded-xl border px-3 py-2 outline-none ${theme.input}`}>
-               {TONES.map(d => <option key={d} value={d}>{d}</option>)}
-             </select>
-           </InputWrapper>
-
-           <InputWrapper label="Formality">
-             <select value={contextSettings.formality || "Neutral"} onChange={e => handleChange('formality', e.target.value)} className={`rounded-xl border px-3 py-2 outline-none ${theme.input}`}>
-               {["Very Formal", "Formal", "Neutral", "Informal", "Very Informal"].map(d => <option key={d} value={d}>{d}</option>)}
-             </select>
-           </InputWrapper>
-
-           <InputWrapper label="Terminology Strictness">
-             <select value={contextSettings.terminologyStrictness || "Flexible"} onChange={e => handleChange('terminologyStrictness', e.target.value)} className={`rounded-xl border px-3 py-2 outline-none ${theme.input}`}>
-               {["Flexible", "Balanced", "Strict"].map(d => <option key={d} value={d}>{d}</option>)}
-             </select>
-           </InputWrapper>
+        {/* Footer */}
+        <div style={{
+          padding: "16px 22px",
+          borderTop: "1px solid var(--border-subtle)",
+          display: "flex", alignItems: "center", justifyContent: "flex-end",
+          gap: 12
+        }}>
+          <button onClick={onClose} className="ab ab-export" style={{ height: 32, padding: "0 18px", borderRadius: "var(--radius-md)" }}>
+            <Check style={{ width: 14, height: 14, marginRight: 4 }} />
+            Apply Context
+          </button>
         </div>
 
-        <div className="mt-8 flex justify-end">
-           <button onClick={onClose} className="px-8 py-3 rounded-xl bg-sky-600 text-white font-bold hover:bg-sky-500 transition shadow-lg shadow-sky-900/50">
-             Apply Context to Translator
-           </button>
-        </div>
       </div>
     </div>
   );
