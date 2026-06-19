@@ -931,7 +931,99 @@ export default function App() {
         rows: bilingualRows
       });
 
-      // Feedback Form is removed as requested
+      // 2. Build Feedback Form Rows
+      const feedbackFields = [
+        { label: "Content Type" },
+        { label: "Accuracy" },
+        { label: "Stylistic Fluency" },
+        { label: "Consistency" },
+        { label: "Tone and Cultural Appropriateness" },
+        { label: "Spelling" },
+        { label: "Sentence Formation and Punctuation" },
+        { label: "Quality Level" },
+        { label: "Rating (out of 10)" },
+        { label: "Overall Comment" },
+        { label: "Additional Comments" },
+        { label: "Qualitative Comment" },
+        { label: "Suggestion or Improvement" },
+        { label: "Would you like to work on this type of MT?" }
+      ];
+
+      const feedbackRows = [
+        new TableRow({
+          children: [
+            new TableCell({
+              width: { size: 1500, type: WidthType.PERCENTAGE }, // 30%
+              shading: { fill: "E2E8F0" },
+              borders: cellBorders,
+              children: [
+                new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  spacing: { before: 100, after: 100 },
+                  children: [
+                    new TextRun({ text: "Evaluation Field", bold: true, font: "Segoe UI", size: 20, color: "0F172A" })
+                  ]
+                })
+              ]
+            }),
+            new TableCell({
+              width: { size: 3500, type: WidthType.PERCENTAGE }, // 70%
+              shading: { fill: "E2E8F0" },
+              borders: cellBorders,
+              children: [
+                new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  spacing: { before: 100, after: 100 },
+                  children: [
+                    new TextRun({ text: "Linguist Feedback & Scoring", bold: true, font: "Segoe UI", size: 20, color: "0F172A" })
+                  ]
+                })
+              ]
+            })
+          ]
+        })
+      ];
+
+      feedbackFields.forEach((field) => {
+        feedbackRows.push(
+          new TableRow({
+            children: [
+              new TableCell({
+                width: { size: 1500, type: WidthType.PERCENTAGE },
+                shading: { fill: "F1F5F9" },
+                borders: cellBorders,
+                children: [
+                  new Paragraph({
+                    spacing: { before: 120, after: 120 },
+                    children: [
+                      new TextRun({ text: field.label, bold: true, font: "Segoe UI", size: 20, color: "1E293B" })
+                    ]
+                  })
+                ]
+              }),
+              new TableCell({
+                width: { size: 3500, type: WidthType.PERCENTAGE },
+                shading: { fill: "FFFFFF" },
+                borders: cellBorders,
+                children: [
+                  new Paragraph({
+                    spacing: { before: 120, after: 120 },
+                    children: [
+                      new TextRun({ text: "", font: "Segoe UI", size: 20, color: "475569" })
+                    ]
+                  })
+                ]
+              })
+            ]
+          })
+        );
+      });
+
+      const feedbackTable = new Table({
+        width: { size: 5000, type: WidthType.PERCENTAGE },
+        margins: { top: 120, bottom: 120, left: 180, right: 180 },
+        rows: feedbackRows
+      });
 
       // 3. Document Metadata Table (Top of Document)
       const metadataTable = new Table({
@@ -1098,7 +1190,38 @@ export default function App() {
                   })
                 ]
               }),
-              bilingualTable
+              bilingualTable,
+
+              // Section spacer
+              new Paragraph({ text: "", spacing: { after: 300 } }),
+
+              // Section: Evaluation Feedback Form
+              new Paragraph({
+                heading: HeadingLevel.HEADING_1,
+                spacing: { before: 400, after: 200 },
+                children: [
+                  new TextRun({
+                    text: "Linguist Feedback & Review Form",
+                    bold: true,
+                    size: 28,
+                    color: "DB2777", // Pink-600
+                    font: "Segoe UI"
+                  })
+                ]
+              }),
+              new Paragraph({
+                spacing: { after: 200 },
+                children: [
+                  new TextRun({
+                    text: "Complete all sections below to submit your quality evaluation. Your feedback helps fine-tune translation models and processes.",
+                    italic: true,
+                    size: 18,
+                    color: "475569",
+                    font: "Segoe UI"
+                  })
+                ]
+              }),
+              feedbackTable
             ]
           }
         ]
