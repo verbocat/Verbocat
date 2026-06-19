@@ -327,16 +327,10 @@ export const SegmentCard = ({
         </div>
 
         {/* ========================================================
-            COLUMN 3: Middle Link Arrow
+            COLUMN 3: Middle Link Arrow (Static Indicator)
             ======================================================== */}
-        <div className="flex items-center justify-center rotate-90 md:rotate-0 shrink-0 select-none">
-          <button
-            onClick={() => onUpdateTranslation(segment.id, segment.source)}
-            className="h-10 w-10 rounded-full border border-violet-500/35 bg-violet-950/30 hover:bg-violet-600 hover:text-white hover:border-violet-500 flex items-center justify-center text-violet-400 transition-all duration-200 cursor-pointer active:scale-95 shadow-md shadow-violet-500/10"
-            title="Copy Source to Target"
-          >
-            <ArrowRight className="h-4.5 w-4.5" />
-          </button>
+        <div className="flex items-center justify-center rotate-90 md:rotate-0 shrink-0 select-none text-neutral-600">
+          <ArrowRight className="h-4 w-4" />
         </div>
 
         {/* ========================================================
@@ -421,13 +415,22 @@ export const SegmentCard = ({
             ======================================================== */}
         <div className="flex items-center gap-2 justify-end md:justify-center shrink-0">
           
+          {/* Copy Source to Target Button */}
+          <button
+            onClick={() => onUpdateTranslation(segment.id, segment.source)}
+            title="Copy source text to target editor"
+            className="rounded-xl p-3 border border-white/5 bg-neutral-900/40 text-neutral-400 hover:text-white hover:bg-white/5 transition-all duration-200 cursor-pointer active:scale-95"
+          >
+            <CornerDownRight className="h-4.5 w-4.5" />
+          </button>
+
           {/* Verify Check Button */}
           <button
             onClick={onToggleVerify}
             title={segment.verified ? 'Unverify segment' : 'Verify segment'}
             className={`rounded-xl p-3 border transition-all duration-200 cursor-pointer active:scale-95 ${
               segment.verified 
-                ? 'bg-violet-600 border-violet-500 text-white shadow-lg shadow-violet-500/10' 
+                ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg shadow-emerald-500/10' 
                 : 'bg-neutral-900/40 border-white/5 text-neutral-400 hover:text-white hover:bg-white/5'
             }`}
           >
@@ -437,7 +440,7 @@ export const SegmentCard = ({
           {/* Copy Target Button */}
           <button
             onClick={() => onCopy(segment.target || "")}
-            title="Copy Target Translation"
+            title="Copy target translation to clipboard"
             className="rounded-xl p-3 border border-white/5 bg-neutral-900/40 text-neutral-400 hover:text-white hover:bg-white/5 transition-all duration-200 cursor-pointer active:scale-95"
           >
             <Copy className="h-4.5 w-4.5" />

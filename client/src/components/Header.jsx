@@ -10,7 +10,8 @@ import {
   LogOut, 
   Plus,
   Lock,
-  LockKeyhole
+  LockKeyhole,
+  Sliders
 } from "lucide-react";
 
 const SidebarButton = ({ children, className = "", isActive = false, ...props }) => (
@@ -89,11 +90,11 @@ export const Header = ({
             </span>
           </div>
 
-          {/* New Project Upload Button */}
+          {/* New File Upload Button */}
           <div>
             <label className="w-full flex items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 py-3 px-4 text-xs font-bold text-white shadow-lg shadow-violet-500/10 hover:shadow-violet-500/20 cursor-pointer transition-all duration-300 hover:scale-[1.01] active:scale-[0.98]">
               <Plus className="w-4.5 h-4.5" />
-              <span>New Project</span>
+              <span>New File</span>
               <input type="file" onChange={onUpload} className="hidden" />
             </label>
           </div>
@@ -106,12 +107,17 @@ export const Header = ({
 
             <SidebarButton isActive={true}>
               <Folder className="w-4 h-4 text-violet-400" />
-              <span>Projects</span>
+              <span>Files</span>
             </SidebarButton>
 
             <SidebarButton isActive={false} onClick={onOpenGlossary}>
               <BookOpen className="w-4 h-4 text-neutral-500" />
               <span>Glossary</span>
+            </SidebarButton>
+
+            <SidebarButton isActive={false} onClick={onOpenContext}>
+              <Sliders className="w-4 h-4 text-neutral-500" />
+              <span>Translation Context</span>
             </SidebarButton>
 
             <SidebarButton 
@@ -213,7 +219,7 @@ export const Header = ({
             
             <label className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${theme.buttonSecondary}`}>
               <Plus className="w-3.5 h-3.5" />
-              <span>Load Project</span>
+              <span>Load File</span>
               <input
                 type="file"
                 accept=".json"

@@ -97,6 +97,7 @@ export default function App() {
   const [showContextPanel, setShowContextPanel] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [filterStatus, setFilterStatus] = useState("all");
   const [contextSettings, setContextSettings] = useState({
     domain: "General",
     contentType: "General",
@@ -208,15 +209,25 @@ export default function App() {
   const filteredSegments = useMemo(
     () =>
       segments.filter(
-        (segment) =>
-          !segment.isMerged &&
-          !isJunkSegment(segment.source) &&
-          (segment.source.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (segment.target || "")
-            .toLowerCase()
-            .includes(searchQuery.toLowerCase()))
+        (segment) => {
+          if (segment.isMerged || isJunkSegment(segment.source)) return false;
+          
+          const matchesSearch = segment.source.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (segment.target || "").toLowerCase().includes(searchQuery.toLowerCase());
+            
+          if (!matchesSearch) return false;
+          
+          if (filterStatus === "translated") {
+            return !!segment.target;
+          } else if (filterStatus === "untranslated") {
+            return !segment.target;
+          } else if (filterStatus === "verified") {
+            return !!segment.verified;
+          }
+          return true;
+        }
       ),
-    [searchQuery, segments]
+    [searchQuery, filterStatus, segments]
   );
 
   const qaIssuesList = useMemo(
@@ -635,7 +646,7 @@ export default function App() {
     link.setAttribute("download", `${fileName}_${targetLanguage}.json`);
     document.body.appendChild(link);
     link.click();
-    showToast("Project saved!");
+    showToast("Session saved!");
   };
 
   const handleReplaceAll = (findStr, replaceStr) => {
@@ -686,9 +697,9 @@ export default function App() {
         setContextSettings(project.contextSettings);
       }
       
-      showToast("Project loaded!");
+      showToast("File loaded!");
     } catch (error) {
-      showToast("Invalid project file", "error");
+      showToast("Invalid file format", "error");
     }
   };
 
@@ -1299,7 +1310,7 @@ export default function App() {
     setProgress(0);
     setIsTranslating(false);
     setSearchQuery("");
-    showToast("Project closed");
+    showToast("File closed");
   };
 
   const goToSegment = (id) => {
@@ -1511,14 +1522,11 @@ export default function App() {
                   onCloseProject={closeProject}
                   onExport={() => setShowExportModal(true)}
                   onLoadProject={loadProject}
-                  onOpenGlossary={() => setShowGlossary(true)}
-                  onOpenContext={() => setShowContextPanel(true)}
                   onSaveProject={saveProject}
                   onRelinkHtml={handleRelinkHtml}
                   onImportXliff={handleImportXliff}
                   onTranslate={handleTranslateSegments}
                   onToggleQa={() => setShowQaPanel((value) => !value)}
-                  onCopyAllSource={copyAllSourceToTarget}
                   isTranslating={isTranslating}
                   qaIssuesCount={qaIssuesList.length}
                   searchQuery={searchQuery}
@@ -1533,6 +1541,8 @@ export default function App() {
                   fileName={fileName}
                   theme={theme}
                   canTranslate={user ? (user.hasTranslateAccess && user.status === "active") : false}
+                  filterStatus={filterStatus}
+                  setFilterStatus={setFilterStatus}
                 />
               </div>
 
