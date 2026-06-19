@@ -99,47 +99,7 @@ export const ExportModal = ({
             </div>
           )}
 
-          {/* Option 3: TMX Current */}
-          <div className="p-4 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 transition flex items-center justify-between">
-            <div className="space-y-1">
-              <div className="font-bold flex items-center gap-2 text-sm text-amber-300">
-                Translation Memory TMX (.tmx)
-              </div>
-              <p className={`text-xs ${theme.muted}`}>
-                Export translated units of this document as a local TM file.
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                onExportTmx();
-                onClose();
-              }}
-              className="bg-amber-700 text-white hover:bg-amber-600 rounded-xl px-4 py-2 text-xs font-semibold flex items-center gap-1.5 transition"
-            >
-              <Icons.Download /> Download
-            </button>
-          </div>
 
-          {/* Option 4: TMX Global */}
-          <div className="p-4 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 transition flex items-center justify-between">
-            <div className="space-y-1">
-              <div className="font-bold flex items-center gap-2 text-sm text-purple-300">
-                Global Database TM TMX (.tmx)
-              </div>
-              <p className={`text-xs ${theme.muted}`}>
-                Export all approved segments in the database for {sourceLanguage.toUpperCase()} → {targetLanguage.toUpperCase()}.
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                onExportGlobalTmx();
-                onClose();
-              }}
-              className="bg-purple-800 text-white hover:bg-purple-700 rounded-xl px-4 py-2 text-xs font-semibold flex items-center gap-1.5 transition"
-            >
-              <Icons.Download /> Download
-            </button>
-          </div>
 
           {/* Option 5: Linguist Review Table (.docx) */}
           <div className="p-4 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 transition flex items-center justify-between">

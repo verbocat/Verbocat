@@ -72,11 +72,7 @@ export const WorkspaceToolbar = ({
               </span>
               <span className="text-[9px] text-neutral-500 font-mono">({fileExtension ? fileExtension.toUpperCase() : "FILE"})</span>
             </div>
-            <span className="h-4 w-px bg-white/10 hidden sm:block" />
-            <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 font-mono">
-              <span>Auto-saved</span>
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            </div>
+
           </div>
 
           {/* Right side: Core Stats */}
@@ -119,7 +115,7 @@ export const WorkspaceToolbar = ({
               >
                 {LANGUAGES.map((lang) => (
                   <option key={`src-${lang.code}`} value={lang.code}>
-                    {lang.name.substring(0, 10)} ({lang.code})
+                    {lang.flag} {lang.name} ({lang.code})
                   </option>
                 ))}
               </select>
@@ -138,7 +134,7 @@ export const WorkspaceToolbar = ({
               >
                 {LANGUAGES.map((lang) => (
                   <option key={`tgt-${lang.code}`} value={lang.code}>
-                    {lang.name.substring(0, 10)} ({lang.code})
+                    {lang.flag} {lang.name} ({lang.code})
                   </option>
                 ))}
               </select>

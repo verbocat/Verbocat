@@ -277,7 +277,7 @@ export const SegmentCard = ({
   return (
     <article
       id={`segment-${segment.id}`}
-      className={`relative overflow-hidden rounded-2xl border transition-all duration-300 bg-[#090b11]/30 border-white/5 px-4 py-5 md:px-5 md:py-6 ${
+      className={`relative overflow-hidden rounded-2xl border transition-all duration-300 bg-[#090b11]/30 border-white/5 px-3 py-3 md:px-4 md:py-3.5 ${
         segment.verified 
           ? 'border-l-2 border-l-emerald-500/80 shadow-[0_0_15px_rgba(16,185,129,0.02)]' 
           : segment.target 
@@ -291,7 +291,7 @@ export const SegmentCard = ({
             COLUMN 1: Segment Number Badge (Minimalist)
             ======================================================== */}
         <div className="flex md:flex-col items-center justify-between md:justify-center gap-1.5 shrink-0 select-none">
-          <div className="text-[10px] font-mono font-bold text-neutral-400 bg-neutral-950/40 border border-white/5 px-2.5 py-1 rounded-md min-w-[32px] text-center shadow-inner">
+          <div className="text-[10px] font-mono font-bold text-neutral-400 bg-neutral-950/40 border border-white/5 px-2 py-0.5 rounded-lg min-w-[32px] text-center shadow-inner">
             {String(index + 1).padStart(2, "0")}
           </div>
           
@@ -314,15 +314,15 @@ export const SegmentCard = ({
         {/* ========================================================
             COLUMN 2: Source Text Block
             ======================================================== */}
-        <div className="relative min-h-[64px] w-full bg-neutral-950/45 border border-white/5 rounded-xl p-4 pr-12 text-white leading-relaxed text-[13px] font-medium">
+        <div className="relative min-h-[32px] w-full bg-neutral-950/45 border border-white/5 rounded-xl p-2 pr-8 text-white leading-relaxed text-[11px] font-medium">
           <div className="break-words select-text">{renderHighlightedSource(segment.source)}</div>
           
           <button
             onClick={() => onCopy(segment.source)}
-            className="absolute right-3 top-3 p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-white/5 transition-all duration-200 cursor-pointer"
-            title="Copy Source Text"
+            className="absolute right-2 top-2 p-1 rounded-lg text-neutral-500 hover:text-white hover:bg-white/5 transition-all duration-200 cursor-pointer"
+            title="Copy source text to clipboard"
           >
-            <Copy className="h-3.5 w-3.5" />
+            <Copy className="h-3 w-3" />
           </button>
         </div>
 
@@ -339,7 +339,7 @@ export const SegmentCard = ({
         <div className="flex flex-col w-full min-w-0">
           
           {/* Status badge row */}
-          <div className="flex items-center gap-1.5 mb-2 select-none text-[10px] font-bold">
+          <div className="flex items-center gap-1.5 mb-1.5 select-none text-[9px] font-bold">
             <span className={`h-1.5 w-1.5 rounded-full ${
               segment.verified 
                 ? 'bg-emerald-500 animate-pulse' 
@@ -369,7 +369,7 @@ export const SegmentCard = ({
               onBlur={handleBlur}
               onInput={handleInput}
               onKeyDown={handleKeyDown}
-              className={`min-h-[64px] w-full break-words rounded-xl border border-white/5 bg-neutral-950/45 p-4 outline-none focus:border-violet-500/35 focus:ring-2 focus:ring-violet-500/10 whitespace-pre-wrap leading-relaxed text-[13px] font-medium text-white transition-all duration-300 ${
+              className={`min-h-[38px] w-full break-words rounded-xl border border-white/5 bg-neutral-950/45 p-2.5 outline-none focus:border-violet-500/35 focus:ring-2 focus:ring-violet-500/10 whitespace-pre-wrap leading-relaxed text-[12px] font-medium text-white transition-all duration-300 ${
                 segment.verified ? 'bg-slate-900/10 cursor-not-allowed opacity-60' : 'empty:before:content-["Translation_will_appear_here..."]'
               }`}
             />
@@ -413,37 +413,37 @@ export const SegmentCard = ({
         {/* ========================================================
             COLUMN 5: Action Verification Buttons
             ======================================================== */}
-        <div className="flex items-center gap-2 justify-end md:justify-center shrink-0">
+        <div className="flex items-center gap-1.5 justify-end md:justify-center shrink-0">
           
           {/* Copy Source to Target Button */}
           <button
             onClick={() => onUpdateTranslation(segment.id, segment.source)}
             title="Copy source text to target editor"
-            className="rounded-xl p-3 border border-white/5 bg-neutral-900/40 text-neutral-400 hover:text-white hover:bg-white/5 transition-all duration-200 cursor-pointer active:scale-95"
+            className="rounded-lg p-2 border border-white/5 bg-neutral-900/40 text-neutral-400 hover:text-white hover:bg-white/5 transition-all duration-200 cursor-pointer active:scale-95"
           >
-            <CornerDownRight className="h-4.5 w-4.5" />
+            <CornerDownRight className="h-4 w-4" />
           </button>
 
           {/* Verify Check Button */}
           <button
             onClick={onToggleVerify}
             title={segment.verified ? 'Unverify segment' : 'Verify segment'}
-            className={`rounded-xl p-3 border transition-all duration-200 cursor-pointer active:scale-95 ${
+            className={`rounded-lg p-2 border transition-all duration-200 cursor-pointer active:scale-95 ${
               segment.verified 
                 ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg shadow-emerald-500/10' 
                 : 'bg-neutral-900/40 border-white/5 text-neutral-400 hover:text-white hover:bg-white/5'
             }`}
           >
-            <Check className="h-4.5 w-4.5" />
+            <Check className="h-4 w-4" />
           </button>
 
           {/* Copy Target Button */}
           <button
             onClick={() => onCopy(segment.target || "")}
             title="Copy target translation to clipboard"
-            className="rounded-xl p-3 border border-white/5 bg-neutral-900/40 text-neutral-400 hover:text-white hover:bg-white/5 transition-all duration-200 cursor-pointer active:scale-95"
+            className="rounded-lg p-2 border border-white/5 bg-neutral-900/40 text-neutral-400 hover:text-white hover:bg-white/5 transition-all duration-200 cursor-pointer active:scale-95"
           >
-            <Copy className="h-4.5 w-4.5" />
+            <Copy className="h-4 w-4" />
           </button>
 
         </div>
