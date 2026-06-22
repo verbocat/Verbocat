@@ -198,6 +198,7 @@ const translateSegments = async (segments, target, sourceLang, contextSettings) 
 
 const translateSegmentWithContext = async ({
   sourceText,
+  existingTranslation,
   targetLang,
   sourceLang,
   contextJira,
@@ -211,6 +212,7 @@ const translateSegmentWithContext = async ({
 
   const translated = await translateSegmentWithVision({
     sourceText,
+    existingTranslation,
     targetLang,
     sourceLang: actualSourceLang,
     contextJira,

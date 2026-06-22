@@ -947,7 +947,9 @@ export default function App() {
         contextJira,
         contextDescription,
         screenshot,
-        contextSettings
+        contextSettings,
+        sourceLang: sourceLanguage,
+        targetLang: targetLanguage
       });
 
       if (result.success) {

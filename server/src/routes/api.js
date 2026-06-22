@@ -470,7 +470,7 @@ apiRouter.post(
       if (!doc) return;
 
       const segmentIndex = parseInt(request.params.index, 10);
-      const { contextJira, contextDescription, contextSettings: contextSettingsStr } = request.body;
+      const { contextJira, contextDescription, contextSettings: contextSettingsStr, sourceLang: bodySourceLang, targetLang: bodyTargetLang } = request.body;
       let contextSettings = null;
       if (contextSettingsStr) {
         try {
@@ -489,10 +489,27 @@ apiRouter.post(
         screenshotMimeType = request.file.mimetype;
       }
 
-      // Fetch the segment source text
+      const targetLang = bodyTargetLang || doc.target_lang || "hi";
+      const sourceLang = bodySourceLang || doc.source_lang || "en";
+
+      // Keep DB document languages in sync if updated in frontend
+      if ((bodyTargetLang && bodyTargetLang !== doc.target_lang) || (bodySourceLang && bodySourceLang !== doc.source_lang)) {
+        const { error: syncError } = await supabase
+          .from("documents")
+          .update({
+            source_lang: sourceLang,
+            target_lang: targetLang
+          })
+          .eq("id", doc.id);
+        if (syncError) {
+          console.error("Failed to sync document languages in database:", syncError);
+        }
+      }
+
+      // Fetch the segment source text and existing target text
       const { data: segment, error: fetchErr } = await supabase
         .from("document_segments")
-        .select("source_text")
+        .select("source_text, target_text")
         .eq("document_id", doc.id)
         .eq("segment_index", segmentIndex)
         .single();
@@ -505,8 +522,9 @@ apiRouter.post(
       const { translateSegmentWithContext } = require("../services/translationService");
       const translationResult = await translateSegmentWithContext({
         sourceText: segment.source_text,
-        targetLang: doc.target_lang,
-        sourceLang: doc.source_lang,
+        existingTranslation: segment.target_text || "",
+        targetLang,
+        sourceLang,
         contextJira,
         contextDescription,
         screenshotBuffer,

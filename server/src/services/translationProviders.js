@@ -90,7 +90,7 @@ const createProviderState = () => ({
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
-const buildTranslationSystemPrompt = (targetLang, sourceLang, contextSettings) => {
+const buildTranslationSystemPrompt = (targetLang, sourceLang, contextSettings, contextJira = "", contextDescription = "") => {
   const getLangName = (code) => {
     try {
       return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code;
@@ -107,14 +107,44 @@ const buildTranslationSystemPrompt = (targetLang, sourceLang, contextSettings) =
   const tone = contextSettings?.tone || "General";
   const formality = contextSettings?.formality || "Neutral";
 
+  // Check if informal is requested either globally or in custom description/Jira
+  const combinedContextText = `${contextJira || ""} ${contextDescription || ""}`.toLowerCase();
+  const hasCasualKeywords = combinedContextText.includes("informal") ||
+                            combinedContextText.includes("casual") ||
+                            combinedContextText.includes("friendly") ||
+                            combinedContextText.includes("day-to-day") ||
+                            combinedContextText.includes("day to day") ||
+                            combinedContextText.includes("talk") ||
+                            combinedContextText.includes("conversational") ||
+                            combinedContextText.includes("colloquial") ||
+                            combinedContextText.includes("extreme") ||
+                            combinedContextText.includes("simple") ||
+                            combinedContextText.includes("warm") ||
+                            combinedContextText.includes("spoken");
+
+  const isCasual = tone === "Casual" || 
+                   tone === "Friendly" || 
+                   formality === "Informal" || 
+                   formality === "Very Informal" ||
+                   hasCasualKeywords;
+
   let styleInstructions = "";
-  if (tone === "Casual" || tone === "Friendly" || formality === "Informal" || formality === "Very Informal") {
+  if (isCasual) {
     styleInstructions = `
 - YOU MUST MAKE THE TRANSLATION EXTREMELY INFORMAL, FRIENDLY, AND CASUAL (like day-to-day spoken conversational talk between friends).
 - Avoid all formal, textbook, literal, or corporate translations.
 - Rewrite sentences to sound like natural spoken language. Use active voice and warm phrasing.
-- For English: Use everyday conversational terms and contractions (e.g. "don't", "can't", "it's"). Translate rigid legalese or rules into simple conversational explanations (e.g. instead of "PFL may change interest rates at its sole discretion and will notify you...", write something like "PFL can change the interest rates whenever they need to, and they'll let you know on their website...").
-- For Hindi: Use highly conversational Hinglish/colloquial phrasing that people speak in real life. Completely avoid rigid, academic, or heavy Sanskritized words (e.g., use 'लोन' instead of 'ऋण', 'डिटेल्स' instead of 'विवरण', 'कस्टमर' instead of 'उपभोक्ता', 'बदलेगी' instead of 'परिवर्तित करेगी').
+- For English: Use everyday conversational terms and contractions (e.g. "don't", "can't", "it's"). Translate rigid legalese or rules into simple conversational explanations.
+  * Example of extremely informal translation:
+    - Formal: "Please note that your inquiry about the loan application has been updated in your CIBIL credit records."
+    - Extremely Informal / Day-to-Day: "Hey, just a heads-up: your loan application query has been updated on your CIBIL report."
+    - Another Example:
+    - Formal: "PFL may increase, decrease, or change the interest rate based on the applicable RPLR at its sole discretion..."
+    - Extremely Informal / Day-to-Day: "PFL can raise, lower, or change the interest rates whenever they need to, and they'll let you know on their website."
+- For Hindi: Use highly conversational Hinglish/colloquial phrasing that people speak in real life. Completely avoid rigid, academic, or heavy Sanskritized words.
+  * Example of extremely informal translation:
+    - Formal: "कृपया ध्यान दें कि आपके ऋण आवेदन के संबंध में पूछताछ आपके सिबिल (CIBIL) क्रेडिट रिकॉर्ड में अपडेट कर दी गई है।"
+    - Extremely Informal / Day-to-Day: "हे, बस बताना था कि आपके लोन एप्लीकेशन की जानकारी आपके CIBIL रिकॉर्ड में अपडेट कर दी गई है।"
 - Under no circumstances should the translation sound stiff, legalistic, or machine-translated.`;
   } else if (tone === "Professional" || formality === "Formal" || formality === "Very Formal") {
     styleInstructions = `
@@ -141,6 +171,7 @@ CRITICAL STYLE DIRECTIVES:
 ${styleInstructions}
 ${languageSpecificInstructions}
 
+- Custom instructions, Jira context, or user feedback (if provided) always take absolute precedence over the default style instructions. If the user requests a change in tone, formality, style, or specific wording via custom instructions/description, you MUST follow those instructions fully.
 - DO NOT leave standard English words (such as 'belonging', 'tackling', 'fellow travelers', 'stakeholders', 'champions') untranslated or transliterated verbatim in the target sentence, unless they are proper brand names (e.g. 'Tripadvisor', 'Viator') or technical codes. Translate them into correct, natural, standard terms of the target language.
 - Ensure perfect grammatical correctness, phrasing, and gender agreement in the target language.
 - Avoid literal, machine-like translations. The translation must sound natural and idiomatic in the target language.
@@ -421,6 +452,7 @@ const getProviderStatus = () => ({
 
 const translateSegmentWithVision = async ({
   sourceText,
+  existingTranslation,
   targetLang,
   sourceLang,
   contextJira,
@@ -444,7 +476,7 @@ const translateSegmentWithVision = async ({
   const sourceLangName = getLangName(sourceLang);
   const targetLangName = getLangName(targetLang);
 
-  const baseSystemPrompt = buildTranslationSystemPrompt(targetLang, sourceLang, contextSettings);
+  const baseSystemPrompt = buildTranslationSystemPrompt(targetLang, sourceLang, contextSettings, contextJira, contextDescription);
 
   const jsonFormattingInstructions = `\n\nCRITICAL OUTPUT FORMATTING: You are a pure translation engine. You MUST ONLY output valid JSON. Your response must be a JSON object containing a single key "translation" containing the translated string. Output a JSON object like this:
 {
@@ -459,9 +491,22 @@ const translateSegmentWithVision = async ({
 - Apply localizer common sense. Use standard, natural terminology corresponding to that visual element.
 - Strictly adhere to any custom description/instructions or terminology limits in the Jira story.`;
 
+  if (existingTranslation) {
+    systemPrompt += `\n\nREFINEMENT AND EDITING DIRECTIVES:
+- You are provided with an 'Existing Translation' of the source segment: "${existingTranslation}".
+- If the user provides custom instructions, a Jira story, or context settings (e.g., asking to make the translation "more informal", "extremely informal", "friendly", "formal again", etc.), you MUST analyze the 'Existing Translation' and rewrite/refine it to strictly satisfy the user's instructions.
+- Do NOT return the 'Existing Translation' unmodified if the user's instructions ask for a change in tone, formality, style, or vocabulary. You must perform the requested changes.
+- Ensure the final translation remains a correct and complete translation of the 'Source Segment', but is rewritten to match the requested style.
+- The final output MUST be in the requested target language (${targetLangName}). Do not output in any other language.`;
+  }
+
   let textPrompt = `Translate the following source text segment:
 Source Segment: "${sourceText}"
 Translate to: ${targetLangName} (from ${sourceLangName})`;
+
+  if (existingTranslation) {
+    textPrompt += `\nExisting Translation: "${existingTranslation}"`;
+  }
 
   if (contextJira) {
     textPrompt += `\n\nJira Story Context:\n${contextJira}`;

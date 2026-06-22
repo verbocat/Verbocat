@@ -14,7 +14,7 @@ async function runTest() {
       targetLang: "hi",
       sourceLang: "en",
       contextJira: "Legal clause translation for user dashboard. Should be easy for common people to understand.",
-      contextDescription: "Translate this legal disclaimer into extremely informal, friendly, day-to-day spoken language. Avoid heavy legal words like 'एकमात्र फैसले', 'विवेक', 'बाइंडिंग', 'लागू' where possible. Make it sound like a person explaining it to a friend.",
+      contextDescription: "Translate this legal disclaimer into extremely informal, friendly, day-to-day spoken language. Avoid heavy legal words like 'एकमात्र फैसले', 'विवेक', 'बाइंडਿੰਗ', 'ਲਾਗੂ' where possible. Make it sound like a person explaining it to a friend.",
       screenshotBuffer: null,
       screenshotMimeType: null,
       contextSettings: {
@@ -41,6 +41,42 @@ async function runTest() {
       }
     });
     console.log("Informal English Translation:\n", resultEnglishInformal);
+
+    // Test 3: Refinement Test (Formal English -> Extremely Informal English)
+    console.log("\n--- Test 3: Target: English, Refinement: make it extremely informal ---");
+    const resultRefinedInformal = await translateSegmentWithVision({
+      sourceText: "ਕਿਰਪਾ ਕਰਕੇ ਨੋਟ ਕਰੋ ਕਿ ਲੋਨ ਅਰਜ਼ੀ ਬਾਰੇ ਤੁਹਾਡੀ ਪੁੱਛਗਿੱਛ ਤੁਹਾਡੇ ਸਿਬਿਲ ਕ੍ਰੈਡਿਟ ਰਿਕਾਰਡਾਂ ਵਿੱਚ ਅਪਡੇਟ ਕੀਤੀ ਗਈ ਹੈ।",
+      existingTranslation: "Please note that your inquiry about the loan application has been updated in your CIBIL credit records.",
+      targetLang: "en",
+      sourceLang: "pa",
+      contextJira: "Translate loan update notification",
+      contextDescription: "is too formal make it extreemly informal like day to day talk",
+      screenshotBuffer: null,
+      screenshotMimeType: null,
+      contextSettings: {
+        tone: "General",
+        formality: "Neutral"
+      }
+    });
+    console.log("Extremely Informal English Refinement:\n", resultRefinedInformal);
+
+    // Test 4: Refinement Test (Informal English -> Formal English again)
+    console.log("\n--- Test 4: Target: English, Refinement: make it formal again ---");
+    const resultRefinedFormal = await translateSegmentWithVision({
+      sourceText: "ਕਿਰਪਾ ਕਰਕੇ ਨੋਟ ਕਰੋ ਕਿ ਲੋਨ ਅਰਜ਼ੀ ਬਾਰੇ ਤੁਹਾਡੀ ਪੁੱਛਗਿੱਛ ਤੁਹਾਡੇ ਸਿਬਿਲ ਕ੍ਰੈਡਿਟ ਰਿਕਾਰਡਾਂ ਵਿੱਚ ਅਪਡੇਟ ਕੀਤੀ ਗਈ ਹੈ।",
+      existingTranslation: resultRefinedInformal,
+      targetLang: "en",
+      sourceLang: "pa",
+      contextJira: "Translate loan update notification",
+      contextDescription: "make it formal again",
+      screenshotBuffer: null,
+      screenshotMimeType: null,
+      contextSettings: {
+        tone: "General",
+        formality: "Neutral"
+      }
+    });
+    console.log("Formalized English Refinement:\n", resultRefinedFormal);
 
   } catch (err) {
     console.error("Test failed:", err);
