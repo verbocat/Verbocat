@@ -24,10 +24,55 @@ apiRouter.get("/", (request, response) => {
   });
 });
 
-apiRouter.post("/upload", upload.single("file"), async (request, response) => {
+apiRouter.post("/upload", checkAuth, upload.single("file"), async (request, response) => {
   try {
     const result = await processUploadedFile(request.file);
-    response.json(result);
+    const userId = request.user.id;
+    const documentId = result.fileId; // Align documentId with the layout template ID (fileId)
+
+    // 1. Create document record
+    const { error: docError } = await supabase
+      .from("documents")
+      .insert({
+        id: documentId,
+        name: result.originalName || "Untitled Document",
+        owner_id: userId,
+        file_id: result.fileId,
+        source_lang: request.body.source || "en",
+        target_lang: request.body.target || "hi"
+      });
+
+    if (docError) {
+      console.error("Failed to insert document metadata:", docError);
+      return response.status(500).json({ error: "Failed to create document record." });
+    }
+
+    // 2. Persist parsed segments to the database
+    const segmentInserts = result.segments.map((seg, idx) => ({
+      document_id: documentId,
+      segment_index: idx,
+      source_text: seg.source || "",
+      target_text: seg.target || "",
+      status: "draft"
+    }));
+
+    const { error: segError } = await supabase
+      .from("document_segments")
+      .insert(segmentInserts);
+
+    if (segError) {
+      console.error("Failed to insert document segments:", segError);
+      // Rollback document creation on segment insertion error
+      await supabase.from("documents").delete().eq("id", documentId);
+      return response.status(500).json({ error: "Failed to persist document segments." });
+    }
+
+    response.json({
+      type: result.type,
+      documentId,
+      segments: result.segments,
+      originalName: result.originalName
+    });
   } catch (error) {
     console.log(error);
     response.status(error.status || 500).json({
@@ -222,6 +267,260 @@ apiRouter.post("/import-tmx", upload.single("file"), async (request, response) =
   } catch (error) {
     console.error(error);
     response.status(500).json({ error: "Failed to import TMX" });
+  }
+});
+
+// Helper helper to check document access permission
+async function verifyDocumentAccess(request, response, requiredPermission = "read") {
+  const documentId = request.params.id;
+  const userId = request.user.id;
+  const role = request.profile.role;
+
+  const isStaff = ["admin", "manager", "verbolabs_staff"].includes(role);
+
+  // Fetch document owner
+  const { data: doc, error: docError } = await supabase
+    .from("documents")
+    .select("*")
+    .eq("id", documentId)
+    .single();
+
+  if (docError || !doc) {
+    response.status(404).json({ error: "Document not found." });
+    return null;
+  }
+
+  // Staff and Owner have full access
+  if (isStaff || doc.owner_id === userId) {
+    return doc;
+  }
+
+  // Check explicit access
+  const { data: access, error: accessError } = await supabase
+    .from("document_access")
+    .select("permission")
+    .eq("document_id", documentId)
+    .eq("user_id", userId)
+    .single();
+
+  if (accessError || !access) {
+    response.status(403).json({ error: "Access denied to this document." });
+    return null;
+  }
+
+  // If write is required but they only have read
+  if (requiredPermission === "write" && access.permission !== "write") {
+    response.status(403).json({ error: "Write permission required." });
+    return null;
+  }
+
+  return doc;
+}
+
+// 1. Fetch document metadata and segments
+apiRouter.get("/documents/:id", checkAuth, async (request, response) => {
+  try {
+    const doc = await verifyDocumentAccess(request, response, "read");
+    if (!doc) return;
+
+    // Fetch segments
+    const { data: segments, error: segError } = await supabase
+      .from("document_segments")
+      .select("*")
+      .eq("document_id", doc.id)
+      .order("segment_index", { ascending: true });
+
+    if (segError) {
+      return response.status(500).json({ error: "Failed to load document segments." });
+    }
+
+    // Map to client format
+    const formattedSegments = segments.map(seg => ({
+      id: seg.segment_index + 1,
+      source: seg.source_text,
+      target: seg.target_text || "",
+      status: seg.status
+    }));
+
+    response.json({
+      documentId: doc.id,
+      name: doc.name,
+      ownerId: doc.owner_id,
+      fileId: doc.file_id,
+      sourceLang: doc.source_lang,
+      targetLang: doc.target_lang,
+      segments: formattedSegments
+    });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Internal server error." });
+  }
+});
+
+// 2. Update a single segment
+apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, response) => {
+  try {
+    const doc = await verifyDocumentAccess(request, response, "write");
+    if (!doc) return;
+
+    const segmentIndex = parseInt(request.params.index, 10);
+    const { targetText, status } = request.body;
+
+    const { error: updateError } = await supabase
+      .from("document_segments")
+      .update({
+        target_text: targetText,
+        status: status || "translated",
+        updated_at: new Date().toISOString()
+      })
+      .eq("document_id", doc.id)
+      .eq("segment_index", segmentIndex);
+
+    if (updateError) {
+      console.error("Segment update error:", updateError);
+      return response.status(500).json({ error: "Failed to update segment." });
+    }
+
+    // Broadcast update via Socket.io
+    const { getIo } = require("../services/socket");
+    const io = getIo();
+    if (io) {
+      io.to(doc.id).emit("segment-updated", {
+        segmentIndex,
+        targetText,
+        status: status || "translated",
+        updatedBy: request.user.email
+      });
+    }
+
+    response.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Internal server error." });
+  }
+});
+
+// 3. Get list of users with explicit access
+apiRouter.get("/documents/:id/access", checkAuth, async (request, response) => {
+  try {
+    const doc = await verifyDocumentAccess(request, response, "read");
+    if (!doc) return;
+
+    const isStaff = ["admin", "manager", "verbolabs_staff"].includes(request.profile.role);
+    if (!isStaff && doc.owner_id !== request.user.id) {
+      return response.status(403).json({ error: "Access management restricted to owner or staff." });
+    }
+
+    const { data: accesses, error: accessError } = await supabase
+      .from("document_access")
+      .select(`
+        id,
+        user_id,
+        permission,
+        profiles (
+          email,
+          full_name
+        )
+      `)
+      .eq("document_id", doc.id);
+
+    if (accessError) {
+      console.error("Failed to fetch access details:", accessError);
+      return response.status(500).json({ error: "Failed to load access list." });
+    }
+
+    const list = accesses.map(acc => ({
+      userId: acc.user_id,
+      permission: acc.permission,
+      email: acc.profiles?.email || "Unknown",
+      name: acc.profiles?.full_name || "Unknown"
+    }));
+
+    response.json(list);
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Internal server error." });
+  }
+});
+
+// 4. Grant access to a user by email
+apiRouter.post("/documents/:id/access", checkAuth, async (request, response) => {
+  try {
+    const doc = await verifyDocumentAccess(request, response, "read");
+    if (!doc) return;
+
+    const isStaff = ["admin", "manager", "verbolabs_staff"].includes(request.profile.role);
+    if (!isStaff && doc.owner_id !== request.user.id) {
+      return response.status(403).json({ error: "Access management restricted to owner or staff." });
+    }
+
+    const { email, permission } = request.body;
+    if (!email) {
+      return response.status(400).json({ error: "User email is required." });
+    }
+
+    const { data: targetUser, error: findError } = await supabase
+      .from("profiles")
+      .select("id, full_name")
+      .eq("email", email.trim().toLowerCase())
+      .single();
+
+    if (findError || !targetUser) {
+      return response.status(404).json({ error: "User not found with this email." });
+    }
+
+    if (targetUser.id === doc.owner_id) {
+      return response.status(400).json({ error: "Owner already has full access." });
+    }
+
+    const { error: insertError } = await supabase
+      .from("document_access")
+      .upsert({
+        document_id: doc.id,
+        user_id: targetUser.id,
+        permission: permission || "read"
+      }, { onConflict: "document_id,user_id" });
+
+    if (insertError) {
+      console.error("Failed to grant access:", insertError);
+      return response.status(500).json({ error: "Failed to grant access." });
+    }
+
+    response.json({ success: true, userId: targetUser.id, name: targetUser.full_name });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Internal server error." });
+  }
+});
+
+// 5. Revoke access from a user
+apiRouter.delete("/documents/:id/access/:userId", checkAuth, async (request, response) => {
+  try {
+    const doc = await verifyDocumentAccess(request, response, "read");
+    if (!doc) return;
+
+    const isStaff = ["admin", "manager", "verbolabs_staff"].includes(request.profile.role);
+    if (!isStaff && doc.owner_id !== request.user.id) {
+      return response.status(403).json({ error: "Access management restricted to owner or staff." });
+    }
+
+    const targetUserId = request.params.userId;
+
+    const { error: deleteError } = await supabase
+      .from("document_access")
+      .delete()
+      .eq("document_id", doc.id)
+      .eq("user_id", targetUserId);
+
+    if (deleteError) {
+      console.error("Failed to revoke access:", deleteError);
+      return response.status(500).json({ error: "Failed to revoke access." });
+    }
+
+    response.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Internal server error." });
   }
 });
 

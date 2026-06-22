@@ -1,4 +1,5 @@
 import { LANGUAGES } from "../constants/languages.js";
+import { CollaboratorsList } from "./CollaboratorsList.jsx";
 import {
   BookOpen, Users, Settings as SettingsIcon,
   Sun, Moon, LogOut, Plus, LockKeyhole, Sliders,
@@ -22,7 +23,8 @@ export const Header = ({
   fileName, fileExtension, sourceLanguage, onSourceLanguageChange,
   targetLanguage, onTargetLanguageChange, stats, onCloseProject, onSaveProject,
   onRelinkHtml, onImportXliff, onOpenContext, onOpenSettings,
-  userRole, onOpenAdmin, creditsAllowed, creditsConsumed, onLogout, onUpload
+  userRole, onOpenAdmin, creditsAllowed, creditsConsumed, onLogout, onUpload,
+  collaborators, onOpenShare
 }) => {
   const isManager = userRole === "admin" || userRole === "manager";
   const hasFile = segmentsCount > 0;
@@ -75,6 +77,22 @@ export const Header = ({
 
       {/* Right nav */}
       <div className="topbar-actions">
+
+        {/* Collaborators List */}
+        {hasFile && collaborators && collaborators.length > 0 && (
+          <CollaboratorsList collaborators={collaborators} />
+        )}
+
+        {/* Share Button */}
+        {hasFile && onOpenShare && (
+          <button
+            onClick={onOpenShare}
+            className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg border border-indigo-500 hover:border-indigo-400 transition-colors mr-1 shadow-md"
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span>Share</span>
+          </button>
+        )}
 
         {/* Primary upload CTA when no file */}
         {!hasFile && (

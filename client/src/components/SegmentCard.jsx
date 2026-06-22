@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Copy, Check, ArrowRight, AlertTriangle } from "lucide-react";
+import { Copy, Check, ArrowRight, AlertTriangle, Lock } from "lucide-react";
 
 /* ── Glossary highlight tooltip ─────────────────────────────── */
 const GlossaryHighlight = ({ term, children }) => {
@@ -80,7 +80,8 @@ const htmlToTarget = (el) => {
 /* ── Main component ──────────────────────────────────────────── */
 export const SegmentCard = ({
   darkMode, index, segment, theme, translationGlossary = [],
-  onCopy, onUpdateTranslation, onToggleVerify, onVerifyAndNext
+  onCopy, onUpdateTranslation, onToggleVerify, onVerifyAndNext,
+  lockInfo, onFocusSegment, onBlurSegment
 }) => {
   const editorRef = useRef(null);
   const lastSaved = useRef(segment.target || "");
@@ -205,11 +206,20 @@ export const SegmentCard = ({
     }
   };
 
+  const handleFocus = () => {
+    if (onFocusSegment) {
+      onFocusSegment(index);
+    }
+  };
+
   const handleBlur = (e) => {
     const t = htmlToTarget(e.currentTarget);
     lastSaved.current = t;
     if (t !== segment.target) onUpdateTranslation(segment.id, t);
     setTimeout(() => setSuggestions([]), 200);
+    if (onBlurSegment) {
+      onBlurSegment(index);
+    }
   };
 
   const statusClass = segment.verified ? "seg-verified" : segment.target ? "seg-translated" : "seg-untranslated";
@@ -247,14 +257,13 @@ export const SegmentCard = ({
         </button>
       </div>
 
-      {/* Col 3: Arrow / Copy Source to Target */}
       <div className="seg-arrow">
         <button
           onClick={() => onUpdateTranslation(segment.id, segment.source)}
           className="seg-arrow-btn"
           title="Copy source to target"
-          disabled={segment.verified}
-          style={segment.verified ? { opacity: 0.35, pointerEvents: "none" } : {}}
+          disabled={segment.verified || !!lockInfo}
+          style={segment.verified || lockInfo ? { opacity: 0.35, pointerEvents: "none" } : {}}
         >
           <ArrowRight style={{ width: 12, height: 12 }} />
         </button>
@@ -267,14 +276,28 @@ export const SegmentCard = ({
             id={`target-${segment.id}`}
             ref={editorRef}
             data-segment-target="true"
-            contentEditable={!segment.verified}
+            contentEditable={!segment.verified && !lockInfo}
             suppressContentEditableWarning
+            onFocus={handleFocus}
             onBlur={handleBlur}
             onInput={handleInput}
             onKeyDown={handleKeyDown}
             className="seg-editor"
-            style={segment.verified ? { opacity: 0.55, cursor: "default", pointerEvents: "none" } : {}}
+            style={
+              segment.verified || lockInfo
+                ? { opacity: 0.55, cursor: lockInfo ? "not-allowed" : "default", pointerEvents: lockInfo ? "none" : "auto" }
+                : {}
+            }
           />
+
+          {lockInfo && (
+            <div className="absolute inset-0 bg-indigo-950/20 border border-indigo-500/30 rounded-lg flex items-center justify-between px-3 z-10 select-none">
+              <span className="text-[10px] font-bold text-indigo-400 flex items-center gap-1.5 bg-zinc-950 border border-zinc-800 rounded px-2 py-0.5 shadow-md">
+                <Lock className="w-3 h-3 text-indigo-400" />
+                Editing by {lockInfo.name || lockInfo.email}
+              </span>
+            </div>
+          )}
 
           {suggestions.length > 0 && (
             <div className="glossary-dropdown">
@@ -324,8 +347,10 @@ export const SegmentCard = ({
       <div className="seg-actions">
         <button
           onClick={onToggleVerify}
+          disabled={!!lockInfo}
           title={segment.verified ? "Unverify" : "Verify"}
           className={`seg-btn ${segment.verified ? "active" : ""}`}
+          style={lockInfo ? { opacity: 0.35, pointerEvents: "none" } : {}}
         >
           <Check style={{ width: 12, height: 12 }} />
         </button>

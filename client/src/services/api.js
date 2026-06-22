@@ -15,9 +15,11 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-export const uploadFile = async (file) => {
+export const uploadFile = async (file, sourceLang, targetLang) => {
   const formData = new FormData();
   formData.append("file", file);
+  formData.append("source", sourceLang);
+  formData.append("target", targetLang);
   const response = await api.post("/api/upload", formData);
   return response.data;
 };
@@ -81,6 +83,37 @@ export const deleteAdminUser = async (id) => {
 
 export const fetchAdminCreditLogs = async () => {
   const response = await api.get("/api/admin/credit-logs");
+  return response.data;
+};
+
+export const fetchDocument = async (documentId) => {
+  const response = await api.get(`/api/documents/${documentId}`);
+  return response.data;
+};
+
+export const updateSegment = async (documentId, segmentIndex, targetText, status) => {
+  const response = await api.put(`/api/documents/${documentId}/segments/${segmentIndex}`, {
+    targetText,
+    status
+  });
+  return response.data;
+};
+
+export const fetchDocumentAccess = async (documentId) => {
+  const response = await api.get(`/api/documents/${documentId}/access`);
+  return response.data;
+};
+
+export const grantDocumentAccess = async (documentId, email, permission) => {
+  const response = await api.post(`/api/documents/${documentId}/access`, {
+    email,
+    permission
+  });
+  return response.data;
+};
+
+export const revokeDocumentAccess = async (documentId, userId) => {
+  const response = await api.delete(`/api/documents/${documentId}/access/${userId}`);
   return response.data;
 };
 

@@ -24,9 +24,13 @@ import {
   uploadFile,
   importXliff,
   importTmx,
-  exportGlobalTm
+  exportGlobalTm,
+  fetchDocument,
+  updateSegment
 } from "./services/api.js";
 import { ExportModal } from "./components/ExportModal.jsx";
+import { ShareModal } from "./components/ShareModal.jsx";
+import { io } from "socket.io-client";
 import { applyGlossaryTerms } from "./utils/glossary.js";
 import { getTheme } from "./utils/theme.js";
 
@@ -55,12 +59,114 @@ export default function App() {
   const [resetMode, setResetMode] = useState(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
 
+  const [collaborators, setCollaborators] = useState([]);
+  const [cellLocks, setCellLocks] = useState(new Map());
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [documentId, setDocumentId] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("doc") || null;
+  });
+
   // Sync profile details on start if session token is cached
   useEffect(() => {
     if (isAuth) {
       fetchProfile();
     }
   }, [isAuth]);
+
+  // Load collaborative document from DB on startup/change
+  useEffect(() => {
+    const loadCollaborativeDocument = async () => {
+      if (!documentId || !token) return;
+      setIsUploading(true);
+      try {
+        const doc = await fetchDocument(documentId);
+        setSegments(doc.segments);
+        setFileName(doc.name);
+        setFileId(doc.fileId);
+        setSourceLanguage(doc.sourceLang);
+        setTargetLanguage(doc.targetLang);
+        showToast(`Loaded collaborative document: ${doc.name}`);
+      } catch (err) {
+        console.error("Failed to load document:", err);
+        showToast(err.response?.data?.error || "Access denied or document not found.");
+        // Clear document ID from URL if load fails
+        const newUrl = `${window.location.origin}${window.location.pathname}`;
+        window.history.pushState({ path: newUrl }, '', newUrl);
+        setDocumentId(null);
+      } finally {
+        setIsUploading(false);
+      }
+    };
+
+    if (isAuth && token) {
+      loadCollaborativeDocument();
+    }
+  }, [documentId, isAuth, token]);
+
+  const socketRef = useRef(null);
+
+  // Initialize socket connection
+  useEffect(() => {
+    if (!documentId || !token) return;
+
+    const socketUrl = import.meta.env.VITE_API_URL || window.location.origin;
+    const socket = io(socketUrl, {
+      auth: { token }
+    });
+
+    socketRef.current = socket;
+
+    socket.on("connect", () => {
+      console.log("Connected to collaborative workspace socket");
+      socket.emit("join-document", { documentId });
+    });
+
+    socket.on("room-state", ({ users, locks }) => {
+      setCollaborators(users.filter(u => u.socketId !== socket.id));
+      setCellLocks(new Map(locks));
+    });
+
+    socket.on("presence-update", (users) => {
+      setCollaborators(users.filter(u => u.socketId !== socket.id));
+    });
+
+    socket.on("lock-update", (locks) => {
+      setCellLocks(new Map(locks));
+    });
+
+    socket.on("segment-updated", ({ segmentIndex, targetText, status }) => {
+      setSegments((prev) =>
+        prev.map((seg, idx) => {
+          if (idx === segmentIndex) {
+            return { ...seg, target: targetText, status, verified: status === "approved" };
+          }
+          return seg;
+        })
+      );
+    });
+
+    socket.on("error", (err) => {
+      showToast(err.message || "Collaboration error.");
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [documentId, token]);
+
+  const handleFocusSegment = (index) => {
+    if (socketRef.current) {
+      socketRef.current.emit("acquire-lock", { segmentIndex: index });
+    }
+  };
+
+  const handleBlurSegment = (index) => {
+    if (socketRef.current) {
+      socketRef.current.emit("release-lock", { segmentIndex: index });
+    }
+  };
 
   // Intercept hashes in URL redirect (Supabase password recovery / registration)
   useEffect(() => {
@@ -297,7 +403,7 @@ export default function App() {
         showToast(`Auto-relinking HTML template...`);
       }
 
-      const data = await uploadFile(file);
+      const data = await uploadFile(file, sourceLanguage, targetLanguage);
       
       const extractTagsOnly = (str) => {
         return (str.match(/<\/?\d+>/g) || []).join(" ");
@@ -392,7 +498,14 @@ export default function App() {
       setSegments(newSegments);
       setHistory([]);
       setFuture([]);
+      const docId = data.documentId || data.fileId;
       setFileId(data.fileId || null);
+      setDocumentId(docId);
+
+      if (docId) {
+        const newUrl = `${window.location.origin}${window.location.pathname}?doc=${docId}`;
+        window.history.pushState({ path: newUrl }, '', newUrl);
+      }
       
       if (isAutoRelink) {
         setFileExtension(".html");
@@ -560,58 +673,100 @@ export default function App() {
     showToast("Glossary applied to current translation");
   };
 
-  const updateTranslation = (id, value) => {
+  const updateTranslation = async (id, value) => {
     setSegments((previous) =>
       previous.map((segment) =>
         segment.id === id ? { ...segment, target: value, verified: false } : segment
       )
     );
-  };
 
-  const toggleVerify = (id) => {
-    updateSegmentsWithHistory((previous) =>
-      previous.map((segment) =>
-        segment.id === id ? { ...segment, verified: !segment.verified } : segment
-      )
-    );
-  };
-
-  const verifyAndNextSegment = (id) => {
-    updateSegmentsWithHistory((previous) => {
-      const newSegments = previous.map((segment) =>
-        segment.id === id ? { ...segment, verified: true } : segment
-      );
-      
-      const currentIndex = filteredSegments.findIndex((s) => s.id === id);
-      if (currentIndex !== -1) {
-        let nextIndex = currentIndex + 1;
-        
-        while (nextIndex < filteredSegments.length) {
-          if (!filteredSegments[nextIndex].verified) {
-            const nextId = filteredSegments[nextIndex].id;
-            
-            setTimeout(() => {
-              if (virtuosoRef.current) {
-                virtuosoRef.current.scrollToIndex({ index: nextIndex, align: 'center', behavior: 'smooth' });
-              }
-              setTimeout(() => {
-                const nextElement = document.getElementById(`segment-${nextId}`);
-                if (nextElement) {
-                  nextElement.classList.add("ring-2", "ring-teal-500");
-                  setTimeout(() => nextElement.classList.remove("ring-2", "ring-teal-500"), 1000);
-                }
-                const nextTa = document.getElementById(`target-${nextId}`);
-                if (nextTa) nextTa.focus();
-              }, 300);
-            }, 50);
-            break;
-          }
-          nextIndex++;
+    if (documentId) {
+      const segmentIndex = segments.findIndex((s) => s.id === id);
+      if (segmentIndex !== -1) {
+        try {
+          await updateSegment(documentId, segmentIndex, value, "draft");
+        } catch (err) {
+          console.error("Failed to update segment in database:", err);
+          showToast("Failed to save translation to database.");
         }
       }
+    }
+  };
+
+  const toggleVerify = async (id) => {
+    let nextVerified = false;
+    setSegments((previous) =>
+      previous.map((segment) => {
+        if (segment.id === id) {
+          nextVerified = !segment.verified;
+          return { ...segment, verified: nextVerified };
+        }
+        return segment;
+      })
+    );
+
+    if (documentId) {
+      const segmentIndex = segments.findIndex((s) => s.id === id);
+      if (segmentIndex !== -1) {
+        try {
+          const targetText = segments[segmentIndex].target;
+          await updateSegment(documentId, segmentIndex, targetText, nextVerified ? "approved" : "draft");
+        } catch (err) {
+          console.error("Failed to update verification in database:", err);
+          showToast("Failed to save verification state.");
+        }
+      }
+    }
+  };
+
+  const verifyAndNextSegment = async (id) => {
+    setSegments((previous) =>
+      previous.map((segment) =>
+        segment.id === id ? { ...segment, verified: true } : segment
+      )
+    );
+
+    if (documentId) {
+      const segmentIndex = segments.findIndex((s) => s.id === id);
+      if (segmentIndex !== -1) {
+        try {
+          const targetText = segments[segmentIndex].target;
+          await updateSegment(documentId, segmentIndex, targetText, "approved");
+        } catch (err) {
+          console.error("Failed to verify in database:", err);
+          showToast("Failed to save verification state.");
+        }
+      }
+    }
+
+    // Move focus to next segment
+    const currentIndex = filteredSegments.findIndex((s) => s.id === id);
+    if (currentIndex !== -1) {
+      let nextIndex = currentIndex + 1;
       
-      return newSegments;
-    });
+      while (nextIndex < filteredSegments.length) {
+        if (!filteredSegments[nextIndex].verified) {
+          const nextId = filteredSegments[nextIndex].id;
+          
+          setTimeout(() => {
+            if (virtuosoRef.current) {
+              virtuosoRef.current.scrollToIndex({ index: nextIndex, align: 'center', behavior: 'smooth' });
+            }
+            setTimeout(() => {
+              const nextElement = document.getElementById(`segment-${nextId}`);
+              if (nextElement) {
+                nextElement.classList.add("ring-2", "ring-teal-500");
+                setTimeout(() => nextElement.classList.remove("ring-2", "ring-teal-500"), 1000);
+              }
+              const nextTa = document.getElementById(`target-${nextId}`);
+              if (nextTa) nextTa.focus();
+            }, 300);
+          }, 50);
+          break;
+        }
+        nextIndex++;
+      }
+    }
   };
 
   const copyAllSourceToTarget = () => {
@@ -1483,6 +1638,8 @@ export default function App() {
         onOpenAdmin={() => setShowAdminDashboard(true)}
         onUpload={handleUpload}
         onOpenSettings={() => setShowSettingsModal(true)}
+        collaborators={collaborators}
+        onOpenShare={() => setShowShareModal(true)}
       />
 
       {/* ── Zone 2+3: Action bar + Editor (or empty state) ── */}
@@ -1580,12 +1737,22 @@ export default function App() {
                   onUpdateTranslation={updateTranslation}
                   onToggleVerify={() => toggleVerify(segment.id)}
                   onVerifyAndNext={() => verifyAndNextSegment(segment.id)}
+                  lockInfo={cellLocks.get(index)}
+                  onFocusSegment={handleFocusSegment}
+                  onBlurSegment={handleBlurSegment}
                 />
               )}
             />
           </div>
         </>
       )}
+
+      <ShareModal
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        documentId={documentId}
+        docName={fileName}
+      />
     </div>
   );
 }
