@@ -134,3 +134,23 @@ export const searchUsers = async (query) => {
   return response.data;
 };
 
+export const fetchRequestStatus = async (documentId) => {
+  const response = await api.get(`/api/documents/${documentId}/request-status`);
+  return response.data;
+};
+
+export const requestAccess = async (documentId) => {
+  const response = await api.post(`/api/documents/${documentId}/request-access`);
+  return response.data;
+};
+
+export const fetchAccessRequests = async (documentId) => {
+  const response = await api.get(`/api/documents/${documentId}/access-requests`);
+  return response.data;
+};
+
+export const respondToAccessRequest = async (documentId, requestId, action) => {
+  const response = await api.post(`/api/documents/${documentId}/access-requests/${requestId}/respond`, { action });
+  return response.data;
+};
+

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { Header } from "./components/Header.jsx";
 import { LoginScreen } from "./components/LoginScreen.jsx";
@@ -26,13 +26,18 @@ import {
   importTmx,
   exportGlobalTm,
   fetchDocument,
-  updateSegment
+  updateSegment,
+  fetchRequestStatus,
+  requestAccess,
+  fetchAccessRequests,
+  respondToAccessRequest
 } from "./services/api.js";
 import { ExportModal } from "./components/ExportModal.jsx";
 import { ShareModal } from "./components/ShareModal.jsx";
 import { io } from "socket.io-client";
 import { applyGlossaryTerms } from "./utils/glossary.js";
 import { getTheme } from "./utils/theme.js";
+import { Globe } from "lucide-react";
 
 export default function App() {
   const virtuosoRef = useRef(null);
@@ -67,6 +72,10 @@ export default function App() {
     return params.get("doc") || null;
   });
   const [permission, setPermission] = useState("write");
+  const [hasNoAccess, setHasNoAccess] = useState(false);
+  const [hasPendingAccessRequest, setHasPendingAccessRequest] = useState(false);
+  const [accessRequestMessage, setAccessRequestMessage] = useState("");
+  const [pendingAccessRequests, setPendingAccessRequests] = useState([]);
 
   // Sync profile details on start if session token is cached
   useEffect(() => {
@@ -76,37 +85,63 @@ export default function App() {
   }, [isAuth]);
 
   // Load collaborative document from DB on startup/change
-  useEffect(() => {
-    const loadCollaborativeDocument = async () => {
-      if (!documentId || !token) return;
-      setIsUploading(true);
-      try {
-        const doc = await fetchDocument(documentId);
-        setSegments(doc.segments);
-        setFileName(doc.name);
-        setFileId(doc.fileId);
-        setSourceLanguage(doc.sourceLang);
-        setTargetLanguage(doc.targetLang);
-        setPermission(doc.permission || "write");
-        showToast(`Loaded collaborative document: ${doc.name}`);
-      } catch (err) {
-        console.error("Failed to load document:", err);
-        setSegments([]);
-        setPermission("write");
+  const loadCollaborativeDocument = useCallback(async () => {
+    if (!documentId || !token) return;
+    setIsUploading(true);
+    setHasNoAccess(false);
+    setAccessRequestMessage("");
+    try {
+      const doc = await fetchDocument(documentId);
+      setSegments(doc.segments);
+      setFileName(doc.name);
+      setFileId(doc.fileId);
+      setSourceLanguage(doc.sourceLang);
+      setTargetLanguage(doc.targetLang);
+      setPermission(doc.permission || "write");
+      showToast(`Loaded collaborative document: ${doc.name}`);
+
+      // Fetch pending requests if the user is owner or staff
+      const isOwnerOrStaff = doc.ownerId === user?.id || ["admin", "manager", "verbolabs_staff"].includes(user?.role);
+      if (isOwnerOrStaff) {
+        try {
+          const reqs = await fetchAccessRequests(documentId);
+          setPendingAccessRequests(reqs);
+        } catch (reqErr) {
+          console.error("Failed to load access requests:", reqErr);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load document:", err);
+      setSegments([]);
+      setPermission("read"); // set to read-only temporarily
+      
+      const isAccessDenied = err.response?.status === 403;
+      if (isAccessDenied) {
+        setHasNoAccess(true);
+        // Check if there is already a pending request
+        try {
+          const status = await fetchRequestStatus(documentId);
+          setHasPendingAccessRequest(status.hasPendingRequest);
+        } catch (statusErr) {
+          console.error(statusErr);
+        }
+      } else {
         showToast(err.response?.data?.error || "Access denied or document not found.");
-        // Clear document ID from URL if load fails
+        // Clear document ID from URL if load fails completely (like 404)
         const newUrl = `${window.location.origin}${window.location.pathname}`;
         window.history.pushState({ path: newUrl }, '', newUrl);
         setDocumentId(null);
-      } finally {
-        setIsUploading(false);
       }
-    };
+    } finally {
+      setIsUploading(false);
+    }
+  }, [documentId, token, user]);
 
+  useEffect(() => {
     if (isAuth && token) {
       loadCollaborativeDocument();
     }
-  }, [documentId, isAuth, token]);
+  }, [documentId, isAuth, token, loadCollaborativeDocument]);
 
   const socketRef = useRef(null);
 
@@ -150,6 +185,41 @@ export default function App() {
       );
     });
 
+    socket.on("access-request-received", (data) => {
+      if (document.hidden) {
+        if (Notification.permission === "granted") {
+          new Notification("Access Request Received", {
+            body: `${data.userName} (${data.userEmail}) is requesting Edit Access to ${data.docName}.`
+          });
+        }
+      }
+      setPendingAccessRequests((prev) => {
+        if (prev.some((r) => r.id === data.id)) return prev;
+        return [...prev, {
+          id: data.id,
+          document_id: data.documentId,
+          user_id: data.userId,
+          profiles: { email: data.userEmail }
+        }];
+      });
+    });
+
+    socket.on("access-request-responded", ({ documentId: docId, action, userId }) => {
+      if (userId === user?.id && docId === documentId) {
+        showToast(`Your edit access request has been ${action === "approve" ? "approved" : "declined"}.`);
+        if (action === "approve") {
+          setPermission("write");
+          setHasNoAccess(false);
+          setHasPendingAccessRequest(false);
+          loadCollaborativeDocument();
+        }
+      }
+    });
+
+    socket.on("access-request-processed", ({ requestId }) => {
+      setPendingAccessRequests((prev) => prev.filter((r) => r.id !== requestId));
+    });
+
     socket.on("error", (err) => {
       showToast(err.message || "Collaboration error.");
     });
@@ -158,7 +228,7 @@ export default function App() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [documentId, token]);
+  }, [documentId, token, user, loadCollaborativeDocument]);
 
   const handleFocusSegment = (index) => {
     if (socketRef.current) {
@@ -171,6 +241,47 @@ export default function App() {
       socketRef.current.emit("release-lock", { segmentIndex: index });
     }
   };
+
+  const handleRequestEditAccess = async () => {
+    try {
+      await requestAccess(documentId);
+      setHasPendingAccessRequest(true);
+      setAccessRequestMessage("Access request submitted successfully!");
+      showToast("Access request submitted successfully!");
+    } catch (err) {
+      console.error("Failed to request access:", err);
+      showToast("Failed to request access.");
+    }
+  };
+
+  const handleRespondToAccessRequest = async (requestId, action) => {
+    try {
+      await respondToAccessRequest(documentId, requestId, action);
+      setPendingAccessRequests(prev => prev.filter(r => r.id !== requestId));
+      showToast(`Access request ${action === "approve" ? "approved" : "declined"}.`);
+    } catch (err) {
+      console.error("Failed to respond to access request:", err);
+      showToast("Failed to respond to request.");
+    }
+  };
+
+  const handleTeleport = (segmentIndex) => {
+    const elements = document.querySelectorAll(".seg-row");
+    if (elements && elements[segmentIndex]) {
+      elements[segmentIndex].scrollIntoView({ behavior: "smooth", block: "center" });
+      elements[segmentIndex].classList.add("teleport-highlight");
+      setTimeout(() => {
+        elements[segmentIndex].classList.remove("teleport-highlight");
+      }, 2000);
+    }
+  };
+
+  // Request notification permission on mount
+  useEffect(() => {
+    if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+      Notification.requestPermission();
+    }
+  }, []);
 
   // Intercept hashes in URL redirect (Supabase password recovery / registration)
   useEffect(() => {
@@ -1520,6 +1631,57 @@ export default function App() {
     );
   }
 
+  if (hasNoAccess) {
+    return (
+      <div className={`h-screen w-screen flex flex-col items-center justify-center bg-[#08090e] text-white p-6`}>
+        <Toast toast={toast} />
+        <div className="max-w-md w-full bg-[var(--bg-surface)] border border-[var(--border-medium)] rounded-2xl p-8 text-center space-y-6 shadow-2xl animate-[fadeIn_0.2s_ease]">
+          <div className="w-16 h-16 bg-rose-500/10 border border-rose-500/20 rounded-full flex items-center justify-center mx-auto text-[var(--text-rose)] shadow-lg">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-lg font-bold text-[var(--text-primary)]">Private Workspace</h2>
+            <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+              You do not have permission to access this document workspace. Please request access from the owner or administrator to participate.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 pt-2">
+            <button
+              onClick={handleRequestEditAccess}
+              disabled={hasPendingAccessRequest}
+              className={`w-full rounded-xl py-3 text-xs font-bold transition-all border cursor-pointer shadow-md ${
+                hasPendingAccessRequest
+                  ? "bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed"
+                  : "bg-[var(--accent)] border-[var(--accent)] hover:bg-[var(--accent-hover)] text-white"
+              }`}
+            >
+              {hasPendingAccessRequest ? "Access Request Pending" : "Request Access"}
+            </button>
+            <button
+              onClick={() => {
+                setHasNoAccess(false);
+                const newUrl = `${window.location.origin}${window.location.pathname}`;
+                window.history.pushState({ path: newUrl }, '', newUrl);
+                setDocumentId(null);
+              }}
+              className="w-full rounded-xl py-3 text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border border-transparent transition-all cursor-pointer"
+            >
+              Go to Dashboard
+            </button>
+          </div>
+          {accessRequestMessage && (
+            <div className="text-[11px] text-[var(--text-emerald)] bg-[var(--emerald-glow)] border border-[var(--emerald-glow)] rounded-xl p-2.5 font-bold">
+              {accessRequestMessage}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="workspace-shell" style={{ color: "var(--text-primary)" }}>
 
@@ -1644,6 +1806,7 @@ export default function App() {
         onOpenSettings={() => setShowSettingsModal(true)}
         collaborators={collaborators}
         onOpenShare={() => setShowShareModal(true)}
+        onTeleport={handleTeleport}
       />
 
       {/* ── Zone 2+3: Action bar + Editor (or empty state) ── */}
@@ -1699,12 +1862,25 @@ export default function App() {
           <div className="segment-table">
 
             {permission === "read" && (
-              <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl px-4 py-3 text-xs font-bold mb-3 shadow-lg mx-1 select-none">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 flex-shrink-0">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-                Read-Only Mode: You are viewing this workspace in read-only mode.
+              <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl px-4 py-3 text-xs font-bold mb-3 shadow-lg mx-1 select-none">
+                <div className="flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 flex-shrink-0">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  <span>Read-Only Mode: You are viewing this workspace in read-only mode.</span>
+                </div>
+                <button
+                  onClick={handleRequestEditAccess}
+                  disabled={hasPendingAccessRequest}
+                  className={`rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-wider border cursor-pointer transition-all shadow-md ${
+                    hasPendingAccessRequest
+                      ? "bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed"
+                      : "bg-amber-500 text-slate-950 border-amber-400 hover:bg-amber-400"
+                  }`}
+                >
+                  {hasPendingAccessRequest ? "Request Pending" : "Request Edit Access"}
+                </button>
               </div>
             )}
 
@@ -1773,6 +1949,38 @@ export default function App() {
         docName={fileName}
         theme={theme}
       />
+
+      {/* Access Requests Dialog Overlay */}
+      {pendingAccessRequests.length > 0 && (
+        <div className="fixed bottom-6 right-6 z-[200] w-96 bg-[var(--bg-surface)] border border-[var(--border-medium)] rounded-2xl shadow-2xl p-5 space-y-4 animate-[slideUp_0.2s_ease] select-none text-left">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-2">
+              <Globe className="w-4 h-4 text-[var(--accent)]" />
+              <h4 className="text-sm font-bold text-[var(--text-primary)]">Access Request</h4>
+            </div>
+            <span className="text-[9px] bg-[var(--accent-glow)] text-[var(--text-accent)] border border-[var(--border-subtle)] rounded px-1.5 py-0.5 font-bold uppercase tracking-wider">
+              Pending
+            </span>
+          </div>
+          <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+            <strong>{pendingAccessRequests[0].profiles?.email.split("@")[0]}</strong> ({pendingAccessRequests[0].profiles?.email}) is requesting <strong>Edit Access</strong> to this document workspace.
+          </p>
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => handleRespondToAccessRequest(pendingAccessRequests[0].id, "reject")}
+              className="rounded-xl px-4 py-2 text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border border-transparent transition-all cursor-pointer"
+            >
+              Decline
+            </button>
+            <button
+              onClick={() => handleRespondToAccessRequest(pendingAccessRequests[0].id, "approve")}
+              className="rounded-xl px-4 py-2 text-xs font-bold bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white border border-[var(--accent)] transition-all cursor-pointer shadow-md"
+            >
+              Grant Edit Access
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

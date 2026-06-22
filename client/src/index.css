@@ -1366,3 +1366,14 @@ code, .font-mono { font-family: "IBM Plex Mono", monospace; }
   border-color: rgba(91,106,240,0.45);
   box-shadow: 0 0 15px rgba(91,106,240,0.12), inset 0 1px 0 rgba(255,255,255,0.05);
 }
+
+@keyframes teleportGlow {
+  0% { box-shadow: 0 0 0 0px rgba(91,106,240,0); border-color: var(--border-medium); }
+  30% { box-shadow: 0 0 20px 4px rgba(91,106,240,0.4); border-color: var(--accent); }
+  100% { box-shadow: 0 0 0 0px rgba(91,106,240,0); border-color: var(--border-medium); }
+}
+.teleport-highlight {
+  animation: teleportGlow 2s ease;
+  position: relative;
+  z-index: 10;
+}

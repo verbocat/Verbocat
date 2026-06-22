@@ -24,7 +24,7 @@ export const Header = ({
   targetLanguage, onTargetLanguageChange, stats, onCloseProject, onSaveProject,
   onRelinkHtml, onImportXliff, onOpenContext, onOpenSettings,
   userRole, onOpenAdmin, creditsAllowed, creditsConsumed, onLogout, onUpload,
-  collaborators, onOpenShare
+  collaborators, onOpenShare, onTeleport
 }) => {
   const isManager = userRole === "admin" || userRole === "manager";
   const hasFile = segmentsCount > 0;
@@ -80,7 +80,7 @@ export const Header = ({
 
         {/* Collaborators List */}
         {hasFile && collaborators && collaborators.length > 0 && (
-          <CollaboratorsList collaborators={collaborators} />
+          <CollaboratorsList collaborators={collaborators} onTeleport={onTeleport} />
         )}
 
         {/* Share Button */}

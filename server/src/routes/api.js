@@ -573,6 +573,225 @@ apiRouter.delete("/documents/:id/access/:userId", checkAuth, async (request, res
   }
 });
 
+// 5a. Get user request status
+apiRouter.get("/documents/:id/request-status", checkAuth, async (request, response) => {
+  try {
+    const documentId = request.params.id;
+    const userId = request.user.id;
+
+    const { data: req, error } = await supabase
+      .from("document_access_requests")
+      .select("status")
+      .eq("document_id", documentId)
+      .eq("user_id", userId)
+      .eq("status", "pending")
+      .maybeSingle();
+
+    if (error) {
+      console.error(error);
+      return response.status(500).json({ error: "Failed to get request status." });
+    }
+
+    response.json({ hasPendingRequest: !!req });
+  } catch (err) {
+    console.error(err);
+    response.status(500).json({ error: "Server error." });
+  }
+});
+
+// 5b. Request access to a document
+apiRouter.post("/documents/:id/request-access", checkAuth, async (request, response) => {
+  try {
+    const documentId = request.params.id;
+    const userId = request.user.id;
+    const userEmail = request.user.email;
+    const userName = request.profile.full_name || userEmail.split("@")[0];
+
+    // Fetch document details to get owner_id and name
+    const { data: doc, error: docError } = await supabase
+      .from("documents")
+      .select("owner_id, name")
+      .eq("id", documentId)
+      .single();
+
+    if (docError || !doc) {
+      return response.status(404).json({ error: "Document not found." });
+    }
+
+    // Insert or update access request
+    const { error: insertError } = await supabase
+      .from("document_access_requests")
+      .upsert({
+        document_id: documentId,
+        user_id: userId,
+        status: "pending",
+        created_at: new Date().toISOString()
+      }, { onConflict: "document_id,user_id" });
+
+    if (insertError) {
+      console.error(insertError);
+      return response.status(500).json({ error: "Failed to submit access request." });
+    }
+
+    // Broadcast to room via Socket.io
+    const { getIo } = require("../services/socket");
+    const io = getIo();
+    if (io) {
+      const payload = {
+        id: documentId + "-" + userId,
+        documentId,
+        docName: doc.name,
+        userId,
+        userEmail,
+        userName
+      };
+
+      const { data: accessReq } = await supabase
+        .from("document_access_requests")
+        .select("id")
+        .eq("document_id", documentId)
+        .eq("user_id", userId)
+        .single();
+      
+      if (accessReq) {
+        payload.id = accessReq.id;
+      }
+
+      // Send to owner's personal room
+      io.to(`user:${doc.owner_id}`).emit("access-request-received", payload);
+      // Send to staff group room
+      io.to("verbolabs_staff").emit("access-request-received", payload);
+    }
+
+    response.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    response.status(500).json({ error: "Server error." });
+  }
+});
+
+// 5c. Get list of pending access requests for a document
+apiRouter.get("/documents/:id/access-requests", checkAuth, async (request, response) => {
+  try {
+    const doc = await verifyDocumentAccess(request, response, "read");
+    if (!doc) return;
+
+    const isStaff = ["admin", "manager", "verbolabs_staff"].includes(request.profile.role);
+    if (!isStaff && doc.owner_id !== request.user.id) {
+      return response.status(403).json({ error: "Access management restricted to owner or staff." });
+    }
+
+    const { data: requests, error } = await supabase
+      .from("document_access_requests")
+      .select(`
+        id,
+        document_id,
+        user_id,
+        status,
+        created_at,
+        profiles (
+          email
+        )
+      `)
+      .eq("document_id", doc.id)
+      .eq("status", "pending");
+
+    if (error) {
+      console.error(error);
+      return response.status(500).json({ error: "Failed to load access requests." });
+    }
+
+    response.json(requests || []);
+  } catch (err) {
+    console.error(err);
+    response.status(500).json({ error: "Server error." });
+  }
+});
+
+// 5d. Respond to access request
+apiRouter.post("/documents/:id/access-requests/:requestId/respond", checkAuth, async (request, response) => {
+  try {
+    const doc = await verifyDocumentAccess(request, response, "read");
+    if (!doc) return;
+
+    const isStaff = ["admin", "manager", "verbolabs_staff"].includes(request.profile.role);
+    if (!isStaff && doc.owner_id !== request.user.id) {
+      return response.status(403).json({ error: "Access management restricted to owner or staff." });
+    }
+
+    const { requestId } = request.params;
+    const { action } = request.body; // 'approve' or 'reject'
+
+    if (!["approve", "reject"].includes(action)) {
+      return response.status(400).json({ error: "Invalid action. Must be approve or reject." });
+    }
+
+    // Fetch the request details to know the user_id
+    const { data: accessReq, error: fetchReqError } = await supabase
+      .from("document_access_requests")
+      .select("*")
+      .eq("id", requestId)
+      .single();
+
+    if (fetchReqError || !accessReq) {
+      return response.status(404).json({ error: "Access request not found." });
+    }
+
+    const targetUserId = accessReq.user_id;
+
+    // Update request status
+    const newStatus = action === "approve" ? "approved" : "rejected";
+    const { error: updateReqError } = await supabase
+      .from("document_access_requests")
+      .update({ status: newStatus })
+      .eq("id", requestId);
+
+    if (updateReqError) {
+      console.error(updateReqError);
+      return response.status(500).json({ error: "Failed to update request status." });
+    }
+
+    if (action === "approve") {
+      // Grant write access to the user
+      const { error: grantError } = await supabase
+        .from("document_access")
+        .upsert({
+          document_id: doc.id,
+          user_id: targetUserId,
+          permission: "write"
+        }, { onConflict: "document_id,user_id" });
+
+      if (grantError) {
+        console.error(grantError);
+        return response.status(500).json({ error: "Failed to grant access on approval." });
+      }
+    }
+
+    // Broadcast update via Socket.io to the target user and the room
+    const { getIo } = require("../services/socket");
+    const io = getIo();
+    if (io) {
+      // Notify the requester
+      io.to(`user:${targetUserId}`).emit("access-request-responded", {
+        documentId: doc.id,
+        action,
+        userId: targetUserId
+      });
+      // Notify the room to update active list/locks
+      io.to(doc.id).emit("access-request-processed", {
+        requestId,
+        action,
+        userId: targetUserId
+      });
+    }
+
+    response.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    response.status(500).json({ error: "Server error." });
+  }
+});
+
 module.exports = {
   apiRouter
 };

@@ -1,6 +1,6 @@
 import React from "react";
 
-export function CollaboratorsList({ collaborators }) {
+export function CollaboratorsList({ collaborators, onTeleport }) {
   if (!collaborators || collaborators.length === 0) return null;
 
   // Generate a soft background/border color based on email string to keep colors consistent
@@ -30,11 +30,18 @@ export function CollaboratorsList({ collaborators }) {
             .substring(0, 2)
             .toUpperCase();
           const colors = getColorHash(user.email);
+          const hasActiveSegment = user.activeSegmentIndex !== null && user.activeSegmentIndex !== undefined;
 
           return (
             <div
               key={user.socketId}
-              className={`relative group flex items-center justify-center w-8 h-8 rounded-full border text-xs font-semibold ${colors.bg} cursor-default select-none transition-transform hover:-translate-y-0.5`}
+              onClick={() => {
+                if (hasActiveSegment && onTeleport) {
+                  onTeleport(user.activeSegmentIndex);
+                }
+              }}
+              className={`relative group flex items-center justify-center w-8 h-8 rounded-full border text-xs font-semibold ${colors.bg} select-none transition-transform hover:-translate-y-0.5 ${hasActiveSegment ? "cursor-pointer" : "cursor-default"}`}
+              title={hasActiveSegment ? `Teleport to Segment ${user.activeSegmentIndex + 1}` : ""}
             >
               {initials}
               {/* Online Indicator */}
@@ -48,6 +55,11 @@ export function CollaboratorsList({ collaborators }) {
                   <span className={`w-1.5 h-1.5 rounded-full ${colors.dot}`} />
                   <span className="capitalize text-[10px] text-zinc-400">{user.role?.replace("_", " ")}</span>
                 </div>
+                {hasActiveSegment && (
+                  <p className="text-[10px] text-[var(--text-accent)] font-bold mt-1.5 border-t border-white/5 pt-1.5">
+                    🎯 Segment {user.activeSegmentIndex + 1} (Click to teleport)
+                  </p>
+                )}
               </div>
             </div>
           );

@@ -56,6 +56,15 @@ function initSocket(server) {
   io.on("connection", (socket) => {
     console.log(`User connected to workspace socket: ${socket.user.email} (${socket.id})`);
 
+    // Join personal user room for direct user-targeted notifications
+    socket.join(`user:${socket.user.id}`);
+
+    // Join staff group room if they are staff
+    const isStaff = ["admin", "manager", "verbolabs_staff"].includes(socket.profile.role);
+    if (isStaff) {
+      socket.join("verbolabs_staff");
+    }
+
     // Handle joining a document room
     socket.on("join-document", async ({ documentId }) => {
       try {

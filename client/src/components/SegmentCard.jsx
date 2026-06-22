@@ -81,12 +81,35 @@ const htmlToTarget = (el) => {
 export const SegmentCard = ({
   darkMode, index, segment, theme, translationGlossary = [],
   onCopy, onUpdateTranslation, onToggleVerify, onVerifyAndNext,
-  lockInfo, onFocusSegment, onBlurSegment
+  lockInfo, onFocusSegment, onBlurSegment, readOnly
 }) => {
   const editorRef = useRef(null);
   const lastSaved = useRef(segment.target || "");
   const [suggestions, setSuggestions] = useState([]);
   const [activeIdx, setActiveIdx] = useState(0);
+
+  // Inactivity timer: 30 seconds threshold
+  const inactivityTimerRef = useRef(null);
+
+  const resetInactivityTimer = () => {
+    if (readOnly) return;
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+    }
+    inactivityTimerRef.current = setTimeout(() => {
+      if (editorRef.current && document.activeElement === editorRef.current) {
+        editorRef.current.blur();
+      }
+    }, 30000); // 30 seconds inactivity
+  };
+
+  useEffect(() => {
+    return () => {
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+    };
+  }, []);
 
   // Sync on row recycle
   useEffect(() => {
@@ -150,6 +173,7 @@ export const SegmentCard = ({
 
   /* ── Input handlers ── */
   const handleInput = (e) => {
+    resetInactivityTimer();
     const text = htmlToTarget(e.currentTarget);
     const words = text.split(/[\s\u00a0]+/);
     const last = words[words.length - 1] || "";
@@ -191,6 +215,7 @@ export const SegmentCard = ({
   };
 
   const handleKeyDown = (e) => {
+    resetInactivityTimer();
     if (suggestions.length) {
       if (e.key === "ArrowDown")  { e.preventDefault(); setActiveIdx(p => Math.min(p+1, suggestions.length-1)); return; }
       if (e.key === "ArrowUp")    { e.preventDefault(); setActiveIdx(p => Math.max(p-1, 0)); return; }
@@ -207,12 +232,16 @@ export const SegmentCard = ({
   };
 
   const handleFocus = () => {
+    resetInactivityTimer();
     if (onFocusSegment) {
       onFocusSegment(index);
     }
   };
 
   const handleBlur = (e) => {
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+    }
     const t = htmlToTarget(e.currentTarget);
     lastSaved.current = t;
     if (t !== segment.target) onUpdateTranslation(segment.id, t);
@@ -262,8 +291,8 @@ export const SegmentCard = ({
           onClick={() => onUpdateTranslation(segment.id, segment.source)}
           className="seg-arrow-btn"
           title="Copy source to target"
-          disabled={segment.verified || !!lockInfo}
-          style={segment.verified || lockInfo ? { opacity: 0.35, pointerEvents: "none" } : {}}
+          disabled={readOnly || segment.verified || !!lockInfo}
+          style={readOnly || segment.verified || lockInfo ? { opacity: 0.35, pointerEvents: "none" } : {}}
         >
           <ArrowRight style={{ width: 12, height: 12 }} />
         </button>
@@ -276,7 +305,7 @@ export const SegmentCard = ({
             id={`target-${segment.id}`}
             ref={editorRef}
             data-segment-target="true"
-            contentEditable={!segment.verified && !lockInfo}
+            contentEditable={!readOnly && !segment.verified && !lockInfo}
             suppressContentEditableWarning
             onFocus={handleFocus}
             onBlur={handleBlur}
@@ -284,8 +313,8 @@ export const SegmentCard = ({
             onKeyDown={handleKeyDown}
             className="seg-editor"
             style={
-              segment.verified || lockInfo
-                ? { opacity: 0.55, cursor: lockInfo ? "not-allowed" : "default", pointerEvents: lockInfo ? "none" : "auto" }
+              readOnly || segment.verified || lockInfo
+                ? { opacity: 0.55, cursor: lockInfo ? "not-allowed" : readOnly ? "default" : "text", pointerEvents: lockInfo ? "none" : "auto" }
                 : {}
             }
           />
@@ -321,8 +350,8 @@ export const SegmentCard = ({
           )}
         </div>
 
-        {!segment.verified && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 4 }}>
+        {!readOnly && !segment.verified && (
+          <div style={{ display: "flex", alignItems: "center", justifycontent: "space-between", gap: 8, marginTop: 4 }}>
             <span className="seg-hint">Ctrl+Enter to verify and advance</span>
             <button
               onClick={onVerifyAndNext}
@@ -347,10 +376,10 @@ export const SegmentCard = ({
       <div className="seg-actions">
         <button
           onClick={onToggleVerify}
-          disabled={!!lockInfo}
+          disabled={readOnly || !!lockInfo}
           title={segment.verified ? "Unverify" : "Verify"}
           className={`seg-btn ${segment.verified ? "active" : ""}`}
-          style={lockInfo ? { opacity: 0.35, pointerEvents: "none" } : {}}
+          style={readOnly || lockInfo ? { opacity: 0.35, pointerEvents: "none" } : {}}
         >
           <Check style={{ width: 12, height: 12 }} />
         </button>
