@@ -115,14 +115,14 @@ export function ShareModal({ isOpen, onClose, documentId, docName }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
-      <div className="w-full max-w-2xl bg-zinc-950 border border-white/10 rounded-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+    <div className="modal-overlay">
+      <div className="modal-card max-w-2xl select-none">
         
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-white/5">
+        <div className="modal-header">
           <div>
-            <h3 className="text-lg font-black text-white flex items-center gap-2 select-none">
-              <Globe className="w-5 h-5 text-indigo-400" />
+            <h3 className="modal-title flex items-center gap-2">
+              <Globe className="w-4 h-4 text-indigo-400" />
               Share Document Workspace
             </h3>
             <p className="text-xs text-slate-400 mt-1 max-w-[450px] truncate font-bold">
@@ -131,18 +131,19 @@ export function ShareModal({ isOpen, onClose, documentId, docName }) {
           </div>
           <button 
             onClick={onClose}
-            className="rounded-lg p-1.5 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all cursor-pointer"
+            className="modal-close"
+            title="Close modal"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-6">
+        <div className="modal-body space-y-6">
           
           {/* Share Link Row */}
           <div className="space-y-2">
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 select-none">
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
               Workspace link
             </label>
             <div className="flex items-center gap-2">
@@ -153,6 +154,7 @@ export function ShareModal({ isOpen, onClose, documentId, docName }) {
                 className="flex-1 rounded-xl border border-white/10 bg-black/40 px-3.5 py-3 text-slate-100 outline-none select-all text-xs font-semibold"
               />
               <button
+                type="button"
                 onClick={copyToClipboard}
                 className={`flex h-[42px] items-center justify-center gap-1.5 px-5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-md ${
                   copied 
@@ -178,12 +180,14 @@ export function ShareModal({ isOpen, onClose, documentId, docName }) {
           <hr className="border-white/5" />
 
           {/* Add collaborator form */}
-          <form onSubmit={handleGrant} className="space-y-2.5">
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 select-none">
-              Add user by email
-            </label>
-            <div className="flex flex-col sm:flex-row gap-3 relative">
-              <div className="flex-1 relative" ref={dropdownRef}>
+          <form onSubmit={handleGrant} className="space-y-4">
+            
+            {/* Row 1: Email Input (Full Width) */}
+            <div className="space-y-2">
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                Add user by email
+              </label>
+              <div className="relative" ref={dropdownRef}>
                 <input
                   type="email"
                   required
@@ -195,61 +199,65 @@ export function ShareModal({ isOpen, onClose, documentId, docName }) {
                 
                 {/* Email Suggestions Dropdown */}
                 {showSuggestions && emailSuggestions.length > 0 && (
-                  <div className="absolute left-0 right-0 mt-1.5 z-55 max-h-[160px] overflow-y-auto bg-zinc-900 border border-white/10 rounded-xl shadow-2xl divide-y divide-white/5">
+                  <div className="absolute left-0 right-0 mt-1.5 z-50 max-h-[160px] overflow-y-auto bg-zinc-950 border border-white/10 rounded-xl shadow-2xl divide-y divide-white/5">
                     {emailSuggestions.map((user) => (
                       <button
                         key={user.email}
                         type="button"
                         onClick={() => selectSuggestion(user.email)}
-                        className="w-full text-left px-3.5 py-2.5 hover:bg-white/5 transition-colors flex flex-col justify-center cursor-pointer"
+                        className="w-full text-left px-4 py-3 hover:bg-white/5 transition-colors flex flex-col justify-center cursor-pointer"
                       >
-                        <span className="text-xs font-semibold text-white truncate">{user.full_name || "Linguist"}</span>
+                        <span className="text-xs font-bold text-white truncate">{user.full_name || "Linguist"}</span>
                         <span className="text-[10px] text-slate-400 truncate mt-0.5">{user.email}</span>
                       </button>
                     ))}
                   </div>
                 )}
               </div>
+            </div>
 
-              <div className="flex gap-2">
+            {/* Row 2: Select permission and Grant button */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1">
                 <select
                   value={permission}
                   onChange={(e) => setPermission(e.target.value)}
-                  className="rounded-xl border border-white/10 bg-black/40 px-3.5 py-3 text-slate-100 outline-none transition-all focus:border-indigo-500/50 text-xs cursor-pointer min-w-[150px]"
+                  className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-3 text-slate-100 outline-none transition-all focus:border-indigo-500/50 text-xs cursor-pointer h-[44px]"
                 >
                   <option value="read">Can view (Read-only)</option>
                   <option value="write">Can edit (Read/Write)</option>
                 </select>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="flex h-[42px] items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 hover:border-indigo-400 text-white border border-indigo-500 text-xs font-bold px-5 rounded-xl transition-all cursor-pointer shadow-md disabled:opacity-50"
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  Grant Access
-                </button>
               </div>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="flex h-[44px] items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 hover:border-indigo-400 text-white border border-indigo-500 text-xs font-bold px-6 rounded-xl transition-all cursor-pointer shadow-md disabled:opacity-50 min-w-[140px]"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                Grant Access
+              </button>
             </div>
+
           </form>
 
           {/* Error Message */}
           {error && (
-            <div className="text-xs font-semibold text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-xl p-3.5 animate-fade-in">
+            <div className="text-xs font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-xl p-3.5">
               {error}
             </div>
           )}
 
           {/* Access List */}
           <div className="space-y-2">
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 select-none">
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
               People with access
             </label>
-            <div className="max-h-[220px] overflow-y-auto border border-white/10 rounded-xl divide-y divide-white/5 bg-black/40 pr-1">
+            <div className="max-h-[200px] overflow-y-auto border border-white/10 rounded-xl divide-y divide-white/5 bg-black/40 pr-1">
               {loading ? (
                 <div className="p-5 text-center text-xs text-slate-500 font-bold">Loading access list...</div>
               ) : accessList.length === 0 ? (
                 <div className="p-6 text-center text-xs text-slate-400 flex flex-col items-center gap-1.5 font-bold">
-                  <Lock className="w-5 h-5 text-slate-600 mb-1" />
+                  <Lock className="w-4 h-4 text-slate-600 mb-1" />
                   Only the Owner & VerboLabs staff currently have access
                 </div>
               ) : (
@@ -264,6 +272,7 @@ export function ShareModal({ isOpen, onClose, documentId, docName }) {
                         {item.permission}
                       </span>
                       <button
+                        type="button"
                         onClick={() => handleRevoke(item.userId)}
                         className="rounded-lg p-1.5 bg-white/5 hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 transition-all border border-white/5 cursor-pointer"
                         title="Revoke access"
@@ -280,11 +289,12 @@ export function ShareModal({ isOpen, onClose, documentId, docName }) {
 
         {/* Footer */}
         <div className="p-5 bg-zinc-900/30 border-t border-white/5 flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold select-none">
+          <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold">
             <Shield className="w-3.5 h-3.5 text-emerald-500" />
             VerboLabs staff bypass all restrictions.
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="rounded-xl px-4 py-2.5 text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 border border-transparent transition-all cursor-pointer"
           >

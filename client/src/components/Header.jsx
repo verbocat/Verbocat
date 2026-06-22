@@ -85,13 +85,10 @@ export const Header = ({
 
         {/* Share Button */}
         {hasFile && onOpenShare && (
-          <button
-            onClick={onOpenShare}
-            className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg border border-indigo-500 hover:border-indigo-400 transition-colors mr-1 shadow-md"
-          >
-            <Users className="w-3.5 h-3.5" />
+          <NavBtn onClick={onOpenShare} title="Share Document Workspace">
+            <Users style={{ width: 13, height: 13 }} />
             <span>Share</span>
-          </button>
+          </NavBtn>
         )}
 
         {/* Primary upload CTA when no file */}

@@ -15,6 +15,18 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Auto logout and refresh if token is invalid or expired
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+      localStorage.removeItem("verbocat_token");
+      window.location.reload();
+    }
+    return Promise.reject(error);
+  }
+);
+
 export const uploadFile = async (file, sourceLang, targetLang) => {
   const formData = new FormData();
   formData.append("file", file);
