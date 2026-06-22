@@ -48,7 +48,7 @@ export function CollaboratorsList({ collaborators, onTeleport }) {
               <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border border-zinc-900 ${colors.dot}`} />
               
               {/* Rich Tooltip */}
-              <div className="absolute top-10 right-0 hidden group-hover:block z-55 bg-zinc-950 border border-zinc-800 text-zinc-300 text-[11px] rounded-lg p-2.5 shadow-xl whitespace-nowrap min-w-[150px]">
+              <div className="absolute top-8 right-0 hidden group-hover:block z-55 bg-zinc-950 border border-zinc-800 text-zinc-300 text-[11px] rounded-lg p-2.5 shadow-xl whitespace-nowrap min-w-[150px]">
                 <p className="font-bold text-white text-xs">{user.name || "Collaborator"}</p>
                 <p className="text-zinc-500 text-[10px] mt-0.5">{user.email}</p>
                 <div className="flex items-center gap-1 mt-1.5">

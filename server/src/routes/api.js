@@ -566,6 +566,13 @@ apiRouter.delete("/documents/:id/access/:userId", checkAuth, async (request, res
       return response.status(500).json({ error: "Failed to revoke access." });
     }
 
+    // Broadcast real-time access revocation to lock out the user instantly
+    const { getIo } = require("../services/socket");
+    const io = getIo();
+    if (io) {
+      io.to(doc.id).emit("access-revoked", { userId: targetUserId, documentId: doc.id });
+    }
+
     response.json({ success: true });
   } catch (error) {
     console.error(error);

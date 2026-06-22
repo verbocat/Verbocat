@@ -72,6 +72,7 @@ export default function App() {
     return params.get("doc") || null;
   });
   const [permission, setPermission] = useState("write");
+  const [ownerId, setOwnerId] = useState(null);
   const [hasNoAccess, setHasNoAccess] = useState(false);
   const [hasPendingAccessRequest, setHasPendingAccessRequest] = useState(false);
   const [accessRequestMessage, setAccessRequestMessage] = useState("");
@@ -98,6 +99,7 @@ export default function App() {
       setSourceLanguage(doc.sourceLang);
       setTargetLanguage(doc.targetLang);
       setPermission(doc.permission || "write");
+      setOwnerId(doc.ownerId);
       showToast(`Loaded collaborative document: ${doc.name}`);
 
       // Fetch pending requests if the user is owner or staff
@@ -218,6 +220,18 @@ export default function App() {
 
     socket.on("access-request-processed", ({ requestId }) => {
       setPendingAccessRequests((prev) => prev.filter((r) => r.id !== requestId));
+    });
+
+    socket.on("access-revoked", ({ userId, documentId: docId }) => {
+      if (userId === user?.id && docId === documentId) {
+        showToast("Your access to this workspace has been revoked.");
+        setPermission("read");
+        setHasNoAccess(true);
+        if (socketRef.current) {
+          socketRef.current.disconnect();
+          socketRef.current = null;
+        }
+      }
     });
 
     socket.on("error", (err) => {
@@ -1805,7 +1819,7 @@ export default function App() {
         onUpload={handleUpload}
         onOpenSettings={() => setShowSettingsModal(true)}
         collaborators={collaborators}
-        onOpenShare={() => setShowShareModal(true)}
+        onOpenShare={ownerId && (ownerId === user?.id || ["admin", "manager", "verbolabs_staff"].includes(user?.role)) ? () => setShowShareModal(true) : null}
         onTeleport={handleTeleport}
       />
 
