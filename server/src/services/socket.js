@@ -141,6 +141,13 @@ function initSocket(server) {
         return socket.emit("lock-failed", { segmentIndex, message: "This cell is already being edited" });
       }
 
+      // Auto-release any previous locks held by this same socket session to prevent lock stacking/stale locks
+      for (const [idx, lock] of roomLocks.entries()) {
+        if (lock.socketId === socket.id && idx !== segmentIndex) {
+          roomLocks.delete(idx);
+        }
+      }
+
       // Store cell lock details
       const lockInfo = {
         socketId: socket.id,

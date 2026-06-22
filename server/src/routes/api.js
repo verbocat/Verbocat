@@ -317,6 +317,32 @@ async function verifyDocumentAccess(request, response, requiredPermission = "rea
   return doc;
 }
 
+// 0. Search users by email for autosuggestion
+apiRouter.get("/users/search", checkAuth, async (request, response) => {
+  try {
+    const { query } = request.query;
+    if (!query || query.trim().length < 2) {
+      return response.json([]);
+    }
+
+    const { data: users, error } = await supabase
+      .from("profiles")
+      .select("email, full_name")
+      .ilike("email", `%${query.trim()}%`)
+      .limit(8);
+
+    if (error) {
+      console.error("Search profiles error:", error);
+      return response.status(500).json({ error: "Failed to search users." });
+    }
+
+    response.json(users || []);
+  } catch (err) {
+    console.error(err);
+    response.status(500).json({ error: "Server error." });
+  }
+});
+
 // 1. Fetch document metadata and segments
 apiRouter.get("/documents/:id", checkAuth, async (request, response) => {
   try {
@@ -334,6 +360,23 @@ apiRouter.get("/documents/:id", checkAuth, async (request, response) => {
       return response.status(500).json({ error: "Failed to load document segments." });
     }
 
+    // Determine current user's permission level ('read' or 'write')
+    const isStaff = ["admin", "manager", "verbolabs_staff"].includes(request.profile.role);
+    let userPermission = "read";
+    if (isStaff || doc.owner_id === request.user.id) {
+      userPermission = "write";
+    } else {
+      const { data: access } = await supabase
+        .from("document_access")
+        .select("permission")
+        .eq("document_id", doc.id)
+        .eq("user_id", request.user.id)
+        .single();
+      if (access) {
+        userPermission = access.permission;
+      }
+    }
+
     // Map to client format
     const formattedSegments = segments.map(seg => ({
       id: seg.segment_index + 1,
@@ -349,6 +392,7 @@ apiRouter.get("/documents/:id", checkAuth, async (request, response) => {
       fileId: doc.file_id,
       sourceLang: doc.source_lang,
       targetLang: doc.target_lang,
+      permission: userPermission,
       segments: formattedSegments
     });
   } catch (error) {

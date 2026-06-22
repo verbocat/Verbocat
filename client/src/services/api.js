@@ -117,3 +117,8 @@ export const revokeDocumentAccess = async (documentId, userId) => {
   return response.data;
 };
 
+export const searchUsers = async (query) => {
+  const response = await api.get(`/api/users/search?query=${query}`);
+  return response.data;
+};
+

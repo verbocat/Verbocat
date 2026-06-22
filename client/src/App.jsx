@@ -66,6 +66,7 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     return params.get("doc") || null;
   });
+  const [permission, setPermission] = useState("write");
 
   // Sync profile details on start if session token is cached
   useEffect(() => {
@@ -86,9 +87,12 @@ export default function App() {
         setFileId(doc.fileId);
         setSourceLanguage(doc.sourceLang);
         setTargetLanguage(doc.targetLang);
+        setPermission(doc.permission || "write");
         showToast(`Loaded collaborative document: ${doc.name}`);
       } catch (err) {
         console.error("Failed to load document:", err);
+        setSegments([]);
+        setPermission("write");
         showToast(err.response?.data?.error || "Access denied or document not found.");
         // Clear document ID from URL if load fails
         const newUrl = `${window.location.origin}${window.location.pathname}`;
@@ -1659,9 +1663,9 @@ export default function App() {
             onExport={() => setShowExportModal(true)}
             onLoadProject={loadProject}
             onSaveProject={saveProject}
-            onRelinkHtml={handleRelinkHtml}
-            onImportXliff={handleImportXliff}
-            onTranslate={handleTranslateSegments}
+            onRelinkHtml={permission === "write" ? handleRelinkHtml : null}
+            onImportXliff={permission === "write" ? handleImportXliff : null}
+            onTranslate={permission === "write" ? handleTranslateSegments : null}
             onToggleQa={() => setShowQaPanel((value) => !value)}
             isTranslating={isTranslating}
             qaIssuesCount={qaIssuesList.length}
@@ -1676,7 +1680,7 @@ export default function App() {
             onTargetLanguageChange={setTargetLanguage}
             fileName={fileName}
             theme={theme}
-            canTranslate={user ? (user.hasTranslateAccess && user.status === "active") : false}
+            canTranslate={permission === "write" && user ? (user.hasTranslateAccess && user.status === "active") : false}
             filterStatus={filterStatus}
             setFilterStatus={setFilterStatus}
             onUpload={handleUpload}
@@ -1693,6 +1697,16 @@ export default function App() {
 
           {/* Zone 3: Segment editor */}
           <div className="segment-table">
+
+            {permission === "read" && (
+              <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl px-4 py-3 text-xs font-bold mb-3 shadow-lg mx-1 select-none">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 flex-shrink-0">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                Read-Only Mode: You are viewing this workspace in read-only mode.
+              </div>
+            )}
 
             {/* Column headers */}
             <div className="seg-header">
@@ -1737,9 +1751,14 @@ export default function App() {
                   onUpdateTranslation={updateTranslation}
                   onToggleVerify={() => toggleVerify(segment.id)}
                   onVerifyAndNext={() => verifyAndNextSegment(segment.id)}
-                  lockInfo={cellLocks.get(index)}
+                  lockInfo={
+                    cellLocks.has(index) && cellLocks.get(index).userId !== user?.id
+                      ? cellLocks.get(index)
+                      : null
+                  }
                   onFocusSegment={handleFocusSegment}
                   onBlurSegment={handleBlurSegment}
+                  readOnly={permission === "read"}
                 />
               )}
             />
