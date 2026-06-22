@@ -374,8 +374,107 @@ const getProviderStatus = () => ({
   maxTextLength: MAX_TEXT_LENGTH
 });
 
+const translateSegmentWithVision = async ({
+  sourceText,
+  targetLang,
+  sourceLang,
+  contextJira,
+  contextDescription,
+  screenshotBuffer,
+  screenshotMimeType
+}) => {
+  if (!OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY not configured");
+  }
+
+  const getLangName = (code) => {
+    try {
+      return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code;
+    } catch (e) {
+      return code;
+    }
+  };
+
+  const sourceLangName = getLangName(sourceLang);
+  const targetLangName = getLangName(targetLang);
+
+  const systemPrompt = `You are an expert human localizer and professional translator. 
+Your task is to translate a specific UI text segment or sentence into the target language.
+You are given visual context (a screenshot of the page where the text is used) and/or text context (Jira story, custom instructions).
+
+CRITICAL DIRECTIVES:
+- DO NOT translate literally like a standard machine translation engine. (e.g. do not translate a "Home" button/link as "घर" in Hindi, which sounds robotic; instead, translate it as "होम" or keep it as "होम" which is the standard term used in actual websites/apps).
+- Inspect the visual placement of the segment in the screenshot (if provided). Check where it is used (button, title, paragraph, menu item) and adapt your translation to fit that layout, role, and style.
+- Apply localizer common sense. The translation must sound natural, professional, grammatically flawless, and idiomatic in the target language. It should feel like it was written by a native human localizer.
+- Strictly adhere to any custom description/instructions or terminology limits in the Jira story.
+- If the target language is Hindi, write the output strictly in the Devanagari script. Do NOT use Perso-Arabic (Urdu) characters.
+- Output a JSON object containing a single key "translation", like this:
+{
+  "translation": "your_smart_translation_here"
+}`;
+
+  let textPrompt = `Translate the following source text segment:
+Source Segment: "${sourceText}"
+Translate to: ${targetLangName} (from ${sourceLangName})`;
+
+  if (contextJira) {
+    textPrompt += `\n\nJira Story Context:\n${contextJira}`;
+  }
+  if (contextDescription) {
+    textPrompt += `\n\nCustom Instructions / Description:\n${contextDescription}`;
+  }
+
+  const userContent = [];
+  userContent.push({
+    type: "text",
+    text: textPrompt
+  });
+
+  if (screenshotBuffer) {
+    const base64Image = screenshotBuffer.toString("base64");
+    const mime = screenshotMimeType || "image/png";
+    userContent.push({
+      type: "image_url",
+      image_url: {
+        url: `data:${mime};base64,${base64Image}`
+      }
+    });
+  }
+
+  const payload = {
+    model: OPENAI_MODEL,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userContent }
+    ],
+    temperature: 0.3,
+    response_format: { type: "json_object" }
+  };
+
+  const response = await axios.post("https://api.openai.com/v1/chat/completions", payload, {
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    timeout: 120000
+  });
+
+  const content = response.data?.choices?.[0]?.message?.content;
+  try {
+    const parsed = JSON.parse(content);
+    if (!parsed || typeof parsed.translation !== "string") {
+      throw new Error("Invalid response format from OpenAI");
+    }
+    return parsed.translation.trim();
+  } catch (error) {
+    console.error("OpenAI vision translation JSON parsing failed:", error, "Content:", content);
+    throw error;
+  }
+};
+
 module.exports = {
   createProviderState,
   translateChunk,
-  getProviderStatus
+  getProviderStatus,
+  translateSegmentWithVision
 };

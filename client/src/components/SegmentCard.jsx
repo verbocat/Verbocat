@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Copy, Check, ArrowRight, AlertTriangle, Lock } from "lucide-react";
+import { Copy, Check, ArrowRight, AlertTriangle, Lock, Sparkles, UploadCloud, Trash2, Image, MessageSquare } from "lucide-react";
 
 /* ── Glossary highlight tooltip ─────────────────────────────── */
 const GlossaryHighlight = ({ term, children }) => {
@@ -81,12 +81,76 @@ const htmlToTarget = (el) => {
 export const SegmentCard = ({
   darkMode, index, segment, theme, translationGlossary = [],
   onCopy, onUpdateTranslation, onToggleVerify, onVerifyAndNext,
-  lockInfo, onFocusSegment, onBlurSegment, readOnly
+  lockInfo, onFocusSegment, onBlurSegment, readOnly,
+  onSaveContext, onTranslateWithContext
 }) => {
   const editorRef = useRef(null);
   const lastSaved = useRef(segment.target || "");
   const [suggestions, setSuggestions] = useState([]);
   const [activeIdx, setActiveIdx] = useState(0);
+
+  const [showContext, setShowContext] = useState(false);
+  const [jiraText, setJiraText] = useState(segment.contextJira || "");
+  const [descText, setDescText] = useState(segment.contextDescription || "");
+  const [screenshotFile, setScreenshotFile] = useState(null);
+  const [screenshotPreview, setScreenshotPreview] = useState(null);
+  const [activeTab, setActiveTab] = useState("screenshot");
+  const [translatingLocal, setTranslatingLocal] = useState(false);
+
+  useEffect(() => {
+    setJiraText(segment.contextJira || "");
+    setDescText(segment.contextDescription || "");
+  }, [segment.contextJira, segment.contextDescription]);
+
+  const handleScreenshotChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setScreenshotFile(file);
+      setScreenshotPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith("image/")) {
+      setScreenshotFile(file);
+      setScreenshotPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const clearScreenshot = () => {
+    setScreenshotFile(null);
+    if (screenshotPreview) {
+      URL.revokeObjectURL(screenshotPreview);
+      setScreenshotPreview(null);
+    }
+  };
+
+  const handleSaveTextContext = () => {
+    onSaveContext(segment.id, {
+      contextJira: jiraText,
+      contextDescription: descText
+    });
+  };
+
+  const handleReTranslate = async () => {
+    setTranslatingLocal(true);
+    try {
+      await onTranslateWithContext(segment.id, {
+        contextJira: jiraText,
+        contextDescription: descText,
+        screenshot: screenshotFile
+      });
+      clearScreenshot();
+    } finally {
+      setTranslatingLocal(false);
+    }
+  };
 
   // Inactivity timer: 30 seconds threshold
   const inactivityTimerRef = useRef(null);
@@ -255,139 +319,389 @@ export const SegmentCard = ({
   const dotClass = segment.verified ? "dot-verified" : segment.target ? "dot-translated" : "dot-pending";
 
   return (
-    <article id={`segment-${segment.id}`} className={`seg-row ${statusClass}`}>
+    <div className="seg-card-container" style={{ borderBottom: "1px solid var(--border-subtle)", background: showContext ? "rgba(255,255,255,0.005)" : "transparent", transition: "all 0.2s" }}>
+      <article id={`segment-${segment.id}`} className={`seg-row ${statusClass}`} style={{ borderBottom: "none" }}>
 
-      {/* Col 1: Number */}
-      <div className="seg-num">
-        <span className="seg-num-label">{String(index + 1).padStart(2, "0")}</span>
-        <span className={`seg-dot ${dotClass}`} />
-        {segment.fuzzyScore && (
-          <span style={{
-            fontSize: 8, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace",
-            color: "var(--text-amber)",
-            background: "rgba(245,158,11,0.08)",
-            border: "1px solid rgba(245,158,11,0.2)",
-            borderRadius: 3, padding: "0 3px"
-          }} title={`Fuzzy: ${segment.fuzzyScore}%`}>
-            {segment.fuzzyScore}%
-          </span>
-        )}
-        {segment.qaIssues?.length > 0 && (
-          <AlertTriangle style={{ width: 9, height: 9, color: "var(--text-rose)" }}
-            title={`${segment.qaIssues.length} QA issue`} />
-        )}
-      </div>
+        {/* Col 1: Number */}
+        <div className="seg-num">
+          <span className="seg-num-label">{String(index + 1).padStart(2, "0")}</span>
+          <span className={`seg-dot ${dotClass}`} />
+          {segment.fuzzyScore && (
+            <span style={{
+              fontSize: 8, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace",
+              color: "var(--text-amber)",
+              background: "rgba(245,158,11,0.08)",
+              border: "1px solid rgba(245,158,11,0.2)",
+              borderRadius: 3, padding: "0 3px"
+            }} title={`Fuzzy: ${segment.fuzzyScore}%`}>
+              {segment.fuzzyScore}%
+            </span>
+          )}
+          {segment.qaIssues?.length > 0 && (
+            <AlertTriangle style={{ width: 9, height: 9, color: "var(--text-rose)" }}
+              title={`${segment.qaIssues.length} QA issue`} />
+          )}
+        </div>
 
-      {/* Col 2: Source */}
-      <div className="seg-source">
-        <div className="seg-source-text">{renderSource(segment.source)}</div>
-        <button className="seg-src-copy" onClick={() => onCopy(segment.source)} title="Copy source">
-          <Copy style={{ width: 9, height: 9 }} />
-        </button>
-      </div>
+        {/* Col 2: Source */}
+        <div className="seg-source">
+          <div className="seg-source-text">{renderSource(segment.source)}</div>
+          <button className="seg-src-copy" onClick={() => onCopy(segment.source)} title="Copy source">
+            <Copy style={{ width: 9, height: 9 }} />
+          </button>
+        </div>
 
-      <div className="seg-arrow">
-        <button
-          onClick={() => onUpdateTranslation(segment.id, segment.source)}
-          className="seg-arrow-btn"
-          title="Copy source to target"
-          disabled={readOnly || segment.verified || !!lockInfo}
-          style={readOnly || segment.verified || lockInfo ? { opacity: 0.35, pointerEvents: "none" } : {}}
-        >
-          <ArrowRight style={{ width: 12, height: 12 }} />
-        </button>
-      </div>
+        <div className="seg-arrow">
+          <button
+            onClick={() => onUpdateTranslation(segment.id, segment.source)}
+            className="seg-arrow-btn"
+            title="Copy source to target"
+            disabled={readOnly || segment.verified || !!lockInfo}
+            style={readOnly || segment.verified || lockInfo ? { opacity: 0.35, pointerEvents: "none" } : {}}
+          >
+            <ArrowRight style={{ width: 12, height: 12 }} />
+          </button>
+        </div>
 
-      {/* Col 4: Target editor */}
-      <div className="seg-target">
-        <div className="relative">
-          <div
-            id={`target-${segment.id}`}
-            ref={editorRef}
-            data-segment-target="true"
-            contentEditable={!readOnly && !segment.verified && !lockInfo}
-            suppressContentEditableWarning
-            onFocus={handleFocus}
-            onBlur={handleBlur}
-            onInput={handleInput}
-            onKeyDown={handleKeyDown}
-            className="seg-editor"
-            style={
-              readOnly || segment.verified || lockInfo
-                ? { opacity: 0.55, cursor: lockInfo ? "not-allowed" : readOnly ? "default" : "text", pointerEvents: lockInfo ? "none" : "auto" }
-                : {}
-            }
-          />
+        {/* Col 4: Target editor */}
+        <div className="seg-target">
+          <div className="relative">
+            <div
+              id={`target-${segment.id}`}
+              ref={editorRef}
+              data-segment-target="true"
+              contentEditable={!readOnly && !segment.verified && !lockInfo}
+              suppressContentEditableWarning
+              onFocus={handleFocus}
+              onBlur={handleBlur}
+              onInput={handleInput}
+              onKeyDown={handleKeyDown}
+              className="seg-editor"
+              style={
+                readOnly || segment.verified || lockInfo
+                  ? { opacity: 0.55, cursor: lockInfo ? "not-allowed" : readOnly ? "default" : "text", pointerEvents: lockInfo ? "none" : "auto" }
+                  : {}
+              }
+            />
 
-          {lockInfo && (
-            <div className="absolute inset-0 bg-indigo-950/20 border border-indigo-500/30 rounded-lg flex items-center justify-between px-3 z-10 select-none">
-              <span className="text-[10px] font-bold text-indigo-400 flex items-center gap-1.5 bg-zinc-950 border border-zinc-800 rounded px-2 py-0.5 shadow-md">
-                <Lock className="w-3 h-3 text-indigo-400" />
-                Editing by {lockInfo.name || lockInfo.email}
-              </span>
+            {lockInfo && (
+              <div className="absolute inset-0 bg-indigo-950/20 border border-indigo-500/30 rounded-lg flex items-center justify-between px-3 z-10 select-none">
+                <span className="text-[10px] font-bold text-indigo-400 flex items-center gap-1.5 bg-zinc-950 border border-zinc-800 rounded px-2 py-0.5 shadow-md">
+                  <Lock className="w-3 h-3 text-indigo-400" />
+                  Editing by {lockInfo.name || lockInfo.email}
+                </span>
+              </div>
+            )}
+
+            {suggestions.length > 0 && (
+              <div className="glossary-dropdown">
+                <div className="glossary-header">
+                  <span>Glossary Suggestions</span>
+                  <span>↑↓ Navigate · Enter/Tab Select</span>
+                </div>
+                {suggestions.map((term, i) => (
+                  <button
+                    key={`sug-${segment.id}-${i}`}
+                    className={`glossary-item ${i === activeIdx ? "active-suggestion" : ""}`}
+                    onMouseDown={(e) => { e.preventDefault(); applySuggestion(term); }}
+                  >
+                    <span style={{ fontWeight: 600 }}>{term.target}</span>
+                    <span style={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace", color: "var(--text-muted)" }}>
+                      {term.source}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {!readOnly && !segment.verified && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 4 }}>
+              <span className="seg-hint">Ctrl+Enter to verify and advance</span>
+              <button
+                onClick={onVerifyAndNext}
+                className="seg-verify-next-btn"
+                title="Verify segment and move to next"
+              >
+                Verify & Next
+              </button>
             </div>
           )}
 
-          {suggestions.length > 0 && (
-            <div className="glossary-dropdown">
-              <div className="glossary-header">
-                <span>Glossary Suggestions</span>
-                <span>↑↓ Navigate · Enter/Tab Select</span>
-              </div>
-              {suggestions.map((term, i) => (
-                <button
-                  key={`sug-${segment.id}-${i}`}
-                  className={`glossary-item ${i === activeIdx ? "active-suggestion" : ""}`}
-                  onMouseDown={(e) => { e.preventDefault(); applySuggestion(term); }}
-                >
-                  <span style={{ fontWeight: 600 }}>{term.target}</span>
-                  <span style={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace", color: "var(--text-muted)" }}>
-                    {term.source}
-                  </span>
-                </button>
+          {segment.qaIssues?.length > 0 && (
+            <div className="seg-qa-chips">
+              {segment.qaIssues.map((issue, i) => (
+                <span key={`qa-${segment.id}-${i}`} className="seg-qa-chip">{issue}</span>
               ))}
             </div>
           )}
         </div>
 
-        {!readOnly && !segment.verified && (
-          <div style={{ display: "flex", alignItems: "center", justifycontent: "space-between", gap: 8, marginTop: 4 }}>
-            <span className="seg-hint">Ctrl+Enter to verify and advance</span>
+        {/* Col 5: Actions */}
+        <div className="seg-actions">
+          <button
+            onClick={() => setShowContext(!showContext)}
+            title="Smart Segment Context"
+            className={`seg-btn ${showContext ? "active" : ""}`}
+            style={{ position: "relative" }}
+          >
+            <Sparkles style={{
+              width: 11,
+              height: 11,
+              color: (segment.contextJira || segment.contextDescription) ? "var(--text-amber)" : "inherit"
+            }} />
+            {(segment.contextJira || segment.contextDescription) && (
+              <span style={{
+                position: "absolute", top: 1, right: 1,
+                width: 4, height: 4, borderRadius: "50%",
+                background: "var(--text-amber)"
+              }} />
+            )}
+          </button>
+          <button
+            onClick={onToggleVerify}
+            disabled={readOnly || !!lockInfo}
+            title={segment.verified ? "Unverify" : "Verify"}
+            className={`seg-btn ${segment.verified ? "active" : ""}`}
+            style={readOnly || lockInfo ? { opacity: 0.35, pointerEvents: "none" } : {}}
+          >
+            <Check style={{ width: 12, height: 12 }} />
+          </button>
+          <button onClick={() => onCopy(segment.target || "")} title="Copy translation" className="seg-btn">
+            <Copy style={{ width: 11, height: 11 }} />
+          </button>
+        </div>
+
+      </article>
+
+      {showContext && (
+        <div className="seg-context-panel" style={{
+          padding: "16px 20px 20px 20px",
+          borderTop: "1px dashed var(--border-subtle)",
+          background: "var(--bg-surface)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 14
+        }}>
+          {/* Header & Tabs */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <Sparkles style={{ width: 13, height: 13, color: "var(--accent)" }} />
+              <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-primary)" }}>
+                Segment-Wise Context Engine
+              </span>
+            </div>
+            
+            {/* Tabs */}
+            <div className="seg-control" style={{ display: "flex", gap: 2, padding: 2, height: "auto" }}>
+              <button
+                type="button"
+                onClick={() => setActiveTab("screenshot")}
+                className={`seg-control-btn ${activeTab === "screenshot" ? "active" : ""}`}
+                style={{ fontSize: 10, padding: "4px 10px", height: "auto" }}
+              >
+                <Image style={{ width: 10, height: 10, marginRight: 4, display: "inline-block", verticalAlign: "middle" }} />
+                Screenshot
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("jira")}
+                className={`seg-control-btn ${activeTab === "jira" ? "active" : ""}`}
+                style={{ fontSize: 10, padding: "4px 10px", height: "auto" }}
+              >
+                <MessageSquare style={{ width: 10, height: 10, marginRight: 4, display: "inline-block", verticalAlign: "middle" }} />
+                Jira Story
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("description")}
+                className={`seg-control-btn ${activeTab === "description" ? "active" : ""}`}
+                style={{ fontSize: 10, padding: "4px 10px", height: "auto" }}
+              >
+                Description
+              </button>
+            </div>
+          </div>
+
+          {/* Tab Content */}
+          <div style={{ minHeight: 90 }}>
+            {activeTab === "screenshot" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                  Upload a screenshot showing where this segment is placed in the UI. The AI will inspect the image layout on-the-fly and discard it.
+                </span>
+                
+                {screenshotPreview ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(255,255,255,0.01)", border: "1px solid var(--border-subtle)", borderRadius: 8, padding: 8 }}>
+                    <img
+                      src={screenshotPreview}
+                      alt="Segment placement visual context"
+                      style={{ height: 60, width: "auto", borderRadius: 4, objectFit: "contain", border: "1px solid var(--border-medium)" }}
+                    />
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-primary)" }}>{screenshotFile?.name}</span>
+                      <span style={{ fontSize: 9, color: "var(--emerald)", fontWeight: 700 }}>READY TO TRANSLATE (EPHEMERAL)</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={clearScreenshot}
+                      className="seg-btn"
+                      style={{ padding: 6, color: "var(--text-rose)" }}
+                      title="Clear screenshot"
+                    >
+                      <Trash2 style={{ width: 12, height: 12 }} />
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
+                    style={{
+                      border: "1px dashed var(--border-medium)",
+                      borderRadius: 8,
+                      padding: "16px 20px",
+                      textAlign: "center",
+                      cursor: "pointer",
+                      background: "rgba(255,255,255,0.003)",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: 6
+                    }}
+                    onClick={() => document.getElementById(`screenshot-input-${segment.id}`).click()}
+                  >
+                    <UploadCloud style={{ width: 18, height: 18, color: "var(--text-muted)" }} />
+                    <span style={{ fontSize: 11, color: "var(--text-primary)" }}>
+                      Drag & drop a screenshot here, or <span style={{ color: "var(--accent)", textDecoration: "underline" }}>browse files</span>
+                    </span>
+                    <span style={{ fontSize: 8, color: "var(--text-muted)" }}>Supports PNG, JPG, WebP</span>
+                    <input
+                      id={`screenshot-input-${segment.id}`}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleScreenshotChange}
+                      style={{ display: "none" }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === "jira" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                  Paste a Jira story or specification block to supply functional context for this segment.
+                </span>
+                <textarea
+                  value={jiraText}
+                  onChange={(e) => setJiraText(e.target.value)}
+                  placeholder="e.g. As a user, I want to click 'Home' to return to the landing page..."
+                  style={{
+                    width: "100%",
+                    minHeight: 70,
+                    fontSize: 11.5,
+                    fontFamily: "var(--font-mono)",
+                    background: "rgba(0,0,0,0.15)",
+                    border: "1px solid var(--border-medium)",
+                    borderRadius: 6,
+                    padding: "8px 10px",
+                    color: "#fff",
+                    outline: "none",
+                    resize: "vertical"
+                  }}
+                />
+              </div>
+            )}
+
+            {activeTab === "description" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                  Write custom translation instructions or term usage descriptions for this segment.
+                </span>
+                <textarea
+                  value={descText}
+                  onChange={(e) => setDescText(e.target.value)}
+                  placeholder="e.g. This is a navigation menu link, keep it short and professional..."
+                  style={{
+                    width: "100%",
+                    minHeight: 70,
+                    fontSize: 11.5,
+                    background: "rgba(0,0,0,0.15)",
+                    border: "1px solid var(--border-medium)",
+                    borderRadius: 6,
+                    padding: "8px 10px",
+                    color: "#fff",
+                    outline: "none",
+                    resize: "vertical"
+                  }}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Action Footer */}
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            gap: 10,
+            borderTop: "1px solid var(--border-subtle)",
+            paddingTop: 12
+          }}>
             <button
-              onClick={onVerifyAndNext}
-              className="seg-verify-next-btn"
-              title="Verify segment and move to next"
+              type="button"
+              onClick={handleSaveTextContext}
+              disabled={readOnly}
+              className="ab ab-export"
+              style={{
+                height: 28,
+                padding: "0 12px",
+                fontSize: 10,
+                borderRadius: "var(--radius-sm)",
+                background: "transparent",
+                border: "1px solid var(--border-medium)",
+                color: "var(--text-primary)"
+              }}
             >
-              Verify & Next
+              Save Text Context
+            </button>
+            <button
+              type="button"
+              onClick={handleReTranslate}
+              disabled={readOnly || translatingLocal}
+              className="ab"
+              style={{
+                height: 28,
+                padding: "0 14px",
+                fontSize: 10,
+                borderRadius: "var(--radius-sm)",
+                background: "linear-gradient(135deg, var(--accent) 0%, #4f46e5 100%)",
+                border: "none",
+                color: "#fff",
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                boxShadow: "0 4px 12px rgba(91,106,240,0.2)"
+              }}
+            >
+              {translatingLocal ? (
+                <>
+                  <svg className="animate-spin h-3.5 w-3.5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span>Translating...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles style={{ width: 11, height: 11 }} />
+                  <span>Re-Translate Segment</span>
+                </>
+              )}
             </button>
           </div>
-        )}
-
-        {segment.qaIssues?.length > 0 && (
-          <div className="seg-qa-chips">
-            {segment.qaIssues.map((issue, i) => (
-              <span key={`qa-${segment.id}-${i}`} className="seg-qa-chip">{issue}</span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Col 5: Actions */}
-      <div className="seg-actions">
-        <button
-          onClick={onToggleVerify}
-          disabled={readOnly || !!lockInfo}
-          title={segment.verified ? "Unverify" : "Verify"}
-          className={`seg-btn ${segment.verified ? "active" : ""}`}
-          style={readOnly || lockInfo ? { opacity: 0.35, pointerEvents: "none" } : {}}
-        >
-          <Check style={{ width: 12, height: 12 }} />
-        </button>
-        <button onClick={() => onCopy(segment.target || "")} title="Copy translation" className="seg-btn">
-          <Copy style={{ width: 11, height: 11 }} />
-        </button>
-      </div>
-
-    </article>
+        </div>
+      )}
+    </div>
   );
 };

@@ -103,10 +103,12 @@ export const fetchDocument = async (documentId) => {
   return response.data;
 };
 
-export const updateSegment = async (documentId, segmentIndex, targetText, status) => {
+export const updateSegment = async (documentId, segmentIndex, targetText, status, contextJira, contextDescription) => {
   const response = await api.put(`/api/documents/${documentId}/segments/${segmentIndex}`, {
     targetText,
-    status
+    status,
+    contextJira,
+    contextDescription
   });
   return response.data;
 };
@@ -151,6 +153,20 @@ export const fetchAccessRequests = async (documentId) => {
 
 export const respondToAccessRequest = async (documentId, requestId, action) => {
   const response = await api.post(`/api/documents/${documentId}/access-requests/${requestId}/respond`, { action });
+  return response.data;
+};
+
+export const translateSegmentWithContext = async (documentId, segmentIndex, { contextJira, contextDescription, screenshot }) => {
+  const formData = new FormData();
+  if (contextJira !== undefined && contextJira !== null) formData.append("contextJira", contextJira);
+  if (contextDescription !== undefined && contextDescription !== null) formData.append("contextDescription", contextDescription);
+  if (screenshot) formData.append("screenshot", screenshot);
+
+  const response = await api.post(`/api/documents/${documentId}/segments/${segmentIndex}/translate-context`, formData, {
+    headers: {
+      "Content-Type": "multipart/form-data"
+    }
+  });
   return response.data;
 };
 

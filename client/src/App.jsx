@@ -30,7 +30,8 @@ import {
   fetchRequestStatus,
   requestAccess,
   fetchAccessRequests,
-  respondToAccessRequest
+  respondToAccessRequest,
+  translateSegmentWithContext
 } from "./services/api.js";
 import { ExportModal } from "./components/ExportModal.jsx";
 import { ShareModal } from "./components/ShareModal.jsx";
@@ -176,11 +177,19 @@ export default function App() {
       setCellLocks(new Map(locks));
     });
 
-    socket.on("segment-updated", ({ segmentIndex, targetText, status }) => {
+    socket.on("segment-updated", ({ segmentIndex, targetText, status, contextJira, contextDescription }) => {
       setSegments((prev) =>
         prev.map((seg, idx) => {
           if (idx === segmentIndex) {
-            return { ...seg, target: targetText, status, verified: status === "approved" };
+            const updatedSeg = { ...seg };
+            if (targetText !== undefined) {
+              updatedSeg.target = targetText;
+              updatedSeg.status = status;
+              updatedSeg.verified = status === "approved";
+            }
+            if (contextJira !== undefined) updatedSeg.contextJira = contextJira;
+            if (contextDescription !== undefined) updatedSeg.contextDescription = contextDescription;
+            return updatedSeg;
           }
           return seg;
         })
@@ -895,6 +904,72 @@ export default function App() {
         }
         nextIndex++;
       }
+    }
+  };
+
+  const saveSegmentContext = async (id, contextData) => {
+    const segmentIndex = segments.findIndex((s) => s.id === id);
+    if (segmentIndex === -1) return;
+
+    setSegments((previous) =>
+      previous.map((segment) =>
+        segment.id === id
+          ? { ...segment, contextJira: contextData.contextJira, contextDescription: contextData.contextDescription }
+          : segment
+      )
+    );
+
+    if (documentId) {
+      try {
+        await updateSegment(
+          documentId,
+          segmentIndex,
+          undefined,
+          undefined,
+          contextData.contextJira,
+          contextData.contextDescription
+        );
+        showToast("Context saved successfully!");
+      } catch (err) {
+        console.error("Failed to save segment context to database:", err);
+        showToast("Failed to save segment context.");
+      }
+    }
+  };
+
+  const handleTranslateSegmentWithContext = async (id, { contextJira, contextDescription, screenshot }) => {
+    const segmentIndex = segments.findIndex((s) => s.id === id);
+    if (segmentIndex === -1) return;
+
+    try {
+      showToast("Translating segment with smart context...");
+      const result = await translateSegmentWithContext(documentId, segmentIndex, {
+        contextJira,
+        contextDescription,
+        screenshot
+      });
+
+      if (result.success) {
+        setSegments((previous) =>
+          previous.map((segment) =>
+            segment.id === id
+              ? {
+                  ...segment,
+                  target: result.translated,
+                  contextJira,
+                  contextDescription,
+                  status: "translated",
+                  verified: false,
+                  qaIssues: result.qaIssues || []
+                }
+              : segment
+          )
+        );
+        showToast("Segment re-translated successfully!");
+      }
+    } catch (err) {
+      console.error("Failed to translate segment with context:", err);
+      showToast("Translation failed. Verify your context/screenshot.");
     }
   };
 
@@ -1949,6 +2024,8 @@ export default function App() {
                   onFocusSegment={handleFocusSegment}
                   onBlurSegment={handleBlurSegment}
                   readOnly={permission === "read"}
+                  onSaveContext={saveSegmentContext}
+                  onTranslateWithContext={handleTranslateSegmentWithContext}
                 />
               )}
             />

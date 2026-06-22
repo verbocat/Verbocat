@@ -388,7 +388,9 @@ apiRouter.get("/documents/:id", checkAuth, async (request, response) => {
       id: seg.segment_index + 1,
       source: seg.source_text,
       target: seg.target_text || "",
-      status: seg.status
+      status: seg.status,
+      contextJira: seg.context_jira || "",
+      contextDescription: seg.context_description || ""
     }));
 
     response.json({
@@ -414,15 +416,19 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
     if (!doc) return;
 
     const segmentIndex = parseInt(request.params.index, 10);
-    const { targetText, status } = request.body;
+    const { targetText, status, contextJira, contextDescription } = request.body;
+
+    const updateFields = {
+      updated_at: new Date().toISOString()
+    };
+    if (targetText !== undefined) updateFields.target_text = targetText;
+    if (status !== undefined) updateFields.status = status;
+    if (contextJira !== undefined) updateFields.context_jira = contextJira;
+    if (contextDescription !== undefined) updateFields.context_description = contextDescription;
 
     const { error: updateError } = await supabase
       .from("document_segments")
-      .update({
-        target_text: targetText,
-        status: status || "translated",
-        updated_at: new Date().toISOString()
-      })
+      .update(updateFields)
       .eq("document_id", doc.id)
       .eq("segment_index", segmentIndex);
 
@@ -439,6 +445,8 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
         segmentIndex,
         targetText,
         status: status || "translated",
+        contextJira,
+        contextDescription,
         updatedBy: request.user.email
       });
     }
@@ -449,6 +457,106 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
     response.status(500).json({ error: "Internal server error." });
   }
 });
+
+// 2a. Translate a single segment with context (Jira, description, and temporary screenshot)
+apiRouter.post(
+  "/documents/:id/segments/:index/translate-context",
+  checkAuth,
+  upload.single("screenshot"),
+  async (request, response) => {
+    let tempPath = null;
+    try {
+      const doc = await verifyDocumentAccess(request, response, "write");
+      if (!doc) return;
+
+      const segmentIndex = parseInt(request.params.index, 10);
+      const { contextJira, contextDescription } = request.body;
+      
+      let screenshotBuffer = null;
+      let screenshotMimeType = null;
+
+      if (request.file) {
+        tempPath = request.file.path;
+        screenshotBuffer = fs.readFileSync(tempPath);
+        screenshotMimeType = request.file.mimetype;
+      }
+
+      // Fetch the segment source text
+      const { data: segment, error: fetchErr } = await supabase
+        .from("document_segments")
+        .select("source_text")
+        .eq("document_id", doc.id)
+        .eq("segment_index", segmentIndex)
+        .single();
+
+      if (fetchErr || !segment) {
+        return response.status(404).json({ error: "Segment not found." });
+      }
+
+      // Execute on-the-fly vision/context aware translation
+      const { translateSegmentWithContext } = require("../services/translationService");
+      const translationResult = await translateSegmentWithContext({
+        sourceText: segment.source_text,
+        targetLang: doc.target_lang,
+        sourceLang: doc.source_lang,
+        contextJira,
+        contextDescription,
+        screenshotBuffer,
+        screenshotMimeType
+      });
+
+      // Update segment target text and status in database
+      const { error: updateError } = await supabase
+        .from("document_segments")
+        .update({
+          target_text: translationResult.translated,
+          context_jira: contextJira || null,
+          context_description: contextDescription || null,
+          status: "translated",
+          updated_at: new Date().toISOString()
+        })
+        .eq("document_id", doc.id)
+        .eq("segment_index", segmentIndex);
+
+      if (updateError) {
+        console.error("Segment context update error:", updateError);
+        return response.status(500).json({ error: "Failed to save translated segment." });
+      }
+
+      // Broadcast update via Socket.io
+      const { getIo } = require("../services/socket");
+      const io = getIo();
+      if (io) {
+        io.to(doc.id).emit("segment-updated", {
+          segmentIndex,
+          targetText: translationResult.translated,
+          status: "translated",
+          contextJira,
+          contextDescription,
+          updatedBy: request.user.email
+        });
+      }
+
+      response.json({
+        success: true,
+        translated: translationResult.translated,
+        qaIssues: translationResult.qaIssues
+      });
+    } catch (error) {
+      console.error("Translate context endpoint exception:", error);
+      response.status(500).json({ error: error.message || "Failed to translate with context." });
+    } finally {
+      // Clean up the temporary screenshot file immediately
+      if (tempPath && fs.existsSync(tempPath)) {
+        try {
+          fs.unlinkSync(tempPath);
+        } catch (unlinkErr) {
+          console.error("Failed to delete temporary screenshot file:", unlinkErr);
+        }
+      }
+    }
+  }
+);
 
 // 3. Get list of users with explicit access
 apiRouter.get("/documents/:id/access", checkAuth, async (request, response) => {

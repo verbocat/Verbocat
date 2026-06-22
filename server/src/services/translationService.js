@@ -196,7 +196,38 @@ const translateSegments = async (segments, target, sourceLang, contextSettings) 
   return { results };
 };
 
+const translateSegmentWithContext = async ({
+  sourceText,
+  targetLang,
+  sourceLang,
+  contextJira,
+  contextDescription,
+  screenshotBuffer,
+  screenshotMimeType
+}) => {
+  const { translateSegmentWithVision } = require("./translationProviders");
+  const actualSourceLang = sourceLang || "en";
+
+  const translated = await translateSegmentWithVision({
+    sourceText,
+    targetLang,
+    sourceLang: actualSourceLang,
+    contextJira,
+    contextDescription,
+    screenshotBuffer,
+    screenshotMimeType
+  });
+
+  const cleanedTranslation = ensureEnglishNumerals(translated);
+
+  return {
+    translated: cleanedTranslation,
+    qaIssues: runQaChecks(sourceText, cleanedTranslation)
+  };
+};
+
 module.exports = {
   translateSegments,
-  isSafeTmTranslation
+  isSafeTmTranslation,
+  translateSegmentWithContext
 };
