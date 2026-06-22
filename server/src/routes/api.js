@@ -327,7 +327,7 @@ apiRouter.get("/users/search", checkAuth, async (request, response) => {
 
     const { data: users, error } = await supabase
       .from("profiles")
-      .select("email, full_name")
+      .select("id, email")
       .ilike("email", `%${query.trim()}%`)
       .limit(8);
 
@@ -336,7 +336,13 @@ apiRouter.get("/users/search", checkAuth, async (request, response) => {
       return response.status(500).json({ error: "Failed to search users." });
     }
 
-    response.json(users || []);
+    const mappedUsers = (users || []).map(u => ({
+      id: u.id,
+      email: u.email,
+      full_name: u.email ? u.email.split("@")[0] : "Linguist"
+    }));
+
+    response.json(mappedUsers);
   } catch (err) {
     console.error(err);
     response.status(500).json({ error: "Server error." });
@@ -462,8 +468,7 @@ apiRouter.get("/documents/:id/access", checkAuth, async (request, response) => {
         user_id,
         permission,
         profiles (
-          email,
-          full_name
+          email
         )
       `)
       .eq("document_id", doc.id);
@@ -477,7 +482,7 @@ apiRouter.get("/documents/:id/access", checkAuth, async (request, response) => {
       userId: acc.user_id,
       permission: acc.permission,
       email: acc.profiles?.email || "Unknown",
-      name: acc.profiles?.full_name || "Unknown"
+      name: acc.profiles?.email ? acc.profiles.email.split("@")[0] : "Unknown"
     }));
 
     response.json(list);
@@ -505,7 +510,7 @@ apiRouter.post("/documents/:id/access", checkAuth, async (request, response) => 
 
     const { data: targetUser, error: findError } = await supabase
       .from("profiles")
-      .select("id, full_name")
+      .select("id, email")
       .eq("email", email.trim().toLowerCase())
       .single();
 
@@ -530,7 +535,7 @@ apiRouter.post("/documents/:id/access", checkAuth, async (request, response) => 
       return response.status(500).json({ error: "Failed to grant access." });
     }
 
-    response.json({ success: true, userId: targetUser.id, name: targetUser.full_name });
+    response.json({ success: true, userId: targetUser.id, name: targetUser.email.split("@")[0] });
   } catch (error) {
     console.error(error);
     response.status(500).json({ error: "Internal server error." });

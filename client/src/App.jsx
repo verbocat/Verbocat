@@ -1771,6 +1771,7 @@ export default function App() {
         onClose={() => setShowShareModal(false)}
         documentId={documentId}
         docName={fileName}
+        theme={theme}
       />
     </div>
   );
