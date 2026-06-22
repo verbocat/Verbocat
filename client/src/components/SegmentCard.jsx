@@ -102,6 +102,38 @@ export const SegmentCard = ({
     setDescText(segment.contextDescription || "");
   }, [segment.contextJira, segment.contextDescription]);
 
+  // Clipboard paste support (Ctrl + V) for screenshots when context panel is open
+  useEffect(() => {
+    if (!showContext) return;
+
+    const handlePaste = (e) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf("image") !== -1) {
+          const file = items[i].getAsFile();
+          if (file) {
+            e.preventDefault();
+            // Automatically switch to screenshot tab if an image is pasted
+            setActiveTab("screenshot");
+            // Wrap the file with a friendly name so we have a valid file name
+            const timestamp = new Date().toLocaleTimeString().replace(/:/g, '-');
+            const newFile = new File([file], `Pasted_Screenshot_${timestamp}.png`, { type: file.type });
+            setScreenshotFile(newFile);
+            setScreenshotPreview(URL.createObjectURL(newFile));
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener("paste", handlePaste);
+    return () => {
+      window.removeEventListener("paste", handlePaste);
+    };
+  }, [showContext]);
+
   const handleScreenshotChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -572,7 +604,7 @@ export const SegmentCard = ({
                   >
                     <UploadCloud style={{ width: 18, height: 18, color: "var(--text-muted)" }} />
                     <span style={{ fontSize: 11, color: "var(--text-primary)" }}>
-                      Drag & drop a screenshot here, or <span style={{ color: "var(--accent)", textDecoration: "underline" }}>browse files</span>
+                      Drag & drop a screenshot here, <span style={{ color: "var(--accent)", textDecoration: "underline" }}>browse files</span>, or press <kbd style={{ background: "var(--bg-tertiary)", padding: "2px 4px", borderRadius: 4, fontStyle: "normal", border: "1px solid var(--border-medium)" }}>Ctrl + V</kbd> to paste
                     </span>
                     <span style={{ fontSize: 8, color: "var(--text-muted)" }}>Supports PNG, JPG, WebP</span>
                     <input
