@@ -90,6 +90,71 @@ const createProviderState = () => ({
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
+const buildTranslationSystemPrompt = (targetLang, sourceLang, contextSettings) => {
+  const getLangName = (code) => {
+    try {
+      return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code;
+    } catch (e) {
+      return code;
+    }
+  };
+
+  const sourceName = getLangName(sourceLang);
+  const targetName = getLangName(targetLang);
+  const isHindi = targetLang.toLowerCase().startsWith("hi");
+
+  // Determine Tone and Formality
+  const tone = contextSettings?.tone || "General";
+  const formality = contextSettings?.formality || "Neutral";
+
+  let styleInstructions = "";
+  if (tone === "Casual" || tone === "Friendly" || formality === "Informal" || formality === "Very Informal") {
+    styleInstructions = `
+- YOU MUST MAKE THE TRANSLATION EXTREMELY INFORMAL, FRIENDLY, AND CASUAL (like day-to-day spoken conversational talk between friends).
+- Avoid all formal, textbook, literal, or corporate translations.
+- Rewrite sentences to sound like natural spoken language. Use active voice and warm phrasing.
+- For English: Use everyday conversational terms and contractions (e.g. "don't", "can't", "it's"). Translate rigid legalese or rules into simple conversational explanations (e.g. instead of "PFL may change interest rates at its sole discretion and will notify you...", write something like "PFL can change the interest rates whenever they need to, and they'll let you know on their website...").
+- For Hindi: Use highly conversational Hinglish/colloquial phrasing that people speak in real life. Completely avoid rigid, academic, or heavy Sanskritized words (e.g., use 'लोन' instead of 'ऋण', 'डिटेल्स' instead of 'विवरण', 'कस्टमर' instead of 'उपभोक्ता', 'बदलेगी' instead of 'परिवर्तित करेगी').
+- Under no circumstances should the translation sound stiff, legalistic, or machine-translated.`;
+  } else if (tone === "Professional" || formality === "Formal" || formality === "Very Formal") {
+    styleInstructions = `
+- YOU MUST MAKE THE TRANSLATION FORMAL, PRECISE, AND PROFESSIONAL.
+- Use official, standard, and legally sound terminology.
+- Maintain a polite, structured, and authoritative tone suitable for legal agreements, official communications, or business contracts.`;
+  } else {
+    styleInstructions = `
+- Translate standardly, keeping the original style, structure, and level of formality of the source text.`;
+  }
+
+  let languageSpecificInstructions = "";
+  if (isHindi) {
+    languageSpecificInstructions = `
+- Since the target language is Hindi, you MUST write the output strictly in the Devanagari script. Do NOT use Perso-Arabic (Urdu) characters under any circumstances.
+- Always place a space after the Hindi purna-viram ('।') full stop when starting a new sentence (e.g. 'है। हमारी' -> 'है। हमारी').`;
+  }
+
+  const baseInstructions = `You are an expert human localizer and professional translator. You translate text from ${sourceName} to ${targetName}.
+Your goal is to produce translations that read as if they were originally written by a native speaker of ${targetName}, rather than a machine.
+
+CRITICAL STYLE DIRECTIVES:
+- IGNORE the original text's tone/formality if it is formal. YOU MUST OVERRIDE the style to perfectly match the requested Tone (${tone}) and Formality (${formality}).
+${styleInstructions}
+${languageSpecificInstructions}
+
+- DO NOT leave standard English words (such as 'belonging', 'tackling', 'fellow travelers', 'stakeholders', 'champions') untranslated or transliterated verbatim in the target sentence, unless they are proper brand names (e.g. 'Tripadvisor', 'Viator') or technical codes. Translate them into correct, natural, standard terms of the target language.
+- Ensure perfect grammatical correctness, phrasing, and gender agreement in the target language.
+- Avoid literal, machine-like translations. The translation must sound natural and idiomatic in the target language.
+- Technical terms MUST be transliterated appropriately.
+- Abbreviations MUST always be kept as abbreviations (e.g. N/A -> N/A).
+- Do NOT translate or transliterate alphanumeric list pointers, section numbers, or clause labels (e.g. '16(a).', '16(a)(i).', '17.', '7(a).', '7(b).', '5.'). Keep them exactly as they are in the original English text.
+- Do NOT translate or transliterate contact prefixes or abbreviation labels like 'T', 'F', 'M', 'Tel', 'Mob', 'Fax', 'Email', 'Email ID'. Keep them exactly as they are in the original English text.
+- Avoid literal/duplicate translations of doublets (e.g. translate 'Safety & Security' as 'सुरक्षा और संरक्षा' rather than repeating 'सुरक्षा').
+- Translate common business/banking terms professionally (e.g. translate 'Earn ... interest' as 'ब्याज प्राप्त करें' in formal Hindi, or 'ब्याज मिलेगा' in informal Hindi).
+- Maintain consistent terminology for recurring terms.`;
+
+  return baseInstructions;
+};
+
 const translateWithOpenAI = async (protectedTexts, target, source = DEFAULT_SOURCE_LANG, contextSettings = null) => {
   if (!OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY not configured");
@@ -106,35 +171,15 @@ const translateWithOpenAI = async (protectedTexts, target, source = DEFAULT_SOUR
   const sourceName = getLangName(source);
   const targetName = getLangName(target);
 
-  let systemPrompt = process.env.OPENAI_SYSTEM_PROMPT;
+  const baseSystemPrompt = buildTranslationSystemPrompt(target, source, contextSettings);
   
-  let contextBlock = "";
+  const jsonFormattingInstructions = `\n\nCRITICAL OUTPUT FORMATTING: You are a pure translation engine. You MUST ONLY output valid JSON. Your response must be a JSON object containing a 'translations' array of strings. The translated strings MUST be in the exact same order as the input 'texts' array. Translate each string into ${targetName}. Do NOT act as a conversational AI. If a text is just a fragment like "To,", translate that exact fragment contextually. Preserve any __TAG_n__ tokens.`;
+
+  const systemPrompt = baseSystemPrompt + jsonFormattingInstructions;
+
   let userContext = "";
   if (contextSettings) {
-    contextBlock = `\nTranslation Context Metadata:\nDomain: ${contextSettings.domain || "General"}\nContent Type: ${contextSettings.contentType || "General"}\nAudience: ${contextSettings.audience || "General"}\nPurpose: ${contextSettings.purpose || "General"}\nTone: ${contextSettings.tone || "General"}\nFormality: ${contextSettings.formality || "Neutral"}\nTerminology Strictness: ${contextSettings.terminologyStrictness || "Flexible"}\nSEO Optimization: ${contextSettings.seoOptimization || "Off"}\n\nCRITICAL OVERRIDE INSTRUCTIONS:\nIGNORE any other instructions in this prompt that tell you to 'maintain original tone' or 'preserve original formality'. YOU MUST OVERRIDE THE ORIGINAL TEXT'S STYLE and adapt your wording to perfectly match the requested Tone (${contextSettings.tone || "General"}) and Formality (${contextSettings.formality || "Neutral"}).\nIf Tone is 'Casual' or Formality is 'Informal' or 'Very Informal', you MUST use highly colloquial, everyday conversational language (e.g., Hinglish for Hindi). For languages like Hindi, completely avoid highly academic, typical, or Sanskritized vocabulary (e.g., use 'लोन' instead of 'ऋण', 'डिटेल्स' instead of 'विवरण', 'कस्टमर' instead of 'उपभोक्ता'). Do not sound like a machine. Use natural, conversational phrasing that people use in real life.\nIf Formality is 'Very Formal', use precise, strict, professional, and standard terminology.`;
-    
-    userContext = `\n\nREMINDER: Tone is ${contextSettings.tone || "General"} and Formality is ${contextSettings.formality || "Neutral"}. YOU MUST OVERRIDE THE ORIGINAL TONE AND ADAPT YOUR VOCABULARY STRICTLY TO THIS OR YOU WILL BE PENALIZED!`;
-  }
-  
-  const strictInstructions = `\n\nCRITICAL INSTRUCTIONS: You are a pure translation engine. You MUST ONLY output valid JSON. Your response must be a JSON object containing a 'translations' array of strings. The translated strings MUST be in the exact same order as the input 'texts' array. Translate each string into ${targetName}. Do NOT act as a conversational AI. If a text is just a fragment like "To,", translate that exact fragment contextually. Preserve any __TAG_n__ tokens.
-Additionally:
-- DO NOT leave standard English words (such as 'belonging', 'tackling', 'fellow travelers', 'stakeholders', 'champions') untranslated or transliterated verbatim in the target sentence, unless they are proper brand names (e.g. 'Tripadvisor', 'Viator', 'TheFork') or technical codes. Translate them into correct, natural, standard terms of the target language (e.g. for Hindi, translate 'belonging' to 'अपनेपन' or 'संबद्धता', 'tackle' to 'सुलझाना' or 'निपटना', 'fellow travelers' to 'सह-यात्री', 'stakeholders' to 'हितधारक', 'champions' to 'समर्थन करता है' or 'बढ़ावा देता है').
-- Ensure perfect grammatical correctness, phrasing, and gender agreement in the target language. For example, in Hindi, 'perspective/view' (दृष्टिकोण) is masculine, so use 'अपना पूरा दृष्टिकोण' instead of 'अपनी पूरी दृष्टिकोण'.
-- Avoid literal, machine-like translations. The translation must sound natural, professional, grammatically flawless, and idiomatic in the target language.
-- Technical terms MUST be transliterated (e.g. Locator -> लोकेटर not सुनने का यंत्र).
-- Abbreviations MUST always be kept as abbreviations (e.g. N/A -> N/A not एन/ए).
-- Do NOT translate or transliterate alphanumeric list pointers, section numbers, or clause labels (e.g. '16(a).', '16(a)(i).', '17.', '7(a).', '7(b).', '5.'). Keep them exactly as they are in the original English text (use English letters and standard periods, not Devanagari characters or purna-viram '।').
-- Do NOT translate or transliterate contact prefixes or abbreviation labels like 'T', 'F', 'M', 'Tel', 'Mob', 'Fax', 'Email', 'Email ID'. Keep them exactly as they are in the original English text.
-- Avoid literal/duplicate translations of doublets (e.g. translate 'Safety & Security' as 'सुरक्षा और संरक्षा' rather than repeating 'सुरक्षा').
-- Translate common business/banking terms professionally (e.g. translate 'Earn ... interest' as 'ब्याज प्राप्त करें' instead of 'कमाएं', 'Collection' as 'वसूली' in a business/debt context rather than 'संग्रहण', 'Reimbursement' as 'प्रतिपूर्ति', 'IT professional' as 'आईटी विशेषज्ञ').
-- Maintain consistent terminology for recurring terms (e.g. choose between transliterated English or pure Hindi terms like 'रिटेलर' vs 'व्यापारी', 'व्यवसाय' vs 'बिजनेस', and maintain that preference across the texts).
-- If the target language is Hindi, you MUST write the output strictly in the Devanagari script. Do NOT use Perso-Arabic (Urdu) characters under any circumstances.
-- Always place a space after the Hindi purna-viram ('।') full stop when starting a new sentence (e.g., 'है। हमारी' instead of 'है।हमारी').${contextBlock}`;
-
-  if (!systemPrompt) {
-    systemPrompt = `Translate the user texts from ${sourceName} to ${targetName}. Do not modify or translate tokens that look like __TAG_0__, __TAG_1__ etc. Preserve punctuation and numbers. Return only the translated text without commentary.` + strictInstructions;
-  } else {
-    systemPrompt = systemPrompt.replace(/{source}/g, sourceName).replace(/{target}/g, targetName) + strictInstructions;
+    userContext = `\n\nREMINDER: Tone is ${contextSettings.tone || "General"} and Formality is ${contextSettings.formality || "Neutral"}. YOU MUST ADAPT YOUR VOCABULARY STRICTLY TO THIS STYLE!`;
   }
 
   const payload = {
@@ -143,7 +188,7 @@ Additionally:
       { role: "system", content: systemPrompt },
       { role: "user", content: JSON.stringify({ texts: protectedTexts }) + userContext }
     ],
-    temperature: 0.6,
+    temperature: 0.3,
     max_tokens: 16000,
     response_format: { type: "json_object" }
   };
@@ -381,7 +426,8 @@ const translateSegmentWithVision = async ({
   contextJira,
   contextDescription,
   screenshotBuffer,
-  screenshotMimeType
+  screenshotMimeType,
+  contextSettings
 }) => {
   if (!OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY not configured");
@@ -398,20 +444,20 @@ const translateSegmentWithVision = async ({
   const sourceLangName = getLangName(sourceLang);
   const targetLangName = getLangName(targetLang);
 
-  const systemPrompt = `You are an expert human localizer and professional translator. 
-Your task is to translate a specific UI text segment or sentence into the target language.
-You are given visual context (a screenshot of the page where the text is used) and/or text context (Jira story, custom instructions).
+  const baseSystemPrompt = buildTranslationSystemPrompt(targetLang, sourceLang, contextSettings);
 
-CRITICAL DIRECTIVES:
-- DO NOT translate literally like a standard machine translation engine. (e.g. do not translate a "Home" button/link as "घर" in Hindi, which sounds robotic; instead, translate it as "होम" or keep it as "होम" which is the standard term used in actual websites/apps).
-- Inspect the visual placement of the segment in the screenshot (if provided). Check where it is used (button, title, paragraph, menu item) and adapt your translation to fit that layout, role, and style.
-- Apply localizer common sense. The translation must sound natural, professional, grammatically flawless, and idiomatic in the target language. It should feel like it was written by a native human localizer.
-- Strictly adhere to any custom description/instructions or terminology limits in the Jira story.
-- If the target language is Hindi, write the output strictly in the Devanagari script. Do NOT use Perso-Arabic (Urdu) characters.
-- Output a JSON object containing a single key "translation", like this:
+  const jsonFormattingInstructions = `\n\nCRITICAL OUTPUT FORMATTING: You are a pure translation engine. You MUST ONLY output valid JSON. Your response must be a JSON object containing a single key "translation" containing the translated string. Output a JSON object like this:
 {
   "translation": "your_smart_translation_here"
 }`;
+
+  let systemPrompt = baseSystemPrompt + jsonFormattingInstructions;
+
+  // Add vision specific instructions
+  systemPrompt += `\n\nVISION DIRECTIVES:
+- Inspect the visual placement of the segment in the screenshot (if provided). Check where it is used (button, title, paragraph, menu item) and adapt your translation to fit that layout, role, and style.
+- Apply localizer common sense. Use standard, natural terminology corresponding to that visual element.
+- Strictly adhere to any custom description/instructions or terminology limits in the Jira story.`;
 
   let textPrompt = `Translate the following source text segment:
 Source Segment: "${sourceText}"

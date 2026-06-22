@@ -946,7 +946,8 @@ export default function App() {
       const result = await translateSegmentWithContext(documentId, segmentIndex, {
         contextJira,
         contextDescription,
-        screenshot
+        screenshot,
+        contextSettings
       });
 
       if (result.success) {

@@ -470,7 +470,15 @@ apiRouter.post(
       if (!doc) return;
 
       const segmentIndex = parseInt(request.params.index, 10);
-      const { contextJira, contextDescription } = request.body;
+      const { contextJira, contextDescription, contextSettings: contextSettingsStr } = request.body;
+      let contextSettings = null;
+      if (contextSettingsStr) {
+        try {
+          contextSettings = JSON.parse(contextSettingsStr);
+        } catch (e) {
+          console.error("Failed to parse contextSettings in endpoint:", e);
+        }
+      }
       
       let screenshotBuffer = null;
       let screenshotMimeType = null;
@@ -502,7 +510,8 @@ apiRouter.post(
         contextJira,
         contextDescription,
         screenshotBuffer,
-        screenshotMimeType
+        screenshotMimeType,
+        contextSettings
       });
 
       // Update segment target text and status in database

@@ -156,11 +156,12 @@ export const respondToAccessRequest = async (documentId, requestId, action) => {
   return response.data;
 };
 
-export const translateSegmentWithContext = async (documentId, segmentIndex, { contextJira, contextDescription, screenshot }) => {
+export const translateSegmentWithContext = async (documentId, segmentIndex, { contextJira, contextDescription, screenshot, contextSettings }) => {
   const formData = new FormData();
   if (contextJira !== undefined && contextJira !== null) formData.append("contextJira", contextJira);
   if (contextDescription !== undefined && contextDescription !== null) formData.append("contextDescription", contextDescription);
   if (screenshot) formData.append("screenshot", screenshot);
+  if (contextSettings) formData.append("contextSettings", JSON.stringify(contextSettings));
 
   const response = await api.post(`/api/documents/${documentId}/segments/${segmentIndex}/translate-context`, formData, {
     headers: {

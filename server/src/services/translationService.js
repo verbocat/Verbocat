@@ -203,7 +203,8 @@ const translateSegmentWithContext = async ({
   contextJira,
   contextDescription,
   screenshotBuffer,
-  screenshotMimeType
+  screenshotMimeType,
+  contextSettings
 }) => {
   const { translateSegmentWithVision } = require("./translationProviders");
   const actualSourceLang = sourceLang || "en";
@@ -215,7 +216,8 @@ const translateSegmentWithContext = async ({
     contextJira,
     contextDescription,
     screenshotBuffer,
-    screenshotMimeType
+    screenshotMimeType,
+    contextSettings
   });
 
   const cleanedTranslation = ensureEnglishNumerals(translated);
