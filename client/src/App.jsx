@@ -1723,21 +1723,40 @@ export default function App() {
   };
 
   const goToSegment = (id) => {
+    // Close QA Panel
+    setShowQaPanel(false);
+
     const element = document.getElementById(`segment-${id}`);
-    if (!element) {
-      return;
+    if (element) {
+      element.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      });
+
+      element.classList.add("ring-2", "ring-red-500");
+
+      window.setTimeout(() => {
+        element.classList.remove("ring-2", "ring-red-500");
+      }, 2000);
     }
 
-    element.scrollIntoView({
-      behavior: "smooth",
-      block: "center"
-    });
-
-    element.classList.add("ring-2", "ring-red-500");
-
+    // Focus target editor and place cursor at the end
     window.setTimeout(() => {
-      element.classList.remove("ring-2", "ring-red-500");
-    }, 2000);
+      const editor = document.getElementById(`target-${id}`);
+      if (editor) {
+        editor.focus();
+        try {
+          const range = document.createRange();
+          const sel = window.getSelection();
+          range.selectNodeContents(editor);
+          range.collapse(false); // collapse to end
+          sel.removeAllRanges();
+          sel.addRange(range);
+        } catch (e) {
+          console.error("Failed to position cursor at end:", e);
+        }
+      }
+    }, 300);
   };
 
   // Guard screens for authentication & password resets

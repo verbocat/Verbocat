@@ -12,7 +12,8 @@ const SKIP_SELECTOR = "script,style,noscript,svg,canvas";
 const BLOCK_TAGS = [
   "p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "th", "blockquote", 
   "section", "article", "nav", "header", "footer", "figcaption", "address", "main",
-  "ul", "ol", "table", "tbody", "thead", "tr", "dl", "dt", "dd", "form", "fieldset"
+  "ul", "ol", "table", "tbody", "thead", "tr", "dl", "dt", "dd", "form", "fieldset",
+  "body", "html"
 ];
 
 const isBlockNode = (node, $) => {
@@ -93,44 +94,43 @@ const parseFile = async (filePath) => {
 
   const tagMapGlobal = new Map();
   const tagCounter = { value: 1 };
-  const processedBlocks = new Set();
 
   // Preprocess body to wrap inline siblings in virtual leaf blocks
   if ($("body").length > 0) {
     wrapInlineSiblings($("body")[0], $);
   }
 
-  $("body").find("*").contents().each((_, element) => {
-    if (element.type !== "text") return;
-
-    // Skip text nodes that are inside script, style, noscript, svg, or canvas tags
-    if ($(element).closest(SKIP_SELECTOR).length > 0) return;
-
-    // Skip text nodes that have been detached from the body (already processed inside a block)
-    if ($(element).parents("body").length === 0) return;
-
-    const rawText = $(element).text().trim();
-    if (!rawText) return;
-
-    let $block = $(element).closest(BLOCK_TAGS.join(","));
-    if ($block.length === 0) {
-      $block = $(element).parent();
+  // 1. Find all block elements in the document that contain non-empty text
+  const blocks = [];
+  const selectors = [...BLOCK_TAGS, ".__temp-leaf-block__"].join(",");
+  $(selectors).each((_, el) => {
+    // Check if this block contains any text (excluding scripts/styles)
+    const clone = $(el).clone();
+    clone.find(SKIP_SELECTOR).remove();
+    const hasText = clone.text().trim().length > 0;
+    if (hasText) {
+      blocks.push(el);
     }
+  });
 
-    if ($block.closest(SKIP_SELECTOR).length > 0) return;
+  // 2. Filter to keep only the leaf-most blocks (blocks that do not contain any other block in the list)
+  const leafTextBlocks = blocks.filter(block => {
+    return !blocks.some(otherBlock => {
+      if (otherBlock === block) return false;
+      return $(block).find(otherBlock).length > 0;
+    });
+  });
 
-    const blockNode = $block[0];
-    if (processedBlocks.has(blockNode)) return;
-    processedBlocks.add(blockNode);
-
+  // 3. Process each leaf text block
+  leafTextBlocks.forEach((blockNode) => {
     const placeholderStr = extractPlaceholders(blockNode, $, tagMapGlobal, tagCounter);
     const subSegments = splitByPunctuation(placeholderStr, tagMapGlobal);
 
-    $block.empty();
+    $(blockNode).empty();
 
     subSegments.forEach((subSeg) => {
       const segmentId = segmentIndex++;
-      $block.append(`__SEG_${segmentId}__`);
+      $(blockNode).append(`__SEG_${segmentId}__`);
       const { leading, body, trailing } = extractSegmentTags(subSeg);
       segments.push({
         id: segmentId,
