@@ -1,32 +1,292 @@
-export const QAPanel = ({ qaIssuesList, showQaPanel, theme, onGoToSegment }) =>
-  showQaPanel && qaIssuesList.length > 0 ? (
-    <section className={`rounded-2xl border p-4 ${theme.cardStrong}`}>
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <div className={`text-xs uppercase tracking-[0.2em] ${theme.muted}`}>
-            QA Review
+import React, { useState } from "react";
+import { AlertOctagon, AlertTriangle, CheckCircle2, ArrowRight, ShieldAlert, Award, FileCode, Sparkles } from "lucide-react";
+
+export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, onGoToSegment }) => {
+  const [activeFilter, setActiveFilter] = useState("all");
+
+  if (!showQaPanel) return null;
+
+  // Calculate Average MQM Accuracy
+  const translatedSegments = segments.filter(s => s.target && s.mqmAccuracyScore !== undefined && s.mqmAccuracyScore !== null);
+  const averageMqm = translatedSegments.length > 0 
+    ? Math.round(translatedSegments.reduce((acc, s) => acc + s.mqmAccuracyScore, 0) / translatedSegments.length)
+    : null;
+
+  // Calculate severity counters
+  let criticalCount = 0;
+  let majorCount = 0;
+  let minorCount = 0;
+  let ruleCount = 0;
+
+  qaIssuesList.forEach(item => {
+    if (item.type === "rule") {
+      ruleCount++;
+    } else if (item.type === "mqm") {
+      if (item.severity === "Critical") criticalCount++;
+      else if (item.severity === "Major") majorCount++;
+      else minorCount++;
+    }
+  });
+
+  // Filter issues list
+  const filteredIssues = qaIssuesList.filter(item => {
+    if (activeFilter === "all") return true;
+    if (activeFilter === "critical") return item.type === "mqm" && item.severity === "Critical";
+    if (activeFilter === "major") return item.type === "mqm" && item.severity === "Major";
+    if (activeFilter === "minor") return item.type === "mqm" && item.severity === "Minor";
+    if (activeFilter === "rule") return item.type === "rule";
+    return true;
+  });
+
+  // Determine MQM health state
+  let healthText = "Unrated";
+  let healthColor = "text-zinc-400";
+  let healthBg = "bg-zinc-500/10";
+  let healthBorder = "border-zinc-500/20";
+  
+  if (averageMqm !== null) {
+    if (averageMqm >= 90) {
+      healthText = "Excellent Quality";
+      healthColor = "text-emerald-400";
+      healthBg = "bg-emerald-500/10";
+      healthBorder = "border-emerald-500/20";
+    } else if (averageMqm >= 70) {
+      healthText = "Needs Revision";
+      healthColor = "text-amber-400";
+      healthBg = "bg-amber-500/10";
+      healthBorder = "border-amber-500/20";
+    } else {
+      healthText = "Critical Issues";
+      healthColor = "text-rose-400";
+      healthBg = "bg-rose-500/10";
+      healthBorder = "border-rose-500/20";
+    }
+  }
+
+  return (
+    <section className={`rounded-2xl border p-6 mb-6 transition-all duration-300 ${theme.cardStrong} shadow-2xl backdrop-blur-md`}>
+      
+      {/* 1. Header & Aggregate Metrics */}
+      <div className="flex flex-col lg:flex-row justify-between gap-6 pb-6 border-b border-white/5">
+        
+        {/* Left column: MQM Accuracy gauge */}
+        <div className="flex-1 min-w-[280px]">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">
+            <Award className="w-4 h-4 text-indigo-400" />
+            <span>Average MQM Quality Health</span>
           </div>
-          <h2 className="mt-1 text-lg font-bold">Issue Navigator</h2>
+          
+          <div className="flex items-end gap-4">
+            {averageMqm !== null ? (
+              <div className="flex flex-col gap-1 w-full">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-4xl font-extrabold tracking-tight text-white font-mono">
+                    {averageMqm}%
+                  </span>
+                  <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold border ${healthColor} ${healthBg} ${healthBorder}`}>
+                    {healthText}
+                  </span>
+                </div>
+                
+                {/* Custom Gradient Progress Bar */}
+                <div className="w-full h-2.5 bg-zinc-800 rounded-full mt-2 overflow-hidden border border-white/5">
+                  <div 
+                    className={`h-full rounded-full transition-all duration-1000 ${
+                      averageMqm >= 90 ? "bg-gradient-to-r from-emerald-500 to-teal-400" :
+                      averageMqm >= 70 ? "bg-gradient-to-r from-amber-500 to-yellow-400" :
+                      "bg-gradient-to-r from-rose-600 to-red-400"
+                    }`}
+                    style={{ width: `${averageMqm}%` }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm text-zinc-400 italic py-2">
+                No translated segments with MQM evaluations yet.
+              </div>
+            )}
+          </div>
         </div>
-        <div className="rounded-lg bg-rose-500/10 px-2.5 py-1 text-xs font-semibold text-rose-300 ring-1 ring-rose-400/20">
-          {qaIssuesList.length} issues
+
+        {/* Right column: Severity Breakdown Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 lg:w-3/5">
+          <div className="bg-rose-500/5 border border-rose-500/10 rounded-xl p-3 flex flex-col justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-400">Critical</span>
+            <div className="flex items-baseline gap-1.5 mt-2">
+              <span className="text-2xl font-bold font-mono text-rose-400">{criticalCount}</span>
+              <AlertOctagon className="w-3.5 h-3.5 text-rose-400/60" />
+            </div>
+          </div>
+          
+          <div className="bg-amber-500/5 border border-amber-500/10 rounded-xl p-3 flex flex-col justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">Major</span>
+            <div className="flex items-baseline gap-1.5 mt-2">
+              <span className="text-2xl font-bold font-mono text-amber-400">{majorCount}</span>
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-400/60" />
+            </div>
+          </div>
+
+          <div className="bg-yellow-500/5 border border-yellow-500/10 rounded-xl p-3 flex flex-col justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">Minor</span>
+            <div className="flex items-baseline gap-1.5 mt-2">
+              <span className="text-2xl font-bold font-mono text-yellow-400">{minorCount}</span>
+              <AlertTriangle className="w-3.5 h-3.5 text-yellow-400/60" />
+            </div>
+          </div>
+
+          <div className="bg-blue-500/5 border border-blue-500/10 rounded-xl p-3 flex flex-col justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400">Auto Rules</span>
+            <div className="flex items-baseline gap-1.5 mt-2">
+              <span className="text-2xl font-bold font-mono text-blue-400">{ruleCount}</span>
+              <FileCode className="w-3.5 h-3.5 text-blue-400/60" />
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* 2. Filters & Navigation Bar */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mt-6 mb-4">
+        <div className="text-sm font-semibold text-zinc-300">
+          Issues ({filteredIssues.length} of {qaIssuesList.length})
+        </div>
+        
+        <div className="flex flex-wrap gap-1.5 bg-zinc-950/40 p-1 rounded-xl border border-white/5">
+          <button
+            onClick={() => setActiveFilter("all")}
+            className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
+              activeFilter === "all" ? "bg-zinc-800 text-white shadow" : "text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            All Issues
+          </button>
+          <button
+            onClick={() => setActiveFilter("critical")}
+            className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1 ${
+              activeFilter === "critical" ? "bg-rose-500/20 text-rose-300 border border-rose-500/30" : "text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            <span className="w-1.5 h-1.5 bg-rose-500 rounded-full" />
+            Critical ({criticalCount})
+          </button>
+          <button
+            onClick={() => setActiveFilter("major")}
+            className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1 ${
+              activeFilter === "major" ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            <span className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
+            Major ({majorCount})
+          </button>
+          <button
+            onClick={() => setActiveFilter("minor")}
+            className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1 ${
+              activeFilter === "minor" ? "bg-yellow-500/20 text-yellow-300 border border-yellow-500/30" : "text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full" />
+            Minor ({minorCount})
+          </button>
+          <button
+            onClick={() => setActiveFilter("rule")}
+            className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1 ${
+              activeFilter === "rule" ? "bg-blue-500/20 text-blue-300 border border-blue-500/30" : "text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            <span className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
+            Rules ({ruleCount})
+          </button>
         </div>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-2 max-h-[30vh] overflow-y-auto pr-2">
-        {qaIssuesList.map((item, index) => (
-          <button
-            key={`${item.id}-${index}`}
-            onClick={() => onGoToSegment(item.id)}
-            className="rounded-xl border border-rose-400/20 bg-rose-500/8 p-4 text-left transition hover:bg-rose-500/14"
-          >
-            <div className="flex items-center justify-between gap-4">
-              <div className="font-semibold text-rose-200">{item.issue}</div>
-              <div className={`text-xs ${theme.muted}`}>Segment {item.id}</div>
-            </div>
-            <div className={`mt-2 text-sm ${theme.muted}`}>{item.source}</div>
-          </button>
-        ))}
-      </div>
+      {/* 3. Issue List / Grid */}
+      {filteredIssues.length > 0 ? (
+        <div className="grid gap-3 max-h-[40vh] overflow-y-auto pr-1">
+          {filteredIssues.map((item, index) => {
+            const isMqm = item.type === "mqm";
+            const severityColor = 
+              item.severity === "Critical" ? "text-rose-400 bg-rose-500/10 border border-rose-500/20" :
+              item.severity === "Major" ? "text-amber-400 bg-amber-500/10 border border-amber-500/20" :
+              item.severity === "Minor" ? "text-yellow-400 bg-yellow-500/10 border border-yellow-500/20" :
+              "text-blue-400 bg-blue-500/10 border border-blue-500/20";
+            
+            return (
+              <div 
+                key={`${item.id}-${index}`}
+                className="bg-zinc-950/20 hover:bg-zinc-950/40 border border-white/5 hover:border-zinc-800 rounded-xl p-4 transition duration-200 flex flex-col md:flex-row md:items-center justify-between gap-4"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${severityColor}`}>
+                      {isMqm ? `MQM: ${item.severity}` : `Auto Rule`}
+                    </span>
+                    <span className="text-[10px] font-bold text-zinc-500 uppercase">
+                      Segment #{item.id}
+                    </span>
+                    {isMqm && (
+                      <span className="text-xs font-bold text-indigo-400">
+                        {item.category}
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-sm font-medium text-zinc-100 mb-2 leading-relaxed">
+                    {isMqm ? item.explanation : item.issue}
+                  </p>
+
+                  {/* Context Snippet */}
+                  <div className="flex flex-col gap-1 bg-black/20 rounded-lg p-2.5 border border-white/5">
+                    <div className="text-[10px] font-bold text-zinc-500 uppercase">Source Text</div>
+                    <div className="text-xs text-zinc-400 italic line-clamp-1">{item.source}</div>
+                    
+                    {item.target && (
+                      <>
+                        <div className="text-[10px] font-bold text-zinc-500 uppercase mt-1">Translation</div>
+                        <div className="text-xs text-zinc-300 font-semibold line-clamp-2">
+                          {item.target}
+                        </div>
+                      </>
+                    )}
+                    
+                    {isMqm && item.snippet && (
+                      <div className="mt-1 flex items-center gap-1.5">
+                        <span className="text-[10.5px] font-bold text-rose-400 uppercase">Offending Snippet:</span>
+                        <span className="text-xs text-rose-300 font-mono bg-rose-950/30 px-1.5 py-0.5 rounded border border-rose-500/15">
+                          "{item.snippet}"
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => onGoToSegment(item.id)}
+                  className="self-end md:self-center flex items-center gap-1.5 text-xs font-bold text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/15 border border-indigo-500/20 px-3.5 py-2 rounded-xl transition duration-200"
+                >
+                  <span>Inspect & Edit</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        /* Empty / Success State */
+        <div className="flex flex-col items-center justify-center py-10 px-4 text-center bg-zinc-950/20 border border-dashed border-zinc-800 rounded-2xl">
+          <div className="w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-3">
+            <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+          </div>
+          <h3 className="text-base font-bold text-zinc-100">
+            No Quality Issues Found
+          </h3>
+          <p className="text-xs text-zinc-500 max-w-sm mt-1">
+            {activeFilter === "all" 
+              ? "All segments are in top condition and comply with regular checks and MQM evaluations."
+              : `There are no issues matching the "${activeFilter}" severity level.`
+            }
+          </p>
+        </div>
+      )}
     </section>
-  ) : null;
+  );
+};

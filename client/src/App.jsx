@@ -478,13 +478,51 @@ export default function App() {
 
   const qaIssuesList = useMemo(
     () =>
-      segments.flatMap((segment) =>
-        (segment.qaIssues || []).map((issue) => ({
-          id: segment.id,
-          issue,
-          source: segment.source
-        }))
-      ),
+      segments.flatMap((segment) => {
+        const list = [];
+        
+        // Rule-based issues
+        if (segment.qaIssues) {
+          segment.qaIssues.forEach((issue) => {
+            list.push({
+              id: segment.id,
+              type: "rule",
+              severity: "Warning",
+              issue: issue,
+              source: segment.source,
+              target: segment.target
+            });
+          });
+        }
+        
+        // MQM issues
+        let mqm = segment.mqmReport;
+        if (typeof mqm === "string") {
+          try {
+            mqm = JSON.parse(mqm);
+          } catch (e) {
+            mqm = null;
+          }
+        }
+        
+        if (mqm && mqm.errors) {
+          mqm.errors.forEach((err) => {
+            list.push({
+              id: segment.id,
+              type: "mqm",
+              category: err.category,
+              severity: err.severity || "Minor",
+              snippet: err.snippet,
+              explanation: err.explanation,
+              issue: `${err.category} (${err.severity || "Minor"}): ${err.explanation}`,
+              source: segment.source,
+              target: segment.target
+            });
+          });
+        }
+        
+        return list;
+      }),
     [segments]
   );
 
@@ -1951,6 +1989,7 @@ export default function App() {
           {/* QA panel (collapsible) */}
           <QAPanel
             qaIssuesList={qaIssuesList}
+            segments={segments}
             showQaPanel={showQaPanel}
             theme={theme}
             onGoToSegment={goToSegment}

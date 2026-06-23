@@ -97,6 +97,15 @@ export const SegmentCard = ({
   const [activeTab, setActiveTab] = useState("screenshot");
   const [translatingLocal, setTranslatingLocal] = useState(false);
 
+  let parsedMqmReport = segment.mqmReport;
+  if (typeof parsedMqmReport === "string") {
+    try {
+      parsedMqmReport = JSON.parse(parsedMqmReport);
+    } catch (e) {
+      parsedMqmReport = null;
+    }
+  }
+
   useEffect(() => {
     setJiraText(segment.contextJira || "");
     setDescText(segment.contextDescription || "");
@@ -395,21 +404,6 @@ export const SegmentCard = ({
               {segment.fuzzyScore}%
             </span>
           )}
-          {segment.mqmAccuracyScore !== undefined && segment.mqmAccuracyScore !== null && segment.target && (
-            <span style={{
-              fontSize: 8, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace",
-              color: segment.mqmAccuracyScore >= 90 ? "var(--emerald)" : segment.mqmAccuracyScore >= 70 ? "var(--text-amber)" : "var(--text-rose)",
-              background: segment.mqmAccuracyScore >= 90 ? "rgba(16,185,129,0.08)" : segment.mqmAccuracyScore >= 70 ? "rgba(245,158,11,0.08)" : "rgba(239,68,68,0.08)",
-              border: segment.mqmAccuracyScore >= 90 ? "1px solid rgba(16,185,129,0.2)" : segment.mqmAccuracyScore >= 70 ? "1px solid rgba(245,158,11,0.2)" : "1px solid rgba(239,68,68,0.2)",
-              borderRadius: 3, padding: "0 3px", marginTop: 2, display: "inline-block"
-            }} title={`MQM Accuracy: ${segment.mqmAccuracyScore}%`}>
-              MQM: {segment.mqmAccuracyScore}%
-            </span>
-          )}
-          {segment.qaIssues?.length > 0 && (
-            <AlertTriangle style={{ width: 9, height: 9, color: "var(--text-rose)" }}
-              title={`${segment.qaIssues.length} QA issue`} />
-          )}
         </div>
 
         {/* Col 2: Source */}
@@ -446,12 +440,83 @@ export const SegmentCard = ({
               onInput={handleInput}
               onKeyDown={handleKeyDown}
               className="seg-editor"
-              style={
-                readOnly || segment.verified || lockInfo
+              style={{
+                ...((readOnly || segment.verified || lockInfo)
                   ? { opacity: 0.55, cursor: lockInfo ? "not-allowed" : readOnly ? "default" : "text", pointerEvents: lockInfo ? "none" : "auto" }
-                  : {}
-              }
+                  : {}),
+                paddingRight: (segment.mqmAccuracyScore !== undefined || (segment.qaIssues && segment.qaIssues.length > 0) || (parsedMqmReport && parsedMqmReport.errors && parsedMqmReport.errors.length > 0)) ? "105px" : undefined
+              }}
             />
+
+            {/* Absolute Badges Container */}
+            {(segment.target && (
+              <div 
+                style={{
+                  position: "absolute",
+                  top: "50%",
+                  right: "8px",
+                  transform: "translateY(-50%)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  zIndex: 5,
+                  pointerEvents: "auto"
+                }}
+              >
+                {/* MQM Quality Badge */}
+                {segment.mqmAccuracyScore !== undefined && segment.mqmAccuracyScore !== null && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowContext(true);
+                      setActiveTab("mqm");
+                    }}
+                    style={{
+                      fontSize: "9px",
+                      fontWeight: 700,
+                      fontFamily: "'Inter', sans-serif",
+                      color: segment.mqmAccuracyScore >= 90 ? "#10b981" : segment.mqmAccuracyScore >= 70 ? "#f59e0b" : "#ef4444",
+                      background: segment.mqmAccuracyScore >= 90 ? "rgba(16,185,129,0.12)" : segment.mqmAccuracyScore >= 70 ? "rgba(245,158,11,0.12)" : "rgba(239,68,68,0.12)",
+                      border: segment.mqmAccuracyScore >= 90 ? "1px solid rgba(16,185,129,0.3)" : segment.mqmAccuracyScore >= 70 ? "1px solid rgba(245,158,11,0.3)" : "1px solid rgba(239,68,68,0.3)",
+                      borderRadius: "6px",
+                      padding: "3px 6px",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      transition: "all 0.2s ease",
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.2)"
+                    }}
+                    title={`MQM Accuracy: ${segment.mqmAccuracyScore}% (Click to audit)`}
+                  >
+                    <Award style={{ width: 11, height: 11 }} />
+                    <span>MQM: {segment.mqmAccuracyScore}%</span>
+                  </button>
+                )}
+
+                {/* QA Alert Mark */}
+                {((segment.qaIssues && segment.qaIssues.length > 0) || (parsedMqmReport && parsedMqmReport.errors && parsedMqmReport.errors.length > 0)) && (
+                  <span 
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: "20px",
+                      height: "20px",
+                      borderRadius: "50%",
+                      background: "rgba(239,68,68,0.15)",
+                      border: "1px solid rgba(239,68,68,0.3)",
+                      color: "#f87171",
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.2)"
+                    }}
+                    title={`${(segment.qaIssues?.length || 0) + (parsedMqmReport?.errors?.length || 0)} issues detected`}
+                  >
+                    <AlertTriangle style={{ width: 11, height: 11 }} />
+                  </span>
+                )}
+              </div>
+            ))}
 
             {lockInfo && (
               <div className="absolute inset-0 bg-indigo-950/20 border border-indigo-500/30 rounded-lg flex items-center justify-between px-3 z-10 select-none">
@@ -754,7 +819,7 @@ export const SegmentCard = ({
                     </div>
 
                     {/* AI Advisor Clarifications and Suggestions */}
-                    {segment.mqmReport?.improvementSuggestion && (
+                    {parsedMqmReport?.improvementSuggestion && (
                       <div style={{
                         background: "rgba(59,130,246,0.05)",
                         border: "1px solid rgba(59,130,246,0.2)",
@@ -771,11 +836,11 @@ export const SegmentCard = ({
                           </span>
                         </div>
                         <p style={{ fontSize: 11.5, color: "var(--text-primary)", margin: 0, fontStyle: "italic" }}>
-                          "{segment.mqmReport.improvementSuggestion}"
+                          "{parsedMqmReport.improvementSuggestion}"
                         </p>
                         <button
                           type="button"
-                          onClick={() => handleAutoApplyMqmSuggestion(segment.mqmReport.improvementSuggestion)}
+                          onClick={() => handleAutoApplyMqmSuggestion(parsedMqmReport.improvementSuggestion)}
                           className="ab ab-export"
                           style={{
                             alignSelf: "flex-start",
@@ -795,7 +860,7 @@ export const SegmentCard = ({
                     )}
 
                     {/* Clarifying Questions */}
-                    {segment.mqmReport?.clarifyingQuestions?.length > 0 && (
+                    {parsedMqmReport?.clarifyingQuestions?.length > 0 && (
                       <div style={{
                         background: "rgba(245,158,11,0.03)",
                         border: "1px solid rgba(245,158,11,0.15)",
@@ -809,7 +874,7 @@ export const SegmentCard = ({
                           🤔 Questions to Clarify Meaning
                         </span>
                         <ul style={{ margin: 0, paddingLeft: 16, fontSize: 11, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 4 }}>
-                          {segment.mqmReport.clarifyingQuestions.map((q, qidx) => (
+                          {parsedMqmReport.clarifyingQuestions.map((q, qidx) => (
                             <li key={qidx}>{q}</li>
                           ))}
                         </ul>
@@ -821,7 +886,7 @@ export const SegmentCard = ({
                       <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)" }}>
                         ISSUES DETECTED BY MQM AUDIT:
                       </span>
-                      {(!segment.mqmReport?.errors || segment.mqmReport.errors.length === 0) ? (
+                      {(!parsedMqmReport?.errors || parsedMqmReport.errors.length === 0) ? (
                         <div style={{ padding: "8px 12px", borderRadius: 6, background: "rgba(16,185,129,0.05)", border: "1px solid rgba(16,185,129,0.15)" }}>
                           <span style={{ fontSize: 11, color: "var(--emerald)", fontWeight: 600 }}>
                             ✓ Perfect quality! No errors found.
@@ -829,7 +894,7 @@ export const SegmentCard = ({
                         </div>
                       ) : (
                         <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 150, overflowY: "auto" }}>
-                          {segment.mqmReport.errors.map((err, errIdx) => (
+                          {parsedMqmReport.errors.map((err, errIdx) => (
                             <div key={errIdx} style={{
                               padding: "8px 10px",
                               borderRadius: 6,
