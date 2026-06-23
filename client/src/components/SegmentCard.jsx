@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Copy, Check, ArrowRight, AlertTriangle, Lock, Sparkles, UploadCloud, Trash2, Image, MessageSquare } from "lucide-react";
+import { Copy, Check, ArrowRight, AlertTriangle, Lock, Sparkles, Award, UploadCloud, Trash2, Image, MessageSquare } from "lucide-react";
 
 /* ── Glossary highlight tooltip ─────────────────────────────── */
 const GlossaryHighlight = ({ term, children }) => {
@@ -179,6 +179,32 @@ export const SegmentCard = ({
         screenshot: screenshotFile
       });
       clearScreenshot();
+    } finally {
+      setTranslatingLocal(false);
+    }
+  };
+
+  const handleAutoApplyMqmSuggestion = async (suggestion) => {
+    if (!suggestion) return;
+    let newDescText = descText;
+    if (newDescText) {
+      newDescText += `\n${suggestion}`;
+    } else {
+      newDescText = suggestion;
+    }
+    setDescText(newDescText);
+
+    setTranslatingLocal(true);
+    try {
+      await onTranslateWithContext(segment.id, {
+        contextJira: jiraText,
+        contextDescription: newDescText,
+        screenshot: screenshotFile
+      });
+      clearScreenshot();
+      setActiveTab("mqm");
+    } catch (err) {
+      console.error("Failed to auto-apply MQM suggestion:", err);
     } finally {
       setTranslatingLocal(false);
     }
@@ -369,6 +395,17 @@ export const SegmentCard = ({
               {segment.fuzzyScore}%
             </span>
           )}
+          {segment.mqmAccuracyScore !== undefined && segment.mqmAccuracyScore !== null && segment.target && (
+            <span style={{
+              fontSize: 8, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace",
+              color: segment.mqmAccuracyScore >= 90 ? "var(--emerald)" : segment.mqmAccuracyScore >= 70 ? "var(--text-amber)" : "var(--text-rose)",
+              background: segment.mqmAccuracyScore >= 90 ? "rgba(16,185,129,0.08)" : segment.mqmAccuracyScore >= 70 ? "rgba(245,158,11,0.08)" : "rgba(239,68,68,0.08)",
+              border: segment.mqmAccuracyScore >= 90 ? "1px solid rgba(16,185,129,0.2)" : segment.mqmAccuracyScore >= 70 ? "1px solid rgba(245,158,11,0.2)" : "1px solid rgba(239,68,68,0.2)",
+              borderRadius: 3, padding: "0 3px", marginTop: 2, display: "inline-block"
+            }} title={`MQM Accuracy: ${segment.mqmAccuracyScore}%`}>
+              MQM: {segment.mqmAccuracyScore}%
+            </span>
+          )}
           {segment.qaIssues?.length > 0 && (
             <AlertTriangle style={{ width: 9, height: 9, color: "var(--text-rose)" }}
               title={`${segment.qaIssues.length} QA issue`} />
@@ -552,6 +589,15 @@ export const SegmentCard = ({
               >
                 Description
               </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("mqm")}
+                className={`seg-control-btn ${activeTab === "mqm" ? "active" : ""}`}
+                style={{ fontSize: 10, padding: "4px 10px", height: "auto" }}
+              >
+                <Award style={{ width: 10, height: 10, marginRight: 4, display: "inline-block", verticalAlign: "middle" }} />
+                MQM Quality ({segment.mqmAccuracyScore !== undefined && segment.mqmAccuracyScore !== null ? `${segment.mqmAccuracyScore}%` : "N/A"})
+              </button>
             </div>
           </div>
 
@@ -667,6 +713,152 @@ export const SegmentCard = ({
                     resize: "vertical"
                   }}
                 />
+              </div>
+            )}
+
+            {activeTab === "mqm" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {!segment.target ? (
+                  <div style={{ padding: "12px 14px", borderRadius: 8, background: "rgba(255,255,255,0.02)", border: "1px dashed var(--border-medium)", textAlign: "center" }}>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                      Translate this segment first to perform an MQM Quality Audit.
+                    </span>
+                  </div>
+                ) : segment.mqmAccuracyScore === undefined || segment.mqmAccuracyScore === null ? (
+                  <div style={{ padding: "12px 14px", borderRadius: 8, background: "rgba(255,255,255,0.02)", border: "1px dashed var(--border-medium)", textAlign: "center" }}>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                      No MQM Audit score is available yet. Try re-translating this segment with context to trigger the audit.
+                    </span>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {/* Score Bar */}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(0,0,0,0.15)", border: "1px solid var(--border-subtle)", borderRadius: 8, padding: "8px 12px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-primary)" }}>MQM Accuracy Score:</span>
+                        <span style={{
+                          fontSize: 13, fontWeight: 800, fontFamily: "'IBM Plex Mono', monospace",
+                          color: segment.mqmAccuracyScore >= 90 ? "var(--emerald)" : segment.mqmAccuracyScore >= 70 ? "var(--text-amber)" : "var(--text-rose)"
+                        }}>
+                          {segment.mqmAccuracyScore}%
+                        </span>
+                      </div>
+                      <div style={{ width: 120, height: 6, background: "rgba(255,255,255,0.05)", borderRadius: 3, overflow: "hidden" }}>
+                        <div style={{
+                          width: `${segment.mqmAccuracyScore}%`,
+                          height: "100%",
+                          background: segment.mqmAccuracyScore >= 90 ? "var(--emerald)" : segment.mqmAccuracyScore >= 70 ? "var(--text-amber)" : "var(--text-rose)",
+                          borderRadius: 3
+                        }} />
+                      </div>
+                    </div>
+
+                    {/* AI Advisor Clarifications and Suggestions */}
+                    {segment.mqmReport?.improvementSuggestion && (
+                      <div style={{
+                        background: "rgba(59,130,246,0.05)",
+                        border: "1px solid rgba(59,130,246,0.2)",
+                        borderRadius: 8,
+                        padding: "10px 12px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 8
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <Sparkles style={{ width: 12, height: 12, color: "var(--accent)" }} />
+                          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                            AI Quality Suggestion to reach 90%+
+                          </span>
+                        </div>
+                        <p style={{ fontSize: 11.5, color: "var(--text-primary)", margin: 0, fontStyle: "italic" }}>
+                          "{segment.mqmReport.improvementSuggestion}"
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => handleAutoApplyMqmSuggestion(segment.mqmReport.improvementSuggestion)}
+                          className="ab ab-export"
+                          style={{
+                            alignSelf: "flex-start",
+                            height: 24,
+                            padding: "0 10px",
+                            fontSize: 10,
+                            fontWeight: 700,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4,
+                            marginTop: 2
+                          }}
+                        >
+                          Auto-Apply Prompt & Re-translate
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Clarifying Questions */}
+                    {segment.mqmReport?.clarifyingQuestions?.length > 0 && (
+                      <div style={{
+                        background: "rgba(245,158,11,0.03)",
+                        border: "1px solid rgba(245,158,11,0.15)",
+                        borderRadius: 8,
+                        padding: "10px 12px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 6
+                      }}>
+                        <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-amber)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                          🤔 Questions to Clarify Meaning
+                        </span>
+                        <ul style={{ margin: 0, paddingLeft: 16, fontSize: 11, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 4 }}>
+                          {segment.mqmReport.clarifyingQuestions.map((q, qidx) => (
+                            <li key={qidx}>{q}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Errors List */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)" }}>
+                        ISSUES DETECTED BY MQM AUDIT:
+                      </span>
+                      {(!segment.mqmReport?.errors || segment.mqmReport.errors.length === 0) ? (
+                        <div style={{ padding: "8px 12px", borderRadius: 6, background: "rgba(16,185,129,0.05)", border: "1px solid rgba(16,185,129,0.15)" }}>
+                          <span style={{ fontSize: 11, color: "var(--emerald)", fontWeight: 600 }}>
+                            ✓ Perfect quality! No errors found.
+                          </span>
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 150, overflowY: "auto" }}>
+                          {segment.mqmReport.errors.map((err, errIdx) => (
+                            <div key={errIdx} style={{
+                              padding: "8px 10px",
+                              borderRadius: 6,
+                              background: err.severity === "Critical" ? "rgba(239,68,68,0.05)" : "rgba(245,158,11,0.05)",
+                              border: err.severity === "Critical" ? "1px solid rgba(239,68,68,0.2)" : "1px solid rgba(245,158,11,0.2)",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 2
+                            }}>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                <span style={{ fontSize: 10.5, fontWeight: 700, color: err.severity === "Critical" ? "var(--text-rose)" : "var(--text-amber)" }}>
+                                  [{err.severity}] {err.category}
+                                </span>
+                                {err.snippet && (
+                                  <span style={{ fontSize: 9.5, fontFamily: "var(--font-mono)", background: "rgba(255,255,255,0.03)", padding: "1px 4px", borderRadius: 3, border: "1px solid var(--border-subtle)" }}>
+                                    "{err.snippet}"
+                                  </span>
+                                )}
+                              </div>
+                              <span style={{ fontSize: 10.5, color: "var(--text-muted)" }}>
+                                {err.explanation}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -177,7 +177,7 @@ export default function App() {
       setCellLocks(new Map(locks));
     });
 
-    socket.on("segment-updated", ({ segmentIndex, targetText, status, contextJira, contextDescription }) => {
+    socket.on("segment-updated", ({ segmentIndex, targetText, status, contextJira, contextDescription, mqmAccuracyScore, mqmReport }) => {
       setSegments((prev) =>
         prev.map((seg, idx) => {
           if (idx === segmentIndex) {
@@ -189,6 +189,8 @@ export default function App() {
             }
             if (contextJira !== undefined) updatedSeg.contextJira = contextJira;
             if (contextDescription !== undefined) updatedSeg.contextDescription = contextDescription;
+            if (mqmAccuracyScore !== undefined) updatedSeg.mqmAccuracyScore = mqmAccuracyScore;
+            if (mqmReport !== undefined) updatedSeg.mqmReport = mqmReport;
             return updatedSeg;
           }
           return seg;
@@ -771,7 +773,9 @@ export default function App() {
                 ),
                 provider: item.provider,
                 qaIssues: item.qaIssues || [],
-                fuzzyScore: item.fuzzyScore || null
+                fuzzyScore: item.fuzzyScore || null,
+                mqmAccuracyScore: item.mqmAccuracyScore !== undefined ? item.mqmAccuracyScore : 100,
+                mqmReport: item.mqmReport || null
               };
             }
           });
@@ -963,7 +967,9 @@ export default function App() {
                   contextDescription,
                   status: "translated",
                   verified: false,
-                  qaIssues: result.qaIssues || []
+                  qaIssues: result.qaIssues || [],
+                  mqmAccuracyScore: result.mqmAccuracyScore !== undefined ? result.mqmAccuracyScore : 100,
+                  mqmReport: result.mqmReport || null
                 }
               : segment
           )

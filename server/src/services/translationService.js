@@ -180,18 +180,42 @@ const translateSegments = async (segments, target, sourceLang, contextSettings) 
     }
   }
 
-  const results = segments.map((segment) => {
+  const results = await Promise.all(segments.map(async (segment) => {
     const tmEntry = tmMap[segment.source];
     const targetText = tmEntry ? tmEntry.target_text : "";
     const provider = tmEntry && tmEntry.provider ? tmEntry.provider : "TM Database";
+
+    let mqmScore = 100;
+    let mqmReportData = null;
+
+    if (targetText) {
+      const { evaluateTranslationMQM } = require("./mqmService");
+      try {
+        const evaluation = await evaluateTranslationMQM({
+          sourceText: segment.source,
+          translatedText: targetText,
+          targetLang: target,
+          sourceLang: actualSourceLang,
+          contextJira: segment.contextJira || "",
+          contextDescription: segment.contextDescription || "",
+          contextSettings
+        });
+        mqmScore = evaluation.accuracyScore;
+        mqmReportData = evaluation;
+      } catch (err) {
+        console.error("Failed to run MQM during batch:", err);
+      }
+    }
 
     return {
       id: segment.id,
       translated: targetText,
       provider: provider,
-      qaIssues: runQaChecks(segment.source, targetText)
+      qaIssues: runQaChecks(segment.source, targetText),
+      mqmAccuracyScore: mqmScore,
+      mqmReport: mqmReportData
     };
-  });
+  }));
 
   return { results };
 };
@@ -224,9 +248,32 @@ const translateSegmentWithContext = async ({
 
   const cleanedTranslation = ensureEnglishNumerals(translated);
 
+  // Evaluate MQM
+  const { evaluateTranslationMQM } = require("./mqmService");
+  let mqmScore = 100;
+  let mqmReportData = null;
+
+  try {
+    const evaluation = await evaluateTranslationMQM({
+      sourceText,
+      translatedText: cleanedTranslation,
+      targetLang,
+      sourceLang: actualSourceLang,
+      contextJira,
+      contextDescription,
+      contextSettings
+    });
+    mqmScore = evaluation.accuracyScore;
+    mqmReportData = evaluation;
+  } catch (err) {
+    console.error("Failed to evaluate MQM with context:", err);
+  }
+
   return {
     translated: cleanedTranslation,
-    qaIssues: runQaChecks(sourceText, cleanedTranslation)
+    qaIssues: runQaChecks(sourceText, cleanedTranslation),
+    mqmAccuracyScore: mqmScore,
+    mqmReport: mqmReportData
   };
 };
 

@@ -390,7 +390,9 @@ apiRouter.get("/documents/:id", checkAuth, async (request, response) => {
       target: seg.target_text || "",
       status: seg.status,
       contextJira: seg.context_jira || "",
-      contextDescription: seg.context_description || ""
+      contextDescription: seg.context_description || "",
+      mqmAccuracyScore: seg.mqm_accuracy_score !== undefined && seg.mqm_accuracy_score !== null ? seg.mqm_accuracy_score : 100,
+      mqmReport: seg.mqm_report || null
     }));
 
     response.json({
@@ -426,6 +428,40 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
     if (contextJira !== undefined) updateFields.context_jira = contextJira;
     if (contextDescription !== undefined) updateFields.context_description = contextDescription;
 
+    let mqmScore = undefined;
+    let mqmReport = undefined;
+
+    if (targetText !== undefined) {
+      // Fetch the source text and context first to evaluate MQM accurately
+      const { data: dbSegment } = await supabase
+        .from("document_segments")
+        .select("source_text, context_jira, context_description")
+        .eq("document_id", doc.id)
+        .eq("segment_index", segmentIndex)
+        .single();
+      
+      if (dbSegment) {
+        const { evaluateTranslationMQM } = require("../services/mqmService");
+        try {
+          const evaluation = await evaluateTranslationMQM({
+            sourceText: dbSegment.source_text,
+            translatedText: targetText,
+            targetLang: doc.target_lang,
+            sourceLang: doc.source_lang,
+            contextJira: contextJira !== undefined ? contextJira : dbSegment.context_jira,
+            contextDescription: contextDescription !== undefined ? contextDescription : dbSegment.context_description,
+            contextSettings: null
+          });
+          mqmScore = evaluation.accuracyScore;
+          mqmReport = evaluation;
+          updateFields.mqm_accuracy_score = mqmScore;
+          updateFields.mqm_report = mqmReport;
+        } catch (err) {
+          console.error("Failed to run MQM on manual update:", err);
+        }
+      }
+    }
+
     const { error: updateError } = await supabase
       .from("document_segments")
       .update(updateFields)
@@ -447,11 +483,17 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
         status: status || "translated",
         contextJira,
         contextDescription,
+        mqmAccuracyScore: mqmScore,
+        mqmReport,
         updatedBy: request.user.email
       });
     }
 
-    response.json({ success: true });
+    response.json({ 
+      success: true,
+      mqmAccuracyScore: mqmScore,
+      mqmReport
+    });
   } catch (error) {
     console.error(error);
     response.status(500).json({ error: "Internal server error." });
@@ -539,6 +581,8 @@ apiRouter.post(
           target_text: translationResult.translated,
           context_jira: contextJira || null,
           context_description: contextDescription || null,
+          mqm_accuracy_score: translationResult.mqmAccuracyScore !== undefined ? translationResult.mqmAccuracyScore : null,
+          mqm_report: translationResult.mqmReport || null,
           status: "translated",
           updated_at: new Date().toISOString()
         })
@@ -560,6 +604,8 @@ apiRouter.post(
           status: "translated",
           contextJira,
           contextDescription,
+          mqmAccuracyScore: translationResult.mqmAccuracyScore,
+          mqmReport: translationResult.mqmReport,
           updatedBy: request.user.email
         });
       }
@@ -567,7 +613,9 @@ apiRouter.post(
       response.json({
         success: true,
         translated: translationResult.translated,
-        qaIssues: translationResult.qaIssues
+        qaIssues: translationResult.qaIssues,
+        mqmAccuracyScore: translationResult.mqmAccuracyScore,
+        mqmReport: translationResult.mqmReport
       });
     } catch (error) {
       console.error("Translate context endpoint exception:", error);
