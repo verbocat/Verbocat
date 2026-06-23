@@ -155,7 +155,6 @@ export const AdminDashboard = ({ onClose, theme }) => {
   );
 
   const isAdmin = currentUser?.role === "admin";
-  const isManager = currentUser?.role === "manager";
 
   return (
     <div className="fixed inset-0 z-[200] flex flex-col bg-[#05070c]/95 backdrop-blur-xl text-slate-100 overflow-hidden font-sans">
@@ -351,10 +350,9 @@ export const AdminDashboard = ({ onClose, theme }) => {
                         {/* Role Badge */}
                         <td className="px-4 py-4">
                           <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${
-                            user.role === "admin" ? "bg-rose-500/10 border border-rose-500/20 text-rose-400" :
-                            user.role === "manager" ? "bg-amber-500/10 border border-amber-500/20 text-amber-400" :
-                            user.role === "verbolabs_staff" ? "bg-sky-500/10 border border-sky-500/20 text-sky-400" :
-                            "bg-slate-500/15 border border-white/5 text-slate-400"
+                             user.role === "admin" ? "bg-rose-500/10 border border-rose-500/20 text-rose-400" :
+                             user.role === "verbolabs_staff" ? "bg-sky-500/10 border border-sky-500/20 text-sky-400" :
+                             "bg-slate-500/15 border border-white/5 text-slate-400"
                           }`}>
                             {user.role.replace("_", " ")}
                           </span>
@@ -522,10 +520,9 @@ export const AdminDashboard = ({ onClose, theme }) => {
                   disabled={!isAdmin}
                   className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-slate-100 outline-none transition-all focus:border-indigo-500/50 disabled:opacity-50 text-sm cursor-pointer"
                 >
-                  <option value="linguist">Linguist</option>
-                  <option value="verbolabs_staff">VerboLabs Staff</option>
-                  <option value="manager">Manager</option>
-                  <option value="admin">Administrator</option>
+                   <option value="linguist">Linguist</option>
+                   <option value="verbolabs_staff">VerboLabs Staff</option>
+                   <option value="admin">Administrator</option>
                 </select>
               </div>
 

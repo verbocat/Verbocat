@@ -276,7 +276,7 @@ async function verifyDocumentAccess(request, response, requiredPermission = "rea
   const userId = request.user.id;
   const role = request.profile.role;
 
-  const isStaff = ["admin", "manager", "verbolabs_staff"].includes(role);
+  const isStaff = ["admin", "verbolabs_staff"].includes(role);
 
   // Fetch document owner
   const { data: doc, error: docError } = await supabase
@@ -367,7 +367,7 @@ apiRouter.get("/documents/:id", checkAuth, async (request, response) => {
     }
 
     // Determine current user's permission level ('read' or 'write')
-    const isStaff = ["admin", "manager", "verbolabs_staff"].includes(request.profile.role);
+    const isStaff = ["admin", "verbolabs_staff"].includes(request.profile.role);
     let userPermission = "read";
     if (isStaff || doc.owner_id === request.user.id) {
       userPermission = "write";
@@ -639,7 +639,7 @@ apiRouter.get("/documents/:id/access", checkAuth, async (request, response) => {
     const doc = await verifyDocumentAccess(request, response, "read");
     if (!doc) return;
 
-    const isStaff = ["admin", "manager", "verbolabs_staff"].includes(request.profile.role);
+    const isStaff = ["admin", "verbolabs_staff"].includes(request.profile.role);
     if (!isStaff && doc.owner_id !== request.user.id) {
       return response.status(403).json({ error: "Access management restricted to owner or staff." });
     }
@@ -681,7 +681,7 @@ apiRouter.post("/documents/:id/access", checkAuth, async (request, response) => 
     const doc = await verifyDocumentAccess(request, response, "read");
     if (!doc) return;
 
-    const isStaff = ["admin", "manager", "verbolabs_staff"].includes(request.profile.role);
+    const isStaff = ["admin", "verbolabs_staff"].includes(request.profile.role);
     if (!isStaff && doc.owner_id !== request.user.id) {
       return response.status(403).json({ error: "Access management restricted to owner or staff." });
     }
@@ -731,7 +731,7 @@ apiRouter.delete("/documents/:id/access/:userId", checkAuth, async (request, res
     const doc = await verifyDocumentAccess(request, response, "read");
     if (!doc) return;
 
-    const isStaff = ["admin", "manager", "verbolabs_staff"].includes(request.profile.role);
+    const isStaff = ["admin", "verbolabs_staff"].includes(request.profile.role);
     if (!isStaff && doc.owner_id !== request.user.id) {
       return response.status(403).json({ error: "Access management restricted to owner or staff." });
     }
@@ -866,7 +866,7 @@ apiRouter.get("/documents/:id/access-requests", checkAuth, async (request, respo
     const doc = await verifyDocumentAccess(request, response, "read");
     if (!doc) return;
 
-    const isStaff = ["admin", "manager", "verbolabs_staff"].includes(request.profile.role);
+    const isStaff = ["admin", "verbolabs_staff"].includes(request.profile.role);
     if (!isStaff && doc.owner_id !== request.user.id) {
       return response.status(403).json({ error: "Access management restricted to owner or staff." });
     }
@@ -904,7 +904,7 @@ apiRouter.post("/documents/:id/access-requests/:requestId/respond", checkAuth, a
     const doc = await verifyDocumentAccess(request, response, "read");
     if (!doc) return;
 
-    const isStaff = ["admin", "manager", "verbolabs_staff"].includes(request.profile.role);
+    const isStaff = ["admin", "verbolabs_staff"].includes(request.profile.role);
     if (!isStaff && doc.owner_id !== request.user.id) {
       return response.status(403).json({ error: "Access management restricted to owner or staff." });
     }

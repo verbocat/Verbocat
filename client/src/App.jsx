@@ -104,7 +104,7 @@ export default function App() {
       showToast(`Loaded collaborative document: ${doc.name}`);
 
       // Fetch pending requests if the user is owner or staff
-      const isOwnerOrStaff = doc.ownerId === user?.id || ["admin", "manager", "verbolabs_staff"].includes(user?.role);
+      const isOwnerOrStaff = doc.ownerId === user?.id || ["admin", "verbolabs_staff"].includes(user?.role);
       if (isOwnerOrStaff) {
         try {
           const reqs = await fetchAccessRequests(documentId);
@@ -1903,7 +1903,7 @@ export default function App() {
         onUpload={handleUpload}
         onOpenSettings={() => setShowSettingsModal(true)}
         collaborators={collaborators}
-        onOpenShare={ownerId && (ownerId === user?.id || ["admin", "manager", "verbolabs_staff"].includes(user?.role)) ? () => setShowShareModal(true) : null}
+        onOpenShare={ownerId && (ownerId === user?.id || ["admin", "verbolabs_staff"].includes(user?.role)) ? () => setShowShareModal(true) : null}
         onTeleport={handleTeleport}
       />
 

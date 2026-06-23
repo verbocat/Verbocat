@@ -6,7 +6,7 @@ const adminRouter = express.Router();
 
 // Apply checkAuth and checkRole guards globally on admin endpoints (Admin & Manager only)
 adminRouter.use(checkAuth);
-adminRouter.use(checkRole(["admin", "manager"]));
+adminRouter.use(checkRole(["admin"]));
 
 // 1. List All Registered Users
 adminRouter.get("/users", async (request, response) => {
@@ -42,17 +42,7 @@ adminRouter.put("/users/:id", async (request, response) => {
       return response.status(404).json({ error: "User account not found" });
     }
 
-    // Role-based validation checks
-    if (currentUserRole !== "admin") {
-      // Managers cannot change user roles
-      if (role && role !== targetUser.role) {
-        return response.status(403).json({ error: "Only Administrators can modify user roles" });
-      }
-      // Managers cannot change account status to suspend/unsuspend
-      if (status && status !== targetUser.status) {
-        return response.status(403).json({ error: "Only Administrators can suspend user accounts" });
-      }
-    }
+    // Only Administrators can access this route now, so no manager checks are needed
 
     // Prepare update parameters
     const updateData = {};

@@ -60,7 +60,7 @@ function initSocket(server) {
     socket.join(`user:${socket.user.id}`);
 
     // Join staff group room if they are staff
-    const isStaff = ["admin", "manager", "verbolabs_staff"].includes(socket.profile.role);
+    const isStaff = ["admin", "verbolabs_staff"].includes(socket.profile.role);
     if (isStaff) {
       socket.join("verbolabs_staff");
     }
@@ -71,7 +71,7 @@ function initSocket(server) {
         if (!documentId) return;
 
         // Verify document permissions
-        const isStaff = ["admin", "manager", "verbolabs_staff"].includes(socket.profile.role);
+        const isStaff = ["admin", "verbolabs_staff"].includes(socket.profile.role);
         const { data: doc, error: docError } = await supabase
           .from("documents")
           .select("owner_id")

@@ -26,7 +26,7 @@ export const Header = ({
   userRole, onOpenAdmin, creditsAllowed, creditsConsumed, onLogout, onUpload,
   collaborators, onOpenShare, onTeleport
 }) => {
-  const isManager = userRole === "admin" || userRole === "manager";
+  const isAdmin = userRole === "admin";
   const hasFile = segmentsCount > 0;
   const srcLang = LANGUAGES.find(l => l.code === sourceLanguage);
   const tgtLang = LANGUAGES.find(l => l.code === targetLanguage);
@@ -113,7 +113,7 @@ export const Header = ({
         </NavBtn>
 
         {/* Admin Panel — NOT "Team" */}
-        {isManager && onOpenAdmin && (
+        {isAdmin && onOpenAdmin && (
           <NavBtn onClick={onOpenAdmin} title="Admin Panel">
             <LayoutDashboard style={{ width: 13, height: 13 }} />
             <span>Admin Panel</span>
