@@ -1,0 +1,967 @@
+[
+  {
+    "Index": 0,
+    "English": "Register",
+    "Hindi": "__SEG_0__"
+  },
+  {
+    "Index": 1,
+    "English": "Login",
+    "Hindi": "पंजीकरण"
+  },
+  {
+    "Index": 2,
+    "English": "Personal",
+    "Hindi": "लॉगिन"
+  },
+  {
+    "Index": 3,
+    "English": "Accounts",
+    "Hindi": "व्यक्तिगत"
+  },
+  {
+    "Index": 4,
+    "English": "Wallet",
+    "Hindi": "खाते"
+  },
+  {
+    "Index": 5,
+    "English": "Savings Account",
+    "Hindi": "वॉलेट"
+  },
+  {
+    "Index": 6,
+    "English": "Current Account",
+    "Hindi": "बचत खाता"
+  },
+  {
+    "Index": 7,
+    "English": "Plans & Offers",
+    "Hindi": "वर्तमान खाता"
+  },
+  {
+    "Index": 8,
+    "English": "Rewards Hub",
+    "Hindi": "योजनाएँ और ऑफ़र"
+  },
+  {
+    "Index": 9,
+    "English": "Rewards 123",
+    "Hindi": "इनाम हब"
+  },
+  {
+    "Index": 10,
+    "English": "Suraksha Account",
+    "Hindi": "इनाम 123"
+  },
+  {
+    "Index": 11,
+    "English": "Traveller's Plan",
+    "Hindi": "सुरक्षा खाता"
+  },
+  {
+    "Index": 12,
+    "English": "Safety & Security",
+    "Hindi": "यात्री योजना"
+  },
+  {
+    "Index": 13,
+    "English": "Safe Pay",
+    "Hindi": "सुरक्षा और संरक्षा"
+  },
+  {
+    "Index": 14,
+    "English": "Fraud Alarm",
+    "Hindi": "सुरक्षित भुगतान"
+  },
+  {
+    "Index": 15,
+    "English": "Transparent Banking",
+    "Hindi": "धोखाधड़ी अलार्म"
+  },
+  {
+    "Index": 16,
+    "English": "WhatsApp Banking",
+    "Hindi": "पारदर्शी बैंकिंग"
+  },
+  {
+    "Index": 17,
+    "English": "Payments",
+    "Hindi": "व्हाट्सएप बैंकिंग"
+  },
+  {
+    "Index": 18,
+    "English": "Automatic Payments",
+    "Hindi": "भुगतान"
+  },
+  {
+    "Index": 19,
+    "English": "Recharges",
+    "Hindi": "स्वचालित भुगतान"
+  },
+  {
+    "Index": 20,
+    "English": "Utility Bill Payments",
+    "Hindi": "रिचार्ज"
+  },
+  {
+    "Index": 21,
+    "English": "UPI",
+    "Hindi": "यूटिलिटी बिल भुगतान"
+  },
+  {
+    "Index": 22,
+    "English": "Send Money",
+    "Hindi": "UPI"
+  },
+  {
+    "Index": 23,
+    "English": "Insurance & Lending",
+    "Hindi": "पैसे भेजें"
+  },
+  {
+    "Index": 24,
+    "English": "Group Health Shield 360",
+    "Hindi": "बीमा और ऋण"
+  },
+  {
+    "Index": 25,
+    "English": "Personal Loan",
+    "Hindi": "समूह स्वास्थ्य सुरक्षा 360"
+  },
+  {
+    "Index": 26,
+    "English": "Insta EMI Card",
+    "Hindi": "व्यक्तिगत ऋण"
+  },
+  {
+    "Index": 27,
+    "English": "Investment",
+    "Hindi": "इंस्टा EMI कार्ड"
+  },
+  {
+    "Index": 28,
+    "English": "Fixed Deposit",
+    "Hindi": "निवेश"
+  },
+  {
+    "Index": 29,
+    "English": "Digital Gold",
+    "Hindi": "फिक्स्ड डिपॉजिट"
+  },
+  {
+    "Index": 30,
+    "English": "Settings & More",
+    "Hindi": "डिजिटल गोल्ड"
+  },
+  {
+    "Index": 31,
+    "English": "Transaction History",
+    "Hindi": "सेटिंग्स और अधिक"
+  },
+  {
+    "Index": 32,
+    "English": "View Profile",
+    "Hindi": "लेन-देन इतिहास"
+  },
+  {
+    "Index": 33,
+    "English": "Check Balance",
+    "Hindi": "प्रोफ़ाइल देखें"
+  },
+  {
+    "Index": 34,
+    "English": "Buy Now",
+    "Hindi": "बैलेंस चेक करें"
+  },
+  {
+    "Index": 35,
+    "English": "NCMC Card",
+    "Hindi": "अभी खरीदें"
+  },
+  {
+    "Index": 36,
+    "English": "Debit Card",
+    "Hindi": "NCMC कार्ड"
+  },
+  {
+    "Index": 37,
+    "English": "FASTag",
+    "Hindi": "डेबिट कार्ड"
+  },
+  {
+    "Index": 38,
+    "English": "Smartwatch",
+    "Hindi": "FASTag"
+  },
+  {
+    "Index": 39,
+    "English": "Business",
+    "Hindi": "स्मार्टवॉच"
+  },
+  {
+    "Index": 40,
+    "English": "Partner With Us",
+    "Hindi": "व्यापार"
+  },
+  {
+    "Index": 41,
+    "English": "Become a Retailer",
+    "Hindi": "हमारे साथ साझेदारी करें"
+  },
+  {
+    "Index": 42,
+    "English": "Merchant",
+    "Hindi": "एक रिटेलर बनें"
+  },
+  {
+    "Index": 43,
+    "English": "Cash Management System",
+    "Hindi": "व्यापारी"
+  },
+  {
+    "Index": 44,
+    "English": "Salary Solutions",
+    "Hindi": "नकद प्रबंधन प्रणाली"
+  },
+  {
+    "Index": 45,
+    "English": "Business Loan",
+    "Hindi": "वेतन समाधान"
+  },
+  {
+    "Index": 46,
+    "English": "Company",
+    "Hindi": "व्यापार ऋण"
+  },
+  {
+    "Index": 47,
+    "English": "Get To Know Us",
+    "Hindi": "कंपनी"
+  },
+  {
+    "Index": 48,
+    "English": "About Us",
+    "Hindi": "हमारे बारे में जानें"
+  },
+  {
+    "Index": 49,
+    "English": "Leadership Team",
+    "Hindi": "हमारे बारे में"
+  },
+  {
+    "Index": 50,
+    "English": "Awards, News & Blogs",
+    "Hindi": "नेतृत्व टीम"
+  },
+  {
+    "Index": 51,
+    "English": "Help",
+    "Hindi": "पुरस्कार, समाचार और ब्लॉग"
+  },
+  {
+    "Index": 52,
+    "English": "Need Assistance?",
+    "Hindi": "मदद"
+  },
+  {
+    "Index": 53,
+    "English": "Reach Out To Us",
+    "Hindi": "क्या आपको सहायता चाहिए?"
+  },
+  {
+    "Index": 54,
+    "English": "FAQs",
+    "Hindi": "हमसे संपर्क करें"
+  },
+  {
+    "Index": 55,
+    "English": "Charges & Fees",
+    "Hindi": "अक्सर पूछे जाने वाले प्रश्न"
+  },
+  {
+    "Index": 56,
+    "English": "Banking Points",
+    "Hindi": "शुल्क और फीस"
+  },
+  {
+    "Index": 57,
+    "English": "Register",
+    "Hindi": "बैंकिंग बिंदु"
+  },
+  {
+    "Index": 58,
+    "English": "Login",
+    "Hindi": "पंजीकरण"
+  },
+  {
+    "Index": 59,
+    "English": "Our Leadership Team",
+    "Hindi": "लॉगिन"
+  },
+  {
+    "Index": 60,
+    "English": "Meet our Executive Committee of leaders who guide ",
+    "Hindi": "हमारी नेतृत्व टीम"
+  },
+  {
+    "Index": 61,
+    "English": "Anubrata Biswas",
+    "Hindi": "हमारे कार्यकारी समिति के नेताओं से मिलें जो बैंक क"
+  },
+  {
+    "Index": 62,
+    "English": "MD and CEO, Airtel Payments Bank",
+    "Hindi": "अनुबरत बिस्वास"
+  },
+  {
+    "Index": 63,
+    "English": "Anubrata Biswas, Managing Director and Chief Execu",
+    "Hindi": "MD और CEO, एयरटेल पेमेंट्स बैंक"
+  },
+  {
+    "Index": 64,
+    "English": "Under his leadership, Airtel Payments Bank has eme",
+    "Hindi": "अनुबरत बिस्वास, एयरटेल पेमेंट्स बैंक के प्रबंध निद"
+  },
+  {
+    "Index": 65,
+    "English": "Airtel Payments Bank is also the largest micro-cas",
+    "Hindi": "एयरटेल पेमेंट्स बैंक सबसे बड़ा माइक्रो-कैश B2B खिल"
+  },
+  {
+    "Index": 66,
+    "English": "Anubrata started his banking career with ICICI Ban",
+    "Hindi": "ICICI बैंक लिमिटेड के साथ अपने अंतिम असाइनमेंट में"
+  },
+  {
+    "Index": 67,
+    "English": "In his last assignment with ICICI Bank Ltd, he wor",
+    "Hindi": "वह प्रमुख उद्योग निकायों में सेवा करते हैं और वर्त"
+  },
+  {
+    "Index": 68,
+    "English": "He serves on leading industry bodies and is curren",
+    "Hindi": "अनुबरत जादवपुर विश्वविद्यालय के पूर्व छात्र हैं और"
+  },
+  {
+    "Index": 69,
+    "English": "Anubrata is an alumnus of Jadavpur University and ",
+    "Hindi": "गणेश आनंदनारायणन"
+  },
+  {
+    "Index": 70,
+    "English": "Ganesh Ananthanarayanan",
+    "Hindi": "कार्यकारी निदेशक-व्यापार संचालन, एयरटेल पेमेंट्स ब"
+  },
+  {
+    "Index": 71,
+    "English": "Executive Director-Business Operations, Airtel Pay",
+    "Hindi": "उनके नेतृत्व में, बैंक ने अपनी डिजिटल बैंकिंग क्षम"
+  },
+  {
+    "Index": 72,
+    "English": "Ganesh Ananthanarayanan is the Executive Director ",
+    "Hindi": "25 वर्षों से अधिक के अनुभव के साथ, गणेश उन पहलों क"
+  },
+  {
+    "Index": 73,
+    "English": "Under his leadership, the Bank has strengthened it",
+    "Hindi": "एयरटेल पेमेंट्स बैंक में शामिल होने से पहले, उन्हो"
+  },
+  {
+    "Index": 74,
+    "English": "Championing over 25 years of experience in driving",
+    "Hindi": "गणेश ने IIT खड़गपुर से BTech पूरा किया है और S.P. "
+  },
+  {
+    "Index": 75,
+    "English": "Prior to joining Airtel Payments Bank, he served a",
+    "Hindi": "अनुज बंसल"
+  },
+  {
+    "Index": 76,
+    "English": "Ganesh completed his BTech from IIT Kharagpur and ",
+    "Hindi": "मुख्य वित्तीय अधिकारी, एयरटेल पेमेंट्स बैंक"
+  },
+  {
+    "Index": 77,
+    "English": "Anuj Bansal",
+    "Hindi": "अनुज बंसल एयरटेल पेमेंट्स बैंक में मुख्य वित्तीय अ"
+  },
+  {
+    "Index": 78,
+    "English": "Chief Financial Officer, Airtel Payments Bank",
+    "Hindi": "उन्हें दिसंबर 2020 में CFO इंडिया द्वारा भारत के '"
+  },
+  {
+    "Index": 79,
+    "English": "Anuj Bansal is the Chief Financial Officer (CFO) a",
+    "Hindi": "अनुज एक चार्टर्ड एकाउंटेंट हैं और उन्होंने दिल्ली "
+  },
+  {
+    "Index": 80,
+    "English": "With close to 25 years of extensive experience acr",
+    "Hindi": "श्रुति ठाकुराल"
+  },
+  {
+    "Index": 81,
+    "English": "He has been recognised amongst the ‘Top 100 financ",
+    "Hindi": "मुख्य मानव संसाधन अधिकारी, एयरटेल पेमेंट्स बैंक"
+  },
+  {
+    "Index": 82,
+    "English": "Anuj is a Chartered Accountant and an alumnus of S",
+    "Hindi": "श्रुति ठाकुराल एयरटेल पेमेंट्स बैंक में मुख्य मानव"
+  },
+  {
+    "Index": 83,
+    "English": "Shruti Thakral",
+    "Hindi": "CHRO के रूप में, श्रुति एयरटेल पेमेंट्स बैंक को एक"
+  },
+  {
+    "Index": 84,
+    "English": "Chief Human Resource Officer, Airtel Payments Bank",
+    "Hindi": "श्रुति एयरटेल समूह में एक नेता के रूप में व्यापक अ"
+  },
+  {
+    "Index": 85,
+    "English": "Shruti Thakral is the Chief Human Resources Office",
+    "Hindi": "पिनाक चक्रवर्ती"
+  },
+  {
+    "Index": 86,
+    "English": "As CHRO, Shruti is committed to making Airtel Paym",
+    "Hindi": "मुख्य सूचना अधिकारी, एयरटेल पेमेंट्स बैंकपिनाक चक्"
+  },
+  {
+    "Index": 87,
+    "English": "Shruti has extensive experience as a leader within",
+    "Hindi": "पिनाक मजबूत तकनीकी शासन को लागू करने और विश्वस्तरी"
+  },
+  {
+    "Index": 88,
+    "English": "Pinak Chakraborty",
+    "Hindi": "इंजीनियरिंग नेतृत्व और लागू अनुसंधान में 22 वर्षों"
+  },
+  {
+    "Index": 89,
+    "English": "Chief Information Officer, Airtel Payments Bank",
+    "Hindi": "पिनाक ने एनआईटी सिलचर से कंप्यूटर विज्ञान और इंजीन"
+  },
+  {
+    "Index": 90,
+    "English": "Pinak Chakraborty is the Chief Information Officer",
+    "Hindi": "प्रणव कौशल"
+  },
+  {
+    "Index": 91,
+    "English": "Pinak also leads initiatives to implement robust t",
+    "Hindi": "मुख्य बिक्री और वितरण अधिकारी, एयरटेल पेमेंट्स बैं"
+  },
+  {
+    "Index": 92,
+    "English": "With over 22 years of experience in engineering le",
+    "Hindi": "प्रणव एयरटेल पेमेंट्स बैंक में मुख्य बिक्री और वित"
+  },
+  {
+    "Index": 93,
+    "English": "Pinak did his Bachelor of Engineering in Computer ",
+    "Hindi": "बिक्री, विपणन, और उत्पाद प्रबंधन में 20 वर्षों से "
+  },
+  {
+    "Index": 94,
+    "English": "Pranav Kaushal",
+    "Hindi": "प्रणव INSEAD के पूर्व छात्र हैं, जहाँ उन्होंने अपन"
+  },
+  {
+    "Index": 95,
+    "English": "Chief Sales & Distribution Officer, Airtel Payment",
+    "Hindi": "दीपक आहूजा"
+  },
+  {
+    "Index": 96,
+    "English": "Pranav is the Chief Sales & Distribution Officer a",
+    "Hindi": "मुख्य आंतरिक लेखा परीक्षक, एयरटेल पेमेंट्स बैंक"
+  },
+  {
+    "Index": 97,
+    "English": "With over 20 years of expertise across sales, mark",
+    "Hindi": "दीपक आहूजा एयरटेल पेमेंट्स बैंक के लिए मुख्य आंतरि"
+  },
+  {
+    "Index": 98,
+    "English": "Pranav is an alumnus of INSEAD, where he completed",
+    "Hindi": "दो दशकों से अधिक के विविध बैंकिंग अनुभव के साथ, दी"
+  },
+  {
+    "Index": 99,
+    "English": "Deepak Ahuja",
+    "Hindi": "दीपक द इंस्टीट्यूट ऑफ इंटरनल ऑडिटर्स इंक (यूएसए) स"
+  },
+  {
+    "Index": 100,
+    "English": "Chief Internal Auditor, Airtel Payments Bank",
+    "Hindi": "अमर कुमार काकर्लापुडी"
+  },
+  {
+    "Index": 101,
+    "English": "Deepak Ahuja is the Chief Internal Auditor for Air",
+    "Hindi": "मुख्य अनुपालन अधिकारी, एयरटेल पेमेंट्स बैंकअमर कुम"
+  },
+  {
+    "Index": 102,
+    "English": "With over two decades of diverse banking experienc",
+    "Hindi": "अमर बैंक के लिए मुख्य और गैर-मुख्य अनुपालन आवश्यकत"
+  },
+  {
+    "Index": 103,
+    "English": "Deepak is a Certified Internal Auditor (CIA) from ",
+    "Hindi": "एयरटेल पेमेंट्स बैंक में शामिल होने से पहले, वह उत"
+  },
+  {
+    "Index": 104,
+    "English": "Amar Kumar Kakarlapudi",
+    "Hindi": "अनुपालन, नियामक रिपोर्टिंग, एएमएल/KYC, और डेटा सुर"
+  },
+  {
+    "Index": 105,
+    "English": "Chief Compliance Officer, Airtel Payments Bank",
+    "Hindi": "हनी मदान"
+  },
+  {
+    "Index": 106,
+    "English": "Amar Kumar Kakarlapudi is the Chief Compliance Off",
+    "Hindi": "व्यवसाय प्रक्रिया प्रमुख, एयरटेल पेमेंट्स बैंकहनी "
+  },
+  {
+    "Index": 107,
+    "English": "Amar serves as a key partner for the Bank in meeti",
+    "Hindi": "उनकी नेतृत्व शैली को अंतर्दृष्टियों को सार्थक कार्"
+  },
+  {
+    "Index": 108,
+    "English": "Amar has over 24 years of experience in the bankin",
+    "Hindi": "इस अनुभव ने न केवल ग्राहक अनुभव कार्यों को स्केल क"
+  },
+  {
+    "Index": 109,
+    "English": "Prior to joining Airtel Payments Bank he was headi",
+    "Hindi": "हनी ने ISB, NIIT से अपने कार्यकारी शिक्षा को पूरा "
+  },
+  {
+    "Index": 110,
+    "English": "Known for his deep expertise in compliance, regula",
+    "Hindi": "पूजा सबलोक"
+  },
+  {
+    "Index": 111,
+    "English": "Honey Madaan",
+    "Hindi": "मुख्य विपणन अधिकारी, एयरटेल पेमेंट्स बैंक"
+  },
+  {
+    "Index": 112,
+    "English": "Business Process Head, Airtel Payments Bank",
+    "Hindi": "पूजा सबलोक एयरटेल पेमेंट्स बैंक में मुख्य विपणन अध"
+  },
+  {
+    "Index": 113,
+    "English": "Honey Madaan is a seasoned leader with over 25 yea",
+    "Hindi": "अपने कार्य में, पूजा बैंक की ब्रांड रणनीति, ग्राहक"
+  },
+  {
+    "Index": 114,
+    "English": "She leverages her expertise to drive innovation, e",
+    "Hindi": "पूजा अपनी रणनीतिक सोच, डेटा-आधारित दृष्टिकोण, और उ"
+  },
+  {
+    "Index": 115,
+    "English": "Her leadership style is characterized by turning i",
+    "Hindi": "एयरटेल पेमेंट्स बैंक में शामिल होने से पहले, पूजा "
+  },
+  {
+    "Index": 116,
+    "English": "Prior to joining Airtel Payments Bank, Honey serve",
+    "Hindi": "पूजा INSEAD की पूर्व छात्रा हैं, जहाँ उन्होंने अपन"
+  },
+  {
+    "Index": 117,
+    "English": "This experience not only honed her skills in scali",
+    "Hindi": "पूजा सिंह"
+  },
+  {
+    "Index": 118,
+    "English": "Honey has completed her executive education from I",
+    "Hindi": "मुख्य जोखिम अधिकारी, एयरटेल पेमेंट्स बैंक"
+  },
+  {
+    "Index": 119,
+    "English": "Pooja Sablok",
+    "Hindi": "पूजा सिंह एयरटेल पेमेंट्स बैंक में जोखिम कार्य का "
+  },
+  {
+    "Index": 120,
+    "English": "Chief Marketing Officer, Airtel Payments Bank",
+    "Hindi": "बैंकिंग उद्योग में जोखिम प्रबंधन, उत्पाद प्रबंधन, "
+  },
+  {
+    "Index": 121,
+    "English": "Pooja Sablok is the Chief Marketing Officer at Air",
+    "Hindi": "पूजा अपने कार्य में उत्पाद और लोगों के प्रबंधन का "
+  },
+  {
+    "Index": 122,
+    "English": "In her role, Pooja leads the Bank’s brand strategy",
+    "Hindi": "पूजा के पास प्रबंधन विकास संस्थान से MBA की डिग्री"
+  },
+  {
+    "Index": 123,
+    "English": "Pooja is known for her strategic thinking, data-le",
+    "Hindi": "भुगतान"
+  },
+  {
+    "Index": 124,
+    "English": "Prior to joining Airtel Payments Bank, Pooja held ",
+    "Hindi": "FASTag"
+  },
+  {
+    "Index": 125,
+    "English": "Pooja is an alumna of INSEAD, where she completed ",
+    "Hindi": "कार्ड"
+  },
+  {
+    "Index": 126,
+    "English": "Pooja Singh",
+    "Hindi": "वियरेबल्स"
+  },
+  {
+    "Index": 127,
+    "English": "Chief Risk Officer, Airtel Payments Bank",
+    "Hindi": "स्वचालित भुगतान"
+  },
+  {
+    "Index": 128,
+    "English": "Pooja Singh leads the Risk function at Airtel Paym",
+    "Hindi": "वित्तीय सेवाएँ"
+  },
+  {
+    "Index": 129,
+    "English": "With over 15 years of cross-functional experience ",
+    "Hindi": "डिजीगोल्ड"
+  },
+  {
+    "Index": 130,
+    "English": "Pooja brings broad experience across product and p",
+    "Hindi": "फिक्स्ड डिपॉजिट"
+  },
+  {
+    "Index": 131,
+    "English": "Pooja holds an MBA degree from the Management Deve",
+    "Hindi": "समूह स्वास्थ्य सुरक्षा 360"
+  },
+  {
+    "Index": 132,
+    "English": "Payments",
+    "Hindi": "बीमा उत्पाद"
+  },
+  {
+    "Index": 133,
+    "English": "FASTag",
+    "Hindi": "इनसे चूकें नहीं"
+  },
+  {
+    "Index": 134,
+    "English": "Cards",
+    "Hindi": "बचत खाता"
+  },
+  {
+    "Index": 135,
+    "English": "Wearables",
+    "Hindi": "वॉलेट"
+  },
+  {
+    "Index": 136,
+    "English": "Automatic Payment",
+    "Hindi": "इनाम हब"
+  },
+  {
+    "Index": 137,
+    "English": "Financial Services",
+    "Hindi": "योजनाएँ"
+  },
+  {
+    "Index": 138,
+    "English": "DigiGold",
+    "Hindi": "और अधिक खोजें"
+  },
+  {
+    "Index": 139,
+    "English": "Fixed Deposit",
+    "Hindi": "कंपनी"
+  },
+  {
+    "Index": 140,
+    "English": "Group Health Shield 360",
+    "Hindi": "हमारे बारे में"
+  },
+  {
+    "Index": 141,
+    "English": "Insurance Products",
+    "Hindi": "नेतृत्व टीम"
+  },
+  {
+    "Index": 142,
+    "English": "Don't Miss These",
+    "Hindi": "पुरस्कार, समाचार और ब्लॉग"
+  },
+  {
+    "Index": 143,
+    "English": "Savings Account",
+    "Hindi": "पुरस्कार"
+  },
+  {
+    "Index": 144,
+    "English": "Wallet",
+    "Hindi": "अपने व्यवसाय को बढ़ाएँ"
+  },
+  {
+    "Index": 145,
+    "English": "Rewards Hub",
+    "Hindi": "एक रिटेलर बनें"
+  },
+  {
+    "Index": 146,
+    "English": "Plans",
+    "Hindi": "व्यापारी"
+  },
+  {
+    "Index": 147,
+    "English": "Discover More",
+    "Hindi": "वेतन समाधान"
+  },
+  {
+    "Index": 148,
+    "English": "Company",
+    "Hindi": "नकद प्रबंधन प्रणाली"
+  },
+  {
+    "Index": 149,
+    "English": "About Us",
+    "Hindi": "सुरक्षा"
+  },
+  {
+    "Index": 150,
+    "English": "Leadership Team",
+    "Hindi": "सुरक्षित भुगतान"
+  },
+  {
+    "Index": 151,
+    "English": "Awards, News & Blogs",
+    "Hindi": "धोखाधड़ी अलार्म"
+  },
+  {
+    "Index": 152,
+    "English": "Awards",
+    "Hindi": "धोखाधड़ी परिदृश्य"
+  },
+  {
+    "Index": 153,
+    "English": "Grow Your Business",
+    "Hindi": "बैंकिंग सुरक्षा टिप्स"
+  },
+  {
+    "Index": 154,
+    "English": "Become a Retailer",
+    "Hindi": "साइबर सुरक्षित"
+  },
+  {
+    "Index": 155,
+    "English": "Merchant",
+    "Hindi": "त्वरित पहुँच"
+  },
+  {
+    "Index": 156,
+    "English": "Salary Solutions",
+    "Hindi": "निवेशक संबंध"
+  },
+  {
+    "Index": 157,
+    "English": "Cash Management System",
+    "Hindi": "आरबीआई कहता है"
+  },
+  {
+    "Index": 158,
+    "English": "Security",
+    "Hindi": "आरबीआई वित्तीय साक्षरता सप्ताह"
+  },
+  {
+    "Index": 159,
+    "English": "Safe Pay",
+    "Hindi": "शिकायत विश्लेषण"
+  },
+  {
+    "Index": 160,
+    "English": "Fraud Alarm",
+    "Hindi": "महत्वपूर्ण नोटिस"
+  },
+  {
+    "Index": 161,
+    "English": "Fraud Scenarios",
+    "Hindi": "नीतियाँ"
+  },
+  {
+    "Index": 162,
+    "English": "Banking Security Tips",
+    "Hindi": "फॉर्म"
+  },
+  {
+    "Index": 163,
+    "English": "Cyber Safe",
+    "Hindi": "क्या मदद चाहिए?"
+  },
+  {
+    "Index": 164,
+    "English": "Quick Access",
+    "Hindi": "हमसे संपर्क करें"
+  },
+  {
+    "Index": 165,
+    "English": "Investor Relations",
+    "Hindi": "अक्सर पूछे जाने वाले प्रश्न"
+  },
+  {
+    "Index": 166,
+    "English": "RBI Kehta Hai",
+    "Hindi": "शर्तें और नियम"
+  },
+  {
+    "Index": 167,
+    "English": "RBI Financial Literacy Week",
+    "Hindi": "शुल्क और फीस"
+  },
+  {
+    "Index": 168,
+    "English": "Complaint Analysis",
+    "Hindi": "बैंकिंग बिंदु"
+  },
+  {
+    "Index": 169,
+    "English": "Important Notices",
+    "Hindi": "शिकायत वृद्धि"
+  },
+  {
+    "Index": 170,
+    "English": "Policies",
+    "Hindi": "बीबीपीएस मुद्दे की रिपोर्ट करें"
+  },
+  {
+    "Index": 171,
+    "English": "Forms",
+    "Hindi": "साइबर अपराध हेल्पलाइन"
+  },
+  {
+    "Index": 172,
+    "English": "Need Help?",
+    "Hindi": "संपर्क करें"
+  },
+  {
+    "Index": 173,
+    "English": "Reach Out to Us",
+    "Hindi": "पता:<1>एयरटेल सेंटर, प्लॉट नंबर-16, उद्योग विहार,<"
+  },
+  {
+    "Index": 174,
+    "English": "FAQs",
+    "Hindi": "सभी प्रश्नों के लिए डायल करें:<4><5>1800-23400</5>"
+  },
+  {
+    "Index": 175,
+    "English": "Terms & Conditions",
+    "Hindi": "ईमेल:<8></7><9><10>[email protected]"
+  },
+  {
+    "Index": 176,
+    "English": "Charges & Fees",
+    "Hindi": "गोपनीयता नीति"
+  },
+  {
+    "Index": 177,
+    "English": "Banking Points",
+    "Hindi": "शर्तें और नियम"
+  },
+  {
+    "Index": 178,
+    "English": "Complaint Escalation",
+    "Hindi": "सरल, तेज़ और सुरक्षित ऐप डाउनलोड करें"
+  },
+  {
+    "Index": 179,
+    "English": "Report a BBPS Issue",
+    "Hindi": "डीआईसीजीसी के साथ पंजीकृत"
+  },
+  {
+    "Index": 180,
+    "English": "Cyber Crime Helpline",
+    "Hindi": "हमारा अनुसरण करें"
+  },
+  {
+    "Index": 181,
+    "English": "Contact Us",
+    "Hindi": "भारत को सशक्त बनाना"
+  },
+  {
+    "Index": 182,
+    "English": "Address:<105>Airtel Centre, Plot No-16, Udyog Viha",
+    "Hindi": "वित्तीय"
+  },
+  {
+    "Index": 183,
+    "English": "Dial for all queries:<108><109>1800-23400</109><11",
+    "Hindi": "---"
+  },
+  {
+    "Index": 184,
+    "English": "Email:<111><112><113>[email protected]",
+    "Hindi": "---"
+  },
+  {
+    "Index": 185,
+    "English": "Privacy Policy",
+    "Hindi": "---"
+  },
+  {
+    "Index": 186,
+    "English": "Terms & Conditions",
+    "Hindi": "---"
+  },
+  {
+    "Index": 187,
+    "English": "Download Simple, Fast & Secure app",
+    "Hindi": "---"
+  },
+  {
+    "Index": 188,
+    "English": "Registered with DICGC",
+    "Hindi": "---"
+  },
+  {
+    "Index": 189,
+    "English": "Follow us on",
+    "Hindi": "---"
+  },
+  {
+    "Index": 190,
+    "English": "Empowering India",
+    "Hindi": "---"
+  },
+  {
+    "Index": 191,
+    "English": "through financial",
+    "Hindi": "---"
+  },
+  {
+    "Index": 192,
+    "English": "inclusion",
+    "Hindi": "---"
+  }
+]

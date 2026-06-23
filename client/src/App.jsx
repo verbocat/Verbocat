@@ -441,8 +441,8 @@ export default function App() {
   const isJunkSegment = (text) => {
     if (!text) return true;
     const clean = text.replace(/__TAG_\d+__/g, "").replace(/<[^>]+>/g, "").trim();
-    // Purely numbers and punctuation
-    if (/^[^a-zA-Z]*$/.test(clean)) return true;
+    // Purely numbers and punctuation (Unicode-aware)
+    if (/^\P{L}*$/u.test(clean)) return true;
     // Raw CSS like @page { ... }
     if (/^\s*@(?:page|media|import|font-face)\s*\{/i.test(clean)) return true;
     if (/(?:margin|padding|position|text-align)\s*:\s*[^;]+;/i.test(clean) && clean.includes("{") && clean.includes("}")) return true;

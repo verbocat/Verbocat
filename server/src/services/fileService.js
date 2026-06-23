@@ -107,7 +107,13 @@ const exportHtml = async (fileId, segments, ext = '.html') => {
     throw error;
   }
 
-  const buffer = await parser.exportFile(data.content, segments);
+  // Normalize segment IDs to match 0-based indexing if they are 1-based
+  const hasZero = segments.some(seg => Number(seg.id) === 0);
+  const normalizedSegments = (!hasZero && segments.length > 0)
+    ? segments.map(seg => ({ ...seg, id: Number(seg.id) - 1 }))
+    : segments.map(seg => ({ ...seg, id: Number(seg.id) }));
+
+  const buffer = await parser.exportFile(data.content, normalizedSegments);
   return buffer;
 };
 
