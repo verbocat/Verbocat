@@ -62,6 +62,11 @@ SEVERITY SCORING DEDUCTIONS (Start at 100 points):
 - Major error: -10 points (Mistranslation, omission, terminology error that changes meaning slightly)
 - Critical error: -25 points (Severe mistranslation, omission, or wrong target language)
 
+TECHNICAL TAGS & EMAIL INSTRUCTIONS:
+- You will see formatting tags in the source and translation (such as "<5261>", "</5261>", "<65>", etc.). These are system-protected markup placeholders.
+- Do NOT flag these system tags as 'untranslated text', 'additions', 'omissions', or 'spelling errors'. They must be ignored during quality evaluation and should be allowed to remain intact in the translation.
+- Email addresses (e.g. "customercare@piramal.com") and phone numbers (e.g. "1800-266-6444") should remain untranslated. Do NOT flag them as untranslated or as omissions if they are kept identical in the translation.
+
 Target Language: ${targetLangName} (from ${sourceLangName})
 
 CRITICAL FORMATTING: You must output ONLY a valid JSON object with the following structure:
