@@ -124,6 +124,17 @@ apiRouter.post("/translate-batch", checkAuth, checkTranslateAccess, async (reque
       });
 
       await Promise.all(updatePromises);
+
+      // Trigger document-wide audit automatically in the background
+      (async () => {
+        try {
+          console.log(`[Translate-Batch] Triggering background audit for document ${documentId}...`);
+          const { auditDocumentByWordCount } = require("../services/mqmService");
+          await auditDocumentByWordCount(documentId, contextSettings);
+        } catch (auditErr) {
+          console.error(`[Translate-Batch] Background audit failed for document ${documentId}:`, auditErr);
+        }
+      })();
     }
 
     // Log credit consumption and update database profiles
@@ -714,17 +725,6 @@ apiRouter.post("/documents/:id/audit", checkAuth, async (request, response) => {
 
     const { contextSettings } = request.body;
 
-    // Fetch all segments ordered by index
-    const { data: segments, error: fetchErr } = await supabase
-      .from("document_segments")
-      .select("*")
-      .eq("document_id", doc.id)
-      .order("segment_index", { ascending: true });
-
-    if (fetchErr || !segments) {
-      return response.status(404).json({ error: "Segments not found." });
-    }
-
     // Start background process
     activeAudits.add(documentId);
     
@@ -734,76 +734,9 @@ apiRouter.post("/documents/:id/audit", checkAuth, async (request, response) => {
     // Execute background audit
     (async () => {
       try {
-        console.log(`Starting background audit for document ${documentId}...`);
-        const { evaluateTranslationMQM } = require("../services/mqmService");
-        const { getIo } = require("../services/socket");
-        const io = getIo();
-
-        for (let i = 0; i < segments.length; i++) {
-          const seg = segments[i];
-          // Only audit segments that have a translation
-          if (!seg.target_text || seg.target_text.trim() === "") {
-            continue;
-          }
-
-          // Sliding window: fetch adjacent segments from local segments array
-          const prevSegment = i > 0 ? segments[i - 1] : null;
-          const nextSegment = i < segments.length - 1 ? segments[i + 1] : null;
-
-          const evaluation = await evaluateTranslationMQM({
-            sourceText: seg.source_text,
-            translatedText: seg.target_text,
-            targetLang: doc.target_lang,
-            sourceLang: doc.source_lang,
-            contextJira: seg.context_jira || "",
-            contextDescription: seg.context_description || "",
-            contextSettings,
-            prevSource: prevSegment?.source_text,
-            prevTarget: prevSegment?.target_text,
-            nextSource: nextSegment?.source_text,
-            nextTarget: nextSegment?.target_text,
-            model: "gpt-4o" // Use flagship gpt-4o for document-wide quality audits
-          });
-
-          // Save the MQM results to the database
-          const { error: updateError } = await supabase
-            .from("document_segments")
-            .update({
-              mqm_accuracy_score: evaluation.accuracyScore,
-              mqm_report: evaluation,
-              updated_at: new Date().toISOString()
-            })
-            .eq("document_id", doc.id)
-            .eq("segment_index", seg.segment_index);
-
-          if (updateError) {
-            console.error(`Audit update error at segment ${seg.segment_index}:`, updateError);
-          } else {
-            // Broadcast the segment update to all connected clients in real time
-            if (io) {
-              io.to(doc.id).emit("segment-updated", {
-                segmentIndex: seg.segment_index,
-                targetText: seg.target_text,
-                status: seg.status || "translated",
-                contextJira: seg.context_jira || "",
-                contextDescription: seg.context_description || "",
-                mqmAccuracyScore: evaluation.accuracyScore,
-                mqmReport: evaluation,
-                updatedBy: "System Auditor"
-              });
-            }
-          }
-
-          // Small delay to respect rate limit boundaries
-          await new Promise(resolve => setTimeout(resolve, 200));
-        }
-
-        console.log(`Audit complete for document ${documentId}.`);
-        if (io) {
-          io.to(doc.id).emit("document-audit-completed", {
-            documentId
-          });
-        }
+        console.log(`Starting background word-count audit for document ${documentId}...`);
+        const { auditDocumentByWordCount } = require("../services/mqmService");
+        await auditDocumentByWordCount(documentId, contextSettings);
       } catch (err) {
         console.error(`Background audit crashed for document ${documentId}:`, err);
       } finally {

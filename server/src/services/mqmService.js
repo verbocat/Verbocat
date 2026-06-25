@@ -1,7 +1,48 @@
 const axios = require("axios");
+const { supabase } = require("../config/supabase");
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+
+const getLangName = (code) => {
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code;
+  } catch (e) {
+    return code;
+  }
+};
+
+const getTargetSpecificRules = (targetLang, sourceLang) => {
+  const targetLangName = getLangName(targetLang);
+  const isTargetHindi = String(targetLang || "").toLowerCase().startsWith("hi");
+  const isTargetEnglish = String(targetLang || "").toLowerCase().startsWith("en");
+
+  if (isTargetHindi) {
+    return `
+- HINDI GRAMMAR & GENDER COMPLIANCE: Check for grammatical agreement in Hindi. Adjective/possessive agreement must match the noun gender. 
+  - "सहमति" (consent) is feminine, so "आपका सहमति" is grammatically incorrect (must be "आपकी सहमति").
+  - "सहमति पत्र" (consent letter) is masculine, so "आपका सहमति पत्र" is correct. Suggest grammatical corrections that preserve proper gender and possessive agreement.
+- ACRONYM & TRANSLITERATION PRESERVATION: Uppercase Latin acronyms and initialization codes (e.g. NRI, AMB, CIBIL, KYC, OTP, ATM) must remain in their original Latin-script uppercase form in the Hindi translation (e.g., use "NRI" instead of transliterating to "एनआरआई", and "AMB" instead of "एएमबी"). If the translation transliterates these, flag this as a Terminology error and suggest the Latin uppercase version.
+- LIST INDEX MAPPING: Standard English list indices (like letters or numbers, e.g. "h.)") can be translated to corresponding Hindi listing characters (like "झ.)"). Do not flag standard Devanagari listing ordering as errors.
+- CONJUNCTIONS: Verify if equivalent Hindi conjunctions (like 'और', 'लेकिन', 'या') are present before reporting missing English conjunctions (like 'and', 'but', 'or').
+- DISSENT ON FORMALITY: Hindi banking/legal translations must be formal. Do NOT flag formal phrasing (e.g. "पुष्टि करता है", "अधीन", "प्रभारों") as "Too Formal" or suggest casual rewrites. For example, translate 'charges' as 'प्रभारों' rather than the transliterated 'चार्जों'.
+`;
+  } else if (isTargetEnglish) {
+    return `
+- ENGLISH GRAMMAR & SYNTAX: Ensure strict adherence to English grammar rules, including correct subject-verb agreement, verb tenses, preposition usage, and article placement ('a', 'an', 'the').
+  - Note: Assertive sentences cannot use 'any' in place of 'a' or 'some' (e.g., "There is any material change" is grammatically incorrect; it must be "There is a material change").
+- LEGAL/BANKING TERMINOLOGY: Standard banking and legal terms must use precise English equivalents. For example, 'प्रभारों' should be translated as 'charges', 'सहमति' as 'consent', 'सहमति पत्र' as 'consent letter' or 'consent form'.
+- CAPITALIZATION: Ensure proper capitalization of standard acronyms (e.g., NRI, AMB, CIBIL, KYC, OTP, ATM, GST), proper nouns, and the start of sentences.
+- PHRASING & FLOW: Phrasing must sound natural and professional. Avoid literal translations of Hindi idioms or sentence structures (e.g. "PCHFL की राय में" should be translated as "In the opinion of PCHFL" or "In PCHFL's opinion").
+`;
+  } else {
+    return `
+- GRAMMAR & SYNTAX: Ensure correct grammar, syntax, gender/plural agreement, and formatting in the target language (${targetLangName}).
+- ACRONYM PRESERVATION: Keep standard alphanumeric acronyms and abbreviations in their original uppercase Latin form if standard in ${targetLangName} technical/banking documents.
+- CONJUNCTIONS & PREPOSITIONS: Do not report false omissions of conjunctions/prepositions. Verify if the target language equivalent is present.
+`;
+  }
+};
 
 /**
  * Performs an honest, exact MQM audit of the translation against the source text and context.
@@ -30,46 +71,9 @@ const evaluateTranslationMQM = async ({
     };
   }
 
-  const getLangName = (code) => {
-    try {
-      return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code;
-    } catch (e) {
-      return code;
-    }
-  };
-
   const sourceLangName = getLangName(sourceLang);
   const targetLangName = getLangName(targetLang);
-
-  const isTargetHindi = String(targetLang || "").toLowerCase().startsWith("hi");
-  const isTargetEnglish = String(targetLang || "").toLowerCase().startsWith("en");
-
-  let targetSpecificRules = "";
-  if (isTargetHindi) {
-    targetSpecificRules = `
-- HINDI GRAMMAR & GENDER COMPLIANCE: Check for grammatical agreement in Hindi. Adjective/possessive agreement must match the noun gender. 
-  - "सहमति" (consent) is feminine, so "आपका सहमति" is grammatically incorrect (must be "आपकी सहमति").
-  - "सहमति पत्र" (consent letter) is masculine, so "आपका सहमति पत्र" is correct. Suggest grammatical corrections that preserve proper gender and possessive agreement.
-- ACRONYM & TRANSLITERATION PRESERVATION: Uppercase Latin acronyms and initialization codes (e.g. NRI, AMB, CIBIL, KYC, OTP, ATM) must remain in their original Latin-script uppercase form in the Hindi translation (e.g., use "NRI" instead of transliterating to "एनआरआई", and "AMB" instead of "एएमबी"). If the translation transliterates these, flag this as a Terminology error and suggest the Latin uppercase version.
-- LIST INDEX MAPPING: Standard English list indices (like letters or numbers, e.g. "h.)") can be translated to corresponding Hindi listing characters (like "झ.)"). Do not flag standard Devanagari listing ordering as errors.
-- CONJUNCTIONS: Verify if equivalent Hindi conjunctions (like 'और', 'लेकिन', 'या') are present before reporting missing English conjunctions (like 'and', 'but', 'or').
-- DISSENT ON FORMALITY: Hindi banking/legal translations must be formal. Do NOT flag formal phrasing (e.g. "पुष्टि करता है", "अधीन", "प्रभारों") as "Too Formal" or suggest casual rewrites. For example, translate 'charges' as 'प्रभारों' rather than the transliterated 'चार्जों'.
-`;
-  } else if (isTargetEnglish) {
-    targetSpecificRules = `
-- ENGLISH GRAMMAR & SYNTAX: Ensure strict adherence to English grammar rules, including correct subject-verb agreement, verb tenses, preposition usage, and article placement ('a', 'an', 'the').
-  - Note: Assertive sentences cannot use 'any' in place of 'a' or 'some' (e.g., "There is any material change" is grammatically incorrect; it must be "There is a material change").
-- LEGAL/BANKING TERMINOLOGY: Standard banking and legal terms must use precise English equivalents. For example, 'प्रभारों' should be translated as 'charges', 'सहमति' as 'consent', 'सहमति पत्र' as 'consent letter' or 'consent form'.
-- CAPITALIZATION: Ensure proper capitalization of standard acronyms (e.g., NRI, AMB, CIBIL, KYC, OTP, ATM, GST), proper nouns, and the start of sentences.
-- PHRASING & FLOW: Phrasing must sound natural and professional. Avoid literal translations of Hindi idioms or sentence structures (e.g. "PCHFL की राय में" should be translated as "In the opinion of PCHFL" or "In PCHFL's opinion").
-`;
-  } else {
-    targetSpecificRules = `
-- GRAMMAR & SYNTAX: Ensure correct grammar, syntax, gender/plural agreement, and formatting in the target language (${targetLangName}).
-- ACRONYM PRESERVATION: Keep standard alphanumeric acronyms and abbreviations in their original uppercase Latin form if standard in ${targetLangName} technical/banking documents.
-- CONJUNCTIONS & PREPOSITIONS: Do not report false omissions of conjunctions/prepositions. Verify if the target language equivalent is present.
-`;
-  }
+  const targetSpecificRules = getTargetSpecificRules(targetLang, sourceLang);
 
   const systemPrompt = `You are an expert translation quality auditor specialized in the MQM (Multidimensional Quality Metrics) framework.
 Your task is to analyze the translation of a text segment and provide an honest, exact, and detailed quality audit.
@@ -77,7 +81,6 @@ Do NOT fake or exaggerate any ratings. If a translation is perfect, give it 100.
 
 CONTEXT & SETTINGS REQUIREMENT:
 - You MUST analyze and prioritize the provided Context & Settings first (Jira context, custom instructions/description, tone, formality) to guide your quality assessment.
-- Analyze how the source text should be translated under these constraints, and evaluate if the translation complies with them.
 - Any suggestions or corrections must align strictly with this context.
 
 MQM ERROR TAXONOMY:
@@ -266,7 +269,360 @@ ${nextTarget ? `- Next Segment Translation: "${nextTarget}"` : ""}`;
   }
 };
 
-// Programmatic acronym checking to prevent Devnagari transliterations of standard Latin abbreviations
+/**
+ * Performs a part-wide MQM audit on a group of segments.
+ */
+const evaluatePartMQM = async ({
+  segments,
+  targetLang,
+  sourceLang,
+  contextSettings,
+  model
+}) => {
+  const activeModel = model || "gpt-4o"; // Default to gpt-4o for document-wide QC
+  if (!OPENAI_API_KEY) {
+    return { errors: [] };
+  }
+
+  const sourceLangName = getLangName(sourceLang);
+  const targetLangName = getLangName(targetLang);
+  const targetSpecificRules = getTargetSpecificRules(targetLang, sourceLang);
+
+  // Format segments text for user prompt
+  let formattedSegmentsList = "";
+  for (const seg of segments) {
+    const translationText = (seg.target_text && seg.target_text.trim() !== "") ? seg.target_text : "(Not translated yet)";
+    formattedSegmentsList += `
+[Segment Index: ${seg.segment_index}]
+Source: "${seg.source_text}"
+Translation: "${translationText}"
+${seg.context_jira ? `Jira Context: ${seg.context_jira}` : ""}
+${seg.context_description ? `Description Context: ${seg.context_description}` : ""}
+---
+`;
+  }
+
+  const systemPrompt = `You are an expert translation quality auditor specialized in the MQM (Multidimensional Quality Metrics) framework.
+Your task is to analyze the translation of a document part consisting of multiple sequential segments.
+You must review the overall translation, maintaining consistency in style, terminology, flow, and grammar.
+
+CONTEXT & SETTINGS REQUIREMENT:
+- Review the provided Context & Settings (tone, formality) to guide your quality assessment.
+- Any suggestions or corrections must align strictly with this context.
+
+MQM ERROR TAXONOMY:
+1. Accuracy:
+   - Addition (Extra words that change the meaning)
+   - Omission (Key information left out)
+   - Mistranslation (Incorrect meaning translated)
+   - Untranslated (Words left in the source language that should have been translated)
+2. Fluency:
+   - Grammar (Syntax, gender agreement, conjugation errors)
+   - Spelling (Typographical or spelling mistakes)
+   - Punctuation (Incorrect or missing punctuation)
+3. Terminology:
+   - Incorrect Term (Using a wrong industry term)
+   - Inconsistent Term (Not matching glossary or other occurrences)
+4. Style:
+   - Too Formal (Translation is rigid or academic when casual was requested)
+   - Too Informal (Translation is slangy or casual when formal was requested)
+   - Awkward (Stilted or unnatural phrasing)
+
+SEVERITY LEVELS:
+- Minor: Dissonance, style mismatch, minor fluency issue
+- Major: Mistranslation, omission, terminology error that changes meaning slightly
+- Critical: Severe mistranslation, omission, or wrong target language
+
+TARGET-SPECIFIC LOCALIZATION & GRAMMAR RULES (CRITICAL):
+${targetSpecificRules}
+
+FALSE-POSITIVE PREVENTION & LOCALIZATION RULES:
+- You MUST double check all potential errors before writing them down.
+- Do NOT flag errors unless you have concrete, indisputable evidence.
+- If a translation is correct and natural, do not report any error.
+- Check target language equivalent words and conjunctions before reporting missing items.
+
+OFFENDING SNIPPET & CORRECTION RULES:
+- The "snippet" field MUST contain ONLY the specific incorrect text/substring from the translated text that needs to be replaced. Do NOT include any surrounding correct words.
+- The "correction" field MUST contain ONLY the corrected text to replace the offending "snippet" with.
+- The snippet and correction must belong to the segment specified by "segmentIndex".
+
+TECHNICAL TAGS & EMAIL INSTRUCTIONS:
+- Formatting tags like "<5261>", "</5261>" are system-protected markup placeholders. Do NOT flag them.
+- Email addresses and phone numbers should remain untranslated. Do NOT flag them.
+
+Target Language: ${targetLangName} (from ${sourceLangName})
+
+CRITICAL FORMATTING: You must output ONLY a valid JSON object with the following structure:
+{
+  "analysisSteps": [
+    "Step 1: Read and understood the full part context.",
+    "Step 2: Checked for acronym and gender alignment across all segments.",
+    "Step 3: Verified each translation segment-by-segment."
+  ],
+  "errors": [
+    {
+      "segmentIndex": 0, // Must be the integer ID matching the Segment Index of the segment containing the error
+      "category": "Terminology / Incorrect Term", // Must match the taxonomy categories
+      "severity": "Minor", // Minor, Major, or Critical
+      "snippet": "incorrect_substring", // ONLY the specific wrong substring from that segment's translation
+      "correction": "corrected_substring", // ONLY the corrected version of that substring
+      "explanation": "Detailed explanation of why this error is flagged."
+    }
+  ]
+}
+
+If no errors are found in any segments, return empty arrays for errors.`;
+
+  const userPrompt = `Here is the list of segments in this document part to audit:
+${formattedSegmentsList}
+
+GLOBAL CONTEXT & SETTINGS:
+- Global Tone Setting: ${contextSettings?.tone || "General"}
+- Global Formality Setting: ${contextSettings?.formality || "Neutral"}
+`;
+
+  try {
+    const response = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: activeModel,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.1,
+        response_format: { type: "json_object" }
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        timeout: 90000
+      }
+    );
+
+    const content = response.data?.choices?.[0]?.message?.content;
+    const parsed = JSON.parse(content);
+    
+    if (parsed.analysisSteps) {
+      console.log(`[Part MQM CoT Analysis]:`, parsed.analysisSteps);
+    }
+
+    return {
+      errors: Array.isArray(parsed.errors) ? parsed.errors : []
+    };
+  } catch (error) {
+    console.error("Part MQM evaluation failed:", error);
+    return { errors: [] };
+  }
+};
+
+/**
+ * Divides document segments into parts based on word counts, runs evaluatePartMQM,
+ * verifies/maps errors back to segments, updates DB, and emits Socket.io updates.
+ */
+const auditDocumentByWordCount = async (documentId, contextSettings) => {
+  const { getIo } = require("./socket");
+  const io = getIo();
+
+  try {
+    console.log(`[Audit] Fetching document info for ${documentId}...`);
+    const { data: doc, error: docErr } = await supabase
+      .from("documents")
+      .select("*")
+      .eq("id", documentId)
+      .single();
+
+    if (docErr || !doc) {
+      console.error(`[Audit] Document not found: ${documentId}`, docErr);
+      return;
+    }
+
+    const { data: segments, error: fetchErr } = await supabase
+      .from("document_segments")
+      .select("*")
+      .eq("document_id", documentId)
+      .order("segment_index", { ascending: true });
+
+    if (fetchErr || !segments || segments.length === 0) {
+      console.error(`[Audit] Segments not found for document: ${documentId}`, fetchErr);
+      return;
+    }
+
+    console.log(`[Audit] Total segments fetched: ${segments.length}`);
+
+    // Group segments into parts based on source text word count
+    const parts = [];
+    let currentPart = [];
+    let currentWordCount = 0;
+    const WORD_COUNT_LIMIT = 1200;
+
+    for (const seg of segments) {
+      const sourceText = seg.source_text || "";
+      const wordCount = sourceText.trim().split(/\s+/).filter(Boolean).length;
+      
+      if (currentWordCount + wordCount > WORD_COUNT_LIMIT && currentPart.length > 0) {
+        parts.push(currentPart);
+        currentPart = [];
+        currentWordCount = 0;
+      }
+
+      currentPart.push(seg);
+      currentWordCount += wordCount;
+    }
+
+    if (currentPart.length > 0) {
+      parts.push(currentPart);
+    }
+
+    console.log(`[Audit] Grouped into ${parts.length} parts based on word count.`);
+
+    for (let partIdx = 0; partIdx < parts.length; partIdx++) {
+      const partSegments = parts[partIdx];
+      console.log(`[Audit] Auditing part ${partIdx + 1}/${parts.length} with ${partSegments.length} segments...`);
+
+      const partEvaluation = await evaluatePartMQM({
+        segments: partSegments,
+        targetLang: doc.target_lang,
+        sourceLang: doc.source_lang,
+        contextSettings,
+        model: "gpt-4o"
+      });
+
+      console.log(`[Audit] Part ${partIdx + 1} got ${partEvaluation.errors.length} raw errors from LLM.`);
+
+      const segmentErrorsMap = {};
+      for (const seg of partSegments) {
+        segmentErrorsMap[seg.segment_index] = [];
+      }
+
+      const cleanText = (t) => String(t || "").replace(/[\s\u200b\u200c\u200d\u00a0]+/g, "").trim();
+
+      for (const err of partEvaluation.errors) {
+        if (!err || typeof err !== "object") continue;
+
+        const snippet = String(err.snippet || "").trim();
+        const correction = String(err.correction || "").trim();
+        if (!snippet || !correction || snippet === correction) continue;
+
+        const normalizedSnippet = cleanText(snippet);
+        let mappedSegment = null;
+
+        // Try mapping by LLM's suggested index
+        const suggestedSeg = partSegments.find(s => s.segment_index === parseInt(err.segmentIndex, 10));
+        if (suggestedSeg && suggestedSeg.target_text) {
+          const normTarget = cleanText(suggestedSeg.target_text);
+          if (normTarget.toLowerCase().includes(normalizedSnippet.toLowerCase())) {
+            mappedSegment = suggestedSeg;
+          }
+        }
+
+        // If not found or not matched, scan all segments in this part
+        if (!mappedSegment) {
+          for (const seg of partSegments) {
+            if (!seg.target_text) continue;
+            const normTarget = cleanText(seg.target_text);
+            if (normTarget.toLowerCase().includes(normalizedSnippet.toLowerCase())) {
+              mappedSegment = seg;
+              break;
+            }
+          }
+        }
+
+        // Map and extract exact casing if matched
+        if (mappedSegment) {
+          console.log(`[Audit] Mapped error snippet "${snippet}" to segment ${mappedSegment.segment_index}`);
+          const exactIdx = mappedSegment.target_text.toLowerCase().indexOf(snippet.toLowerCase());
+          const verifiedSnippet = exactIdx !== -1 
+            ? mappedSegment.target_text.substring(exactIdx, exactIdx + snippet.length)
+            : snippet;
+
+          segmentErrorsMap[mappedSegment.segment_index].push({
+            category: err.category || "Accuracy / Mistranslation",
+            severity: err.severity || "Minor",
+            snippet: verifiedSnippet,
+            correction: correction,
+            explanation: err.explanation || ""
+          });
+        } else {
+          console.log(`[Audit] Discarded non-genuine error snippet "${snippet}" (not found in translations)`);
+        }
+      }
+
+      // Save MQM score & report for each segment in the part, and emit Socket.io updates
+      for (const seg of partSegments) {
+        const verifiedErrors = segmentErrorsMap[seg.segment_index] || [];
+        
+        checkAcronymErrors(seg.source_text, seg.target_text || "", verifiedErrors);
+        resolveOverlappingErrors(verifiedErrors, seg.target_text || "");
+
+        let calculatedScore = 100;
+        for (const err of verifiedErrors) {
+          const severity = (err.severity || "").toLowerCase();
+          if (severity === "minor") {
+            calculatedScore -= 3;
+          } else if (severity === "major") {
+            calculatedScore -= 10;
+          } else if (severity === "critical") {
+            calculatedScore -= 25;
+          } else {
+            calculatedScore -= 3;
+          }
+        }
+        const accuracyScore = Math.max(0, calculatedScore);
+
+        const mqmReport = {
+          accuracyScore,
+          errors: verifiedErrors,
+          clarifyingQuestions: [],
+          improvementSuggestion: verifiedErrors.length > 0 ? "Corrected translation errors found in document-wide context audit." : ""
+        };
+
+        const { error: updateError } = await supabase
+          .from("document_segments")
+          .update({
+            mqm_accuracy_score: accuracyScore,
+            mqm_report: mqmReport,
+            updated_at: new Date().toISOString()
+          })
+          .eq("document_id", documentId)
+          .eq("segment_index", seg.segment_index);
+
+        if (updateError) {
+          console.error(`[Audit] Failed to update segment index ${seg.segment_index}:`, updateError);
+        } else {
+          if (io) {
+            io.to(documentId).emit("segment-updated", {
+              segmentIndex: seg.segment_index,
+              targetText: seg.target_text,
+              status: seg.status || "translated",
+              contextJira: seg.context_jira || "",
+              contextDescription: seg.context_description || "",
+              mqmAccuracyScore: accuracyScore,
+              mqmReport: mqmReport,
+              updatedBy: "System Auditor"
+            });
+          }
+        }
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+
+    console.log(`[Audit] Document-wide audit completed for document ${documentId}.`);
+    if (io) {
+      io.to(documentId).emit("document-audit-completed", {
+        documentId
+      });
+    }
+
+  } catch (error) {
+    console.error(`[Audit] Failed during word-count audit for document ${documentId}:`, error);
+  }
+};
+
 const checkAcronymErrors = (sourceText, translatedText, errors) => {
   const acronyms = [
     { latin: "NRI", devanagari: "एनआरआई" },
@@ -279,13 +635,10 @@ const checkAcronymErrors = (sourceText, translatedText, errors) => {
   ];
 
   for (const item of acronyms) {
-    // Check if source contains the Latin acronym as a whole word
     const sourceRegex = new RegExp(`\\b${item.latin}\\b`, "i");
     if (sourceRegex.test(sourceText)) {
-      // Check if translation contains the Devanagari transliteration
       const transRegex = new RegExp(item.devanagari, "g");
       if (transRegex.test(translatedText)) {
-        // Check if this acronym or transliteration is already reported
         const alreadyReported = errors.some(
           err => err.snippet && (err.snippet.includes(item.devanagari) || err.correction === item.latin)
         );
@@ -304,9 +657,7 @@ const checkAcronymErrors = (sourceText, translatedText, errors) => {
   }
 };
 
-// Resolves conflicting or overlapping errors (e.g. grammar correction "आपका" -> "आपकी" conflicting with terminology correction "सहमति" -> "सहमति पत्र")
 const resolveOverlappingErrors = (errors, translatedText) => {
-  // Correct any grammatical gender errors in the suggestions for "सहमति पत्र"
   for (const err of errors) {
     if (err.correction) {
       if (err.correction.includes("सहमति पत्र") && (err.correction.includes("आपकी") || err.correction.includes("की"))) {
@@ -316,24 +667,18 @@ const resolveOverlappingErrors = (errors, translatedText) => {
     }
   }
 
-  // Find if we have a "सहमति" -> "सहमति पत्र" terminology correction
   const hasConsentLetterCorrection = errors.some(
     err => (err.snippet === "सहमति" || err.snippet === "सहमति पत्र") && err.correction.includes("सहमति पत्र")
   );
 
   if (hasConsentLetterCorrection) {
-    // If we also have a correction for "आपका" -> "आपकी" or "आपका सहमति" -> "आपकी सहमति"
-    // that conflicts (since सहमति पत्र is masculine, so 'आपका सहमति पत्र' is grammatically correct)
     const grammarErrIndex = errors.findIndex(
       err => (err.snippet === "आपका सहमति" && err.correction === "आपकी सहमति") ||
              (err.snippet === "आपका" && err.correction === "आपकी" && (translatedText.includes("क्या आपका सहमति") || translatedText.includes("आपका सहमति") || translatedText.includes("आपका सहमति पत्र")))
     );
 
     if (grammarErrIndex !== -1) {
-      // Remove the conflicting grammar error
       errors.splice(grammarErrIndex, 1);
-      
-      // Update the terminology error to encompass the full phrase "आपका सहमति" -> "आपका सहमति पत्र"
       const termErr = errors.find(err => (err.snippet === "सहमति" || err.snippet === "सहमति पत्र") && err.correction.includes("सहमति पत्र"));
       if (termErr && translatedText.includes("आपका सहमति")) {
         termErr.snippet = "आपका सहमति";
@@ -345,5 +690,7 @@ const resolveOverlappingErrors = (errors, translatedText) => {
 };
 
 module.exports = {
-  evaluateTranslationMQM
+  evaluateTranslationMQM,
+  evaluatePartMQM,
+  auditDocumentByWordCount
 };
