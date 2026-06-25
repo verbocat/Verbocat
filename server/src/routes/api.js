@@ -124,17 +124,6 @@ apiRouter.post("/translate-batch", checkAuth, checkTranslateAccess, async (reque
       });
 
       await Promise.all(updatePromises);
-
-      // Trigger document-wide audit automatically in the background
-      (async () => {
-        try {
-          console.log(`[Translate-Batch] Triggering background audit for document ${documentId}...`);
-          const { auditDocumentByWordCount } = require("../services/mqmService");
-          await auditDocumentByWordCount(documentId, contextSettings);
-        } catch (auditErr) {
-          console.error(`[Translate-Batch] Background audit failed for document ${documentId}:`, auditErr);
-        }
-      })();
     }
 
     // Log credit consumption and update database profiles

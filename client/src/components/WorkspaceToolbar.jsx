@@ -13,7 +13,7 @@ export const WorkspaceToolbar = ({
   setSearchQuery, stats, sourceLanguage, onSourceLanguageChange,
   targetLanguage, onTargetLanguageChange, fileName, theme,
   canTranslate = true, fileExtension, filterStatus, setFilterStatus, onUpload,
-  onOpenContext
+  onOpenContext, onRunQc, isAuditing
 }) => {
   const [showDocMenu, setShowDocMenu] = useState(false);
   const docMenuRef = useRef(null);
@@ -74,6 +74,19 @@ export const WorkspaceToolbar = ({
               {qaIssuesCount}
             </span>
           )}
+        </button>
+
+        {/* Run QC */}
+        <button
+          onClick={onRunQc}
+          disabled={!canAct || isAuditing}
+          className={`ab ${canAct && !isAuditing ? "ab-qc" : ""}`}
+        >
+          <RefreshCw
+            style={{ width: 12, height: 12, color: "var(--indigo-400)", flexShrink: 0 }}
+            className={isAuditing ? "animate-spin" : ""}
+          />
+          <span>{isAuditing ? "Auditing…" : "Run QC"}</span>
         </button>
 
         {/* Context */}

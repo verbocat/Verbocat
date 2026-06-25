@@ -58,6 +58,7 @@ export default function App() {
   const [fileExtension, setFileExtension] = useState(".html");
   const [currentProvider, setCurrentProvider] = useState("");
   const [isTranslating, setIsTranslating] = useState(false);
+  const [isAuditing, setIsAuditing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [sourceLanguage, setSourceLanguage] = useState("en");
   const [targetLanguage, setTargetLanguage] = useState("hi");
@@ -252,6 +253,13 @@ export default function App() {
     });
 
 
+
+    socket.on("document-audit-completed", ({ documentId: docId }) => {
+      if (docId === documentId) {
+        setIsAuditing(false);
+        showToast("Quality Control Audit Completed!", "success");
+      }
+    });
 
     socket.on("error", (err) => {
       showToast(err.message || "Collaboration error.", "error");
@@ -840,6 +848,19 @@ export default function App() {
       console.error("Translation error:", error);
       setIsTranslating(false);
       showToast(`Translation failed: ${error.message || error}`, "error");
+    }
+  };
+
+  const handleRunQc = async () => {
+    if (!documentId) return;
+    setIsAuditing(true);
+    showToast("Starting Quality Control Audit...", "info");
+    try {
+      await auditDocument(documentId, contextSettings);
+    } catch (err) {
+      console.error("Failed to run document audit:", err);
+      showToast(`Audit failed: ${err.response?.data?.error || err.message || err}`, "error");
+      setIsAuditing(false);
     }
   };
 
@@ -2008,7 +2029,9 @@ export default function App() {
             onImportXliff={permission === "write" ? handleImportXliff : null}
             onTranslate={permission === "write" ? handleTranslateSegments : null}
             onToggleQa={() => setShowQaPanel((value) => !value)}
+            onRunQc={permission === "write" ? handleRunQc : null}
             isTranslating={isTranslating}
+            isAuditing={isAuditing}
             qaIssuesCount={qaIssuesList.length}
             segmentsCount={segments.length}
             searchQuery={searchQuery}
