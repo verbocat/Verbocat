@@ -365,7 +365,7 @@ export const SegmentCard = ({
   const handleFocus = () => {
     resetInactivityTimer();
     if (onFocusSegment) {
-      onFocusSegment(index);
+      onFocusSegment(segment.id - 1);
     }
   };
 
@@ -378,7 +378,7 @@ export const SegmentCard = ({
     if (t !== segment.target) onUpdateTranslation(segment.id, t);
     setTimeout(() => setSuggestions([]), 200);
     if (onBlurSegment) {
-      onBlurSegment(index);
+      onBlurSegment(segment.id - 1);
     }
   };
 
@@ -391,7 +391,7 @@ export const SegmentCard = ({
 
         {/* Col 1: Number */}
         <div className="seg-num">
-          <span className="seg-num-label">{String(index + 1).padStart(2, "0")}</span>
+          <span className="seg-num-label">{String(segment.id).padStart(2, "0")}</span>
           <span className={`seg-dot ${dotClass}`} />
           {segment.fuzzyScore && (
             <span style={{

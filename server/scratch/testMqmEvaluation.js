@@ -93,7 +93,23 @@ async function runTest() {
         formality: "Formal"
       }
     });
-    console.log("Evaluation Results (Expect 100/High Score, NO error flagged for list letter localization):", JSON.stringify(resultListIndex, null, 2));
+    // Test Case 6: Acronym and Gender Agreement Check
+    console.log("\n--- Test 6: Acronym and Gender Agreement Check ---");
+    const sourceAcronymGender = "Please note your Consent is mandatory for opening of NRI Account";
+    const translationAcronymGender = "कृपया ध्यान दें कि आपका सहमति एनआरआई खाता खोलने के लिए अनिवार्य है";
+    const resultAcronymGender = await evaluateTranslationMQM({
+      sourceText: sourceAcronymGender,
+      translatedText: translationAcronymGender,
+      targetLang: "hi",
+      sourceLang: "en",
+      contextJira: "NRI Account opening flow",
+      contextDescription: "Consent must be translated as सहमति पत्र to reflect a formal document. Ensure grammatical gender agreement is correct. Acronyms like NRI must remain in English/Latin script.",
+      contextSettings: {
+        tone: "Formal",
+        formality: "Formal"
+      }
+    });
+    console.log("Evaluation Results (Expect acronym correction to NRI and gender agreement correction to आपकी सहमति / आपका सहमति पत्र):", JSON.stringify(resultAcronymGender, null, 2));
 
   } catch (err) {
     console.error("Test execution failed:", err);

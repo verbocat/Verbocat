@@ -1,5 +1,5 @@
 const axios = require("axios");
-const { protectTags } = require("../utils/tagProtection");
+const { protectTags, restoreProtectedTags } = require("../utils/tagProtection");
 
 // Keep only OpenAI provider; other external provider endpoints were removed
 // to simplify the codebase and avoid maintaining multiple external fallbacks.
@@ -320,46 +320,7 @@ const translateWithProviders = async (sourceTexts, protectedTexts, target, provi
   return null;
 };
 
-const restoreProtectedTags = (translated, tags) => {
-  let output = normalizeTranslatedText(translated);
-
-  // Normalize spaces/casing around tag placeholders (e.g., "__tag_0__", "__TAG _ 1__", "__TAG_ 1 __")
-  output = output.replace(/__\s*TAG\s*_\s*(\d+)\s*__/gi, '__TAG_$1__');
-
-  const usedTags = new Set();
-
-  // 1. Try exact matching by index first
-  tags.forEach((tag, index) => {
-    const placeholder = `__TAG_${index}__`;
-    if (output.includes(placeholder)) {
-      output = output.replace(placeholder, tag);
-      usedTags.add(index);
-    }
-  });
-
-  // 2. Fallback: If there are still __TAG_n__ placeholders in the output,
-  // replace them with the unused tags in order.
-  const remainingPlaceholderRegex = /__TAG_\d+__/g;
-  
-  const unusedIndices = [];
-  for (let i = 0; i < tags.length; i++) {
-    if (!usedTags.has(i)) {
-      unusedIndices.push(i);
-    }
-  }
-
-  let unusedPtr = 0;
-  output = output.replace(remainingPlaceholderRegex, () => {
-    if (unusedPtr < unusedIndices.length) {
-      const tag = tags[unusedIndices[unusedPtr]];
-      unusedPtr++;
-      return tag;
-    }
-    return "";
-  });
-
-  return output;
-};
+// Local definition removed — imported from tagProtection utility instead.
 
 const translateChunk = async (texts, target, source = DEFAULT_SOURCE_LANG, providerState = createProviderState(), contextSettings = null) => {
   if (!target || !validateLang(target)) {
@@ -448,9 +409,7 @@ const getProviderStatus = () => ({
   ],
   defaultSource: DEFAULT_SOURCE_LANG,
   maxTextLength: MAX_TEXT_LENGTH
-});
-
-const translateSegmentWithVision = async ({
+});const translateSegmentWithVision = async ({
   sourceText,
   existingTranslation,
   targetLang,
@@ -476,12 +435,21 @@ const translateSegmentWithVision = async ({
   const sourceLangName = getLangName(sourceLang);
   const targetLangName = getLangName(targetLang);
 
+  // Protect HTML tags to preserve formatting
+  const { protectedText: protectedSource, tags } = protectTags(sourceText);
+  let protectedExisting = undefined;
+  if (existingTranslation) {
+    const { protectedText } = protectTags(existingTranslation);
+    protectedExisting = protectedText;
+  }
+
   const baseSystemPrompt = buildTranslationSystemPrompt(targetLang, sourceLang, contextSettings, contextJira, contextDescription);
 
   const jsonFormattingInstructions = `\n\nCRITICAL OUTPUT FORMATTING: You are a pure translation engine. You MUST ONLY output valid JSON. Your response must be a JSON object containing a single key "translation" containing the translated string. Output a JSON object like this:
 {
   "translation": "your_smart_translation_here"
-}`;
+}
+Preserve any __TAG_n__ tokens (like __TAG_0__, __TAG_1__, etc.) exactly as they are in the source, and place them in the correct corresponding translated position.`;
 
   let systemPrompt = baseSystemPrompt + jsonFormattingInstructions;
 
@@ -493,7 +461,7 @@ const translateSegmentWithVision = async ({
 
   if (existingTranslation) {
     systemPrompt += `\n\nREFINEMENT AND EDITING DIRECTIVES:
-- You are provided with an 'Existing Translation' of the source segment: "${existingTranslation}".
+- You are provided with an 'Existing Translation' of the source segment (with tag placeholders): "${protectedExisting}".
 - If the user provides custom instructions, a Jira story, or context settings (e.g., asking to make the translation "more informal", "extremely informal", "friendly", "formal again", etc.), you MUST analyze the 'Existing Translation' and rewrite/refine it to strictly satisfy the user's instructions.
 - Do NOT return the 'Existing Translation' unmodified if the user's instructions ask for a change in tone, formality, style, or vocabulary. You must perform the requested changes.
 - Ensure the final translation remains a correct and complete translation of the 'Source Segment', but is rewritten to match the requested style.
@@ -501,11 +469,11 @@ const translateSegmentWithVision = async ({
   }
 
   let textPrompt = `Translate the following source text segment:
-Source Segment: "${sourceText}"
+Source Segment: "${protectedSource}"
 Translate to: ${targetLangName} (from ${sourceLangName})`;
 
-  if (existingTranslation) {
-    textPrompt += `\nExisting Translation: "${existingTranslation}"`;
+  if (protectedExisting) {
+    textPrompt += `\nExisting Translation: "${protectedExisting}"`;
   }
 
   if (contextJira) {
@@ -556,13 +524,14 @@ Translate to: ${targetLangName} (from ${sourceLangName})`;
     if (!parsed || typeof parsed.translation !== "string") {
       throw new Error("Invalid response format from OpenAI");
     }
-    return parsed.translation.trim();
+    const rawTranslation = parsed.translation.trim();
+    // Restore protected HTML tags
+    return restoreProtectedTags(rawTranslation, tags);
   } catch (error) {
     console.error("OpenAI vision translation JSON parsing failed:", error, "Content:", content);
     throw error;
   }
 };
-
 module.exports = {
   createProviderState,
   translateChunk,

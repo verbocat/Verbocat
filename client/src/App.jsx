@@ -1727,14 +1727,21 @@ export default function App() {
     // Close QA Panel
     setShowQaPanel(false);
 
-    const index = filteredSegments.findIndex((s) => s.id === id);
-    if (index !== -1 && virtuosoRef.current) {
-      virtuosoRef.current.scrollToIndex({
-        index,
-        align: "center",
-        behavior: "smooth"
-      });
-    }
+    // Clear filters to ensure the target segment is visible
+    setSearchQuery("");
+    setFilterStatus("all");
+
+    // We defer the lookup slightly to let filteredSegments update
+    window.setTimeout(() => {
+      const index = segments.findIndex((s) => s.id === id);
+      if (index !== -1 && virtuosoRef.current) {
+        virtuosoRef.current.scrollToIndex({
+          index,
+          align: "center",
+          behavior: "smooth"
+        });
+      }
+    }, 50);
 
     // Focus target editor and place cursor at the end after scroll mounts the element
     window.setTimeout(() => {
@@ -2088,8 +2095,8 @@ export default function App() {
                   onToggleVerify={() => toggleVerify(segment.id)}
                   onVerifyAndNext={() => verifyAndNextSegment(segment.id)}
                   lockInfo={
-                    cellLocks.has(index) && cellLocks.get(index).userId !== user?.id
-                      ? cellLocks.get(index)
+                    cellLocks.has(segment.id - 1) && cellLocks.get(segment.id - 1).userId !== user?.id
+                      ? cellLocks.get(segment.id - 1)
                       : null
                   }
                   onFocusSegment={handleFocusSegment}
