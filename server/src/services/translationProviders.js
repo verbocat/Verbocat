@@ -418,7 +418,11 @@ const getProviderStatus = () => ({
   contextDescription,
   screenshotBuffer,
   screenshotMimeType,
-  contextSettings
+  contextSettings,
+  prevSource,
+  prevTarget,
+  nextSource,
+  nextTarget
 }) => {
   if (!OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY not configured");
@@ -481,6 +485,15 @@ Translate to: ${targetLangName} (from ${sourceLangName})`;
   }
   if (contextDescription) {
     textPrompt += `\n\nCustom Instructions / Description:\n${contextDescription}`;
+  }
+
+  if (prevSource || nextSource) {
+    textPrompt += `\n\nSLIDING WINDOW LOCAL TRANSLATION CONTEXT:
+Use the adjacent segments to resolve pronoun reference, gender continuity, terminology alignment, and stylistic consistency:
+${prevSource ? `- Previous Segment Source: "${prevSource}"` : ""}
+${prevTarget ? `- Previous Segment Translation: "${prevTarget}"` : ""}
+${nextSource ? `- Next Segment Source: "${nextSource}"` : ""}
+${nextTarget ? `- Next Segment Translation: "${nextTarget}"` : ""}`;
   }
 
   const userContent = [];

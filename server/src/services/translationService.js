@@ -256,7 +256,11 @@ const translateSegmentWithContext = async ({
     contextDescription,
     screenshotBuffer,
     screenshotMimeType,
-    contextSettings
+    contextSettings,
+    prevSource,
+    prevTarget,
+    nextSource,
+    nextTarget
   });
 
   const cleanedTranslation = ensureEnglishNumerals(translated);
