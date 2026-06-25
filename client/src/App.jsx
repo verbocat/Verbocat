@@ -129,7 +129,7 @@ export default function App() {
           console.error(statusErr);
         }
       } else {
-        showToast(err.response?.data?.error || "Access denied or document not found.");
+        showToast(err.response?.data?.error || "Access denied or document not found.", "error");
         // Clear document ID from URL if load fails completely (like 404)
         const newUrl = `${window.location.origin}${window.location.pathname}`;
         window.history.pushState({ path: newUrl }, '', newUrl);
@@ -246,7 +246,7 @@ export default function App() {
     });
 
     socket.on("error", (err) => {
-      showToast(err.message || "Collaboration error.");
+      showToast(err.message || "Collaboration error.", "error");
     });
 
     return () => {
@@ -275,7 +275,7 @@ export default function App() {
       showToast("Access request submitted successfully!");
     } catch (err) {
       console.error("Failed to request access:", err);
-      showToast("Failed to request access.");
+      showToast(`Failed to request access: ${err.response?.data?.error || err.message}`, "error");
     }
   };
 
@@ -286,7 +286,7 @@ export default function App() {
       showToast(`Access request ${action === "approve" ? "approved" : "declined"}.`);
     } catch (err) {
       console.error("Failed to respond to access request:", err);
-      showToast("Failed to respond to request.");
+      showToast(`Failed to respond to request: ${err.response?.data?.error || err.message}`, "error");
     }
   };
 
@@ -698,8 +698,9 @@ export default function App() {
         showToast(`File uploaded: ${file.name}`);
       }
     } catch (error) {
-      console.log(error);
-      showToast("Upload failed. Is the backend running?", "error");
+      console.error(error);
+      const errMsg = error.response?.data?.error || error.message || "Is the backend running?";
+      showToast(`Upload failed: ${errMsg}`, "error");
     } finally {
       setIsUploading(false);
     }
@@ -830,7 +831,8 @@ export default function App() {
     } catch (error) {
       console.log(error);
       setIsTranslating(false);
-      showToast("Translation error.", "error");
+      const errMsg = error.response?.data?.error || error.message || "Translation error.";
+      showToast(`Translation error: ${errMsg}`, "error");
     }
   };
 
@@ -868,7 +870,7 @@ export default function App() {
           await updateSegment(documentId, segmentIndex, value, "draft");
         } catch (err) {
           console.error("Failed to update segment in database:", err);
-          showToast("Failed to save translation to database.");
+          showToast(`Failed to save translation to database: ${err.message || err}`, "error");
         }
       }
     }
@@ -894,7 +896,7 @@ export default function App() {
           await updateSegment(documentId, segmentIndex, targetText, nextVerified ? "approved" : "draft");
         } catch (err) {
           console.error("Failed to update verification in database:", err);
-          showToast("Failed to save verification state.");
+          showToast(`Failed to save verification state: ${err.message || err}`, "error");
         }
       }
     }
@@ -915,7 +917,7 @@ export default function App() {
           await updateSegment(documentId, segmentIndex, targetText, "approved");
         } catch (err) {
           console.error("Failed to verify in database:", err);
-          showToast("Failed to save verification state.");
+          showToast(`Failed to save verification state: ${err.message || err}`, "error");
         }
       }
     }
@@ -975,7 +977,7 @@ export default function App() {
         showToast("Context saved successfully!");
       } catch (err) {
         console.error("Failed to save segment context to database:", err);
-        showToast("Failed to save segment context.");
+        showToast(`Failed to save segment context: ${err.message || err}`, "error");
       }
     }
   };
@@ -1017,7 +1019,8 @@ export default function App() {
       }
     } catch (err) {
       console.error("Failed to translate segment with context:", err);
-      showToast("Translation failed. Verify your context/screenshot.");
+      const errMsg = err.response?.data?.error || err.message || "Verify your context/screenshot.";
+      showToast(`Translation failed: ${errMsg}`, "error");
     }
   };
 
@@ -1122,7 +1125,7 @@ export default function App() {
       showToast("Document exported successfully!");
     } catch (error) {
       console.log(error);
-      showToast("Export failed", "error");
+      showToast(`Export failed: ${error.message}`, "error");
     }
   };
 
@@ -1138,7 +1141,7 @@ export default function App() {
       showToast("XLIFF exported successfully!");
     } catch (error) {
       console.log(error);
-      showToast("XLIFF export failed", "error");
+      showToast(`XLIFF export failed: ${error.message}`, "error");
     }
   };
 
@@ -1154,7 +1157,7 @@ export default function App() {
       showToast("TMX memory exported successfully!");
     } catch (error) {
       console.log(error);
-      showToast("TMX export failed", "error");
+      showToast(`TMX export failed: ${error.message}`, "error");
     }
   };
 
@@ -1170,7 +1173,7 @@ export default function App() {
       showToast("Global database TM exported successfully!");
     } catch (error) {
       console.log(error);
-      showToast("Global TM export failed", "error");
+      showToast(`Global TM export failed: ${error.message}`, "error");
     }
   };
 
@@ -1647,7 +1650,7 @@ export default function App() {
       showToast("Linguist review table exported successfully!");
     } catch (error) {
       console.error(error);
-      showToast("Review table export failed", "error");
+      showToast(`Review table export failed: ${error.message}`, "error");
     }
   };
 
@@ -1689,7 +1692,7 @@ export default function App() {
       }
     } catch (error) {
       console.error(error);
-      showToast("XLIFF import failed", "error");
+      showToast(`XLIFF import failed: ${error.response?.data?.error || error.message}`, "error");
     } finally {
       if (event.target) event.target.value = "";
     }
@@ -1702,7 +1705,7 @@ export default function App() {
       showToast(`Imported ${data.count} TM pairs to database!`);
     } catch (error) {
       console.error(error);
-      showToast("TMX import failed", "error");
+      showToast(`TMX import failed: ${error.response?.data?.error || error.message}`, "error");
     }
   };
 

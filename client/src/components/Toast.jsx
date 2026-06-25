@@ -1,10 +1,18 @@
-export const Toast = ({ toast }) =>
-  toast ? (
-    <div
-      className={`fixed top-5 right-5 z-[200] px-6 py-3 rounded-lg shadow-xl text-white font-medium transition-all transform translate-x-0 ${
-        toast.type === "error" ? "bg-red-600" : "bg-green-600"
-      }`}
-    >
-      {toast.message}
+export const Toast = ({ toast }) => {
+  if (!toast) return null;
+
+  const type = toast.type || "success";
+
+  return (
+    <div className={`notification-toast toast-${type}`}>
+      <div className="notification-toast-content">
+        <div className="notification-toast-title">
+          {type === "error" ? "Error" : type === "warn" ? "Warning" : type === "info" ? "Info" : "Success"}
+        </div>
+        <div className="notification-toast-message">
+          {toast.message}
+        </div>
+      </div>
     </div>
-  ) : null;
+  );
+};

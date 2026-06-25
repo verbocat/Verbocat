@@ -1377,3 +1377,80 @@ code, .font-mono { font-family: "IBM Plex Mono", monospace; }
   position: relative;
   z-index: 10;
 }
+
+/* ================================================================
+   NOTIFICATION TOASTS (SUCCESS, ERROR, WARN, INFO)
+   ================================================================ */
+.notification-toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  min-width: 320px;
+  max-width: 450px;
+  background: rgba(19, 21, 31, 0.85); /* var(--bg-surface) with transparency */
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg);
+  padding: 14px 18px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(20px);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transition: all 0.2s ease;
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(120%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.notification-toast-content {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex-grow: 1;
+}
+
+.notification-toast-title {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.notification-toast-message {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+/* Toast types */
+.notification-toast.toast-success {
+  border-left: 3px solid var(--emerald);
+}
+.notification-toast.toast-success .notification-toast-title {
+  color: var(--text-emerald);
+}
+
+.notification-toast.toast-error {
+  border-left: 3px solid var(--rose);
+}
+.notification-toast.toast-error .notification-toast-title {
+  color: var(--text-rose);
+}
+
+.notification-toast.toast-warn {
+  border-left: 3px solid var(--amber);
+}
+.notification-toast.toast-warn .notification-toast-title {
+  color: var(--text-amber);
+}
+
+.notification-toast.toast-info {
+  border-left: 3px solid var(--accent);
+}
+.notification-toast.toast-info .notification-toast-title {
+  color: var(--text-accent);
+}
