@@ -13,7 +13,11 @@ const evaluateTranslationMQM = async ({
   sourceLang,
   contextJira,
   contextDescription,
-  contextSettings
+  contextSettings,
+  prevSource,
+  prevTarget,
+  nextSource,
+  nextTarget
 }) => {
   if (!OPENAI_API_KEY) {
     return {
@@ -90,26 +94,31 @@ TECHNICAL TAGS & EMAIL INSTRUCTIONS:
 
 Target Language: ${targetLangName} (from ${sourceLangName})
 
+SLIDING WINDOW CONTEXT UTILIZATION:
+- You are provided with a Sliding Window Local Context containing the source and translation of adjacent segments (previous and next) if available.
+- Use this local context to resolve ambiguities, verify pronoun agreement (like gender and plurality continuity across segments), and ensure consistent terminology and style flow.
+- Remember: the target of your audit is strictly the "Translated Segment" relative to the "Source Segment". Do NOT flag errors in the adjacent segments; they are only provided to help you understand the context.
+
 CRITICAL FORMATTING: You must output ONLY a valid JSON object with the following structure:
 {
   "analysisSteps": [
     "Step 1: Analyzed Jira context, global tone, and formality constraints.",
-    "Step 2: Fact-checked whether there is any list index or punctuation localization. The source has list index 'h.)' and the translation has 'झ.)'. 'झ' is the correct 8th index in Hindi list sequencing, so this is correct localization and not an error.",
-    "Step 3: Fact-checked conjunction 'and'. The source has 'aware of and have understood' and translation has 'अवगत है और ... समझता है'. 'और' is present, meaning 'and' is translated properly and not omitted.",
-    "Step 4: Checked for other spelling/grammar/mistranslation issues."
+    "Step 2: Fact-checked whether there is any list index or punctuation localization for the target language.",
+    "Step 3: Fact-checked conjunctions (e.g. 'and', 'or') between source and translation.",
+    "Step 4: Checked for other spelling/grammar/mistranslation issues in the translation."
   ],
-  "accuracyScore": 97, // Math-based score from 0 to 100 after deductions. If errors is empty, this MUST be 100.
+  "accuracyScore": 95, // Math-based score from 0 to 100 after deductions. If errors is empty, this MUST be 100.
   "errors": [
     {
-      "category": "Terminology / Incorrect Term",
-      "severity": "Minor",
-      "snippet": "चार्जों", // ONLY the wrong text/substring from the translation
-      "correction": "प्रभारों", // ONLY the corrected version of that substring to replace it with
-      "explanation": "In standard banking/legal contexts, 'charges' is translated as 'प्रभारों' rather than the transliterated 'चार्जों'."
+      "category": "Terminology / Incorrect Term", // Must match the taxonomy categories
+      "severity": "Minor", // Minor, Major, or Critical
+      "snippet": "incorrect_substring", // ONLY the specific wrong substring from the translation
+      "correction": "corrected_substring", // ONLY the corrected version of that substring to replace it with
+      "explanation": "Detailed explanation of why this error is flagged."
     }
   ],
   "clarifyingQuestions": [],
-  "improvementSuggestion": "Consider adding a custom glossary instruction to translate 'charges' as 'प्रभार' for banking consistency."
+  "improvementSuggestion": "Brief suggestion to improve overall quality."
 }
 
 If no errors are found, the accuracyScore MUST be 100, and you should return empty arrays for errors and clarifyingQuestions, and an empty string for improvementSuggestion.`;
@@ -121,7 +130,13 @@ CONTEXT & SETTINGS PROVIDED:
 - Global Tone Setting: ${contextSettings?.tone || "General"}
 - Global Formality Setting: ${contextSettings?.formality || "Neutral"}
 - Jira Story Context: ${contextJira || "None"}
-- Custom Instructions / Description: ${contextDescription || "None"}`;
+- Custom Instructions / Description: ${contextDescription || "None"}
+
+SLIDING WINDOW LOCAL CONTEXT:
+${prevSource ? `- Previous Segment Source: "${prevSource}"` : ""}
+${prevTarget ? `- Previous Segment Translation: "${prevTarget}"` : ""}
+${nextSource ? `- Next Segment Source: "${nextSource}"` : ""}
+${nextTarget ? `- Next Segment Translation: "${nextTarget}"` : ""}`;
 
   try {
     const response = await axios.post(
@@ -230,6 +245,16 @@ const checkAcronymErrors = (sourceText, translatedText, errors) => {
 
 // Resolves conflicting or overlapping errors (e.g. grammar correction "आपका" -> "आपकी" conflicting with terminology correction "सहमति" -> "सहमति पत्र")
 const resolveOverlappingErrors = (errors, translatedText) => {
+  // Correct any grammatical gender errors in the suggestions for "सहमति पत्र"
+  for (const err of errors) {
+    if (err.correction) {
+      if (err.correction.includes("सहमति पत्र") && (err.correction.includes("आपकी") || err.correction.includes("की"))) {
+        err.correction = err.correction.replace(/आपकी/g, "आपका").replace(/की/g, "का");
+        err.explanation = "The term 'Consent' must be translated as 'सहमति पत्र' (masculine), and possessive 'आपका' agrees with the masculine 'पत्र'.";
+      }
+    }
+  }
+
   // Find if we have a "सहमति" -> "सहमति पत्र" terminology correction
   const hasConsentLetterCorrection = errors.some(
     err => (err.snippet === "सहमति" || err.snippet === "सहमति पत्र") && err.correction.includes("सहमति पत्र")
@@ -240,7 +265,7 @@ const resolveOverlappingErrors = (errors, translatedText) => {
     // that conflicts (since सहमति पत्र is masculine, so 'आपका सहमति पत्र' is grammatically correct)
     const grammarErrIndex = errors.findIndex(
       err => (err.snippet === "आपका सहमति" && err.correction === "आपकी सहमति") ||
-             (err.snippet === "आपका" && err.correction === "आपकी" && (translatedText.includes("आपका सहमति") || translatedText.includes("आपका सहमति पत्र")))
+             (err.snippet === "आपका" && err.correction === "आपकी" && (translatedText.includes("क्या आपका सहमति") || translatedText.includes("आपका सहमति") || translatedText.includes("आपका सहमति पत्र")))
     );
 
     if (grammarErrIndex !== -1) {

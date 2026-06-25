@@ -432,7 +432,7 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
     let mqmReport = undefined;
 
     if (targetText !== undefined) {
-      // Fetch the source text and context first to evaluate MQM accurately
+      // Fetch the source text and context, along with adjacent segments for the sliding context window
       const { data: dbSegment } = await supabase
         .from("document_segments")
         .select("source_text, context_jira, context_description")
@@ -441,6 +441,15 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
         .single();
       
       if (dbSegment) {
+        const { data: siblingSegments } = await supabase
+          .from("document_segments")
+          .select("segment_index, source_text, target_text")
+          .eq("document_id", doc.id)
+          .in("segment_index", [segmentIndex - 1, segmentIndex + 1]);
+
+        const prevSegment = siblingSegments?.find(s => s.segment_index === segmentIndex - 1);
+        const nextSegment = siblingSegments?.find(s => s.segment_index === segmentIndex + 1);
+
         const { evaluateTranslationMQM } = require("../services/mqmService");
         try {
           const evaluation = await evaluateTranslationMQM({
@@ -450,7 +459,11 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
             sourceLang: doc.source_lang,
             contextJira: contextJira !== undefined ? contextJira : dbSegment.context_jira,
             contextDescription: contextDescription !== undefined ? contextDescription : dbSegment.context_description,
-            contextSettings: null
+            contextSettings: null,
+            prevSource: prevSegment?.source_text,
+            prevTarget: prevSegment?.target_text,
+            nextSource: nextSegment?.source_text,
+            nextTarget: nextSegment?.target_text
           });
           mqmScore = evaluation.accuracyScore;
           mqmReport = evaluation;
@@ -548,7 +561,7 @@ apiRouter.post(
         }
       }
 
-      // Fetch the segment source text and existing target text
+      // Fetch the segment source text and existing target text, along with sibling segments for context
       const { data: segment, error: fetchErr } = await supabase
         .from("document_segments")
         .select("source_text, target_text")
@@ -559,6 +572,15 @@ apiRouter.post(
       if (fetchErr || !segment) {
         return response.status(404).json({ error: "Segment not found." });
       }
+
+      const { data: siblingSegments } = await supabase
+        .from("document_segments")
+        .select("segment_index, source_text, target_text")
+        .eq("document_id", doc.id)
+        .in("segment_index", [segmentIndex - 1, segmentIndex + 1]);
+
+      const prevSegment = siblingSegments?.find(s => s.segment_index === segmentIndex - 1);
+      const nextSegment = siblingSegments?.find(s => s.segment_index === segmentIndex + 1);
 
       // Execute on-the-fly vision/context aware translation
       const { translateSegmentWithContext } = require("../services/translationService");
@@ -571,7 +593,11 @@ apiRouter.post(
         contextDescription,
         screenshotBuffer,
         screenshotMimeType,
-        contextSettings
+        contextSettings,
+        prevSource: prevSegment?.source_text,
+        prevTarget: prevSegment?.target_text,
+        nextSource: nextSegment?.source_text,
+        nextTarget: nextSegment?.target_text
       });
 
       // Update segment target text and status in database
@@ -632,6 +658,123 @@ apiRouter.post(
     }
   }
 );
+
+// 2b. Audit the entire document segments sequentially in the background using sliding context window
+const activeAudits = new Set();
+
+apiRouter.post("/documents/:id/audit", checkAuth, async (request, response) => {
+  const documentId = request.params.id;
+  try {
+    const doc = await verifyDocumentAccess(request, response, "write");
+    if (!doc) return;
+
+    if (activeAudits.has(documentId)) {
+      return response.status(400).json({ error: "Audit is already in progress for this document." });
+    }
+
+    const { contextSettings } = request.body;
+
+    // Fetch all segments ordered by index
+    const { data: segments, error: fetchErr } = await supabase
+      .from("document_segments")
+      .select("*")
+      .eq("document_id", doc.id)
+      .order("segment_index", { ascending: true });
+
+    if (fetchErr || !segments) {
+      return response.status(404).json({ error: "Segments not found." });
+    }
+
+    // Start background process
+    activeAudits.add(documentId);
+    
+    // Respond immediately to prevent HTTP connection timeouts
+    response.json({ success: true, message: "Document audit started in the background." });
+
+    // Execute background audit
+    (async () => {
+      try {
+        console.log(`Starting background audit for document ${documentId}...`);
+        const { evaluateTranslationMQM } = require("../services/mqmService");
+        const { getIo } = require("../services/socket");
+        const io = getIo();
+
+        for (let i = 0; i < segments.length; i++) {
+          const seg = segments[i];
+          // Only audit segments that have a translation
+          if (!seg.target_text || seg.target_text.trim() === "") {
+            continue;
+          }
+
+          // Sliding window: fetch adjacent segments from local segments array
+          const prevSegment = i > 0 ? segments[i - 1] : null;
+          const nextSegment = i < segments.length - 1 ? segments[i + 1] : null;
+
+          const evaluation = await evaluateTranslationMQM({
+            sourceText: seg.source_text,
+            translatedText: seg.target_text,
+            targetLang: doc.target_lang,
+            sourceLang: doc.source_lang,
+            contextJira: seg.context_jira || "",
+            contextDescription: seg.context_description || "",
+            contextSettings,
+            prevSource: prevSegment?.source_text,
+            prevTarget: prevSegment?.target_text,
+            nextSource: nextSegment?.source_text,
+            nextTarget: nextSegment?.target_text
+          });
+
+          // Save the MQM results to the database
+          const { error: updateError } = await supabase
+            .from("document_segments")
+            .update({
+              mqm_accuracy_score: evaluation.accuracyScore,
+              mqm_report: evaluation,
+              updated_at: new Date().toISOString()
+            })
+            .eq("document_id", doc.id)
+            .eq("segment_index", seg.segment_index);
+
+          if (updateError) {
+            console.error(`Audit update error at segment ${seg.segment_index}:`, updateError);
+          } else {
+            // Broadcast the segment update to all connected clients in real time
+            if (io) {
+              io.to(doc.id).emit("segment-updated", {
+                segmentIndex: seg.segment_index,
+                targetText: seg.target_text,
+                status: seg.status || "translated",
+                contextJira: seg.context_jira || "",
+                contextDescription: seg.context_description || "",
+                mqmAccuracyScore: evaluation.accuracyScore,
+                mqmReport: evaluation,
+                updatedBy: "System Auditor"
+              });
+            }
+          }
+
+          // Small delay to respect rate limit boundaries
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+
+        console.log(`Audit complete for document ${documentId}.`);
+        if (io) {
+          io.to(doc.id).emit("document-audit-completed", {
+            documentId
+          });
+        }
+      } catch (err) {
+        console.error(`Background audit crashed for document ${documentId}:`, err);
+      } finally {
+        activeAudits.delete(documentId);
+      }
+    })();
+
+  } catch (error) {
+    console.error("Audit endpoint error:", error);
+    activeAudits.delete(documentId);
+  }
+});
 
 // 3. Get list of users with explicit access
 apiRouter.get("/documents/:id/access", checkAuth, async (request, response) => {

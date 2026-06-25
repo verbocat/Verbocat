@@ -180,7 +180,7 @@ const translateSegments = async (segments, target, sourceLang, contextSettings) 
     }
   }
 
-  const results = await Promise.all(segments.map(async (segment) => {
+  const results = await Promise.all(segments.map(async (segment, index) => {
     const tmEntry = tmMap[segment.source];
     const targetText = tmEntry ? tmEntry.target_text : "";
     const provider = tmEntry && tmEntry.provider ? tmEntry.provider : "TM Database";
@@ -191,6 +191,11 @@ const translateSegments = async (segments, target, sourceLang, contextSettings) 
     if (targetText) {
       const { evaluateTranslationMQM } = require("./mqmService");
       try {
+        const prevSegment = index > 0 ? segments[index - 1] : null;
+        const nextSegment = index < segments.length - 1 ? segments[index + 1] : null;
+        const prevEntry = prevSegment ? tmMap[prevSegment.source] : null;
+        const nextEntry = nextSegment ? tmMap[nextSegment.source] : null;
+
         const evaluation = await evaluateTranslationMQM({
           sourceText: segment.source,
           translatedText: targetText,
@@ -198,7 +203,11 @@ const translateSegments = async (segments, target, sourceLang, contextSettings) 
           sourceLang: actualSourceLang,
           contextJira: segment.contextJira || "",
           contextDescription: segment.contextDescription || "",
-          contextSettings
+          contextSettings,
+          prevSource: prevSegment ? prevSegment.source : undefined,
+          prevTarget: prevEntry ? prevEntry.target_text : (prevSegment ? prevSegment.target : undefined),
+          nextSource: nextSegment ? nextSegment.source : undefined,
+          nextTarget: nextEntry ? nextEntry.target_text : (nextSegment ? nextSegment.target : undefined)
         });
         mqmScore = evaluation.accuracyScore;
         mqmReportData = evaluation;
@@ -229,7 +238,11 @@ const translateSegmentWithContext = async ({
   contextDescription,
   screenshotBuffer,
   screenshotMimeType,
-  contextSettings
+  contextSettings,
+  prevSource,
+  prevTarget,
+  nextSource,
+  nextTarget
 }) => {
   const { translateSegmentWithVision } = require("./translationProviders");
   const actualSourceLang = sourceLang || "en";
@@ -261,7 +274,11 @@ const translateSegmentWithContext = async ({
       sourceLang: actualSourceLang,
       contextJira,
       contextDescription,
-      contextSettings
+      contextSettings,
+      prevSource,
+      prevTarget,
+      nextSource,
+      nextTarget
     });
     mqmScore = evaluation.accuracyScore;
     mqmReportData = evaluation;

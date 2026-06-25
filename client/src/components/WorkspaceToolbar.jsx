@@ -3,7 +3,7 @@ import { LANGUAGES } from "../constants/languages.js";
 import {
   FileText, ArrowRight, Search, Filter, Sparkles,
   Save, Upload, Download, Trash2, RefreshCw, ChevronDown, Plus, Link2,
-  FolderOpen, Sliders
+  FolderOpen, Sliders, ClipboardCheck
 } from "lucide-react";
 
 export const WorkspaceToolbar = ({
@@ -13,7 +13,7 @@ export const WorkspaceToolbar = ({
   setSearchQuery, stats, sourceLanguage, onSourceLanguageChange,
   targetLanguage, onTargetLanguageChange, fileName, theme,
   canTranslate = true, fileExtension, filterStatus, setFilterStatus, onUpload,
-  onOpenContext
+  onOpenContext, onAudit, isAuditing
 }) => {
   const [showDocMenu, setShowDocMenu] = useState(false);
   const docMenuRef = useRef(null);
@@ -55,6 +55,22 @@ export const WorkspaceToolbar = ({
           />
           <span>{isTranslating ? "Translating…" : "Auto-Translate"}</span>
         </button>
+
+        {/* Document Audit */}
+        {onAudit && (
+          <button
+            onClick={onAudit}
+            disabled={!canAct || isAuditing}
+            className={`ab ${canAct && !isAuditing ? "ab-audit" : ""}`}
+            title="Run sequential Document-Wide MQM Quality Audit using sliding context window"
+          >
+            <ClipboardCheck
+              style={{ width: 12, height: 12, flexShrink: 0 }}
+              className={isAuditing ? "animate-spin" : ""}
+            />
+            <span>{isAuditing ? "Auditing…" : "Audit Document"}</span>
+          </button>
+        )}
 
         {/* QA Check */}
         <button onClick={onToggleQa} disabled={!canAct} className="ab">

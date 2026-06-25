@@ -31,7 +31,8 @@ import {
   requestAccess,
   fetchAccessRequests,
   respondToAccessRequest,
-  translateSegmentWithContext
+  translateSegmentWithContext,
+  auditDocument
 } from "./services/api.js";
 import { ExportModal } from "./components/ExportModal.jsx";
 import { ShareModal } from "./components/ShareModal.jsx";
@@ -50,6 +51,7 @@ export default function App() {
   const [currentProvider, setCurrentProvider] = useState("");
   const [progress, setProgress] = useState(0);
   const [isTranslating, setIsTranslating] = useState(false);
+  const [isAuditing, setIsAuditing] = useState(false);
   const [sourceLanguage, setSourceLanguage] = useState("en");
   const [targetLanguage, setTargetLanguage] = useState("hi");
   const [darkMode, setDarkMode] = useState(true);
@@ -242,6 +244,12 @@ export default function App() {
           socketRef.current.disconnect();
           socketRef.current = null;
         }
+      }
+    });
+
+    socket.on("document-audit-completed", ({ documentId: docId }) => {
+      if (docId === documentId) {
+        showToast("Document MQM audit completed successfully!", "success");
       }
     });
 
@@ -829,10 +837,32 @@ export default function App() {
       setIsTranslating(false);
       showToast("Translation completed!");
     } catch (error) {
-      console.log(error);
+      console.error("Translation error:", error);
       setIsTranslating(false);
-      const errMsg = error.response?.data?.error || error.message || "Translation error.";
-      showToast(`Translation error: ${errMsg}`, "error");
+      showToast(`Translation failed: ${error.message || error}`, "error");
+    }
+  };
+
+  const handleDocumentAudit = async () => {
+    if (segments.length === 0 || isAuditing) {
+      return;
+    }
+
+    const hasTranslations = segments.some(s => s.target && s.target.trim() !== "");
+    if (!hasTranslations) {
+      showToast("There are no translated segments to audit. Translate the document first!", "error");
+      return;
+    }
+
+    setIsAuditing(true);
+    try {
+      await auditDocument(documentId || fileId, contextSettings);
+      showToast("Document MQM audit started in the background. Scores will update in real time!", "success");
+    } catch (error) {
+      console.error("Failed to run document audit:", error);
+      showToast(`Failed to run MQM audit: ${error.response?.data?.error || error.message || error}`, "error");
+    } finally {
+      setIsAuditing(false);
     }
   };
 
@@ -2017,6 +2047,8 @@ export default function App() {
             setFilterStatus={setFilterStatus}
             onUpload={handleUpload}
             onOpenContext={() => setShowContextPanel(true)}
+            onAudit={permission === "write" ? handleDocumentAudit : null}
+            isAuditing={isAuditing}
           />
 
           {/* QA panel (collapsible) */}

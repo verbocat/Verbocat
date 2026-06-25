@@ -173,3 +173,8 @@ export const translateSegmentWithContext = async (documentId, segmentIndex, { co
   return response.data;
 };
 
+export const auditDocument = async (documentId, contextSettings) => {
+  const response = await api.post(`/api/documents/${documentId}/audit`, { contextSettings });
+  return response.data;
+};
+

@@ -381,6 +381,28 @@ code, .font-mono { font-family: "IBM Plex Mono", monospace; }
   opacity: 0.35;
 }
 
+/* Audit — quality audit action */
+.ab-audit {
+  color: #fff;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border-color: rgba(16,185,129,0.45);
+  box-shadow: 0 1px 4px rgba(16,185,129,0.25), inset 0 1px 0 rgba(255,255,255,0.1);
+  font-weight: 600;
+}
+.ab-audit:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  box-shadow: 0 2px 8px rgba(16,185,129,0.35), inset 0 1px 0 rgba(255,255,255,0.1);
+  color: #fff;
+  border-color: rgba(16,185,129,0.55);
+}
+.ab-audit:disabled {
+  background: rgba(255,255,255,0.03);
+  border-color: rgba(255,255,255,0.05);
+  color: var(--text-muted);
+  box-shadow: none;
+  opacity: 0.35;
+}
+
 /* Close File button */
 .ab-close-file {
   color: var(--text-rose);
