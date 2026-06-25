@@ -83,9 +83,49 @@ apiRouter.post("/upload", checkAuth, upload.single("file"), async (request, resp
 
 apiRouter.post("/translate-batch", checkAuth, checkTranslateAccess, async (request, response) => {
   try {
-    const { segments, target, source, contextSettings, fileName } = request.body;
+    const { segments, target, source, contextSettings, fileName, documentId } = request.body;
     const result = await translateSegments(segments, target, source, contextSettings);
     
+    // Save translations to document_segments in DB if documentId is provided
+    if (documentId && result.results && result.results.length > 0) {
+      const { getIo } = require("../services/socket");
+      const io = getIo();
+
+      const updatePromises = result.results.map(async (item) => {
+        const segmentIndex = item.id - 1; // client IDs are 1-indexed
+        
+        const { error } = await supabase
+          .from("document_segments")
+          .update({
+            target_text: item.translated,
+            status: "translated",
+            mqm_accuracy_score: item.mqmAccuracyScore !== undefined ? item.mqmAccuracyScore : 100,
+            mqm_report: item.mqmReport || null,
+            updated_at: new Date().toISOString()
+          })
+          .eq("document_id", documentId)
+          .eq("segment_index", segmentIndex);
+
+        if (error) {
+          console.error(`Failed to save auto-translated segment index ${segmentIndex} for document ${documentId}:`, error);
+        } else {
+          // Broadcast to other collaborative clients in real time
+          if (io) {
+            io.to(documentId).emit("segment-updated", {
+              segmentIndex,
+              targetText: item.translated,
+              status: "translated",
+              mqmAccuracyScore: item.mqmAccuracyScore,
+              mqmReport: item.mqmReport,
+              updatedBy: request.user.email
+            });
+          }
+        }
+      });
+
+      await Promise.all(updatePromises);
+    }
+
     // Log credit consumption and update database profiles
     const wordCount = request.wordCount || 0;
     if (wordCount > 0) {
@@ -721,7 +761,8 @@ apiRouter.post("/documents/:id/audit", checkAuth, async (request, response) => {
             prevSource: prevSegment?.source_text,
             prevTarget: prevSegment?.target_text,
             nextSource: nextSegment?.source_text,
-            nextTarget: nextSegment?.target_text
+            nextTarget: nextSegment?.target_text,
+            model: "gpt-4o" // Use flagship gpt-4o for document-wide quality audits
           });
 
           // Save the MQM results to the database

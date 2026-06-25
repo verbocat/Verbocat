@@ -17,8 +17,10 @@ const evaluateTranslationMQM = async ({
   prevSource,
   prevTarget,
   nextSource,
-  nextTarget
+  nextTarget,
+  model
 }) => {
+  const activeModel = model || OPENAI_MODEL;
   if (!OPENAI_API_KEY) {
     return {
       accuracyScore: 100,
@@ -39,6 +41,36 @@ const evaluateTranslationMQM = async ({
   const sourceLangName = getLangName(sourceLang);
   const targetLangName = getLangName(targetLang);
 
+  const isTargetHindi = String(targetLang || "").toLowerCase().startsWith("hi");
+  const isTargetEnglish = String(targetLang || "").toLowerCase().startsWith("en");
+
+  let targetSpecificRules = "";
+  if (isTargetHindi) {
+    targetSpecificRules = `
+- HINDI GRAMMAR & GENDER COMPLIANCE: Check for grammatical agreement in Hindi. Adjective/possessive agreement must match the noun gender. 
+  - "सहमति" (consent) is feminine, so "आपका सहमति" is grammatically incorrect (must be "आपकी सहमति").
+  - "सहमति पत्र" (consent letter) is masculine, so "आपका सहमति पत्र" is correct. Suggest grammatical corrections that preserve proper gender and possessive agreement.
+- ACRONYM & TRANSLITERATION PRESERVATION: Uppercase Latin acronyms and initialization codes (e.g. NRI, AMB, CIBIL, KYC, OTP, ATM) must remain in their original Latin-script uppercase form in the Hindi translation (e.g., use "NRI" instead of transliterating to "एनआरआई", and "AMB" instead of "एएमबी"). If the translation transliterates these, flag this as a Terminology error and suggest the Latin uppercase version.
+- LIST INDEX MAPPING: Standard English list indices (like letters or numbers, e.g. "h.)") can be translated to corresponding Hindi listing characters (like "झ.)"). Do not flag standard Devanagari listing ordering as errors.
+- CONJUNCTIONS: Verify if equivalent Hindi conjunctions (like 'और', 'लेकिन', 'या') are present before reporting missing English conjunctions (like 'and', 'but', 'or').
+- DISSENT ON FORMALITY: Hindi banking/legal translations must be formal. Do NOT flag formal phrasing (e.g. "पुष्टि करता है", "अधीन", "प्रभारों") as "Too Formal" or suggest casual rewrites. For example, translate 'charges' as 'प्रभारों' rather than the transliterated 'चार्जों'.
+`;
+  } else if (isTargetEnglish) {
+    targetSpecificRules = `
+- ENGLISH GRAMMAR & SYNTAX: Ensure strict adherence to English grammar rules, including correct subject-verb agreement, verb tenses, preposition usage, and article placement ('a', 'an', 'the').
+  - Note: Assertive sentences cannot use 'any' in place of 'a' or 'some' (e.g., "There is any material change" is grammatically incorrect; it must be "There is a material change").
+- LEGAL/BANKING TERMINOLOGY: Standard banking and legal terms must use precise English equivalents. For example, 'प्रभारों' should be translated as 'charges', 'सहमति' as 'consent', 'सहमति पत्र' as 'consent letter' or 'consent form'.
+- CAPITALIZATION: Ensure proper capitalization of standard acronyms (e.g., NRI, AMB, CIBIL, KYC, OTP, ATM, GST), proper nouns, and the start of sentences.
+- PHRASING & FLOW: Phrasing must sound natural and professional. Avoid literal translations of Hindi idioms or sentence structures (e.g. "PCHFL की राय में" should be translated as "In the opinion of PCHFL" or "In PCHFL's opinion").
+`;
+  } else {
+    targetSpecificRules = `
+- GRAMMAR & SYNTAX: Ensure correct grammar, syntax, gender/plural agreement, and formatting in the target language (${targetLangName}).
+- ACRONYM PRESERVATION: Keep standard alphanumeric acronyms and abbreviations in their original uppercase Latin form if standard in ${targetLangName} technical/banking documents.
+- CONJUNCTIONS & PREPOSITIONS: Do not report false omissions of conjunctions/prepositions. Verify if the target language equivalent is present.
+`;
+  }
+
   const systemPrompt = `You are an expert translation quality auditor specialized in the MQM (Multidimensional Quality Metrics) framework.
 Your task is to analyze the translation of a text segment and provide an honest, exact, and detailed quality audit.
 Do NOT fake or exaggerate any ratings. If a translation is perfect, give it 100. If there are minor flaws, deduct points strictly based on severity.
@@ -47,7 +79,6 @@ CONTEXT & SETTINGS REQUIREMENT:
 - You MUST analyze and prioritize the provided Context & Settings first (Jira context, custom instructions/description, tone, formality) to guide your quality assessment.
 - Analyze how the source text should be translated under these constraints, and evaluate if the translation complies with them.
 - Any suggestions or corrections must align strictly with this context.
-- TONE COMPLIANCE: If the requested tone is 'Formal' (or if the text is a legal/banking document), formal language is CORRECT. Do NOT flag formal phrasing as 'Too Formal' or suggest converting it to casual talk (e.g. do not suggest changing 'पुष्टि करता है' to 'बताना चाहता है').
 
 MQM ERROR TAXONOMY:
 1. Accuracy:
@@ -72,20 +103,17 @@ SEVERITY SCORING DEDUCTIONS (Start at 100 points):
 - Major error: -10 points (Mistranslation, omission, terminology error that changes meaning slightly)
 - Critical error: -25 points (Severe mistranslation, omission, or wrong target language)
 
-FALSE-POSITIVE PREVENTION & LOCALIZATION RULES (CRITICAL):
+TARGET-SPECIFIC LOCALIZATION & GRAMMAR RULES (CRITICAL):
+${targetSpecificRules}
+
+FALSE-POSITIVE PREVENTION & LOCALIZATION RULES:
 - You MUST double check all potential errors before writing them down.
-- Conjunction and Word Presence: Before marking a word or conjunction (like 'and', 'but', 'or') as "Omitted" or missing, you must verify if its target language equivalent (e.g. 'और', 'लेकिन', 'या' in Hindi) is already present in the translation. If it is present, it is NOT an error. Never report false omissions.
-- Meaning Representation: If a concept or verb is already translated (e.g., 'have understood' translated as 'समझता है' or 'समझ गया है'), it is NOT omitted. Do not flag minor grammatical tense or voice differences as major omissions.
-- Acronym and Abbreviation Preservation: Alphanumeric abbreviations, acronyms, and standard initialization codes (such as NRI, AMB, CIBIL, KYC, OTP, ATM) should be preserved in their Latin-script uppercase form in the translation (e.g. "NRI" in Hindi translation instead of transliterating to "एनआरआई", and "AMB" instead of "एएमबी"). If the translation transliterates these standard acronyms, you MUST flag this as a terminology or spelling error and suggest the Latin uppercase acronym (e.g., snippet: "एनआरआई", correction: "NRI").
-- Grammatical Gender and Case Agreement: Check for grammatical agreement in the target language. For example, in Hindi, possessive/adjective agreement is strict. "सहमति" (consent) is feminine, so "आपका सहमति" is grammatically incorrect (should be "आपकी सहमति"). Similarly, if suggesting "सहमति पत्र" (consent letter, masculine), you must check if the possessive matches (e.g. "आपका सहमति पत्र" is correct). Suggest corrections that restore proper grammar and agreement.
-- List Index Localization: Do NOT flag translated list indices (like letters or numerals) as errors if they represent standard local equivalents. For example, translating the English list letter 'h.)' to the corresponding Hindi letter 'झ.)' is standard and correct Devanagari listing order (skipping non-initial consonants like ङ). Do NOT flag this as mistranslation, addition, or spelling error.
-- Standard Punctuation differences (like using '।' instead of '.') are correct target language punctuation and must not be flagged as errors.
 - Do NOT deduct points unless you have concrete, indisputable evidence of an error. If there are no errors, the score must be exactly 100.
 
 OFFENDING SNIPPET & CORRECTION RULES:
 - The "snippet" field MUST contain ONLY the specific incorrect text/substring from the translated text that needs to be replaced. Do NOT include any surrounding correct words.
 - The "correction" field MUST contain ONLY the corrected text to replace the offending "snippet" with. Do NOT include the whole sentence, only the exact correction.
-- SYNTAX CHECK: Ensure that replacing the "snippet" with the "correction" in the translation yields a grammatically correct sentence. Do not introduce duplicate words (like duplicate conjunctions 'और और') or break sentence flow.
+- SYNTAX CHECK: Ensure that replacing the "snippet" with the "correction" in the translation yields a grammatically correct sentence. Do not introduce duplicate words or break sentence flow.
 
 TECHNICAL TAGS & EMAIL INSTRUCTIONS:
 - You will see formatting tags in the source and translation (such as "<5261>", "</5261>", "<65>", etc.). These are system-protected markup placeholders.
@@ -103,9 +131,9 @@ CRITICAL FORMATTING: You must output ONLY a valid JSON object with the following
 {
   "analysisSteps": [
     "Step 1: Analyzed Jira context, global tone, and formality constraints.",
-    "Step 2: Fact-checked whether there is any list index or punctuation localization for the target language.",
-    "Step 3: Fact-checked conjunctions (e.g. 'and', 'or') between source and translation.",
-    "Step 4: Checked for other spelling/grammar/mistranslation issues in the translation."
+    "Step 2: Fact-checked target language specific guidelines.",
+    "Step 3: Fact-checked grammatical correctness and term alignments.",
+    "Step 4: Checked for other spelling/grammar/mistranslation issues."
   ],
   "accuracyScore": 95, // Math-based score from 0 to 100 after deductions. If errors is empty, this MUST be 100.
   "errors": [
@@ -142,7 +170,7 @@ ${nextTarget ? `- Next Segment Translation: "${nextTarget}"` : ""}`;
     const response = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
-        model: OPENAI_MODEL,
+        model: activeModel,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
@@ -166,15 +194,48 @@ ${nextTarget ? `- Next Segment Translation: "${nextTarget}"` : ""}`;
       console.log(`[MQM CoT Analysis for "${sourceText.substring(0, 40)}..."]:`, parsed.analysisSteps);
     }
 
-    const errors = Array.isArray(parsed.errors) ? parsed.errors : [];
+    const rawErrors = Array.isArray(parsed.errors) ? parsed.errors : [];
     
+    // Programmatic verification filter to remove hallucinated/invalid errors
+    const cleanText = (t) => String(t || "").replace(/[\s\u200b\u200c\u200d\u00a0]+/g, "").trim();
+    const normalizedTranslated = cleanText(translatedText);
+    
+    const verifiedErrors = [];
+    for (const err of rawErrors) {
+      if (!err || typeof err !== "object") continue;
+      
+      const snippet = String(err.snippet || "").trim();
+      const correction = String(err.correction || "").trim();
+      
+      if (!snippet || !correction) continue;
+      if (snippet === correction) continue;
+      
+      // Verify if snippet exists in the translation (space-insensitive)
+      const normalizedSnippet = cleanText(snippet);
+      if (!normalizedTranslated.toLowerCase().includes(normalizedSnippet.toLowerCase())) {
+        console.log(`[MQM Filter] Discarded false-positive error (snippet not found in translation): "${snippet}"`);
+        continue;
+      }
+      
+      // Extract exact case-matching substring from the translation for UI highlighting
+      const exactIdx = translatedText.toLowerCase().indexOf(snippet.toLowerCase());
+      if (exactIdx !== -1) {
+        err.snippet = translatedText.substring(exactIdx, exactIdx + snippet.length);
+      } else {
+        err.snippet = snippet;
+      }
+      
+      err.correction = correction;
+      verifiedErrors.push(err);
+    }
+
     // Post-process programmatically to verify abbreviation & alignment accuracy
-    checkAcronymErrors(sourceText, translatedText, errors);
-    resolveOverlappingErrors(errors, translatedText);
+    checkAcronymErrors(sourceText, translatedText, verifiedErrors);
+    resolveOverlappingErrors(verifiedErrors, translatedText);
 
     // Recalculate mathematical score based on corrected error severities
     let calculatedScore = 100;
-    for (const err of errors) {
+    for (const err of verifiedErrors) {
       const severity = (err.severity || "").toLowerCase();
       if (severity === "minor") {
         calculatedScore -= 3;
@@ -190,7 +251,7 @@ ${nextTarget ? `- Next Segment Translation: "${nextTarget}"` : ""}`;
 
     return {
       accuracyScore,
-      errors,
+      errors: verifiedErrors,
       clarifyingQuestions: Array.isArray(parsed.clarifyingQuestions) ? parsed.clarifyingQuestions : [],
       improvementSuggestion: typeof parsed.improvementSuggestion === "string" ? parsed.improvementSuggestion : ""
     };

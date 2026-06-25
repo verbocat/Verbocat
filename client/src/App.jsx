@@ -43,15 +43,22 @@ import { Globe } from "lucide-react";
 
 export default function App() {
   const virtuosoRef = useRef(null);
+  
+  // Zustand Session Store hook
+  const { isAuth, fetchProfile, token, logout, user, loading } = useUserStore();
+  const userRef = useRef(user);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
   const [segments, setSegments] = useState([]);
   const [history, setHistory] = useState([]);
   const [future, setFuture] = useState([]);
   const [fileId, setFileId] = useState(null);
   const [fileExtension, setFileExtension] = useState(".html");
   const [currentProvider, setCurrentProvider] = useState("");
-  const [progress, setProgress] = useState(0);
   const [isTranslating, setIsTranslating] = useState(false);
-  const [isAuditing, setIsAuditing] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [sourceLanguage, setSourceLanguage] = useState("en");
   const [targetLanguage, setTargetLanguage] = useState("hi");
   const [darkMode, setDarkMode] = useState(true);
@@ -61,9 +68,6 @@ export default function App() {
   const [showQaPanel, setShowQaPanel] = useState(false);
   const [fileName, setFileName] = useState("document");
   const [isUploading, setIsUploading] = useState(false);
-
-  // Zustand Session Store hook
-  const { isAuth, fetchProfile, token, logout, user, loading } = useUserStore();
   const [resetMode, setResetMode] = useState(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
 
@@ -106,7 +110,7 @@ export default function App() {
       showToast(`Loaded collaborative document: ${doc.name}`);
 
       // Fetch pending requests if the user is owner or staff
-      const isOwnerOrStaff = doc.ownerId === user?.id || ["admin", "verbolabs_staff"].includes(user?.role);
+      const isOwnerOrStaff = doc.ownerId === userRef.current?.id || ["admin", "verbolabs_staff"].includes(userRef.current?.role);
       if (isOwnerOrStaff) {
         try {
           const reqs = await fetchAccessRequests(documentId);
@@ -140,7 +144,7 @@ export default function App() {
     } finally {
       setIsUploading(false);
     }
-  }, [documentId, token, user]);
+  }, [documentId, token]);
 
   useEffect(() => {
     if (isAuth && token) {
@@ -220,7 +224,7 @@ export default function App() {
     });
 
     socket.on("access-request-responded", ({ documentId: docId, action, userId }) => {
-      if (userId === user?.id && docId === documentId) {
+      if (userId === userRef.current?.id && docId === documentId) {
         showToast(`Your edit access request has been ${action === "approve" ? "approved" : "declined"}.`);
         if (action === "approve") {
           setPermission("write");
@@ -236,7 +240,7 @@ export default function App() {
     });
 
     socket.on("access-revoked", ({ userId, documentId: docId }) => {
-      if (userId === user?.id && docId === documentId) {
+      if (userId === userRef.current?.id && docId === documentId) {
         showToast("Your access to this workspace has been revoked.");
         setPermission("read");
         setHasNoAccess(true);
@@ -247,11 +251,7 @@ export default function App() {
       }
     });
 
-    socket.on("document-audit-completed", ({ documentId: docId }) => {
-      if (docId === documentId) {
-        showToast("Document MQM audit completed successfully!", "success");
-      }
-    });
+
 
     socket.on("error", (err) => {
       showToast(err.message || "Collaboration error.", "error");
@@ -261,7 +261,7 @@ export default function App() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [documentId, token, user, loadCollaborativeDocument]);
+  }, [documentId, token, loadCollaborativeDocument]);
 
   const handleFocusSegment = (index) => {
     if (socketRef.current) {
@@ -800,7 +800,7 @@ export default function App() {
 
       for (let i = 0; i < segmentsToTranslate.length; i += BATCH_SIZE) {
         const batch = segmentsToTranslate.slice(i, i + BATCH_SIZE);
-        const data = await translateBatch(batch, targetLanguage, sourceLanguage, contextSettings);
+        const data = await translateBatch(batch, targetLanguage, sourceLanguage, contextSettings, documentId);
         const results = data.results || [];
 
         if (results.length > 0 && i === 0) {
@@ -843,28 +843,7 @@ export default function App() {
     }
   };
 
-  const handleDocumentAudit = async () => {
-    if (segments.length === 0 || isAuditing) {
-      return;
-    }
 
-    const hasTranslations = segments.some(s => s.target && s.target.trim() !== "");
-    if (!hasTranslations) {
-      showToast("There are no translated segments to audit. Translate the document first!", "error");
-      return;
-    }
-
-    setIsAuditing(true);
-    try {
-      await auditDocument(documentId || fileId, contextSettings);
-      showToast("Document MQM audit started in the background. Scores will update in real time!", "success");
-    } catch (error) {
-      console.error("Failed to run document audit:", error);
-      showToast(`Failed to run MQM audit: ${error.response?.data?.error || error.message || error}`, "error");
-    } finally {
-      setIsAuditing(false);
-    }
-  };
 
   const handleApplyGlossary = () => {
     if (segments.length === 0) {
@@ -2047,8 +2026,6 @@ export default function App() {
             setFilterStatus={setFilterStatus}
             onUpload={handleUpload}
             onOpenContext={() => setShowContextPanel(true)}
-            onAudit={permission === "write" ? handleDocumentAudit : null}
-            isAuditing={isAuditing}
           />
 
           {/* QA panel (collapsible) */}

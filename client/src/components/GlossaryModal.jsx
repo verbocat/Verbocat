@@ -85,7 +85,7 @@ export const GlossaryModal = ({
   }
 
   return (
-    <div className={`fixed inset-0 z-[100] flex flex-col bg-slate-950 ${theme.text}`}>
+    <div className={`fixed inset-0 z-[9999] flex flex-col bg-slate-950 ${theme.text}`}>
       <div className="flex-1 overflow-hidden">
         <div className="h-full flex flex-col lg:flex-row">
           <aside
