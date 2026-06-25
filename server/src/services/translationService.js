@@ -49,7 +49,7 @@ const isSafeTmTranslation = (source, target, targetLang) => {
     }
     
     // Check if it has no letters at all (just numbers, punctuation, symbols)
-    if (!/[a-zA-Z]/.test(clean)) {
+    if (!/\p{L}/u.test(clean)) {
       return true;
     }
     

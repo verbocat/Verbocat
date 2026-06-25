@@ -76,7 +76,7 @@ const splitByPunctuation = (str, tagMap) => {
       currentSegment += tagStr;
     } else if (match[2]) {
       const text = match[2];
-      const splitRegex = /([!?]+[\s]*|[\n]+[\s]*|\.+)/g;
+      const splitRegex = /([!?।॥]+[\s]*|[\n]+[\s]*|\.+)/g;
 
       let lastIndex = 0;
       let splitMatch;
