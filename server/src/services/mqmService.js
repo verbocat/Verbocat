@@ -152,10 +152,26 @@ CONTEXT & SETTINGS PROVIDED:
     }
 
     const errors = Array.isArray(parsed.errors) ? parsed.errors : [];
-    let accuracyScore = typeof parsed.accuracyScore === "number" ? Math.max(0, Math.min(100, parsed.accuracyScore)) : 100;
-    if (errors.length === 0) {
-      accuracyScore = 100;
+    
+    // Post-process programmatically to verify abbreviation & alignment accuracy
+    checkAcronymErrors(sourceText, translatedText, errors);
+    resolveOverlappingErrors(errors, translatedText);
+
+    // Recalculate mathematical score based on corrected error severities
+    let calculatedScore = 100;
+    for (const err of errors) {
+      const severity = (err.severity || "").toLowerCase();
+      if (severity === "minor") {
+        calculatedScore -= 3;
+      } else if (severity === "major") {
+        calculatedScore -= 10;
+      } else if (severity === "critical") {
+        calculatedScore -= 25;
+      } else {
+        calculatedScore -= 3; // Default minor deduction
+      }
     }
+    const accuracyScore = Math.max(0, calculatedScore);
 
     return {
       accuracyScore,
@@ -171,6 +187,74 @@ CONTEXT & SETTINGS PROVIDED:
       clarifyingQuestions: [],
       improvementSuggestion: ""
     };
+  }
+};
+
+// Programmatic acronym checking to prevent Devnagari transliterations of standard Latin abbreviations
+const checkAcronymErrors = (sourceText, translatedText, errors) => {
+  const acronyms = [
+    { latin: "NRI", devanagari: "एनआरआई" },
+    { latin: "AMB", devanagari: "एएमबी" },
+    { latin: "CIBIL", devanagari: "सिबिल" },
+    { latin: "CIBIL", devanagari: "सीआईबीआईएल" },
+    { latin: "KYC", devanagari: "केवाईसी" },
+    { latin: "OTP", devanagari: "ओटीपी" },
+    { latin: "ATM", devanagari: "एटीएम" }
+  ];
+
+  for (const item of acronyms) {
+    // Check if source contains the Latin acronym as a whole word
+    const sourceRegex = new RegExp(`\\b${item.latin}\\b`, "i");
+    if (sourceRegex.test(sourceText)) {
+      // Check if translation contains the Devanagari transliteration
+      const transRegex = new RegExp(item.devanagari, "g");
+      if (transRegex.test(translatedText)) {
+        // Check if this acronym or transliteration is already reported
+        const alreadyReported = errors.some(
+          err => err.snippet && (err.snippet.includes(item.devanagari) || err.correction === item.latin)
+        );
+
+        if (!alreadyReported) {
+          errors.push({
+            category: "Terminology / Incorrect Term",
+            severity: "Minor",
+            snippet: item.devanagari,
+            correction: item.latin,
+            explanation: `Acronyms like '${item.latin}' must remain in English/Latin script instead of being transliterated to '${item.devanagari}'.`
+          });
+        }
+      }
+    }
+  }
+};
+
+// Resolves conflicting or overlapping errors (e.g. grammar correction "आपका" -> "आपकी" conflicting with terminology correction "सहमति" -> "सहमति पत्र")
+const resolveOverlappingErrors = (errors, translatedText) => {
+  // Find if we have a "सहमति" -> "सहमति पत्र" terminology correction
+  const hasConsentLetterCorrection = errors.some(
+    err => (err.snippet === "सहमति" || err.snippet === "सहमति पत्र") && err.correction.includes("सहमति पत्र")
+  );
+
+  if (hasConsentLetterCorrection) {
+    // If we also have a correction for "आपका" -> "आपकी" or "आपका सहमति" -> "आपकी सहमति"
+    // that conflicts (since सहमति पत्र is masculine, so 'आपका सहमति पत्र' is grammatically correct)
+    const grammarErrIndex = errors.findIndex(
+      err => (err.snippet === "आपका सहमति" && err.correction === "आपकी सहमति") ||
+             (err.snippet === "आपका" && err.correction === "आपकी" && (translatedText.includes("आपका सहमति") || translatedText.includes("आपका सहमति पत्र")))
+    );
+
+    if (grammarErrIndex !== -1) {
+      // Remove the conflicting grammar error
+      errors.splice(grammarErrIndex, 1);
+      
+      // Update the terminology error to encompass the full phrase "आपका सहमति" -> "आपका सहमति पत्र"
+      const termErr = errors.find(err => (err.snippet === "सहमति" || err.snippet === "सहमति पत्र") && err.correction.includes("सहमति पत्र"));
+      if (termErr && translatedText.includes("आपका सहमति")) {
+        termErr.snippet = "आपका सहमति";
+        termErr.correction = "आपका सहमति पत्र";
+        termErr.explanation = "The term 'Consent' must be translated as 'सहमति पत्र' to reflect the formal document requirement, and possessive 'आपका' agrees with the masculine 'पत्र'.";
+      }
+    }
   }
 };
 

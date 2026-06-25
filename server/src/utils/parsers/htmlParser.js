@@ -16,18 +16,28 @@ const BLOCK_TAGS = [
   "body", "html"
 ];
 
-const isBlockNode = (node, $) => {
-  if (node.type !== "tag") return false;
+const isBlockNode = (node) => {
+  if (!node || node.type !== "tag") return false;
+  if (node._isBlockNodeCached !== undefined) return node._isBlockNodeCached;
+
   const tagName = node.name.toLowerCase();
-  if (BLOCK_TAGS.includes(tagName)) return true;
+  if (BLOCK_TAGS.includes(tagName)) {
+    node._isBlockNodeCached = true;
+    return true;
+  }
   
   let hasBlockDescendant = false;
-  $(node).find("*").each((_, desc) => {
-    if (BLOCK_TAGS.includes(desc.name.toLowerCase())) {
-      hasBlockDescendant = true;
-      return false;
+  if (node.children) {
+    for (let i = 0; i < node.children.length; i++) {
+      const child = node.children[i];
+      if (child.type === "tag" && isBlockNode(child)) {
+        hasBlockDescendant = true;
+        break;
+      }
     }
-  });
+  }
+
+  node._isBlockNodeCached = hasBlockDescendant;
   return hasBlockDescendant;
 };
 
@@ -46,7 +56,7 @@ const wrapInlineSiblings = (element, $) => {
         hasInline = true;
       }
     } else if (child.type === "tag") {
-      if (isBlockNode(child, $)) {
+      if (isBlockNode(child)) {
         hasBlock = true;
       } else if (!["script", "style", "noscript"].includes(child.name.toLowerCase())) {
         hasInline = true;
@@ -58,7 +68,7 @@ const wrapInlineSiblings = (element, $) => {
     let currentGroup = [];
     
     children.each((_, child) => {
-      const isBlock = child.type === "tag" && isBlockNode(child, $);
+      const isBlock = child.type === "tag" && isBlockNode(child);
       const isWhitespaceText = child.type === "text" && !$(child).text().trim();
       const isIgnoredTag = child.type === "tag" && ["script", "style", "noscript"].includes(child.name.toLowerCase());
 
@@ -100,26 +110,58 @@ const parseFile = async (filePath) => {
     wrapInlineSiblings($("body")[0], $);
   }
 
-  // 1. Find all block elements in the document that contain non-empty text
-  const blocks = [];
-  const selectors = [...BLOCK_TAGS, ".__temp-leaf-block__"].join(",");
-  $(selectors).each((_, el) => {
-    // Check if this block contains any text (excluding scripts/styles)
-    const clone = $(el).clone();
-    clone.find(SKIP_SELECTOR).remove();
-    const hasText = clone.text().trim().length > 0;
-    if (hasText) {
-      blocks.push(el);
+  // 1. Find all leaf-most block elements in the document that contain non-empty text in linear time
+  const leafTextBlocks = [];
+  const traverse = (node) => {
+    if (!node) return false;
+    
+    if (node.type === "tag") {
+      const tagName = node.name.toLowerCase();
+      if (["script", "style", "noscript", "svg", "canvas"].includes(tagName)) {
+        return false;
+      }
     }
-  });
 
-  // 2. Filter to keep only the leaf-most blocks (blocks that do not contain any other block in the list)
-  const leafTextBlocks = blocks.filter(block => {
-    return !blocks.some(otherBlock => {
-      if (otherBlock === block) return false;
-      return $(block).find(otherBlock).length > 0;
-    });
-  });
+    if (node.type === "text") {
+      return node.data.trim().length > 0;
+    }
+
+    let hasText = false;
+    let hasDescendantBlock = false;
+
+    if (node.children) {
+      for (let i = 0; i < node.children.length; i++) {
+        const child = node.children[i];
+        const isChildBlock = child.type === "tag" && 
+          (BLOCK_TAGS.includes(child.name.toLowerCase()) || 
+           (child.attribs && child.attribs.class && child.attribs.class.includes("__temp-leaf-block__")));
+
+        const childHasText = traverse(child);
+        if (childHasText) {
+          hasText = true;
+        }
+        if (isChildBlock && childHasText) {
+          hasDescendantBlock = true;
+        }
+      }
+    }
+
+    const isThisBlock = node.type === "tag" && 
+      (BLOCK_TAGS.includes(node.name.toLowerCase()) || 
+       (node.attribs && node.attribs.class && node.attribs.class.includes("__temp-leaf-block__")));
+
+    if (isThisBlock && hasText && !hasDescendantBlock) {
+      leafTextBlocks.push(node);
+    }
+
+    return hasText;
+  };
+
+  if ($("body").length > 0) {
+    traverse($("body")[0]);
+  } else {
+    traverse($.root()[0]);
+  }
 
   // 3. Process each leaf text block
   leafTextBlocks.forEach((blockNode) => {
