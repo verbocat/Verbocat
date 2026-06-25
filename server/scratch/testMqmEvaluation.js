@@ -59,6 +59,42 @@ async function runTest() {
     });
     console.log("Evaluation Results (Expect severe accuracy/terminology deductions):", JSON.stringify(resultBadTerm, null, 2));
 
+    // Test Case 4: Hindi translation false positive (conjunction and/और is present)
+    console.log("\n--- Test 4: Conjunction Check (False-Positive Prevention) ---");
+    const sourceHindiConjunction = "The Borrower also confirm that Borrower is aware of and have understood the aforesaid charges applicable on the Flexi Loan and the approach for gradations of risk & rationale followed by Lender for charging different rate of interest to different categories of borrowers along with other policies published on its website.";
+    const translationHindiConjunction = "उधारकर्ता यह भी पुष्टि करता है कि उधारकर्ता उपरोक्त चार्जों से अवगत है और फ्लेक्सी लोन पर लागू चार्जों को समझता है और जोखिम के ग्रेडेशन और विभिन्न श्रेणियों के उधारकर्ताओं पर विभिन्न ब्याज दरों को चार्ज करने के लिए ऋणदाता द्वारा अपनाई गई तर्कशक्ति को समझता है, साथ ही इसकी वेबसाइट पर प्रकाशित अन्य नीतियों को भी।";
+    const resultConjunction = await evaluateTranslationMQM({
+      sourceText: sourceHindiConjunction,
+      translatedText: translationHindiConjunction,
+      targetLang: "hi",
+      sourceLang: "en",
+      contextJira: "Loan agreement terms",
+      contextDescription: "Accurate legal translation",
+      contextSettings: {
+        tone: "Formal",
+        formality: "Formal"
+      }
+    });
+    console.log("Evaluation Results (Expect 100/High Score, NO false omission of 'and'):", JSON.stringify(resultConjunction, null, 2));
+
+    // Test Case 5: List Index Localization (h.) -> झ.))
+    console.log("\n--- Test 5: List Index Localization ---");
+    const sourceListIndex = "h.) The Borrower shall pay standard charges.";
+    const translationListIndex = "झ.) उधारकर्ता मानक शुल्कों का भुगतान करेगा।";
+    const resultListIndex = await evaluateTranslationMQM({
+      sourceText: sourceListIndex,
+      translatedText: translationListIndex,
+      targetLang: "hi",
+      sourceLang: "en",
+      contextJira: "Loan agreement terms",
+      contextDescription: "Accurate legal translation",
+      contextSettings: {
+        tone: "Formal",
+        formality: "Formal"
+      }
+    });
+    console.log("Evaluation Results (Expect 100/High Score, NO error flagged for list letter localization):", JSON.stringify(resultListIndex, null, 2));
+
   } catch (err) {
     console.error("Test execution failed:", err);
   }

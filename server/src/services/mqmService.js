@@ -43,6 +43,7 @@ CONTEXT & SETTINGS REQUIREMENT:
 - You MUST analyze and prioritize the provided Context & Settings first (Jira context, custom instructions/description, tone, formality) to guide your quality assessment.
 - Analyze how the source text should be translated under these constraints, and evaluate if the translation complies with them.
 - Any suggestions or corrections must align strictly with this context.
+- TONE COMPLIANCE: If the requested tone is 'Formal' (or if the text is a legal/banking document), formal language is CORRECT. Do NOT flag formal phrasing as 'Too Formal' or suggest converting it to casual talk (e.g. do not suggest changing 'पुष्टि करता है' to 'बताना चाहता है').
 
 MQM ERROR TAXONOMY:
 1. Accuracy:
@@ -67,9 +68,18 @@ SEVERITY SCORING DEDUCTIONS (Start at 100 points):
 - Major error: -10 points (Mistranslation, omission, terminology error that changes meaning slightly)
 - Critical error: -25 points (Severe mistranslation, omission, or wrong target language)
 
+FALSE-POSITIVE PREVENTION & LOCALIZATION RULES (CRITICAL):
+- You MUST double check all potential errors before writing them down.
+- Conjunction and Word Presence: Before marking a word or conjunction (like 'and', 'but', 'or') as "Omitted" or missing, you must verify if its target language equivalent (e.g. 'और', 'लेकिन', 'या' in Hindi) is already present in the translation. If it is present, it is NOT an error. Never report false omissions.
+- Meaning Representation: If a concept or verb is already translated (e.g., 'have understood' translated as 'समझता है' or 'समझ गया है'), it is NOT omitted. Do not flag minor grammatical tense or voice differences as major omissions.
+- List Index Localization: Do NOT flag translated list indices (like letters or numerals) as errors if they represent standard local equivalents. For example, translating the English list letter 'h.)' to the corresponding Hindi letter 'झ.)' is standard and correct Devanagari listing order (skipping non-initial consonants like ङ). Do NOT flag this as mistranslation, addition, or spelling error.
+- Standard Punctuation differences (like using '।' instead of '.') are correct target language punctuation and must not be flagged as errors.
+- Do NOT deduct points unless you have concrete, indisputable evidence of an error. If there are no errors, the score must be exactly 100.
+
 OFFENDING SNIPPET & CORRECTION RULES:
 - The "snippet" field MUST contain ONLY the specific incorrect text/substring from the translated text that needs to be replaced. Do NOT include any surrounding correct words.
 - The "correction" field MUST contain ONLY the corrected text to replace the offending "snippet" with. Do NOT include the whole sentence, only the exact correction.
+- SYNTAX CHECK: Ensure that replacing the "snippet" with the "correction" in the translation yields a grammatically correct sentence. Do not introduce duplicate words (like duplicate conjunctions 'और और') or break sentence flow.
 
 TECHNICAL TAGS & EMAIL INSTRUCTIONS:
 - You will see formatting tags in the source and translation (such as "<5261>", "</5261>", "<65>", etc.). These are system-protected markup placeholders.
@@ -80,23 +90,27 @@ Target Language: ${targetLangName} (from ${sourceLangName})
 
 CRITICAL FORMATTING: You must output ONLY a valid JSON object with the following structure:
 {
-  "accuracyScore": 85, // Math-based score from 0 to 100 after deductions
+  "analysisSteps": [
+    "Step 1: Analyzed Jira context, global tone, and formality constraints.",
+    "Step 2: Fact-checked whether there is any list index or punctuation localization. The source has list index 'h.)' and the translation has 'झ.)'. 'झ' is the correct 8th index in Hindi list sequencing, so this is correct localization and not an error.",
+    "Step 3: Fact-checked conjunction 'and'. The source has 'aware of and have understood' and translation has 'अवगत है और ... समझता है'. 'और' is present, meaning 'and' is translated properly and not omitted.",
+    "Step 4: Checked for other spelling/grammar/mistranslation issues."
+  ],
+  "accuracyScore": 97, // Math-based score from 0 to 100 after deductions. If errors is empty, this MUST be 100.
   "errors": [
     {
-      "category": "Style / Too Formal",
+      "category": "Terminology / Incorrect Term",
       "severity": "Minor",
-      "snippet": "Please note that", // ONLY the wrong text/substring from the translation
-      "correction": "Just remember,", // ONLY the corrected version of that substring to replace it with
-      "explanation": "Presents a formal notification style. The user requested extremely informal day-to-day talk."
+      "snippet": "चार्जों", // ONLY the wrong text/substring from the translation
+      "correction": "प्रभारों", // ONLY the corrected version of that substring to replace it with
+      "explanation": "In standard banking/legal contexts, 'charges' is translated as 'प्रभारों' rather than the transliterated 'चार्जों'."
     }
   ],
-  "clarifyingQuestions": [
-    "Is 'PFL' a specific brand name that must remain untranslated, or does it stand for a local term that should be localized?"
-  ],
-  "improvementSuggestion": "Add custom description instruction: 'Use contractions like you've, it's and warm greetings like Hey, just a heads-up'"
+  "clarifyingQuestions": [],
+  "improvementSuggestion": "Consider adding a custom glossary instruction to translate 'charges' as 'प्रभार' for banking consistency."
 }
 
-If no errors are found, return empty arrays and an empty string for improvementSuggestion. Always provide clear, helpful questions or suggestions if the score is below 95.`;
+If no errors are found, the accuracyScore MUST be 100, and you should return empty arrays for errors and clarifyingQuestions, and an empty string for improvementSuggestion.`;
 
   const userPrompt = `Source Segment: "${sourceText}"
 Translated Segment: "${translatedText}"
@@ -130,9 +144,20 @@ CONTEXT & SETTINGS PROVIDED:
 
     const content = response.data?.choices?.[0]?.message?.content;
     const parsed = JSON.parse(content);
+    
+    if (parsed.analysisSteps) {
+      console.log(`[MQM CoT Analysis for "${sourceText.substring(0, 40)}..."]:`, parsed.analysisSteps);
+    }
+
+    const errors = Array.isArray(parsed.errors) ? parsed.errors : [];
+    let accuracyScore = typeof parsed.accuracyScore === "number" ? Math.max(0, Math.min(100, parsed.accuracyScore)) : 100;
+    if (errors.length === 0) {
+      accuracyScore = 100;
+    }
+
     return {
-      accuracyScore: typeof parsed.accuracyScore === "number" ? Math.max(0, Math.min(100, parsed.accuracyScore)) : 100,
-      errors: Array.isArray(parsed.errors) ? parsed.errors : [],
+      accuracyScore,
+      errors,
       clarifyingQuestions: Array.isArray(parsed.clarifyingQuestions) ? parsed.clarifyingQuestions : [],
       improvementSuggestion: typeof parsed.improvementSuggestion === "string" ? parsed.improvementSuggestion : ""
     };
