@@ -909,9 +909,19 @@ export const SegmentCard = ({
                                   [{err.severity}] {err.category}
                                 </span>
                                 {err.snippet && (
-                                  <span style={{ fontSize: 9.5, fontFamily: "var(--font-mono)", background: "rgba(255,255,255,0.03)", padding: "1px 4px", borderRadius: 3, border: "1px solid var(--border-subtle)" }}>
-                                    "{err.snippet}"
-                                  </span>
+                                  <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                                    <span style={{ fontSize: 9.5, fontFamily: "var(--font-mono)", background: "rgba(239,68,68,0.05)", color: "var(--text-rose)", padding: "1px 4px", borderRadius: 3, border: "1px solid rgba(239,68,68,0.15)" }}>
+                                      "{err.snippet}"
+                                    </span>
+                                    {err.correction && (
+                                      <>
+                                        <span style={{ fontSize: 9.5, color: "var(--text-muted)" }}>➔</span>
+                                        <span style={{ fontSize: 9.5, fontFamily: "var(--font-mono)", background: "rgba(16,185,129,0.05)", color: "var(--text-emerald)", padding: "1px 4px", borderRadius: 3, border: "1px solid rgba(16,185,129,0.15)" }}>
+                                          "{err.correction}"
+                                        </span>
+                                      </>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                               <span style={{ fontSize: 10.5, color: "var(--text-muted)" }}>

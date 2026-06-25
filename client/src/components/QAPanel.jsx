@@ -256,6 +256,15 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
                         </span>
                       </div>
                     )}
+                    
+                    {isMqm && item.correction && (
+                      <div className="mt-1 flex items-center gap-1.5">
+                        <span className="text-[10.5px] font-bold text-emerald-400 uppercase">Correction:</span>
+                        <span className="text-xs text-emerald-300 font-mono bg-emerald-950/30 px-1.5 py-0.5 rounded border border-emerald-500/15">
+                          "{item.correction}"
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 

@@ -513,6 +513,7 @@ export default function App() {
               category: err.category,
               severity: err.severity || "Minor",
               snippet: err.snippet,
+              correction: err.correction,
               explanation: err.explanation,
               issue: `${err.category} (${err.severity || "Minor"}): ${err.explanation}`,
               source: segment.source,
@@ -1726,22 +1727,25 @@ export default function App() {
     // Close QA Panel
     setShowQaPanel(false);
 
-    const element = document.getElementById(`segment-${id}`);
-    if (element) {
-      element.scrollIntoView({
-        behavior: "smooth",
-        block: "center"
+    const index = filteredSegments.findIndex((s) => s.id === id);
+    if (index !== -1 && virtuosoRef.current) {
+      virtuosoRef.current.scrollToIndex({
+        index,
+        align: "center",
+        behavior: "smooth"
       });
-
-      element.classList.add("ring-2", "ring-red-500");
-
-      window.setTimeout(() => {
-        element.classList.remove("ring-2", "ring-red-500");
-      }, 2000);
     }
 
-    // Focus target editor and place cursor at the end
+    // Focus target editor and place cursor at the end after scroll mounts the element
     window.setTimeout(() => {
+      const element = document.getElementById(`segment-${id}`);
+      if (element) {
+        element.classList.add("ring-2", "ring-red-500");
+        window.setTimeout(() => {
+          element.classList.remove("ring-2", "ring-red-500");
+        }, 2000);
+      }
+
       const editor = document.getElementById(`target-${id}`);
       if (editor) {
         editor.focus();
@@ -1756,7 +1760,7 @@ export default function App() {
           console.error("Failed to position cursor at end:", e);
         }
       }
-    }, 300);
+    }, 450);
   };
 
   // Guard screens for authentication & password resets

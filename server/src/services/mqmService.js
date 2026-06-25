@@ -39,6 +39,11 @@ const evaluateTranslationMQM = async ({
 Your task is to analyze the translation of a text segment and provide an honest, exact, and detailed quality audit.
 Do NOT fake or exaggerate any ratings. If a translation is perfect, give it 100. If there are minor flaws, deduct points strictly based on severity.
 
+CONTEXT & SETTINGS REQUIREMENT:
+- You MUST analyze and prioritize the provided Context & Settings first (Jira context, custom instructions/description, tone, formality) to guide your quality assessment.
+- Analyze how the source text should be translated under these constraints, and evaluate if the translation complies with them.
+- Any suggestions or corrections must align strictly with this context.
+
 MQM ERROR TAXONOMY:
 1. Accuracy:
    - Addition (Extra words that change the meaning)
@@ -62,6 +67,10 @@ SEVERITY SCORING DEDUCTIONS (Start at 100 points):
 - Major error: -10 points (Mistranslation, omission, terminology error that changes meaning slightly)
 - Critical error: -25 points (Severe mistranslation, omission, or wrong target language)
 
+OFFENDING SNIPPET & CORRECTION RULES:
+- The "snippet" field MUST contain ONLY the specific incorrect text/substring from the translated text that needs to be replaced. Do NOT include any surrounding correct words.
+- The "correction" field MUST contain ONLY the corrected text to replace the offending "snippet" with. Do NOT include the whole sentence, only the exact correction.
+
 TECHNICAL TAGS & EMAIL INSTRUCTIONS:
 - You will see formatting tags in the source and translation (such as "<5261>", "</5261>", "<65>", etc.). These are system-protected markup placeholders.
 - Do NOT flag these system tags as 'untranslated text', 'additions', 'omissions', or 'spelling errors'. They must be ignored during quality evaluation and should be allowed to remain intact in the translation.
@@ -76,7 +85,8 @@ CRITICAL FORMATTING: You must output ONLY a valid JSON object with the following
     {
       "category": "Style / Too Formal",
       "severity": "Minor",
-      "snippet": "Please note that",
+      "snippet": "Please note that", // ONLY the wrong text/substring from the translation
+      "correction": "Just remember,", // ONLY the corrected version of that substring to replace it with
       "explanation": "Presents a formal notification style. The user requested extremely informal day-to-day talk."
     }
   ],
