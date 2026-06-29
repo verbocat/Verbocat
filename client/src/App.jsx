@@ -2485,6 +2485,49 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* ── Failed Background Audit Alert ── */}
+      {activeJob && activeJob.status === "failed" && (
+        <div style={{
+          position: "fixed", bottom: 24, left: 24, zIndex: 199,
+          background: "var(--bg-surface)", border: "1px solid rgba(239,68,68,0.3)",
+          borderRadius: 14, padding: "14px 18px", width: 340,
+          boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
+          display: "flex", flexDirection: "column", gap: 10,
+          textAlign: "left", transition: "all 0.3s ease",
+          backdropFilter: "blur(8px)"
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 11.5, fontWeight: 800, color: "#f87171" }}>
+              QC Audit Failed
+            </span>
+            <button 
+              onClick={() => setActiveJob(null)}
+              style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: 14, fontWeight: "bold" }}
+            >
+              ×
+            </button>
+          </div>
+          <p style={{ fontSize: 11, color: "var(--text-secondary)", margin: 0, lineHeight: 1.4 }}>
+            {activeJob.error_message || "An unexpected error occurred during execution."}
+          </p>
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button
+              onClick={() => {
+                setActiveJob(null);
+                handleRunQc();
+              }}
+              style={{
+                background: "rgba(255,255,255,0.08)", border: "1px solid var(--border-medium)",
+                color: "#fff", fontSize: 9.5, fontWeight: 700,
+                borderRadius: 6, padding: "4px 10px", cursor: "pointer"
+              }}
+            >
+              Retry Audit
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

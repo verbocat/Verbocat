@@ -1,6 +1,7 @@
 const axios = require("axios");
 const crypto = require("crypto");
-const pLimit = require("p-limit");
+const pLimitModule = require("p-limit");
+const pLimit = pLimitModule.default || pLimitModule;
 const { supabase } = require("../config/supabase");
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
