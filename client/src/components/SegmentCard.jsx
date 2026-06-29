@@ -106,6 +106,24 @@ export const SegmentCard = ({
     }
   }
 
+  let penaltyPoints = 0;
+  let isMqmEvaluated = false;
+  let isEscalatingVerifying = false;
+
+  if (parsedMqmReport) {
+    isMqmEvaluated = true;
+    const errors = parsedMqmReport.errors || [];
+    const SEVERITY_WEIGHT = { minor: 1, major: 5, critical: 25 };
+    penaltyPoints = errors.reduce((sum, e) => {
+      const sev = String(e.severity || "").toLowerCase();
+      return sum + (SEVERITY_WEIGHT[sev] || 0);
+    }, 0);
+    isEscalatingVerifying = !!(parsedMqmReport.isEscalating || errors.some(e => e.verifying));
+  } else if (segment.mqmAccuracyScore !== undefined && segment.mqmAccuracyScore !== null) {
+    isMqmEvaluated = true;
+    penaltyPoints = Math.max(0, 100 - segment.mqmAccuracyScore);
+  }
+
   useEffect(() => {
     setJiraText(segment.contextJira || "");
     setDescText(segment.contextDescription || "");
@@ -472,7 +490,7 @@ export const SegmentCard = ({
                 }}
               >
                 {/* MQM Quality Badge */}
-                {segment.mqmAccuracyScore !== undefined && segment.mqmAccuracyScore !== null && (
+                {isMqmEvaluated && (
                   <button
                     type="button"
                     onClick={(e) => {
@@ -484,9 +502,9 @@ export const SegmentCard = ({
                       fontSize: "9px",
                       fontWeight: 700,
                       fontFamily: "'Inter', sans-serif",
-                      color: segment.mqmAccuracyScore >= 90 ? "#10b981" : segment.mqmAccuracyScore >= 70 ? "#f59e0b" : "#ef4444",
-                      background: segment.mqmAccuracyScore >= 90 ? "rgba(16,185,129,0.12)" : segment.mqmAccuracyScore >= 70 ? "rgba(245,158,11,0.12)" : "rgba(239,68,68,0.12)",
-                      border: segment.mqmAccuracyScore >= 90 ? "1px solid rgba(16,185,129,0.3)" : segment.mqmAccuracyScore >= 70 ? "1px solid rgba(245,158,11,0.3)" : "1px solid rgba(239,68,68,0.3)",
+                      color: isEscalatingVerifying ? "#818cf8" : (penaltyPoints === 0 ? "#10b981" : penaltyPoints <= 4 ? "#fbbf24" : penaltyPoints <= 24 ? "#f97316" : "#ef4444"),
+                      background: isEscalatingVerifying ? "rgba(99,102,241,0.12)" : (penaltyPoints === 0 ? "rgba(16,185,129,0.12)" : penaltyPoints <= 4 ? "rgba(251,191,36,0.12)" : penaltyPoints <= 24 ? "rgba(249,115,22,0.12)" : "rgba(239,68,68,0.12)"),
+                      border: isEscalatingVerifying ? "1px solid rgba(99,102,241,0.3)" : (penaltyPoints === 0 ? "1px solid rgba(16,185,129,0.3)" : penaltyPoints <= 4 ? "1px solid rgba(251,191,36,0.3)" : penaltyPoints <= 24 ? "1px solid rgba(249,115,22,0.3)" : "1px solid rgba(239,68,68,0.3)"),
                       borderRadius: "6px",
                       padding: "3px 6px",
                       cursor: "pointer",
@@ -496,10 +514,10 @@ export const SegmentCard = ({
                       transition: "all 0.2s ease",
                       boxShadow: "0 2px 6px rgba(0,0,0,0.2)"
                     }}
-                    title={`MQM Accuracy: ${segment.mqmAccuracyScore}% (Click to audit)`}
+                    title={isEscalatingVerifying ? "Verifying critical errors in background..." : `MQM Penalty: ${penaltyPoints} pts (Click to audit)`}
                   >
                     <Award style={{ width: 11, height: 11 }} />
-                    <span>MQM: {segment.mqmAccuracyScore}%</span>
+                    <span>{isEscalatingVerifying ? "MQM: Verifying..." : (penaltyPoints === 0 ? "MQM: Clean" : `MQM: ${penaltyPoints} pts`)}</span>
                   </button>
                 )}
 
@@ -805,25 +823,31 @@ export const SegmentCard = ({
                   </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    {/* Score Bar */}
+                    {/* Penalty Points & Status */}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(0,0,0,0.15)", border: "1px solid var(--border-subtle)", borderRadius: 8, padding: "8px 12px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-primary)" }}>MQM Accuracy Score:</span>
+                        <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-primary)" }}>
+                          {isEscalatingVerifying ? "MQM Verification:" : "MQM Penalty Score:"}
+                        </span>
                         <span style={{
                           fontSize: 13, fontWeight: 800, fontFamily: "'IBM Plex Mono', monospace",
-                          color: segment.mqmAccuracyScore >= 90 ? "var(--emerald)" : segment.mqmAccuracyScore >= 70 ? "var(--text-amber)" : "var(--text-rose)"
+                          color: isEscalatingVerifying ? "#818cf8" : (penaltyPoints === 0 ? "var(--emerald)" : penaltyPoints <= 4 ? "var(--text-amber)" : penaltyPoints <= 24 ? "var(--text-orange)" : "var(--text-rose)")
                         }}>
-                          {segment.mqmAccuracyScore}%
+                          {isEscalatingVerifying ? "Verifying..." : `${penaltyPoints} pts`}
                         </span>
                       </div>
-                      <div style={{ width: 120, height: 6, background: "rgba(255,255,255,0.05)", borderRadius: 3, overflow: "hidden" }}>
-                        <div style={{
-                          width: `${segment.mqmAccuracyScore}%`,
-                          height: "100%",
-                          background: segment.mqmAccuracyScore >= 90 ? "var(--emerald)" : segment.mqmAccuracyScore >= 70 ? "var(--text-amber)" : "var(--text-rose)",
-                          borderRadius: 3
-                        }} />
-                      </div>
+                      {!isEscalatingVerifying && (
+                        <span style={{
+                          fontSize: 9, fontWeight: 700,
+                          color: penaltyPoints === 0 ? "var(--emerald)" : penaltyPoints <= 4 ? "var(--text-amber)" : penaltyPoints <= 24 ? "var(--text-orange)" : "var(--text-rose)",
+                          background: penaltyPoints === 0 ? "rgba(16,185,129,0.12)" : penaltyPoints <= 4 ? "rgba(251,191,36,0.12)" : penaltyPoints <= 24 ? "rgba(249,115,22,0.12)" : "rgba(239,68,68,0.12)",
+                          border: penaltyPoints === 0 ? "1px solid rgba(16,185,129,0.3)" : penaltyPoints <= 4 ? "1px solid rgba(251,191,36,0.3)" : penaltyPoints <= 24 ? "1px solid rgba(249,115,22,0.3)" : "1px solid rgba(239,68,68,0.3)",
+                          borderRadius: "4px",
+                          padding: "2px 6px"
+                        }}>
+                          {penaltyPoints === 0 ? "Excellent" : penaltyPoints <= 4 ? "Minor Issues" : penaltyPoints <= 24 ? "Major Issues" : "Critical Issues"}
+                        </span>
+                      )}
                     </div>
 
                     {/* AI Advisor Clarifications and Suggestions */}

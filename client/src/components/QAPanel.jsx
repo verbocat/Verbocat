@@ -6,10 +6,39 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
 
   if (!showQaPanel) return null;
 
-  // Calculate Average MQM Accuracy
-  const translatedSegments = segments.filter(s => s.target && s.mqmAccuracyScore !== undefined && s.mqmAccuracyScore !== null);
-  const averageMqm = translatedSegments.length > 0 
-    ? Math.round(translatedSegments.reduce((acc, s) => acc + s.mqmAccuracyScore, 0) / translatedSegments.length)
+  // Calculate aggregate document score based on raw penalties and total word count (pure weighted average)
+  let totalWords = 0;
+  let totalPenalty = 0;
+  let ratedCount = 0;
+
+  segments.forEach(seg => {
+    if (seg.target) {
+      const words = Math.max(1, (seg.source || "").trim().split(/\s+/).filter(Boolean).length);
+      totalWords += words;
+
+      let segmentErrors = [];
+      if (seg.mqmReport) {
+        let rep = seg.mqmReport;
+        if (typeof rep === "string") {
+          try { rep = JSON.parse(rep); } catch (e) {}
+        }
+        segmentErrors = rep.errors || [];
+      }
+
+      if (seg.mqmAccuracyScore !== undefined && seg.mqmAccuracyScore !== null) {
+        ratedCount++;
+        const SEVERITY_WEIGHT = { minor: 1, major: 5, critical: 25 };
+        const penalty = segmentErrors.reduce((sum, e) => {
+          const sev = String(e.severity || "").toLowerCase();
+          return sum + (SEVERITY_WEIGHT[sev] || 0);
+        }, 0);
+        totalPenalty += penalty;
+      }
+    }
+  });
+
+  const averageMqm = ratedCount > 0
+    ? Math.max(0, Math.round(100 - (totalPenalty / totalWords) * 100))
     : null;
 
   // Calculate severity counters
@@ -22,8 +51,9 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
     if (item.type === "rule") {
       ruleCount++;
     } else if (item.type === "mqm") {
-      if (item.severity === "Critical") criticalCount++;
-      else if (item.severity === "Major") majorCount++;
+      const sev = String(item.severity || "").toLowerCase();
+      if (sev === "critical") criticalCount++;
+      else if (sev === "major") majorCount++;
       else minorCount++;
     }
   });
@@ -31,9 +61,9 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
   // Filter issues list
   const filteredIssues = qaIssuesList.filter(item => {
     if (activeFilter === "all") return true;
-    if (activeFilter === "critical") return item.type === "mqm" && item.severity === "Critical";
-    if (activeFilter === "major") return item.type === "mqm" && item.severity === "Major";
-    if (activeFilter === "minor") return item.type === "mqm" && item.severity === "Minor";
+    if (activeFilter === "critical") return item.type === "mqm" && String(item.severity || "").toLowerCase() === "critical";
+    if (activeFilter === "major") return item.type === "mqm" && String(item.severity || "").toLowerCase() === "major";
+    if (activeFilter === "minor") return item.type === "mqm" && String(item.severity || "").toLowerCase() === "minor";
     if (activeFilter === "rule") return item.type === "rule";
     return true;
   });

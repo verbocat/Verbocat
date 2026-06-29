@@ -179,3 +179,23 @@ export const auditDocument = async (documentId, contextSettings) => {
   return response.data;
 };
 
+export const getAuditEstimate = async (documentId, contextSettings) => {
+  const response = await api.post(`/api/documents/${documentId}/audit/estimate`, { contextSettings });
+  return response.data;
+};
+
+export const startAudit = async (documentId, contextSettings) => {
+  const response = await api.post(`/api/documents/${documentId}/audit/start`, { contextSettings });
+  return response.data;
+};
+
+export const cancelAudit = async (documentId, jobId) => {
+  const response = await api.post(`/api/documents/${documentId}/audit/cancel/${jobId}`);
+  return response.data;
+};
+
+export const getAuditStatus = async (documentId, jobId) => {
+  const response = await api.get(`/api/documents/${documentId}/audit/status/${jobId}`);
+  return response.data;
+};
+

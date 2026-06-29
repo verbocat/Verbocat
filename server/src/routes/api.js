@@ -477,9 +477,6 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
     if (contextJira !== undefined) updateFields.context_jira = contextJira;
     if (contextDescription !== undefined) updateFields.context_description = contextDescription;
 
-    let mqmScore = undefined;
-    let mqmReport = undefined;
-
     // Fetch the source text and context
     const { data: dbSegment } = await supabase
       .from("document_segments")
@@ -493,41 +490,6 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
     }
 
     const sourceText = dbSegment.source_text;
-
-    if (targetText !== undefined) {
-      // Fetch the adjacent segments for the sliding context window
-      const { data: siblingSegments } = await supabase
-        .from("document_segments")
-        .select("segment_index, source_text, target_text")
-        .eq("document_id", doc.id)
-        .in("segment_index", [segmentIndex - 1, segmentIndex + 1]);
-
-      const prevSegment = siblingSegments?.find(s => s.segment_index === segmentIndex - 1);
-      const nextSegment = siblingSegments?.find(s => s.segment_index === segmentIndex + 1);
-
-      const { evaluateTranslationMQM } = require("../services/mqmService");
-      try {
-        const evaluation = await evaluateTranslationMQM({
-          sourceText: dbSegment.source_text,
-          translatedText: targetText,
-          targetLang: doc.target_lang,
-          sourceLang: doc.source_lang,
-          contextJira: contextJira !== undefined ? contextJira : dbSegment.context_jira,
-          contextDescription: contextDescription !== undefined ? contextDescription : dbSegment.context_description,
-          contextSettings: null,
-          prevSource: prevSegment?.source_text,
-          prevTarget: prevSegment?.target_text,
-          nextSource: nextSegment?.source_text,
-          nextTarget: nextSegment?.target_text
-        });
-        mqmScore = evaluation.accuracyScore;
-        mqmReport = evaluation;
-        updateFields.mqm_accuracy_score = mqmScore;
-        updateFields.mqm_report = mqmReport;
-      } catch (err) {
-        console.error("Failed to run MQM on manual update:", err);
-      }
-    }
 
     // Find all duplicate segment indices in the document
     let updatedIndices = [segmentIndex];
@@ -553,7 +515,7 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
       return response.status(500).json({ error: "Failed to update segment." });
     }
 
-    // Broadcast update via Socket.io
+    // Broadcast manual save update immediately via Socket.io
     const { getIo } = require("../services/socket");
     const io = getIo();
     if (io) {
@@ -564,18 +526,102 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
           status: status || "translated",
           contextJira,
           contextDescription,
-          mqmAccuracyScore: mqmScore,
-          mqmReport,
+          mqmAccuracyScore: undefined,
+          mqmReport: null,
           updatedBy: request.user.email
         });
       });
     }
 
+    // Respond immediately to UI
     response.json({ 
       success: true,
-      mqmAccuracyScore: mqmScore,
-      mqmReport
+      message: "Segment saved. MQM auditing in background."
     });
+
+    // Run MQM evaluation asynchronously in background
+    if (targetText !== undefined) {
+      (async () => {
+        try {
+          const { evaluateTranslationMQM } = require("../services/mqmService");
+          
+          // Fetch adjacent segments for sliding window context
+          const { data: siblingSegments } = await supabase
+            .from("document_segments")
+            .select("segment_index, source_text, target_text")
+            .eq("document_id", doc.id)
+            .in("segment_index", [segmentIndex - 1, segmentIndex + 1]);
+
+          const prevSegment = siblingSegments?.find(s => s.segment_index === segmentIndex - 1);
+          const nextSegment = siblingSegments?.find(s => s.segment_index === segmentIndex + 1);
+
+          const evaluation = await evaluateTranslationMQM({
+            sourceText: dbSegment.source_text,
+            translatedText: targetText,
+            targetLang: doc.target_lang,
+            sourceLang: doc.source_lang,
+            contextJira: contextJira !== undefined ? contextJira : dbSegment.context_jira,
+            contextDescription: contextDescription !== undefined ? contextDescription : dbSegment.context_description,
+            contextSettings: null,
+            prevSource: prevSegment?.source_text,
+            prevTarget: prevSegment?.target_text,
+            nextSource: nextSegment?.source_text,
+            nextTarget: nextSegment?.target_text,
+            isFullAudit: false, // 1-pass execution
+            documentId: doc.id,
+            onCriticalEscalate: async (intermediateReport) => {
+              // Persist intermediate report to DB
+              await supabase
+                .from("document_segments")
+                .update({
+                  mqm_accuracy_score: intermediateReport.accuracyScore,
+                  mqm_report: intermediateReport
+                })
+                .eq("document_id", doc.id)
+                .in("segment_index", updatedIndices);
+
+              if (io) {
+                updatedIndices.forEach((idx) => {
+                  io.to(doc.id).emit("segment-updated", {
+                    segmentIndex: idx,
+                    targetText,
+                    status: status || "translated",
+                    mqmAccuracyScore: intermediateReport.accuracyScore,
+                    mqmReport: intermediateReport,
+                    updatedBy: "System Auditor"
+                  });
+                });
+              }
+            }
+          });
+
+          // Persist final resolved MQM score & report
+          await supabase
+            .from("document_segments")
+            .update({
+              mqm_accuracy_score: evaluation.accuracyScore,
+              mqm_report: evaluation
+            })
+            .eq("document_id", doc.id)
+            .in("segment_index", updatedIndices);
+
+          if (io) {
+            updatedIndices.forEach((idx) => {
+              io.to(doc.id).emit("segment-updated", {
+                segmentIndex: idx,
+                targetText,
+                status: status || "translated",
+                mqmAccuracyScore: evaluation.accuracyScore,
+                mqmReport: evaluation,
+                updatedBy: "System Auditor"
+              });
+            });
+          }
+        } catch (err) {
+          console.error("Failed background MQM update:", err.message);
+        }
+      })();
+    }
   } catch (error) {
     console.error(error);
     response.status(500).json({ error: "Internal server error." });
@@ -728,43 +774,197 @@ apiRouter.post(
   }
 );
 
-// 2b. Audit the entire document segments sequentially in the background using sliding context window
-const activeAudits = new Set();
+// ── Document-Wide Audit APIs ──
 
-apiRouter.post("/documents/:id/audit", checkAuth, async (request, response) => {
+// 1. Pre-flight Estimate
+apiRouter.post("/documents/:id/audit/estimate", checkAuth, async (request, response) => {
   const documentId = request.params.id;
   try {
     const doc = await verifyDocumentAccess(request, response, "write");
     if (!doc) return;
 
-    if (activeAudits.has(documentId)) {
-      return response.status(400).json({ error: "Audit is already in progress for this document." });
+    const { data: segments, error: fetchErr } = await supabase
+      .from("document_segments")
+      .select("source_text")
+      .eq("document_id", documentId);
+
+    if (fetchErr || !segments) {
+      return response.status(500).json({ error: "Failed to fetch document segments." });
     }
 
-    const { contextSettings } = request.body;
+    const segmentCount = segments.length;
+    let totalWordCount = 0;
+    segments.forEach(seg => {
+      const words = (seg.source_text || "").trim().split(/\s+/).filter(Boolean).length;
+      totalWordCount += words;
+    });
 
-    // Start background process
-    activeAudits.add(documentId);
-    
-    // Respond immediately to prevent HTTP connection timeouts
-    response.json({ success: true, message: "Document audit started in the background." });
+    const pass1Calls = Math.ceil(segmentCount / 8);
+    const estErrSegments = Math.ceil(segmentCount * 0.15);
+    const estimatedCalls = pass1Calls + (estErrSegments * 2);
 
-    // Execute background audit
+    const estimatedDurationMin = Math.max(1, Math.round((segmentCount * 0.4) / 60 * 10) / 10);
+    const estimatedCostUsd = Math.round((segmentCount * 0.00015) * 10000) / 10000;
+
+    response.json({
+      segmentCount,
+      totalWordCount,
+      estimatedCalls,
+      estimatedDurationMin,
+      estimatedCostUsd
+    });
+  } catch (error) {
+    console.error("Audit estimate failed:", error);
+    response.status(500).json({ error: "Internal server error." });
+  }
+});
+
+// 2. Start Background Audit
+apiRouter.post("/documents/:id/audit/start", checkAuth, async (request, response) => {
+  const documentId = request.params.id;
+  try {
+    const doc = await verifyDocumentAccess(request, response, "write");
+    if (!doc) return;
+
+    // Check if there is already an active job for this document
+    const { data: activeJobs } = await supabase
+      .from("audit_jobs")
+      .select("*")
+      .eq("document_id", documentId)
+      .in("status", ["pending", "in_progress"]);
+
+    if (activeJobs && activeJobs.length > 0) {
+      return response.status(400).json({ error: "An audit is already running for this document." });
+    }
+
+    // Insert pending job record
+    const { data: job, error: jobErr } = await supabase
+      .from("audit_jobs")
+      .insert({
+        document_id: documentId,
+        status: "pending"
+      })
+      .select()
+      .single();
+
+    if (jobErr || !job) {
+      console.error("Failed to create audit job:", jobErr);
+      return response.status(500).json({ error: "Failed to initiate audit job." });
+    }
+
+    response.json({
+      success: true,
+      jobId: job.id,
+      message: "Background audit started."
+    });
+
+    // Start background worker
     (async () => {
       try {
-        console.log(`Starting background word-count audit for document ${documentId}...`);
-        const { auditDocumentByWordCount } = require("../services/mqmService");
-        await auditDocumentByWordCount(documentId, contextSettings);
+        const { auditDocumentMQM } = require("../services/mqmService");
+        await auditDocumentMQM(documentId, job.id);
       } catch (err) {
-        console.error(`Background audit crashed for document ${documentId}:`, err);
-      } finally {
-        activeAudits.delete(documentId);
+        console.error(`[Background Audit Crash] Job ${job.id}:`, err);
       }
     })();
 
   } catch (error) {
-    console.error("Audit endpoint error:", error);
-    activeAudits.delete(documentId);
+    console.error("Start audit failed:", error);
+    response.status(500).json({ error: "Internal server error." });
+  }
+});
+
+// 3. Cancel Background Audit
+apiRouter.post("/documents/:id/audit/cancel/:jobId", checkAuth, async (request, response) => {
+  const documentId = request.params.id;
+  const jobId = request.params.jobId;
+  try {
+    const doc = await verifyDocumentAccess(request, response, "write");
+    if (!doc) return;
+
+    const { error } = await supabase
+      .from("audit_jobs")
+      .update({
+        status: "cancelled",
+        error_message: "Cancelled by user",
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", jobId)
+      .eq("document_id", documentId);
+
+    if (error) {
+      console.error("Failed to cancel job:", error);
+      return response.status(500).json({ error: "Failed to request cancellation." });
+    }
+
+    response.json({ success: true, message: "Audit cancellation requested successfully." });
+  } catch (error) {
+    console.error("Cancel audit failed:", error);
+    response.status(500).json({ error: "Internal server error." });
+  }
+});
+
+// 4. Check Background Audit Status & Cleanup Stale
+apiRouter.get("/documents/:id/audit/status/:jobId", checkAuth, async (request, response) => {
+  const documentId = request.params.id;
+  const jobId = request.params.jobId;
+  try {
+    const doc = await verifyDocumentAccess(request, response, "read");
+    if (!doc) return;
+
+    // Stale jobs cleanup: in_progress job updated > 30 minutes ago is marked failed
+    const staleLimit = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    await supabase
+      .from("audit_jobs")
+      .update({
+        status: "failed",
+        error_message: "Job stale / timed out.",
+        updated_at: new Date().toISOString()
+      })
+      .eq("status", "in_progress")
+      .lt("updated_at", staleLimit);
+
+    const { data: job, error } = await supabase
+      .from("audit_jobs")
+      .select("*")
+      .eq("id", jobId)
+      .eq("document_id", documentId)
+      .single();
+
+    if (error || !job) {
+      return response.status(404).json({ error: "Audit job not found." });
+    }
+
+    response.json(job);
+  } catch (error) {
+    console.error("Fetch audit status failed:", error);
+    response.status(500).json({ error: "Internal server error." });
+  }
+});
+
+// Deprecated endpoint forward compatibility
+apiRouter.post("/documents/:id/audit", checkAuth, async (request, response) => {
+  const documentId = request.params.id;
+  try {
+    const doc = await verifyDocumentAccess(request, response, "write");
+    if (!doc) return;
+    
+    const { data: job } = await supabase
+      .from("audit_jobs")
+      .insert({ document_id: documentId, status: "pending" })
+      .select()
+      .single();
+
+    response.json({ success: true, message: "Document audit started in the background." });
+
+    if (job) {
+      (async () => {
+        const { auditDocumentMQM } = require("../services/mqmService");
+        await auditDocumentMQM(documentId, job.id);
+      })();
+    }
+  } catch (e) {
+    response.json({ success: true, message: "Document audit started in the background." });
   }
 });
 

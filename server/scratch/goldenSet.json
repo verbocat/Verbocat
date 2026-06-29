@@ -1,0 +1,124 @@
+[
+  {
+    "id": 1,
+    "sourceText": "Your session has expired.",
+    "translatedText": "Tu sesión ha expirado",
+    "sourceLang": "en",
+    "targetLang": "es",
+    "expectedErrors": []
+  },
+  {
+    "id": 2,
+    "sourceText": "Please verify your account details.",
+    "translatedText": "Por favor verifique detalles de cuenta",
+    "sourceLang": "en",
+    "targetLang": "es",
+    "expectedErrors": [
+      {
+        "span": "detalles de cuenta",
+        "category": "fluency",
+        "severity": "minor"
+      }
+    ]
+  },
+  {
+    "id": 3,
+    "sourceText": "The company shall not be liable for any indirect or consequential damages.",
+    "translatedText": "Die Firma haftet nicht für direkte Schäden.",
+    "sourceLang": "en",
+    "targetLang": "de",
+    "expectedErrors": [
+      {
+        "span": "direkte Schäden",
+        "category": "accuracy",
+        "severity": "critical"
+      }
+    ]
+  },
+  {
+    "id": 4,
+    "sourceText": "Check your CIBIL score today.",
+    "translatedText": "आज ही अपना सिबिल स्कोर चेक करें।",
+    "sourceLang": "en",
+    "targetLang": "hi",
+    "expectedErrors": [
+      {
+        "span": "सिबिल",
+        "category": "terminology",
+        "severity": "minor"
+      }
+    ]
+  },
+  {
+    "id": 5,
+    "sourceText": "Enter your OTP to complete transaction.",
+    "translatedText": "लेनदेन पूरा करने के लिए ओटीपी दर्ज करें।",
+    "sourceLang": "en",
+    "targetLang": "hi",
+    "expectedErrors": [
+      {
+        "span": "ओटीपी",
+        "category": "terminology",
+        "severity": "minor"
+      }
+    ]
+  },
+  {
+    "id": 6,
+    "sourceText": "This is a serious legal notice.",
+    "translatedText": "यह एक कैज़ुअल मैसेज है।",
+    "sourceLang": "en",
+    "targetLang": "hi",
+    "expectedErrors": [
+      {
+        "span": "कैज़ुअल मैसेज",
+        "category": "accuracy",
+        "severity": "critical"
+      }
+    ]
+  },
+  {
+    "id": 7,
+    "sourceText": "Please accept our consent letter.",
+    "translatedText": "कृपया हमारा सहमति पत्र स्वीकार करें।",
+    "sourceLang": "en",
+    "targetLang": "hi",
+    "expectedErrors": []
+  },
+  {
+    "id": 8,
+    "sourceText": "He goes to the office.",
+    "translatedText": "वह ऑफिस जाता है।",
+    "sourceLang": "en",
+    "targetLang": "hi",
+    "expectedErrors": []
+  },
+  {
+    "id": 9,
+    "sourceText": "Please pay all your charges.",
+    "translatedText": "कृपया अपने सभी चार्जों का भुगतान करें।",
+    "sourceLang": "en",
+    "targetLang": "hi",
+    "expectedErrors": [
+      {
+        "span": "चार्जों",
+        "category": "style",
+        "severity": "minor"
+      }
+    ]
+  },
+  {
+    "id": 10,
+    "sourceText": "There is a material change.",
+    "translatedText": "There is any material change.",
+    "sourceLang": "en",
+    "targetLang": "en",
+    "expectedErrors": [
+      {
+        "span": "any",
+        "category": "fluency",
+        "severity": "minor"
+      }
+    ]
+  }
+]

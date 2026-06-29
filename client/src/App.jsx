@@ -32,7 +32,11 @@ import {
   fetchAccessRequests,
   respondToAccessRequest,
   translateSegmentWithContext,
-  auditDocument
+  auditDocument,
+  getAuditEstimate,
+  startAudit,
+  cancelAudit,
+  getAuditStatus
 } from "./services/api.js";
 import { ExportModal } from "./components/ExportModal.jsx";
 import { ShareModal } from "./components/ShareModal.jsx";
@@ -86,12 +90,43 @@ export default function App() {
   const [accessRequestMessage, setAccessRequestMessage] = useState("");
   const [pendingAccessRequests, setPendingAccessRequests] = useState([]);
 
-  // Sync profile details on start if session token is cached
+  const [showEstimateModal, setShowEstimateModal] = useState(false);
+  const [isEstimating, setIsEstimating] = useState(false);
+  const [estimateData, setEstimateData] = useState(null);
+  const [activeJob, setActiveJob] = useState(null);
+
   useEffect(() => {
     if (isAuth) {
       fetchProfile();
     }
   }, [isAuth]);
+
+  // Poll background audit job status if a job is active
+  useEffect(() => {
+    if (!activeJob || ["completed", "failed", "cancelled"].includes(activeJob.status)) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const job = await getAuditStatus(documentId, activeJob.id);
+        setActiveJob(job);
+        
+        if (job.status === "completed") {
+          setIsAuditing(false);
+          showToast("Quality Control Audit Completed!", "success");
+        } else if (job.status === "failed") {
+          setIsAuditing(false);
+          showToast(`Audit failed: ${job.error_message || "Unknown error"}`, "error");
+        } else if (job.status === "cancelled") {
+          setIsAuditing(false);
+          showToast("Audit cancelled.", "info");
+        }
+      } catch (e) {
+        console.error("Failed to fetch job status", e);
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [activeJob, documentId]);
 
   // Load collaborative document from DB on startup/change
   const loadCollaborativeDocument = useCallback(async () => {
@@ -896,14 +931,49 @@ export default function App() {
 
   const handleRunQc = async () => {
     if (!documentId) return;
-    setIsAuditing(true);
-    showToast("Starting Quality Control Audit...", "info");
+    setIsEstimating(true);
+    setShowEstimateModal(true);
+    setEstimateData(null);
     try {
-      await auditDocument(documentId, contextSettings);
+      const data = await getAuditEstimate(documentId, contextSettings);
+      setEstimateData(data);
     } catch (err) {
-      console.error("Failed to run document audit:", err);
-      showToast(`Audit failed: ${err.response?.data?.error || err.message || err}`, "error");
+      console.error("Failed to fetch pre-flight audit estimate:", err);
+      showToast("Failed to fetch pre-flight estimate.", "error");
+      setShowEstimateModal(false);
+    } finally {
+      setIsEstimating(false);
+    }
+  };
+
+  const handleConfirmStartAudit = async () => {
+    if (!documentId) return;
+    setIsAuditing(true);
+    setShowEstimateModal(false);
+    showToast("Starting background Quality Control Audit...", "info");
+    try {
+      const result = await startAudit(documentId, contextSettings);
+      if (result.success && result.jobId) {
+        const job = await getAuditStatus(documentId, result.jobId);
+        setActiveJob(job);
+      }
+    } catch (err) {
+      console.error("Failed to start document audit:", err);
+      showToast(`Audit failed to start: ${err.response?.data?.error || err.message || err}`, "error");
       setIsAuditing(false);
+    }
+  };
+
+  const handleCancelAudit = async () => {
+    if (!documentId || !activeJob) return;
+    showToast("Cancelling audit...", "info");
+    try {
+      await cancelAudit(documentId, activeJob.id);
+      setIsAuditing(false);
+      setActiveJob(null);
+    } catch (err) {
+      console.error("Failed to cancel audit:", err);
+      showToast("Failed to cancel audit.", "error");
     }
   };
 
@@ -2276,6 +2346,141 @@ export default function App() {
               className="rounded-xl px-4 py-2 text-xs font-bold bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white border border-[var(--accent)] transition-all cursor-pointer shadow-md"
             >
               Grant Edit Access
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Pre-flight Estimate Modal ── */}
+      {showEstimateModal && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          zIndex: 1000, padding: 20
+        }}>
+          <div style={{
+            background: "var(--bg-surface)",
+            border: "1px solid var(--border-medium)",
+            borderRadius: 16, width: "100%", maxWidth: 450,
+            padding: 24, boxShadow: "0 20px 40px rgba(0,0,0,0.6)",
+            display: "flex", flexDirection: "column", gap: 16,
+            textAlign: "left"
+          }}>
+            <h3 style={{ fontSize: 16, fontWeight: 800, color: "#fff", margin: 0 }}>
+              QC Audit Pre-Flight Check
+            </h3>
+            
+            {isEstimating || !estimateData ? (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, padding: "20px 0" }}>
+                <div className="animate-spin" style={{ width: 24, height: 24, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.1)", borderTopColor: "var(--accent)" }} />
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Calculating estimate...</span>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <p style={{ fontSize: 12.5, color: "var(--text-secondary)", margin: 0, lineHeight: 1.5 }}>
+                  We will perform a deterministically scored MQM analysis using <strong>gpt-4o-mini</strong> with strict schemas, sliding window context, and self-check verification passes to eliminate noise.
+                </p>
+                
+                <div style={{
+                  display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10,
+                  background: "rgba(0,0,0,0.15)", border: "1px solid var(--border-subtle)",
+                  borderRadius: 10, padding: 12
+                }}>
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    <span style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase" }}>Total Segments</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{estimateData.segmentCount}</span>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    <span style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase" }}>Total Words</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{estimateData.totalWordCount}</span>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", marginTop: 4 }}>
+                    <span style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase" }}>Est. Duration</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{estimateData.estimatedDurationMin} min</span>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", marginTop: 4 }}>
+                    <span style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase" }}>Est. Cost (USD)</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "var(--emerald)" }}>~${estimateData.estimatedCostUsd}</span>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 10 }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowEstimateModal(false)}
+                    style={{
+                      height: 36, padding: "0 16px", borderRadius: 8,
+                      background: "transparent", border: "1px solid var(--border-medium)",
+                      color: "var(--text-secondary)", fontSize: 12, fontWeight: 700,
+                      cursor: "pointer", transition: "all 0.2s"
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmStartAudit}
+                    style={{
+                      height: 36, padding: "0 16px", borderRadius: 8,
+                      background: "var(--accent)", border: "1px solid var(--accent)",
+                      color: "#fff", fontSize: 12, fontWeight: 700,
+                      cursor: "pointer", transition: "all 0.2s",
+                      boxShadow: "0 4px 12px var(--accent-glow)"
+                    }}
+                  >
+                    Confirm & Start Audit
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Active Background Audit Progress Bar Overlay ── */}
+      {activeJob && ["pending", "in_progress"].includes(activeJob.status) && (
+        <div style={{
+          position: "fixed", bottom: 24, left: 24, zIndex: 199,
+          background: "var(--bg-surface)", border: "1px solid var(--border-medium)",
+          borderRadius: 14, padding: "14px 18px", width: 340,
+          boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
+          display: "flex", flexDirection: "column", gap: 8,
+          textAlign: "left", transition: "all 0.3s ease"
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>
+              QC Audit in Progress...
+            </span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)" }}>
+              {activeJob.completed_segments}/{activeJob.total_segments}
+            </span>
+          </div>
+
+          {/* Progress bar */}
+          <div style={{ width: "100%", height: 6, background: "rgba(255,255,255,0.05)", borderRadius: 3, overflow: "hidden" }}>
+            <div style={{
+              width: `${(activeJob.completed_segments / (activeJob.total_segments || 1)) * 100}%`,
+              height: "100%", background: "var(--accent)", borderRadius: 3,
+              transition: "width 0.4s ease"
+            }} />
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+            <span style={{ fontSize: 10, color: "var(--text-rose)", fontWeight: 600 }}>
+              {activeJob.failed_segments > 0 ? `${activeJob.failed_segments} failed` : ""}
+            </span>
+            <button
+              type="button"
+              onClick={handleCancelAudit}
+              style={{
+                background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)",
+                color: "#f87171", fontSize: 9.5, fontWeight: 700,
+                borderRadius: 6, padding: "3px 8px", cursor: "pointer",
+                transition: "all 0.2s"
+              }}
+            >
+              Cancel Audit
             </button>
           </div>
         </div>
