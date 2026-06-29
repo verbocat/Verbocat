@@ -177,7 +177,9 @@ ${languageSpecificInstructions}
 - Avoid literal, machine-like translations. The translation must sound natural and idiomatic in the target language.
 - Technical terms MUST be transliterated appropriately.
 - Abbreviations MUST always be kept as abbreviations (e.g. N/A -> N/A).
-- Do NOT translate or transliterate alphanumeric list pointers, section numbers, or clause labels (e.g. '16(a).', '16(a)(i).', '17.', '7(a).', '7(b).', '5.'). Keep them exactly as they are in the original English text.
+- DO NOT translate, transliterate, or localize list indices, alphabetic bullet points, numbering, section numbers, or clause labels (e.g. 'h.', 'j.', 'k.', 'l.', 'm.', 'b)', 'd)', 'a)', 's)', 'c)', 'r).', '1.', '2)', '5.', '16(a)'). They must be preserved EXACTLY as they appear in the original source text (keeping the same English alphabet/numbers and punctuation, e.g. keeping 'h.' as 'h.', 'b)' as 'b)', etc.).
+- Uppercase English abbreviations, acronyms, or proper names (e.g. 'PDC', 'RBI', 'KYC', 'CIBIL', 'OTP', 'PAN') MUST be preserved EXACTLY in their original English uppercase form. Do NOT translate or transliterate them into Devanagari (e.g. do NOT write 'पीडीसी' for 'PDC', or 'आरबीआई' for 'RBI').
+- YOU MUST TRANSLATE EVERY SINGLE TEXT SEGMENT FULLY. Under no circumstances should you leave any segment untranslated, copy the English source verbatim, or return empty values for long or complex legal segments. Every segment MUST be translated into the target language.
 - Do NOT translate or transliterate contact prefixes or abbreviation labels like 'T', 'F', 'M', 'Tel', 'Mob', 'Fax', 'Email', 'Email ID'. Keep them exactly as they are in the original English text.
 - Avoid literal/duplicate translations of doublets (e.g. translate 'Safety & Security' as 'सुरक्षा और संरक्षा' rather than repeating 'सुरक्षा').
 - Translate common business/banking terms professionally (e.g. translate 'Earn ... interest' as 'ब्याज प्राप्त करें' in formal Hindi, or 'ब्याज मिलेगा' in informal Hindi).
@@ -219,7 +221,7 @@ const translateWithOpenAI = async (protectedTexts, target, source = DEFAULT_SOUR
       { role: "system", content: systemPrompt },
       { role: "user", content: JSON.stringify({ texts: protectedTexts }) + userContext }
     ],
-    temperature: 0.3,
+    temperature: 0.0,
     max_tokens: 16000,
     response_format: { type: "json_object" }
   };
@@ -519,7 +521,7 @@ ${nextTarget ? `- Next Segment Translation: "${nextTarget}"` : ""}`;
       { role: "system", content: systemPrompt },
       { role: "user", content: userContent }
     ],
-    temperature: 0.3,
+    temperature: 0.0,
     response_format: { type: "json_object" }
   };
 

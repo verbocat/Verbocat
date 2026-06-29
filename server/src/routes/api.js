@@ -743,11 +743,19 @@ apiRouter.post("/documents/:id/audit/start", checkAuth, async (request, response
     if (!doc) return;
 
     // Check if there is already an active job for this document
-    const { data: activeJobs } = await supabase
+    const { data: activeJobs, error: selectError } = await supabase
       .from("audit_jobs")
       .select("*")
       .eq("document_id", documentId)
       .in("status", ["pending", "in_progress"]);
+
+    if (selectError) {
+      console.error("Select active jobs error:", selectError);
+      if (selectError.code === 'PGRST205' || selectError.message?.includes("audit_jobs")) {
+        return response.status(500).json({ error: "Database table 'audit_jobs' is missing. Please run the SQL migration script (server/src/config/migration.sql) in your Supabase SQL Editor to create it." });
+      }
+      return response.status(500).json({ error: selectError.message || "Failed to query audit jobs." });
+    }
 
     if (activeJobs && activeJobs.length > 0) {
       return response.status(400).json({ error: "An audit is already running for this document." });
@@ -765,6 +773,9 @@ apiRouter.post("/documents/:id/audit/start", checkAuth, async (request, response
 
     if (jobErr || !job) {
       console.error("Failed to create audit job:", jobErr);
+      if (jobErr && (jobErr.code === 'PGRST205' || jobErr.message?.includes("audit_jobs"))) {
+        return response.status(500).json({ error: "Database table 'audit_jobs' is missing. Please run the SQL migration script (server/src/config/migration.sql) in your Supabase SQL Editor to create it." });
+      }
       return response.status(500).json({ error: "Failed to initiate audit job." });
     }
 
@@ -786,6 +797,9 @@ apiRouter.post("/documents/:id/audit/start", checkAuth, async (request, response
 
   } catch (error) {
     console.error("Start audit failed:", error);
+    if (error.message?.includes("audit_jobs") || String(error).includes("audit_jobs")) {
+      return response.status(500).json({ error: "Database table 'audit_jobs' is missing. Please run the SQL migration script (server/src/config/migration.sql) in your Supabase SQL Editor to create it." });
+    }
     response.status(500).json({ error: "Internal server error." });
   }
 });
@@ -810,12 +824,18 @@ apiRouter.post("/documents/:id/audit/cancel/:jobId", checkAuth, async (request, 
 
     if (error) {
       console.error("Failed to cancel job:", error);
+      if (error.code === 'PGRST205' || error.message?.includes("audit_jobs")) {
+        return response.status(500).json({ error: "Database table 'audit_jobs' is missing. Please run the SQL migration script (server/src/config/migration.sql) in your Supabase SQL Editor to create it." });
+      }
       return response.status(500).json({ error: "Failed to request cancellation." });
     }
 
     response.json({ success: true, message: "Audit cancellation requested successfully." });
   } catch (error) {
     console.error("Cancel audit failed:", error);
+    if (error.message?.includes("audit_jobs") || String(error).includes("audit_jobs")) {
+      return response.status(500).json({ error: "Database table 'audit_jobs' is missing. Please run the SQL migration script (server/src/config/migration.sql) in your Supabase SQL Editor to create it." });
+    }
     response.status(500).json({ error: "Internal server error." });
   }
 });
@@ -830,7 +850,9 @@ apiRouter.get("/documents/:id/audit/status/:jobId", checkAuth, async (request, r
 
     // Stale jobs cleanup: in_progress job updated > 30 minutes ago is marked failed
     const staleLimit = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-    await supabase
+    
+    // Gracefully handle case where audit_jobs table does not exist
+    const { error: cleanupError } = await supabase
       .from("audit_jobs")
       .update({
         status: "failed",
@@ -840,6 +862,10 @@ apiRouter.get("/documents/:id/audit/status/:jobId", checkAuth, async (request, r
       .eq("status", "in_progress")
       .lt("updated_at", staleLimit);
 
+    if (cleanupError && (cleanupError.code === 'PGRST205' || cleanupError.message?.includes("audit_jobs"))) {
+      return response.status(500).json({ error: "Database table 'audit_jobs' is missing. Please run the SQL migration script (server/src/config/migration.sql) in your Supabase SQL Editor to create it." });
+    }
+
     const { data: job, error } = await supabase
       .from("audit_jobs")
       .select("*")
@@ -848,12 +874,18 @@ apiRouter.get("/documents/:id/audit/status/:jobId", checkAuth, async (request, r
       .single();
 
     if (error || !job) {
+      if (error && (error.code === 'PGRST205' || error.message?.includes("audit_jobs"))) {
+        return response.status(500).json({ error: "Database table 'audit_jobs' is missing. Please run the SQL migration script (server/src/config/migration.sql) in your Supabase SQL Editor to create it." });
+      }
       return response.status(404).json({ error: "Audit job not found." });
     }
 
     response.json(job);
   } catch (error) {
     console.error("Fetch audit status failed:", error);
+    if (error.message?.includes("audit_jobs") || String(error).includes("audit_jobs")) {
+      return response.status(500).json({ error: "Database table 'audit_jobs' is missing. Please run the SQL migration script (server/src/config/migration.sql) in your Supabase SQL Editor to create it." });
+    }
     response.status(500).json({ error: "Internal server error." });
   }
 });

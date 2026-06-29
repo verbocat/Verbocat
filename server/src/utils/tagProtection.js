@@ -44,11 +44,22 @@ const restoreProtectedTags = (translated, tags) => {
   let unusedPtr = 0;
   output = output.replace(remainingPlaceholderRegex, () => {
     if (unusedPtr < unusedIndices.length) {
-      const tag = tags[unusedIndices[unusedPtr]];
+      const idx = unusedIndices[unusedPtr];
+      const tag = tags[idx];
+      usedTags.add(idx);
       unusedPtr++;
       return tag;
     }
     return "";
+  });
+
+  // 3. Absolute safety fallback: If any tag index is still not used (e.g. model completely omitted it),
+  // append it at the end of the string to ensure all tags are perfectly preserved.
+  tags.forEach((tag, index) => {
+    if (!usedTags.has(index)) {
+      output = output + tag;
+      usedTags.add(index);
+    }
   });
 
   return output;

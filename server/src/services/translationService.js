@@ -17,6 +17,58 @@ const ensureEnglishNumerals = (text) => {
   });
 };
 
+const postProcessTranslation = (source, target, targetLang) => {
+  let output = String(target || "").trim();
+
+  // 1. List prefix protection: h. / b) / a) / r).
+  // Match prefix like 'h. ', 'b) ', 'a) ', '1. ', 'r). ', '(a) '
+  const prefixRegex = /^([a-zA-Z0-9]+[\.\)]\s*|^\([a-zA-Z0-9]+\)\s*)/;
+  const sourceMatch = source.match(prefixRegex);
+  if (sourceMatch) {
+    const sourcePrefix = sourceMatch[1];
+    if (!output.startsWith(sourcePrefix)) {
+      // Find what target prefix was generated (e.g. any word/characters followed by a purna-viram, dot, or bracket)
+      const targetPrefixRegex = /^([^\s]+[\।\.\)]\s*|^\([^\s]+\)\s*)/;
+      const targetMatch = output.match(targetPrefixRegex);
+      if (targetMatch) {
+        const targetPrefix = targetMatch[1];
+        output = sourcePrefix + output.slice(targetPrefix.length);
+      } else {
+        output = sourcePrefix + output;
+      }
+    }
+  }
+
+  // 2. Acronym translation restoration (e.g. targetLang is Hindi)
+  if (targetLang && targetLang.toLowerCase().startsWith("hi")) {
+    const acronymsMap = {
+      "आरबीआई": "RBI",
+      "आर.बी.आई.": "RBI",
+      "आरबीआइ": "RBI",
+      "आर.बी.आइ.": "RBI",
+      "आरबीआई": "RBI",
+      "आरबीआय": "RBI",
+      "पीडीसी": "PDC",
+      "पी.डी.सी.": "PDC",
+      "केवाईसी": "KYC",
+      "के.वाई.सी.": "KYC",
+      "ओटीपी": "OTP",
+      "ओ.टी.पी.": "OTP",
+      "सिबिल": "CIBIL",
+      "पैन": "PAN",
+      "एनआरआई": "NRI",
+      "एन.आर.आई.": "NRI"
+    };
+    
+    Object.keys(acronymsMap).forEach(key => {
+      const regex = new RegExp(key, "g");
+      output = output.replace(regex, acronymsMap[key]);
+    });
+  }
+
+  return output;
+};
+
 const hasVisibleMarkup = (text) => /<\/?[a-z][^>]*>/i.test(text || "");
 
 const digitString = (text) => String(text || "").replace(/\D/g, "");
@@ -149,7 +201,8 @@ const translateSegments = async (segments, target, sourceLang, contextSettings) 
 
     chunkSources.forEach((source, offset) => {
       const translated = translatedChunk[offset];
-      const translatedText = ensureEnglishNumerals(translated.translated);
+      const processedText = postProcessTranslation(source, translated.translated, target);
+      const translatedText = ensureEnglishNumerals(processedText);
 
       tmMap[source] = {
         source_text: source,
@@ -232,7 +285,8 @@ const translateSegmentWithContext = async ({
     nextTarget
   });
 
-  const cleanedTranslation = ensureEnglishNumerals(translated);
+  const processed = postProcessTranslation(sourceText, translated, targetLang);
+  const cleanedTranslation = ensureEnglishNumerals(processed);
 
   return {
     translated: cleanedTranslation,
