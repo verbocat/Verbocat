@@ -319,6 +319,23 @@ apiRouter.post("/import-tmx", upload.single("file"), async (request, response) =
   }
 });
 
+// Helper to capture and handle missing table cache errors gracefully (PGRST205)
+function handleDatabaseError(error, response, fallbackMsg) {
+  if (error) {
+    console.error(error);
+    const msg = String(error.message || "");
+    const code = String(error.code || "");
+    if (code === 'PGRST205' || msg.includes("audit_jobs") || msg.includes("document_access_requests")) {
+      const missingTable = msg.includes("document_access_requests") ? "document_access_requests" : "audit_jobs";
+      response.status(500).json({ error: `Database table '${missingTable}' is missing. Please run the SQL migration script (server/src/config/migration.sql) in your Supabase SQL Editor to create it.` });
+      return true;
+    }
+    response.status(500).json({ error: fallbackMsg || "Database query failed." });
+    return true;
+  }
+  return false;
+}
+
 // Helper helper to check document access permission
 async function verifyDocumentAccess(request, response, requiredPermission = "read") {
   const documentId = request.params.id;
@@ -1061,8 +1078,7 @@ apiRouter.get("/documents/:id/request-status", checkAuth, async (request, respon
       .maybeSingle();
 
     if (error) {
-      console.error(error);
-      return response.status(500).json({ error: "Failed to get request status." });
+      return handleDatabaseError(error, response, "Failed to get request status.");
     }
 
     response.json({ hasPendingRequest: !!req });
@@ -1102,8 +1118,7 @@ apiRouter.post("/documents/:id/request-access", checkAuth, async (request, respo
       }, { onConflict: "document_id,user_id" });
 
     if (insertError) {
-      console.error(insertError);
-      return response.status(500).json({ error: "Failed to submit access request." });
+      return handleDatabaseError(insertError, response, "Failed to submit access request.");
     }
 
     // Broadcast to room via Socket.io
@@ -1170,8 +1185,7 @@ apiRouter.get("/documents/:id/access-requests", checkAuth, async (request, respo
       .eq("status", "pending");
 
     if (error) {
-      console.error(error);
-      return response.status(500).json({ error: "Failed to load access requests." });
+      return handleDatabaseError(error, response, "Failed to load access requests.");
     }
 
     response.json(requests || []);
@@ -1207,6 +1221,9 @@ apiRouter.post("/documents/:id/access-requests/:requestId/respond", checkAuth, a
       .single();
 
     if (fetchReqError || !accessReq) {
+      if (fetchReqError) {
+        return handleDatabaseError(fetchReqError, response, "Failed to fetch access request.");
+      }
       return response.status(404).json({ error: "Access request not found." });
     }
 
@@ -1220,8 +1237,7 @@ apiRouter.post("/documents/:id/access-requests/:requestId/respond", checkAuth, a
       .eq("id", requestId);
 
     if (updateReqError) {
-      console.error(updateReqError);
-      return response.status(500).json({ error: "Failed to update request status." });
+      return handleDatabaseError(updateReqError, response, "Failed to update request status.");
     }
 
     if (action === "approve") {
