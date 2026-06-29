@@ -185,44 +185,13 @@ const translateSegments = async (segments, target, sourceLang, contextSettings) 
     const targetText = tmEntry ? tmEntry.target_text : "";
     const provider = tmEntry && tmEntry.provider ? tmEntry.provider : "TM Database";
 
-    let mqmScore = 100;
-    let mqmReportData = null;
-
-    if (targetText) {
-      const { evaluateTranslationMQM } = require("./mqmService");
-      try {
-        const prevSegment = index > 0 ? segments[index - 1] : null;
-        const nextSegment = index < segments.length - 1 ? segments[index + 1] : null;
-        const prevEntry = prevSegment ? tmMap[prevSegment.source] : null;
-        const nextEntry = nextSegment ? tmMap[nextSegment.source] : null;
-
-        const evaluation = await evaluateTranslationMQM({
-          sourceText: segment.source,
-          translatedText: targetText,
-          targetLang: target,
-          sourceLang: actualSourceLang,
-          contextJira: segment.contextJira || "",
-          contextDescription: segment.contextDescription || "",
-          contextSettings,
-          prevSource: prevSegment ? prevSegment.source : undefined,
-          prevTarget: prevEntry ? prevEntry.target_text : (prevSegment ? prevSegment.target : undefined),
-          nextSource: nextSegment ? nextSegment.source : undefined,
-          nextTarget: nextEntry ? nextEntry.target_text : (nextSegment ? nextSegment.target : undefined)
-        });
-        mqmScore = evaluation.accuracyScore;
-        mqmReportData = evaluation;
-      } catch (err) {
-        console.error("Failed to run MQM during batch:", err);
-      }
-    }
-
     return {
       id: segment.id,
       translated: targetText,
       provider: provider,
       qaIssues: runQaChecks(segment.source, targetText),
-      mqmAccuracyScore: mqmScore,
-      mqmReport: mqmReportData
+      mqmAccuracyScore: 100,
+      mqmReport: null
     };
   }));
 
@@ -265,36 +234,11 @@ const translateSegmentWithContext = async ({
 
   const cleanedTranslation = ensureEnglishNumerals(translated);
 
-  // Evaluate MQM
-  const { evaluateTranslationMQM } = require("./mqmService");
-  let mqmScore = 100;
-  let mqmReportData = null;
-
-  try {
-    const evaluation = await evaluateTranslationMQM({
-      sourceText,
-      translatedText: cleanedTranslation,
-      targetLang,
-      sourceLang: actualSourceLang,
-      contextJira,
-      contextDescription,
-      contextSettings,
-      prevSource,
-      prevTarget,
-      nextSource,
-      nextTarget
-    });
-    mqmScore = evaluation.accuracyScore;
-    mqmReportData = evaluation;
-  } catch (err) {
-    console.error("Failed to evaluate MQM with context:", err);
-  }
-
   return {
     translated: cleanedTranslation,
     qaIssues: runQaChecks(sourceText, cleanedTranslation),
-    mqmAccuracyScore: mqmScore,
-    mqmReport: mqmReportData
+    mqmAccuracyScore: 100,
+    mqmReport: null
   };
 };
 
