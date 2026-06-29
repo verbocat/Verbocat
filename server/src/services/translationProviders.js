@@ -160,7 +160,23 @@ const buildTranslationSystemPrompt = (targetLang, sourceLang, contextSettings, c
   if (isHindi) {
     languageSpecificInstructions = `
 - Since the target language is Hindi, you MUST write the output strictly in the Devanagari script. Do NOT use Perso-Arabic (Urdu) characters under any circumstances.
-- Always place a space after the Hindi purna-viram ('।') full stop when starting a new sentence (e.g. 'है। हमारी' -> 'है। हमारी').`;
+- Always place a space after the Hindi purna-viram ('।') full stop when starting a new sentence (e.g. 'है। हमारी' -> 'है। हमारी').
+- HINDI LEGAL & BANKING GENDER AGREEMENT: Ensure perfect grammatical gender and possessive agreement for common banking words in Hindi:
+  * 'अस्वीकृति' (dishonour/rejection) is FEMININE. You MUST use feminine possessive/adjectives with it (e.g., write 'भुगतान निर्देशों की अस्वीकृति', NOT 'भुगतान निर्देशों का अस्वीकृति').
+  * 'सहमति' (consent) is FEMININE (e.g., 'आपकी सहमति').
+  * 'सहमति पत्र' (consent letter) is MASCULINE (e.g., 'आपका सहमति पत्र').
+  * 'मांग' (demand) is FEMININE (e.g., 'मांग की जाएगी').
+  * 'अवधि' (period/tenure) is FEMININE (e.g., 'ऋण की अवधि').
+  * 'अधिकार' (right) is MASCULINE (e.g., 'लेंडर का अधिकार').
+  * 'निर्देश' / 'निर्देशों' / 'अनुदेश' (instructions) is MASCULINE (e.g., 'भुगतान निर्देशों का पालन').
+- HINDI LEGAL TERMINOLOGY GLOSSARY:
+  * 'unattested' -> translate as 'गैर-हस्ताक्षरित' (do NOT write 'बिना हस्ताक्षरित').
+  * 'legal heirs, executors and administrators' -> translate as 'कानूनी उत्तराधिकारी, निष्पादक और प्रशासक'.
+  * 'loan-cum-pledge agreement' -> translate as 'ऋण-सह-गिरवी समझौता'.
+  * 'repayment mode/mandate' -> translate as 'पुनर्भुगतान मोड/जनादेश' or 'पुनर्भुगतान मोड/आदेश'.
+  * 'undertakes' / 'undertaking' -> translate as 'वचन देता है' or 'वचनबद्ध है' / 'वचनबद्धता' (do NOT leave as English 'undertaking' in Hindi).
+  * 'governing' -> translate as 'नियंत्रित करने वाला'.
+  * 'sanctioned details' -> translate as 'अनुमोदित विवरण'.`;
   }
 
   const baseInstructions = `You are an expert human localizer and professional translator. You translate text from ${sourceName} to ${targetName}.
@@ -179,6 +195,7 @@ ${languageSpecificInstructions}
 - Abbreviations MUST always be kept as abbreviations (e.g. N/A -> N/A).
 - DO NOT translate, transliterate, or localize list indices, alphabetic bullet points, numbering, section numbers, or clause labels (e.g. 'h.', 'j.', 'k.', 'l.', 'm.', 'b)', 'd)', 'a)', 's)', 'c)', 'r).', '1.', '2)', '5.', '16(a)'). They must be preserved EXACTLY as they appear in the original source text (keeping the same English alphabet/numbers and punctuation, e.g. keeping 'h.' as 'h.', 'b)' as 'b)', etc.).
 - Uppercase English abbreviations, acronyms, or proper names (e.g. 'PDC', 'RBI', 'KYC', 'CIBIL', 'OTP', 'PAN') MUST be preserved EXACTLY in their original English uppercase form. Do NOT translate or transliterate them into Devanagari (e.g. do NOT write 'पीडीसी' for 'PDC', or 'आरबीआई' for 'RBI').
+- STRICT COMPLETENESS & BOILERPLATE PRESERVATION: You MUST translate every single phrase, word, definition, and clause of the source text. Under no circumstances should you omit, summarize, truncate, or leave out any boilerplate legal details (such as lists of heirs, legal executors, administrators, covenants, or conditions). Every single legal term and detail in the source must have a direct, fully translated equivalent in the target translation.
 - YOU MUST TRANSLATE EVERY SINGLE TEXT SEGMENT FULLY. Under no circumstances should you leave any segment untranslated, copy the English source verbatim, or return empty values for long or complex legal segments. Every segment MUST be translated into the target language.
 - Do NOT translate or transliterate contact prefixes or abbreviation labels like 'T', 'F', 'M', 'Tel', 'Mob', 'Fax', 'Email', 'Email ID'. Keep them exactly as they are in the original English text.
 - Avoid literal/duplicate translations of doublets (e.g. translate 'Safety & Security' as 'सुरक्षा और संरक्षा' rather than repeating 'सुरक्षा').

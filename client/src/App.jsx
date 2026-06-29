@@ -571,6 +571,9 @@ export default function App() {
     [searchQuery, filterStatus, segments]
   );
 
+  const filteredSegmentsRef = useRef([]);
+  filteredSegmentsRef.current = filteredSegments;
+
   const qaIssuesList = useMemo(
     () =>
       segments.flatMap((segment) => {
@@ -1952,33 +1955,38 @@ export default function App() {
     setSearchQuery("");
     setFilterStatus("all");
 
-    // Defer slightly to let filters clear and state resolve
-    window.setTimeout(() => {
-      const index = segments.findIndex((s) => s.id === id);
+    // Wait for the render cycle to update filteredSegmentsRef.current
+    const startTime = Date.now();
+    const pollInterval = window.setInterval(() => {
+      const currentList = filteredSegmentsRef.current || [];
+      const index = currentList.findIndex((s) => s.id === id);
+
       if (index !== -1 && virtuosoRef.current) {
-        // Jump instantly to index to avoid height jiggling from off-screen virtualized segments
+        window.clearInterval(pollInterval);
+
+        // Jump instantly to the correct index in the updated list
         virtuosoRef.current.scrollToIndex({
           index,
           align: "center",
           behavior: "auto"
         });
 
-        // Poll the DOM until Virtuoso has mounted the item at the new scroll position
-        const startTime = Date.now();
-        const pollInterval = window.setInterval(() => {
+        // Poll the DOM until Virtuoso has rendered the items at the new scroll offset
+        const startDomTime = Date.now();
+        const domInterval = window.setInterval(() => {
           const element = document.getElementById(`segment-${id}`);
           const editor = document.getElementById(`target-${id}`);
 
           if (element && editor) {
-            window.clearInterval(pollInterval);
+            window.clearInterval(domInterval);
 
-            // Apply a beautiful highlight ring to guide the eye
+            // Apply highlight
             element.classList.add("ring-4", "ring-indigo-500", "scale-[1.01]", "transition-all", "duration-300");
             window.setTimeout(() => {
               element.classList.remove("ring-4", "ring-indigo-500", "scale-[1.01]");
             }, 2000);
 
-            // Focus the editor
+            // Focus
             editor.focus();
 
             // Set cursor to the end
@@ -1986,19 +1994,20 @@ export default function App() {
               const range = document.createRange();
               const sel = window.getSelection();
               range.selectNodeContents(editor);
-              range.collapse(false); // collapse to end
+              range.collapse(false);
               sel.removeAllRanges();
               sel.addRange(range);
             } catch (e) {
               console.error("Failed to position cursor at end:", e);
             }
-          } else if (Date.now() - startTime > 1500) {
-            // Stop polling after 1.5 seconds if segment element never mounts
-            window.clearInterval(pollInterval);
+          } else if (Date.now() - startDomTime > 1500) {
+            window.clearInterval(domInterval);
           }
         }, 30);
+      } else if (Date.now() - startTime > 1500) {
+        window.clearInterval(pollInterval);
       }
-    }, 80);
+    }, 30);
   };
 
   // Guard screens for authentication & password resets

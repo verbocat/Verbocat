@@ -127,6 +127,7 @@ ${targetSpecificRules}
 TECHNICAL MARKS & SYSTEM RULES:
 - Ignore system-protected protected tags like "<5261>", "</5261>" or place-holders. Do NOT flag them as untranslated or spelling errors.
 - Email addresses and phone numbers should remain untranslated; do not flag them.
+- SUGGESTED CORRECTION REQUIREMENTS: For every error, you MUST provide a valid, grammatically correct replacement in the 'correction' field. The correction MUST be different from the offending 'span' and resolve the error (e.g., if 'span' is 'का अस्वीकृति', the 'correction' should be 'की अस्वीकृति'). Do NOT copy the offending span verbatim into the correction field.
 
 Target Language: ${targetLangName} (from ${sourceLangName})`;
 };
@@ -551,6 +552,7 @@ ${targetSpecificRules}
 TECHNICAL MARKS & SYSTEM RULES:
 - Ignore system protected tags like "<5261>", "</5261>" or place-holders. Do NOT flag them.
 - Email addresses and phone numbers should remain untranslated.
+- SUGGESTED CORRECTION REQUIREMENTS: For every error, you MUST provide a valid, grammatically correct replacement in the 'correction' field. The correction MUST be different from the offending 'span' and resolve the error (e.g., if 'span' is 'का अस्वीकृति', the 'correction' should be 'की अस्वीकृति'). Do NOT copy the offending span verbatim into the correction field.
 
 Target Language: ${targetLangName} (from ${sourceLangName})`;
 
