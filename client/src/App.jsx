@@ -469,8 +469,24 @@ export default function App() {
   };
 
   const filteredSegments = useMemo(
-    () =>
-      segments.filter(
+    () => {
+      const cleanString = (str) => {
+        if (!str) return "";
+        return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+      };
+
+      const sourceCounts = {};
+      if (filterStatus === "duplicate") {
+        segments.forEach((seg) => {
+          if (seg.isMerged || isJunkSegment(seg.source)) return;
+          const cleaned = cleanString(seg.source);
+          if (cleaned) {
+            sourceCounts[cleaned] = (sourceCounts[cleaned] || 0) + 1;
+          }
+        });
+      }
+
+      return segments.filter(
         (segment) => {
           if (segment.isMerged || isJunkSegment(segment.source)) return false;
           
@@ -485,10 +501,14 @@ export default function App() {
             return !segment.target;
           } else if (filterStatus === "verified") {
             return !!segment.verified;
+          } else if (filterStatus === "duplicate") {
+            const cleaned = cleanString(segment.source);
+            return cleaned && sourceCounts[cleaned] > 1;
           }
           return true;
         }
-      ),
+      );
+    },
     [searchQuery, filterStatus, segments]
   );
 
@@ -886,12 +906,34 @@ export default function App() {
     showToast("Glossary applied to current translation");
   };
 
+  const handleSegmentTyping = (id, value) => {
+    let sourceText = "";
+    setSegments((previous) => {
+      const targetSeg = previous.find((s) => s.id === id);
+      if (targetSeg) {
+        sourceText = targetSeg.source;
+      }
+      return previous.map((segment) =>
+        (segment.id === id || (sourceText && segment.source === sourceText))
+          ? { ...segment, target: value }
+          : segment
+      );
+    });
+  };
+
   const updateTranslation = async (id, value) => {
-    setSegments((previous) =>
-      previous.map((segment) =>
-        segment.id === id ? { ...segment, target: value, verified: false } : segment
-      )
-    );
+    let sourceText = "";
+    setSegments((previous) => {
+      const targetSeg = previous.find((s) => s.id === id);
+      if (targetSeg) {
+        sourceText = targetSeg.source;
+      }
+      return previous.map((segment) =>
+        (segment.id === id || (sourceText && segment.source === sourceText))
+          ? { ...segment, target: value, verified: false }
+          : segment
+      );
+    });
 
     if (documentId) {
       const segmentIndex = segments.findIndex((s) => s.id === id);
@@ -908,15 +950,20 @@ export default function App() {
 
   const toggleVerify = async (id) => {
     let nextVerified = false;
-    setSegments((previous) =>
-      previous.map((segment) => {
-        if (segment.id === id) {
-          nextVerified = !segment.verified;
+    let sourceText = "";
+    setSegments((previous) => {
+      const targetSeg = previous.find((s) => s.id === id);
+      if (targetSeg) {
+        sourceText = targetSeg.source;
+        nextVerified = !targetSeg.verified;
+      }
+      return previous.map((segment) => {
+        if (segment.id === id || (sourceText && segment.source === sourceText)) {
           return { ...segment, verified: nextVerified };
         }
         return segment;
-      })
-    );
+      });
+    });
 
     if (documentId) {
       const segmentIndex = segments.findIndex((s) => s.id === id);
@@ -933,11 +980,18 @@ export default function App() {
   };
 
   const verifyAndNextSegment = async (id) => {
-    setSegments((previous) =>
-      previous.map((segment) =>
-        segment.id === id ? { ...segment, verified: true } : segment
-      )
-    );
+    let sourceText = "";
+    setSegments((previous) => {
+      const targetSeg = previous.find((s) => s.id === id);
+      if (targetSeg) {
+        sourceText = targetSeg.source;
+      }
+      return previous.map((segment) =>
+        (segment.id === id || (sourceText && segment.source === sourceText))
+          ? { ...segment, verified: true }
+          : segment
+      );
+    });
 
     if (documentId) {
       const segmentIndex = segments.findIndex((s) => s.id === id);
@@ -1153,6 +1207,22 @@ export default function App() {
       document.body.appendChild(link);
       link.click();
       showToast("Document exported successfully!");
+    } catch (error) {
+      console.log(error);
+      showToast(`Export failed: ${error.message}`, "error");
+    }
+  };
+
+  const handleExportSourceDocument = async () => {
+    try {
+      const blob = await exportFile(fileId, segments, fileExtension, sourceLanguage, targetLanguage, fileName, true);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `${fileName}_source${fileExtension}`);
+      document.body.appendChild(link);
+      link.click();
+      showToast("Source document exported successfully!");
     } catch (error) {
       console.log(error);
       showToast(`Export failed: ${error.message}`, "error");
@@ -1926,6 +1996,7 @@ export default function App() {
         show={showExportModal}
         onClose={() => setShowExportModal(false)}
         onExportDocument={handleExportDocument}
+        onExportSourceDocument={handleExportSourceDocument}
         onExportXliff={handleExportXliff}
         onExportTmx={handleExportTmx}
         onExportGlobalTmx={handleExportGlobalTmx}
@@ -2139,6 +2210,7 @@ export default function App() {
                   readOnly={permission === "read"}
                   onSaveContext={saveSegmentContext}
                   onTranslateWithContext={handleTranslateSegmentWithContext}
+                  onTyping={handleSegmentTyping}
                 />
               )}
             />

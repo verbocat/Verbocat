@@ -170,11 +170,20 @@ apiRouter.get("/provider-status", (request, response) => {
 
 apiRouter.post("/export", async (request, response) => {
   try {
-    const { fileId, segments, extension, sourceLang, targetLang, fileName } = request.body;
+    const { fileId, segments, extension, sourceLang, targetLang, fileName, exportSource } = request.body;
     const ext = extension || ".html";
 
+    let exportSegments = segments;
+    if (exportSource) {
+      exportSegments = segments.map(seg => ({
+        ...seg,
+        target: seg.source,
+        translation: seg.source
+      }));
+    }
+
     if (ext === ".xlf" || ext === ".xliff") {
-      const xliffContent = generateXliff(segments, sourceLang || "en", targetLang || "hi", fileName || "document");
+      const xliffContent = generateXliff(exportSegments, sourceLang || "en", targetLang || "hi", fileName || "document");
       response.setHeader(
         "Content-Disposition",
         `attachment; filename="${fileName || "translated"}.xlf"`
@@ -184,7 +193,7 @@ apiRouter.post("/export", async (request, response) => {
     }
 
     if (ext === ".tmx") {
-      const tmxContent = generateTmx(segments, sourceLang || "en", targetLang || "hi");
+      const tmxContent = generateTmx(exportSegments, sourceLang || "en", targetLang || "hi");
       response.setHeader(
         "Content-Disposition",
         `attachment; filename="${fileName || "translated"}.tmx"`
@@ -193,7 +202,7 @@ apiRouter.post("/export", async (request, response) => {
       return response.send(Buffer.from(tmxContent, "utf-8"));
     }
 
-    const buffer = await exportHtml(fileId, segments, ext);
+    const buffer = await exportHtml(fileId, exportSegments, ext);
 
     response.setHeader(
       "Content-Disposition",
@@ -471,47 +480,65 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
     let mqmScore = undefined;
     let mqmReport = undefined;
 
+    // Fetch the source text and context
+    const { data: dbSegment } = await supabase
+      .from("document_segments")
+      .select("source_text, context_jira, context_description")
+      .eq("document_id", doc.id)
+      .eq("segment_index", segmentIndex)
+      .single();
+    
+    if (!dbSegment) {
+      return response.status(404).json({ error: "Segment not found." });
+    }
+
+    const sourceText = dbSegment.source_text;
+
     if (targetText !== undefined) {
-      // Fetch the source text and context, along with adjacent segments for the sliding context window
-      const { data: dbSegment } = await supabase
+      // Fetch the adjacent segments for the sliding context window
+      const { data: siblingSegments } = await supabase
         .from("document_segments")
-        .select("source_text, context_jira, context_description")
+        .select("segment_index, source_text, target_text")
         .eq("document_id", doc.id)
-        .eq("segment_index", segmentIndex)
-        .single();
-      
-      if (dbSegment) {
-        const { data: siblingSegments } = await supabase
-          .from("document_segments")
-          .select("segment_index, source_text, target_text")
-          .eq("document_id", doc.id)
-          .in("segment_index", [segmentIndex - 1, segmentIndex + 1]);
+        .in("segment_index", [segmentIndex - 1, segmentIndex + 1]);
 
-        const prevSegment = siblingSegments?.find(s => s.segment_index === segmentIndex - 1);
-        const nextSegment = siblingSegments?.find(s => s.segment_index === segmentIndex + 1);
+      const prevSegment = siblingSegments?.find(s => s.segment_index === segmentIndex - 1);
+      const nextSegment = siblingSegments?.find(s => s.segment_index === segmentIndex + 1);
 
-        const { evaluateTranslationMQM } = require("../services/mqmService");
-        try {
-          const evaluation = await evaluateTranslationMQM({
-            sourceText: dbSegment.source_text,
-            translatedText: targetText,
-            targetLang: doc.target_lang,
-            sourceLang: doc.source_lang,
-            contextJira: contextJira !== undefined ? contextJira : dbSegment.context_jira,
-            contextDescription: contextDescription !== undefined ? contextDescription : dbSegment.context_description,
-            contextSettings: null,
-            prevSource: prevSegment?.source_text,
-            prevTarget: prevSegment?.target_text,
-            nextSource: nextSegment?.source_text,
-            nextTarget: nextSegment?.target_text
-          });
-          mqmScore = evaluation.accuracyScore;
-          mqmReport = evaluation;
-          updateFields.mqm_accuracy_score = mqmScore;
-          updateFields.mqm_report = mqmReport;
-        } catch (err) {
-          console.error("Failed to run MQM on manual update:", err);
-        }
+      const { evaluateTranslationMQM } = require("../services/mqmService");
+      try {
+        const evaluation = await evaluateTranslationMQM({
+          sourceText: dbSegment.source_text,
+          translatedText: targetText,
+          targetLang: doc.target_lang,
+          sourceLang: doc.source_lang,
+          contextJira: contextJira !== undefined ? contextJira : dbSegment.context_jira,
+          contextDescription: contextDescription !== undefined ? contextDescription : dbSegment.context_description,
+          contextSettings: null,
+          prevSource: prevSegment?.source_text,
+          prevTarget: prevSegment?.target_text,
+          nextSource: nextSegment?.source_text,
+          nextTarget: nextSegment?.target_text
+        });
+        mqmScore = evaluation.accuracyScore;
+        mqmReport = evaluation;
+        updateFields.mqm_accuracy_score = mqmScore;
+        updateFields.mqm_report = mqmReport;
+      } catch (err) {
+        console.error("Failed to run MQM on manual update:", err);
+      }
+    }
+
+    // Find all duplicate segment indices in the document
+    let updatedIndices = [segmentIndex];
+    if (sourceText) {
+      const { data: matchingSegs } = await supabase
+        .from("document_segments")
+        .select("segment_index")
+        .eq("document_id", doc.id)
+        .eq("source_text", sourceText);
+      if (matchingSegs && matchingSegs.length > 0) {
+        updatedIndices = matchingSegs.map((s) => s.segment_index);
       }
     }
 
@@ -519,7 +546,7 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
       .from("document_segments")
       .update(updateFields)
       .eq("document_id", doc.id)
-      .eq("segment_index", segmentIndex);
+      .in("segment_index", updatedIndices);
 
     if (updateError) {
       console.error("Segment update error:", updateError);
@@ -530,15 +557,17 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
     const { getIo } = require("../services/socket");
     const io = getIo();
     if (io) {
-      io.to(doc.id).emit("segment-updated", {
-        segmentIndex,
-        targetText,
-        status: status || "translated",
-        contextJira,
-        contextDescription,
-        mqmAccuracyScore: mqmScore,
-        mqmReport,
-        updatedBy: request.user.email
+      updatedIndices.forEach((idx) => {
+        io.to(doc.id).emit("segment-updated", {
+          segmentIndex: idx,
+          targetText,
+          status: status || "translated",
+          contextJira,
+          contextDescription,
+          mqmAccuracyScore: mqmScore,
+          mqmReport,
+          updatedBy: request.user.email
+        });
       });
     }
 

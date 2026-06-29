@@ -28,7 +28,7 @@ const ExportOption = ({ title, desc, accentColor, btnLabel, btnColor, btnBg, btn
 );
 
 export const ExportModal = ({
-  show, onClose, onExportDocument, onExportXliff, onExportTmx,
+  show, onClose, onExportDocument, onExportSourceDocument, onExportXliff, onExportTmx,
   onExportGlobalTmx, onExportLinguistTable, onRelinkHtml,
   fileExtension, theme, sourceLanguage, targetLanguage
 }) => {
@@ -66,6 +66,20 @@ export const ExportModal = ({
             desc="Export the final translated file with original layout preserved."
             accentColor="var(--text-primary)"
             onAction={() => { onExportDocument(); onClose(); }}
+          >
+            <Download style={{ width: 12, height: 12 }} />
+            Download
+          </ExportOption>
+
+          {/* Source Document */}
+          <ExportOption
+            title={`Source Document ${fileExtension || ""}`}
+            desc="Export the original source file with formatting preserved."
+            accentColor="var(--text-muted)"
+            btnBg="rgba(148,163,184,0.1)"
+            btnBorder="rgba(148,163,184,0.3)"
+            btnColor="var(--text-muted)"
+            onAction={() => { onExportSourceDocument(); onClose(); }}
           >
             <Download style={{ width: 12, height: 12 }} />
             Download

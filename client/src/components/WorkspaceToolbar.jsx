@@ -228,6 +228,7 @@ export const WorkspaceToolbar = ({
             <option value="translated">Translated</option>
             <option value="untranslated">Untranslated</option>
             <option value="verified">Verified</option>
+            <option value="duplicate">Duplicates</option>
           </select>
           <span className="filter-arrow">▼</span>
         </div>

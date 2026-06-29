@@ -82,7 +82,7 @@ export const SegmentCard = ({
   darkMode, index, segment, theme, translationGlossary = [],
   onCopy, onUpdateTranslation, onToggleVerify, onVerifyAndNext,
   lockInfo, onFocusSegment, onBlurSegment, readOnly,
-  onSaveContext, onTranslateWithContext
+  onSaveContext, onTranslateWithContext, onTyping
 }) => {
   const editorRef = useRef(null);
   const lastSaved = useRef(segment.target || "");
@@ -252,7 +252,9 @@ export const SegmentCard = ({
 
   useEffect(() => {
     if (editorRef.current && segment.target !== lastSaved.current) {
-      editorRef.current.innerHTML = targetToHtml(segment.target || "");
+      if (document.activeElement !== editorRef.current) {
+        editorRef.current.innerHTML = targetToHtml(segment.target || "");
+      }
       lastSaved.current = segment.target || "";
     }
   }, [segment.target]);
@@ -306,6 +308,9 @@ export const SegmentCard = ({
   const handleInput = (e) => {
     resetInactivityTimer();
     const text = htmlToTarget(e.currentTarget);
+    if (onTyping) {
+      onTyping(segment.id, text);
+    }
     const words = text.split(/[\s\u00a0]+/);
     const last = words[words.length - 1] || "";
     if (last.length >= 1 && translationGlossary?.length) {
@@ -331,6 +336,9 @@ export const SegmentCard = ({
     const next = words.join("");
     editorRef.current.innerHTML = targetToHtml(next);
     lastSaved.current = next;
+    if (onTyping) {
+      onTyping(segment.id, next);
+    }
     onUpdateTranslation(segment.id, next);
     setSuggestions([]);
     setTimeout(() => {
