@@ -486,7 +486,7 @@ export default function App() {
         });
       }
 
-      return segments.filter(
+      const filtered = segments.filter(
         (segment) => {
           if (segment.isMerged || isJunkSegment(segment.source)) return false;
           
@@ -508,6 +508,29 @@ export default function App() {
           return true;
         }
       );
+
+      if (filterStatus === "duplicate") {
+        const firstOccurrence = {};
+        segments.forEach((seg, idx) => {
+          const cleaned = cleanString(seg.source);
+          if (cleaned && firstOccurrence[cleaned] === undefined) {
+            firstOccurrence[cleaned] = idx;
+          }
+        });
+
+        filtered.sort((a, b) => {
+          const cleanA = cleanString(a.source);
+          const cleanB = cleanString(b.source);
+          const firstA = firstOccurrence[cleanA] ?? 0;
+          const firstB = firstOccurrence[cleanB] ?? 0;
+          if (firstA !== firstB) {
+            return firstA - firstB;
+          }
+          return a.id - b.id;
+        });
+      }
+
+      return filtered;
     },
     [searchQuery, filterStatus, segments]
   );
