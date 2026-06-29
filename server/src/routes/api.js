@@ -1063,6 +1063,34 @@ apiRouter.delete("/documents/:id/access/:userId", checkAuth, async (request, res
   }
 });
 
+// Update document source and target languages
+apiRouter.put("/documents/:id/languages", checkAuth, async (request, response) => {
+  const documentId = request.params.id;
+  const { sourceLang, targetLang } = request.body;
+  try {
+    const doc = await verifyDocumentAccess(request, response, "write");
+    if (!doc) return;
+
+    const { error } = await supabase
+      .from("documents")
+      .update({
+        source_lang: sourceLang,
+        target_lang: targetLang
+      })
+      .eq("id", documentId);
+
+    if (error) {
+      console.error("Failed to update document languages:", error);
+      return response.status(500).json({ error: "Failed to update document languages." });
+    }
+
+    response.json({ success: true });
+  } catch (error) {
+    console.error("Update languages failed:", error);
+    response.status(500).json({ error: "Internal server error." });
+  }
+});
+
 // 5a. Get user request status
 apiRouter.get("/documents/:id/request-status", checkAuth, async (request, response) => {
   try {

@@ -199,3 +199,8 @@ export const getAuditStatus = async (documentId, jobId) => {
   return response.data;
 };
 
+export const updateDocumentLanguages = async (documentId, sourceLang, targetLang) => {
+  const response = await api.put(`/api/documents/${documentId}/languages`, { sourceLang, targetLang });
+  return response.data;
+};
+

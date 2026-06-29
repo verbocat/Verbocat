@@ -278,21 +278,20 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
                       </>
                     )}
                     
-                    {isMqm && item.snippet && (
-                      <div className="mt-1 flex items-center gap-1.5">
-                        <span className="text-[10.5px] font-bold text-rose-400 uppercase">Offending Snippet:</span>
-                        <span className="text-xs text-rose-300 font-mono bg-rose-950/30 px-1.5 py-0.5 rounded border border-rose-500/15">
-                          "{item.snippet}"
-                        </span>
-                      </div>
-                    )}
-                    
-                    {isMqm && item.correction && (
-                      <div className="mt-1 flex items-center gap-1.5">
-                        <span className="text-[10.5px] font-bold text-emerald-400 uppercase">Correction:</span>
-                        <span className="text-xs text-emerald-300 font-mono bg-emerald-950/30 px-1.5 py-0.5 rounded border border-emerald-500/15">
-                          "{item.correction}"
-                        </span>
+                    {isMqm && (item.snippet || item.correction) && (
+                      <div className="mt-2.5 rounded-lg border border-white/5 bg-zinc-950/40 overflow-hidden font-mono text-[11px] leading-relaxed">
+                        {item.snippet && (
+                          <div className="flex items-center gap-2 bg-rose-500/5 hover:bg-rose-500/10 px-3 py-1.5 border-b border-white/5 text-rose-300/90 transition">
+                            <span className="text-rose-500 font-bold select-none">- Replace:</span>
+                            <span className="line-through flex-1">"{item.snippet}"</span>
+                          </div>
+                        )}
+                        {item.correction && (
+                          <div className="flex items-center gap-2 bg-emerald-500/5 hover:bg-emerald-500/10 px-3 py-1.5 text-emerald-300/90 transition">
+                            <span className="text-emerald-500 font-bold select-none">+ With:</span>
+                            <span className="flex-1 font-semibold">"{item.correction}"</span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

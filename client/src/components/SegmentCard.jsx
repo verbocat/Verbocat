@@ -940,25 +940,52 @@ export const SegmentCard = ({
                                 <span style={{ fontSize: 10.5, fontWeight: 700, color: err.severity === "Critical" ? "var(--text-rose)" : "var(--text-amber)" }}>
                                   [{err.severity}] {err.category}
                                 </span>
-                                {err.snippet && (
-                                  <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                                    <span style={{ fontSize: 9.5, fontFamily: "var(--font-mono)", background: "rgba(239,68,68,0.05)", color: "var(--text-rose)", padding: "1px 4px", borderRadius: 3, border: "1px solid rgba(239,68,68,0.15)" }}>
-                                      "{err.snippet}"
-                                    </span>
-                                    {err.correction && (
-                                      <>
-                                        <span style={{ fontSize: 9.5, color: "var(--text-muted)" }}>➔</span>
-                                        <span style={{ fontSize: 9.5, fontFamily: "var(--font-mono)", background: "rgba(16,185,129,0.05)", color: "var(--text-emerald)", padding: "1px 4px", borderRadius: 3, border: "1px solid rgba(16,185,129,0.15)" }}>
-                                          "{err.correction}"
-                                        </span>
-                                      </>
-                                    )}
-                                  </div>
-                                )}
                               </div>
-                              <span style={{ fontSize: 10.5, color: "var(--text-muted)" }}>
+                              <span style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.4 }}>
                                 {err.explanation}
                               </span>
+                              {(err.snippet || err.correction) && (
+                                <div style={{
+                                  marginTop: 6,
+                                  borderRadius: 6,
+                                  border: "1px solid var(--border-subtle)",
+                                  background: "rgba(0,0,0,0.25)",
+                                  overflow: "hidden",
+                                  fontFamily: "var(--font-mono)",
+                                  fontSize: "9.5px",
+                                  lineHeight: 1.4
+                                }}>
+                                  {err.snippet && (
+                                    <div style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 6,
+                                      background: "rgba(239,68,68,0.04)",
+                                      padding: "5px 8px",
+                                      borderBottom: err.correction ? "1px solid var(--border-subtle)" : "none",
+                                      color: "var(--text-rose)",
+                                      textDecoration: "line-through"
+                                    }}>
+                                      <span style={{ fontWeight: "bold", opacity: 0.7 }}>- Replace:</span>
+                                      <span>"{err.snippet}"</span>
+                                    </div>
+                                  )}
+                                  {err.correction && (
+                                    <div style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 6,
+                                      background: "rgba(16,185,129,0.04)",
+                                      padding: "5px 8px",
+                                      color: "var(--text-emerald)",
+                                      fontWeight: 600
+                                    }}>
+                                      <span style={{ fontWeight: "bold", opacity: 0.7 }}>+ With:</span>
+                                      <span>"{err.correction}"</span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>

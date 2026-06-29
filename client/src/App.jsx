@@ -36,7 +36,8 @@ import {
   getAuditEstimate,
   startAudit,
   cancelAudit,
-  getAuditStatus
+  getAuditStatus,
+  updateDocumentLanguages
 } from "./services/api.js";
 import { ExportModal } from "./components/ExportModal.jsx";
 import { ShareModal } from "./components/ShareModal.jsx";
@@ -926,6 +927,30 @@ export default function App() {
       console.error("Translation error:", error);
       setIsTranslating(false);
       showToast(`Translation failed: ${error.message || error}`, "error");
+    }
+  };
+
+  const handleSourceLanguageChange = async (lang) => {
+    setSourceLanguage(lang);
+    if (documentId) {
+      try {
+        await updateDocumentLanguages(documentId, lang, targetLanguage);
+        showToast(`Document source language updated to ${lang}`);
+      } catch (err) {
+        console.error("Failed to sync source language to DB:", err);
+      }
+    }
+  };
+
+  const handleTargetLanguageChange = async (lang) => {
+    setTargetLanguage(lang);
+    if (documentId) {
+      try {
+        await updateDocumentLanguages(documentId, sourceLanguage, lang);
+        showToast(`Document target language updated to ${lang}`);
+      } catch (err) {
+        console.error("Failed to sync target language to DB:", err);
+      }
     }
   };
 
@@ -2151,9 +2176,9 @@ export default function App() {
         fileName={fileName}
         fileExtension={fileExtension}
         sourceLanguage={sourceLanguage}
-        onSourceLanguageChange={setSourceLanguage}
+        onSourceLanguageChange={handleSourceLanguageChange}
         targetLanguage={targetLanguage}
-        onTargetLanguageChange={setTargetLanguage}
+        onTargetLanguageChange={handleTargetLanguageChange}
         stats={stats}
         onCloseProject={closeProject}
         onSaveProject={saveProject}
@@ -2203,9 +2228,9 @@ export default function App() {
             setSearchQuery={setSearchQuery}
             stats={stats}
             sourceLanguage={sourceLanguage}
-            onSourceLanguageChange={setSourceLanguage}
+            onSourceLanguageChange={handleSourceLanguageChange}
             targetLanguage={targetLanguage}
-            onTargetLanguageChange={setTargetLanguage}
+            onTargetLanguageChange={handleTargetLanguageChange}
             fileName={fileName}
             theme={theme}
             canTranslate={permission === "write" && user ? (user.hasTranslateAccess && user.status === "active") : false}
