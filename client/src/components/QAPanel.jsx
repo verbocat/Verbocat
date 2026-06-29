@@ -231,7 +231,7 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
 
       {/* 3. Issue List / Grid */}
       {filteredIssues.length > 0 ? (
-        <div className="grid gap-3 max-h-[40vh] overflow-y-auto pr-1">
+        <div className="grid gap-3 max-h-[70vh] overflow-y-auto pr-1">
           {filteredIssues.map((item, index) => {
             const isMqm = item.type === "mqm";
             const severityColor = 
@@ -243,9 +243,9 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
             return (
               <div 
                 key={`${item.id}-${index}`}
-                className="bg-zinc-950/20 hover:bg-zinc-950/40 border border-white/5 hover:border-zinc-800 rounded-xl p-4 transition duration-200 flex flex-col md:flex-row md:items-center justify-between gap-4"
+                className="bg-zinc-950/20 hover:bg-zinc-950/40 border border-white/5 hover:border-zinc-800 rounded-xl p-4 transition duration-200 flex flex-col gap-3.5"
               >
-                <div className="flex-1 min-w-0">
+                <div className="w-full">
                   <div className="flex flex-wrap items-center gap-2 mb-2">
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${severityColor}`}>
                       {isMqm ? `MQM: ${item.severity}` : `Auto Rule`}
@@ -297,13 +297,15 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
                   </div>
                 </div>
 
-                <button
-                  onClick={() => onGoToSegment(item.id)}
-                  className="self-end md:self-center flex items-center gap-1.5 text-xs font-bold text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/15 border border-indigo-500/20 px-3.5 py-2 rounded-xl transition duration-200"
-                >
-                  <span>Inspect & Edit</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex justify-end border-t border-white/5 pt-2.5">
+                  <button
+                    onClick={() => onGoToSegment(item.id)}
+                    className="flex items-center gap-1.5 text-xs font-bold text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/15 border border-indigo-500/20 px-3.5 py-1.5 rounded-xl transition duration-200"
+                  >
+                    <span>Inspect & Edit</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             );
           })}

@@ -101,6 +101,7 @@ Target: "Por favor verifique detalles de cuenta"
 Errors: [
   {
     "span": "detalles de cuenta",
+    "correction": "los detalles de su cuenta",
     "category": "fluency",
     "severity": "minor",
     "comment": "Grammar error: missing article before 'detalles'"
@@ -113,6 +114,7 @@ Target: "Die Firma haftet nicht für direkte Schäden."
 Errors: [
   {
     "span": "direkte Schäden",
+    "correction": "indirekte oder Folgeschäden",
     "category": "accuracy",
     "severity": "critical",
     "comment": "Critical mistranslation: 'indirect/consequential' was translated as 'direct' (direkte), reversing the legal liability."
@@ -165,11 +167,12 @@ const mqmSchema = {
           type: "object",
           properties: {
             span: { type: "string", description: "Exact substring from the target text containing the error" },
+            correction: { type: "string", description: "The suggested corrected text that should replace the offending span" },
             category: { type: "string", enum: ["accuracy", "fluency", "terminology", "style", "locale"] },
             severity: { type: "string", enum: ["minor", "major", "critical"] },
             comment: { type: "string", description: "Reason why this is an error" }
           },
-          required: ["span", "category", "severity", "comment"],
+          required: ["span", "correction", "category", "severity", "comment"],
           additionalProperties: false
         }
       }
@@ -535,6 +538,7 @@ Errors: [
   {
     "segmentIndex": 1,
     "span": "detalles de cuenta",
+    "correction": "los detalles de su cuenta",
     "category": "fluency",
     "severity": "minor",
     "comment": "Grammar error: missing article before 'detalles'"
@@ -563,11 +567,12 @@ Target Language: ${targetLangName} (from ${sourceLangName})`;
             properties: {
               segmentIndex: { type: "integer", description: "The index matching the segment_index of the input segments" },
               span: { type: "string", description: "Exact substring from the target text containing the error" },
+              correction: { type: "string", description: "The suggested corrected text that should replace the offending span" },
               category: { type: "string", enum: ["accuracy", "fluency", "terminology", "style", "locale"] },
               severity: { type: "string", enum: ["minor", "major", "critical"] },
               comment: { type: "string", description: "Detailed explanation of the error" }
             },
-            required: ["segmentIndex", "span", "category", "severity", "comment"],
+            required: ["segmentIndex", "span", "correction", "category", "severity", "comment"],
             additionalProperties: false
           }
         }

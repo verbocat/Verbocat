@@ -22,13 +22,13 @@ const postProcessTranslation = (source, target, targetLang) => {
 
   // 1. List prefix protection: h. / b) / a) / r).
   // Match prefix like 'h. ', 'b) ', 'a) ', '1. ', 'r). ', '(a) '
-  const prefixRegex = /^([a-zA-Z0-9]+[\.\)]\s*|^\([a-zA-Z0-9]+\)\s*)/;
+  const prefixRegex = /^(\(?[a-zA-Z0-9]+\)[\.\)]?\s*|^[a-zA-Z0-9]+\.\s*)/;
   const sourceMatch = source.match(prefixRegex);
   if (sourceMatch) {
     const sourcePrefix = sourceMatch[1];
     if (!output.startsWith(sourcePrefix)) {
       // Find what target prefix was generated (e.g. any word/characters followed by a purna-viram, dot, or bracket)
-      const targetPrefixRegex = /^([^\s]+[\।\.\)]\s*|^\([^\s]+\)\s*)/;
+      const targetPrefixRegex = /^(\(?[^\s]+\)[\.\।\)]?\s*|^[^\s]+[\.।]\s*)/;
       const targetMatch = output.match(targetPrefixRegex);
       if (targetMatch) {
         const targetPrefix = targetMatch[1];

@@ -1952,43 +1952,53 @@ export default function App() {
     setSearchQuery("");
     setFilterStatus("all");
 
-    // We defer the lookup slightly to let filteredSegments update
+    // Defer slightly to let filters clear and state resolve
     window.setTimeout(() => {
       const index = segments.findIndex((s) => s.id === id);
       if (index !== -1 && virtuosoRef.current) {
+        // Jump instantly to index to avoid height jiggling from off-screen virtualized segments
         virtuosoRef.current.scrollToIndex({
           index,
           align: "center",
-          behavior: "smooth"
+          behavior: "auto"
         });
-      }
-    }, 50);
 
-    // Focus target editor and place cursor at the end after scroll mounts the element
-    window.setTimeout(() => {
-      const element = document.getElementById(`segment-${id}`);
-      if (element) {
-        element.classList.add("ring-2", "ring-red-500");
-        window.setTimeout(() => {
-          element.classList.remove("ring-2", "ring-red-500");
-        }, 2000);
-      }
+        // Poll the DOM until Virtuoso has mounted the item at the new scroll position
+        const startTime = Date.now();
+        const pollInterval = window.setInterval(() => {
+          const element = document.getElementById(`segment-${id}`);
+          const editor = document.getElementById(`target-${id}`);
 
-      const editor = document.getElementById(`target-${id}`);
-      if (editor) {
-        editor.focus();
-        try {
-          const range = document.createRange();
-          const sel = window.getSelection();
-          range.selectNodeContents(editor);
-          range.collapse(false); // collapse to end
-          sel.removeAllRanges();
-          sel.addRange(range);
-        } catch (e) {
-          console.error("Failed to position cursor at end:", e);
-        }
+          if (element && editor) {
+            window.clearInterval(pollInterval);
+
+            // Apply a beautiful highlight ring to guide the eye
+            element.classList.add("ring-4", "ring-indigo-500", "scale-[1.01]", "transition-all", "duration-300");
+            window.setTimeout(() => {
+              element.classList.remove("ring-4", "ring-indigo-500", "scale-[1.01]");
+            }, 2000);
+
+            // Focus the editor
+            editor.focus();
+
+            // Set cursor to the end
+            try {
+              const range = document.createRange();
+              const sel = window.getSelection();
+              range.selectNodeContents(editor);
+              range.collapse(false); // collapse to end
+              sel.removeAllRanges();
+              sel.addRange(range);
+            } catch (e) {
+              console.error("Failed to position cursor at end:", e);
+            }
+          } else if (Date.now() - startTime > 1500) {
+            // Stop polling after 1.5 seconds if segment element never mounts
+            window.clearInterval(pollInterval);
+          }
+        }, 30);
       }
-    }, 450);
+    }, 80);
   };
 
   // Guard screens for authentication & password resets
