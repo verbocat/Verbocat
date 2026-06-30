@@ -242,6 +242,7 @@ function initSocket(server) {
         if (changed) {
           if (roomLocks.size === 0) {
             documentLocks.delete(documentId);
+            io.to(documentId).emit("lock-update", []);
           } else {
             io.to(documentId).emit("lock-update", Array.from(roomLocks.entries()));
           }

@@ -43,7 +43,7 @@ const computeWordDiff = (oldStr, newStr) => {
 const renderDiff = (oldStr, newStr) => {
   const diff = computeWordDiff(oldStr, newStr);
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", whiteSpace: "pre-wrap" }}>
+    <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", overflowWrap: "anywhere", display: "inline" }}>
       {diff.map((token, index) => {
         if (token.type === "added") {
           return (
@@ -151,6 +151,7 @@ export const SegmentCard = ({
 }) => {
   const editorRef = useRef(null);
   const lastSaved = useRef(segment.target || "");
+  const prevOriginalTarget = useRef(segment.originalTargetText);
   const [suggestions, setSuggestions] = useState([]);
   const [activeIdx, setActiveIdx] = useState(0);
 
@@ -334,9 +335,13 @@ export const SegmentCard = ({
   }, [segment.id]);
 
   useEffect(() => {
+    const wasTracking = !!prevOriginalTarget.current;
+    const isTrackingNow = !!segment.originalTargetText;
+    const didRevertOrAccept = wasTracking && !isTrackingNow;
+    prevOriginalTarget.current = segment.originalTargetText;
+
     if (editorRef.current && segment.target !== lastSaved.current) {
-      const forceUpdate = !segment.originalTargetText;
-      if (document.activeElement !== editorRef.current || forceUpdate) {
+      if (document.activeElement !== editorRef.current || didRevertOrAccept) {
         editorRef.current.innerHTML = targetToHtml(segment.target || "");
       }
       lastSaved.current = segment.target || "";
@@ -665,7 +670,10 @@ export const SegmentCard = ({
               boxShadow: "inset 0 1px 2px rgba(0, 0, 0, 0.05)",
               display: "flex",
               flexDirection: "column",
-              gap: 10
+              gap: 10,
+              width: "100%",
+              boxSizing: "border-box",
+              overflow: "hidden"
             }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -725,7 +733,10 @@ export const SegmentCard = ({
                 padding: "8px 10px",
                 borderRadius: "6px",
                 backgroundColor: darkMode ? "rgba(15, 23, 42, 0.4)" : "rgba(255, 255, 255, 0.8)",
-                border: "1px solid var(--border-light)"
+                border: "1px solid var(--border-light)",
+                wordBreak: "break-word",
+                overflowWrap: "anywhere",
+                maxWidth: "100%"
               }}>
                 {renderDiff(segment.originalTargetText, segment.target)}
               </div>
