@@ -48,11 +48,18 @@ const getTargetSpecificRules = (targetLang, sourceLang) => {
     return `
 - HINDI GRAMMAR & GENDER COMPLIANCE: Check for grammatical agreement in Hindi. Adjective/possessive agreement must match the noun gender.
   - "सहमति" (consent) is feminine, so "आपका सहमति" is grammatically incorrect (must be "आपकी सहमति").
-  - "सहमति पत्र" (consent letter) is masculine, so "आपका सहमति पत्र" is correct. Suggest grammatical corrections that preserve proper gender and possessive agreement.
-- ACRONYM & TRANSLITERATION PRESERVATION: Uppercase Latin acronyms and initialization codes (e.g. NRI, AMB, CIBIL, KYC, OTP, ATM) must remain in their original Latin-script uppercase form in the Hindi translation (e.g., use "NRI" instead of transliterating to "एनआरआई", and "AMB" instead of "एएमबी"). If the translation transliterates these, flag this as a Terminology error and suggest the Latin uppercase version.
+  - "सहमति पत्र" (consent letter) is masculine, so "आपका सहमति पत्र" is correct.
+  - HINDI GENITIVE AGREEMENT (CRITICAL): In Hindi possessive phrases (e.g., "X की Y" or "X का Y"), the genitive postposition ('का', 'की', 'के') agrees in gender/number with the POSSESSED noun 'Y', NOT the owner noun 'X'. Since 'अस्वीकृति' (dishonour) is FEMININE, it must always be "भुगतान निर्देशों की अस्वीकृति" (using the feminine 'की'). Do NOT flag 'की' as an error in this context and do NOT suggest changing it to 'का'.
+- ACRONYM & TRANSLITERATION PRESERVATION: 
+  * Only short-form uppercase English acronyms, abbreviations, and initialization codes (e.g., 'RBI', 'PDC', 'KYC', 'CIBIL', 'OTP', 'NACH', 'e-NACH', 'SPDC') must remain in their original English uppercase form. If the translation transliterates these (like 'आरबीआई' or 'पीडीसी'), flag it as a Terminology error.
+  * Standard financial, technical, or banking terms (such as 'Margin Call', 'Flexi Loan', 'Loan Agreement', 'Lender', 'Borrower') MUST be transliterated into Devanagari script (e.g. 'मार्जिन कॉल', 'फ्लेक्सी लोन', 'लोन एग्रीमेंट', 'लेंडर'). Do NOT flag Devanagari transliterations of these terms as errors and do NOT suggest leaving them in English Latin characters.
 - LIST INDEX MAPPING: Standard English list indices (like letters or numbers, e.g. "h.)") can be translated to corresponding Hindi listing characters (like "झ.)"). Do not flag standard Devanagari listing ordering as errors.
 - CONJUNCTIONS: Verify if equivalent Hindi conjunctions (like 'और', 'लेकिन', 'या') are present before reporting missing English conjunctions (like 'and', 'but', 'or').
 - DISSENT ON FORMALITY: Hindi banking/legal translations must be formal. Do NOT flag formal phrasing (e.g. "पुष्टि करता है", "अधीन", "प्रभारों") as "Too Formal" or suggest casual rewrites. For example, translate 'charges' as 'प्रभारों' rather than the transliterated 'चार्जों'.
+- STRICT LEGAL PRECISION & ANTI-HALLUCINATION: 
+  * Do NOT suggest stylistic changes that weaken legal precision. For example, "partnership firm" must remain "साझेदारी फर्म" (Firm), do NOT suggest changing it to "साझेदारी कंपनी" (Company) as they are distinct legal entities.
+  * "duly represented" is formally translated as "उचित रूप से प्रतिनिधित्व". Do NOT recommend casual/informal phrases like "सही तरीके से" in formal agreements.
+  * Do not invent or hallucinate errors. If the translation is grammatically correct, formal, and legally accurate, return an empty errors list.
 `;
   } else if (isTargetEnglish) {
     return `

@@ -288,11 +288,35 @@ const translateSegmentWithContext = async ({
   const processed = postProcessTranslation(sourceText, translated, targetLang);
   const cleanedTranslation = ensureEnglishNumerals(processed);
 
+  // Run MQM evaluation on the newly translated segment to verify if errors are resolved
+  const { evaluateTranslationMQM } = require("./mqmService");
+  let mqmReport = null;
+  let mqmAccuracyScore = 100;
+  try {
+    mqmReport = await evaluateTranslationMQM({
+      sourceText,
+      translatedText: cleanedTranslation,
+      targetLang,
+      sourceLang: actualSourceLang,
+      contextJira,
+      contextDescription,
+      contextSettings,
+      prevSource,
+      prevTarget,
+      nextSource,
+      nextTarget,
+      isFullAudit: true
+    });
+    mqmAccuracyScore = mqmReport?.accuracyScore !== undefined ? mqmReport.accuracyScore : 100;
+  } catch (err) {
+    console.error("Failed to run MQM on re-translated segment:", err);
+  }
+
   return {
     translated: cleanedTranslation,
     qaIssues: runQaChecks(sourceText, cleanedTranslation),
-    mqmAccuracyScore: 100,
-    mqmReport: null
+    mqmAccuracyScore,
+    mqmReport
   };
 };
 

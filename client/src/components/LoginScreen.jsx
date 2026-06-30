@@ -49,7 +49,12 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
     try {
       if (mode === "login") {
         const response = await axios.post(`${API_URL}/auth/login`, { email, password });
-        loginAction(response.data.token, response.data.user);
+        loginAction(
+          response.data.token, 
+          response.data.refreshToken, 
+          response.data.expiresAt, 
+          response.data.user
+        );
       } 
       else if (mode === "register") {
         if (password !== confirmPassword) {

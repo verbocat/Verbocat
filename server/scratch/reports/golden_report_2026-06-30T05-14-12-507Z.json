@@ -1,0 +1,199 @@
+{
+  "timestamp": "2026-06-30T05:14:12.515Z",
+  "metrics": {
+    "tp": 7,
+    "fp": 1,
+    "fn": 0,
+    "precision": 87.5,
+    "recall": 100,
+    "f1Score": 93.33333333333333
+  },
+  "results": [
+    {
+      "id": 1,
+      "sourceText": "Your session has expired.",
+      "translatedText": "Tu sesión ha expirado",
+      "expectedErrors": [],
+      "flaggedErrors": [],
+      "evaluationScore": 100
+    },
+    {
+      "id": 2,
+      "sourceText": "Please verify your account details.",
+      "translatedText": "Por favor verifique detalles de cuenta",
+      "expectedErrors": [
+        {
+          "span": "detalles de cuenta",
+          "category": "fluency",
+          "severity": "minor"
+        }
+      ],
+      "flaggedErrors": [
+        {
+          "category": "fluency",
+          "severity": "minor",
+          "snippet": "detalles de cuenta",
+          "correction": "los detalles de su cuenta",
+          "explanation": "Grammar error: missing article before 'detalles' and possessive pronoun for clarity."
+        }
+      ],
+      "evaluationScore": 80
+    },
+    {
+      "id": 3,
+      "sourceText": "The company shall not be liable for any indirect or consequential damages.",
+      "translatedText": "Die Firma haftet nicht für direkte Schäden.",
+      "expectedErrors": [
+        {
+          "span": "direkte Schäden",
+          "category": "accuracy",
+          "severity": "critical"
+        }
+      ],
+      "flaggedErrors": [
+        {
+          "category": "accuracy",
+          "severity": "critical",
+          "snippet": "direkte Schäden",
+          "correction": "indirekte oder Folgeschäden",
+          "explanation": "Critical mistranslation: 'indirect/consequential' was translated as 'direct' (direkte), reversing the legal liability."
+        }
+      ],
+      "evaluationScore": 0
+    },
+    {
+      "id": 4,
+      "sourceText": "Check your CIBIL score today.",
+      "translatedText": "आज ही अपना सिबिल स्कोर चेक करें।",
+      "expectedErrors": [
+        {
+          "span": "सिबिल",
+          "category": "terminology",
+          "severity": "minor"
+        }
+      ],
+      "flaggedErrors": [
+        {
+          "category": "terminology",
+          "severity": "major",
+          "snippet": "सिबिल",
+          "correction": "CIBIL",
+          "explanation": "Incorrect term: 'CIBIL' should remain in uppercase as it is an acronym."
+        }
+      ],
+      "evaluationScore": 0
+    },
+    {
+      "id": 5,
+      "sourceText": "Enter your OTP to complete transaction.",
+      "translatedText": "लेनदेन पूरा करने के लिए ओटीपी दर्ज करें।",
+      "expectedErrors": [
+        {
+          "span": "ओटीपी",
+          "category": "terminology",
+          "severity": "minor"
+        }
+      ],
+      "flaggedErrors": [
+        {
+          "category": "terminology",
+          "severity": "minor",
+          "snippet": "ओटीपी",
+          "correction": "OTP",
+          "explanation": "Acronyms like 'OTP' must remain in English/Latin script instead of being transliterated to 'ओटीपी'."
+        }
+      ],
+      "evaluationScore": 83
+    },
+    {
+      "id": 6,
+      "sourceText": "This is a serious legal notice.",
+      "translatedText": "यह एक कैज़ुअल मैसेज है।",
+      "expectedErrors": [
+        {
+          "span": "कैज़ुअल मैसेज",
+          "category": "accuracy",
+          "severity": "critical"
+        }
+      ],
+      "flaggedErrors": [
+        {
+          "category": "accuracy",
+          "severity": "critical",
+          "snippet": "कैज़ुअल मैसेज है",
+          "correction": "गंभीर कानूनी नोटिस है।",
+          "explanation": "Critical mistranslation: 'कैज़ुअल मैसेज' (casual message) does not convey the serious legal nature of the original text."
+        }
+      ],
+      "evaluationScore": 0
+    },
+    {
+      "id": 7,
+      "sourceText": "Please accept our consent letter.",
+      "translatedText": "कृपया हमारा सहमति पत्र स्वीकार करें।",
+      "expectedErrors": [],
+      "flaggedErrors": [
+        {
+          "category": "fluency",
+          "severity": "minor",
+          "snippet": "हमारा सहमति पत्र",
+          "correction": "हमारा सहमति पत्र",
+          "explanation": "Grammar error: 'हमारा' is masculine, but 'सहमति' is feminine. It should be 'हमारी सहमति पत्र'."
+        }
+      ],
+      "evaluationScore": 80
+    },
+    {
+      "id": 8,
+      "sourceText": "He goes to the office.",
+      "translatedText": "वह ऑफिस जाता है।",
+      "expectedErrors": [],
+      "flaggedErrors": [],
+      "evaluationScore": 100
+    },
+    {
+      "id": 9,
+      "sourceText": "Please pay all your charges.",
+      "translatedText": "कृपया अपने सभी चार्जों का भुगतान करें।",
+      "expectedErrors": [
+        {
+          "span": "चार्जों",
+          "category": "style",
+          "severity": "minor"
+        }
+      ],
+      "flaggedErrors": [
+        {
+          "category": "terminology",
+          "severity": "minor",
+          "snippet": "चार्जों",
+          "correction": "प्रभारों",
+          "explanation": "Terminology error: 'चार्जों' should be translated as 'प्रभारों' for formal banking/legal context."
+        }
+      ],
+      "evaluationScore": 80
+    },
+    {
+      "id": 10,
+      "sourceText": "There is a material change.",
+      "translatedText": "There is any material change.",
+      "expectedErrors": [
+        {
+          "span": "any",
+          "category": "fluency",
+          "severity": "minor"
+        }
+      ],
+      "flaggedErrors": [
+        {
+          "category": "fluency",
+          "severity": "major",
+          "snippet": "any material change",
+          "correction": "a material change",
+          "explanation": "Grammar error: 'any' is incorrectly used instead of 'a', which affects the clarity of the statement."
+        }
+      ],
+      "evaluationScore": 0
+    }
+  ]
+}

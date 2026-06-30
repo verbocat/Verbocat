@@ -579,8 +579,9 @@ code, .font-mono { font-family: "IBM Plex Mono", monospace; }
    ================================================================ */
 .segment-table {
   flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: var(--bg-base);
   position: relative;
 }

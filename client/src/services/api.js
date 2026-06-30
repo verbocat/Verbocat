@@ -1,4 +1,5 @@
 import axios from "axios";
+import { useUserStore } from "./userStore";
 
 const api = axios.create({
   // If VITE_API_URL is set at build/runtime, use it. Otherwise use
@@ -6,21 +7,78 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || ""
 });
 
-// Automatically inject JWT authentication token to headers
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("verbocat_token");
+let refreshPromise = null;
+
+const refreshSessionToken = async () => {
+  const refreshToken = localStorage.getItem("verbocat_refresh_token");
+  if (!refreshToken) throw new Error("No refresh token available");
+
+  if (refreshPromise) return refreshPromise;
+
+  const API_URL = import.meta.env.VITE_API_URL 
+    ? `${import.meta.env.VITE_API_URL}/api` 
+    : "/api";
+
+  refreshPromise = axios.post(`${API_URL}/auth/refresh`, { refreshToken })
+    .then((response) => {
+      refreshPromise = null;
+      const { token, refreshToken: newRefreshToken, expiresAt, user } = response.data;
+      
+      // Update store state and localStorage
+      useUserStore.getState().login(token, newRefreshToken, expiresAt, user);
+      return token;
+    })
+    .catch((err) => {
+      refreshPromise = null;
+      useUserStore.getState().logout();
+      throw err;
+    });
+
+  return refreshPromise;
+};
+
+// Automatically inject JWT authentication token to headers and pre-emptively refresh if near expiry
+api.interceptors.request.use(async (config) => {
+  const expiresAt = localStorage.getItem("verbocat_expires_at");
+  let token = localStorage.getItem("verbocat_token");
+
+  // Pre-emptive refresh: if token will expire in less than 1 minute, refresh it first
+  if (token && expiresAt && Date.now() > parseInt(expiresAt, 10) - 60000) {
+    try {
+      const newToken = await refreshSessionToken();
+      if (newToken) {
+        token = newToken;
+      }
+    } catch (e) {
+      console.error("Pre-emptive token refresh failed:", e);
+    }
+  }
+
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
 
-// Auto logout and refresh if token is invalid or expired
+// Auto logout and refresh if token is invalid or expired (fallback retry)
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response && error.response.status === 401) {
-      localStorage.removeItem("verbocat_token");
+  async (error) => {
+    const originalRequest = error.config;
+    if (error.response && error.response.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      try {
+        const newToken = await refreshSessionToken();
+        if (newToken) {
+          originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          return api(originalRequest);
+        }
+      } catch (refreshError) {
+        console.error("Session refresh failed on 401 response:", refreshError);
+      }
+      
+      // If refresh fails or token is rejected, log out completely
+      useUserStore.getState().logout();
       window.location.reload();
     }
     return Promise.reject(error);

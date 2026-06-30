@@ -90,6 +90,8 @@ authRouter.post("/login", async (request, response) => {
     response.json({
       message: "Login successful",
       token: data.session.access_token,
+      refreshToken: data.session.refresh_token,
+      expiresAt: Date.now() + (data.session.expires_in || 3600) * 1000,
       user: {
         id: user.id,
         email: user.email,
@@ -103,6 +105,58 @@ authRouter.post("/login", async (request, response) => {
   } catch (error) {
     console.error("Login Router Error:", error);
     response.status(500).json({ error: "Authentication failed on server" });
+  }
+});
+
+// 2b. Silent Session Token Refresh
+authRouter.post("/refresh", async (request, response) => {
+  try {
+    const { refreshToken } = request.body;
+    if (!refreshToken) {
+      return response.status(400).json({ error: "Refresh token is required" });
+    }
+
+    const { data, error } = await supabase.auth.refreshSession({
+      refresh_token: refreshToken
+    });
+
+    if (error) {
+      return response.status(401).json({ error: error.message });
+    }
+
+    const user = data.user;
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .single();
+
+    if (profileError || !profile) {
+      return response.status(401).json({ error: "User profile record missing" });
+    }
+
+    if (profile.status === "suspended") {
+      return response.status(403).json({ error: "Your account is suspended. Contact VerboLabs." });
+    }
+
+    response.json({
+      message: "Session refreshed successfully",
+      token: data.session.access_token,
+      refreshToken: data.session.refresh_token,
+      expiresAt: Date.now() + (data.session.expires_in || 3600) * 1000,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: profile.role,
+        hasTranslateAccess: profile.has_translate_access,
+        creditsAllowed: profile.credits_allowed,
+        creditsConsumed: profile.credits_consumed,
+        status: profile.status
+      }
+    });
+  } catch (error) {
+    console.error("Token Refresh Error:", error);
+    response.status(500).json({ error: "Token refresh failed on server" });
   }
 });
 

@@ -371,6 +371,15 @@ export default function App() {
       
       if (accessToken) {
         localStorage.setItem("verbocat_token", accessToken);
+        const refreshToken = params.get("refresh_token");
+        if (refreshToken) {
+          localStorage.setItem("verbocat_refresh_token", refreshToken);
+        }
+        const expiresIn = params.get("expires_in");
+        if (expiresIn) {
+          localStorage.setItem("verbocat_expires_at", String(Date.now() + parseInt(expiresIn, 10) * 1000));
+        }
+
         if (hash.includes("type=recovery")) {
           setResetMode(true);
         } else {
@@ -2322,9 +2331,8 @@ export default function App() {
 
             <Virtuoso
               ref={virtuosoRef}
-              style={{ height: "100%" }}
+              style={{ flex: 1 }}
               data={filteredSegments}
-              components={{ Footer: () => <div style={{ height: 80 }} /> }}
               itemContent={(index, segment) => (
                 <SegmentCard
                   key={segment.id}
