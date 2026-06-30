@@ -277,4 +277,9 @@ export const rejectTrackedChange = async (documentId, segmentIndex) => {
   return response.data;
 };
 
+export const acceptAllTrackedChanges = async (documentId) => {
+  const response = await api.post(`/api/documents/${documentId}/accept-all-changes`);
+  return response.data;
+};
+
 

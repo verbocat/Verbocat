@@ -6,6 +6,38 @@ let io = null;
 // Track active users and segment locks in memory for high-performance and auto-cleanup
 const activeUsers = new Map(); // Map<documentId, Map<socketId, userInfo>>
 const documentLocks = new Map(); // Map<documentId, Map<segmentIndex, lockInfo>>
+const pendingUnlockTimeouts = new Map(); // Map<string, NodeJS.Timeout>
+
+function scheduleUnlock(documentId, segmentIndex, socketId) {
+  const key = `${documentId}:${segmentIndex}`;
+  if (pendingUnlockTimeouts.has(key)) {
+    clearTimeout(pendingUnlockTimeouts.get(key));
+  }
+
+  const timeout = setTimeout(() => {
+    pendingUnlockTimeouts.delete(key);
+    const roomLocks = documentLocks.get(documentId);
+    if (roomLocks) {
+      const lock = roomLocks.get(segmentIndex);
+      if (lock && lock.socketId === socketId) {
+        roomLocks.delete(segmentIndex);
+        if (io) {
+          io.to(documentId).emit("lock-update", Array.from(roomLocks.entries()));
+        }
+      }
+    }
+  }, 30000); // 30 seconds
+
+  pendingUnlockTimeouts.set(key, timeout);
+}
+
+function cancelUnlock(documentId, segmentIndex) {
+  const key = `${documentId}:${segmentIndex}`;
+  if (pendingUnlockTimeouts.has(key)) {
+    clearTimeout(pendingUnlockTimeouts.get(key));
+    pendingUnlockTimeouts.delete(key);
+  }
+}
 
 function initSocket(server) {
   io = new Server(server, {
@@ -150,10 +182,13 @@ function initSocket(server) {
         return socket.emit("lock-failed", { segmentIndex, message: "This cell is already being edited" });
       }
 
-      // Auto-release any previous locks held by this same socket session to prevent lock stacking/stale locks
+      // Cancel any pending unlock timeout for this segment
+      cancelUnlock(documentId, segmentIndex);
+
+      // Auto-schedule unlock for any previous locks held by this same socket session
       for (const [idx, lock] of roomLocks.entries()) {
         if (lock.socketId === socket.id && idx !== segmentIndex) {
-          roomLocks.delete(idx);
+          scheduleUnlock(documentId, idx, socket.id);
         }
       }
 
@@ -186,8 +221,8 @@ function initSocket(server) {
       if (roomLocks) {
         const existingLock = roomLocks.get(segmentIndex);
         if (existingLock && existingLock.socketId === socket.id) {
-          roomLocks.delete(segmentIndex);
-          io.to(documentId).emit("lock-update", Array.from(roomLocks.entries()));
+          // Schedule unlock with 30s delay instead of deleting immediately
+          scheduleUnlock(documentId, segmentIndex, socket.id);
         }
       }
 
@@ -197,6 +232,19 @@ function initSocket(server) {
         roomUsers.get(socket.id).activeSegmentIndex = null;
         io.to(documentId).emit("presence-update", Array.from(roomUsers.values()));
       }
+    });
+
+    // Handle real-time typing broadcast before saving
+    socket.on("typing-update", ({ segmentIndex, targetText, originalTargetText, trackedBy }) => {
+      const documentId = socket.currentDocId;
+      if (!documentId) return;
+      socket.to(documentId).emit("typing-update", {
+        segmentIndex,
+        targetText,
+        originalTargetText,
+        trackedBy,
+        socketId: socket.id
+      });
     });
 
     // Handle user disconnect (either tab close or internet drop)
@@ -216,21 +264,12 @@ function initSocket(server) {
         }
       }
 
-      // 2. Auto-release all locks held by this socket session
+      // 2. Auto-schedule unlock for all locks held by this socket session with 30s delay
       const roomLocks = documentLocks.get(documentId);
       if (roomLocks) {
-        let changed = false;
         for (const [segmentIndex, lockInfo] of roomLocks.entries()) {
           if (lockInfo.socketId === socket.id) {
-            roomLocks.delete(segmentIndex);
-            changed = true;
-          }
-        }
-        if (changed) {
-          if (roomLocks.size === 0) {
-            documentLocks.delete(documentId);
-          } else {
-            io.to(documentId).emit("lock-update", Array.from(roomLocks.entries()));
+            scheduleUnlock(documentId, segmentIndex, socket.id);
           }
         }
       }

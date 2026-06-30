@@ -3,7 +3,7 @@ import { LANGUAGES } from "../constants/languages.js";
 import {
   FileText, ArrowRight, Search, Filter, Sparkles,
   Save, Upload, Download, Trash2, RefreshCw, ChevronDown, Plus, Link2,
-  FolderOpen, Sliders, GitBranch
+  FolderOpen, Sliders, GitBranch, Check
 } from "lucide-react";
 
 export const WorkspaceToolbar = ({
@@ -14,7 +14,8 @@ export const WorkspaceToolbar = ({
   targetLanguage, onTargetLanguageChange, fileName, theme,
   canTranslate = true, fileExtension, filterStatus, setFilterStatus, onUpload,
   onOpenContext, onRunQc, isAuditing,
-  trackChangesEnabled, onToggleTrackChanges, isOwner
+  trackChangesEnabled, onToggleTrackChanges, isOwner,
+  onAcceptAllChanges, hasTrackedChanges
 }) => {
   const [showDocMenu, setShowDocMenu] = useState(false);
   const docMenuRef = useRef(null);
@@ -104,6 +105,23 @@ export const WorkspaceToolbar = ({
           >
             <GitBranch style={{ width: 12, height: 12, color: trackChangesEnabled ? "var(--emerald)" : "var(--text-muted)", flexShrink: 0 }} />
             <span>Track Changes: {trackChangesEnabled ? "ON" : "OFF"}</span>
+          </button>
+        )}
+
+        {/* Accept All Changes (Owner Only) */}
+        {isOwner && hasTrackedChanges && (
+          <button
+            onClick={onAcceptAllChanges}
+            disabled={!canAct}
+            className="ab"
+            style={{
+              background: "rgba(16,185,129,0.15)",
+              color: "var(--emerald)",
+              border: "1px solid rgba(16,185,129,0.25)"
+            }}
+          >
+            <Check style={{ width: 12, height: 12, color: "var(--emerald)", flexShrink: 0 }} />
+            <span>Accept All Changes</span>
           </button>
         )}
 

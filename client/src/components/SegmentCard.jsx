@@ -335,12 +335,13 @@ export const SegmentCard = ({
 
   useEffect(() => {
     if (editorRef.current && segment.target !== lastSaved.current) {
-      if (document.activeElement !== editorRef.current) {
+      const forceUpdate = !segment.originalTargetText;
+      if (document.activeElement !== editorRef.current || forceUpdate) {
         editorRef.current.innerHTML = targetToHtml(segment.target || "");
       }
       lastSaved.current = segment.target || "";
     }
-  }, [segment.target]);
+  }, [segment.target, segment.originalTargetText]);
 
   /* ── Source renderer ── */
   const renderSource = (text) => {
@@ -656,37 +657,76 @@ export const SegmentCard = ({
 
           {segment.originalTargetText && (
             <div style={{
-              marginTop: 8,
-              padding: 10,
-              borderRadius: 8,
-              border: "1px solid rgba(245,158,11,0.25)",
-              background: "rgba(245,158,11,0.05)",
+              marginTop: 12,
+              padding: "12px 14px",
+              borderRadius: "8px",
+              border: "1px dashed var(--border-medium)",
+              background: darkMode ? "rgba(30, 41, 59, 0.4)" : "rgba(241, 245, 249, 0.6)",
+              boxShadow: "inset 0 1px 2px rgba(0, 0, 0, 0.05)",
               display: "flex",
               flexDirection: "column",
-              gap: 8
+              gap: 10
             }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-amber)" }}>
-                  Tracked Change (Edited by {segment.trackedBy})
-                </span>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{
+                    width: 6, height: 6, borderRadius: "50%",
+                    backgroundColor: "var(--text-amber)"
+                  }} />
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 4 }}>
+                    Tracked edit by <strong style={{ color: "var(--text-primary)", fontWeight: 700 }}>{segment.trackedBy}</strong>
+                  </span>
+                </div>
                 {isOwner && (
-                  <div style={{ display: "flex", gap: 6 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <button
                       onClick={() => onAcceptChange(segment.id)}
-                      className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 text-[10px] font-bold transition cursor-pointer"
+                      style={{
+                        padding: "5px 12px",
+                        borderRadius: "5px",
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        border: "1px solid rgba(16,185,129,0.3)",
+                        background: "rgba(16,185,129,0.15)",
+                        color: "var(--emerald)",
+                        transition: "all 0.2s ease"
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(16,185,129,0.25)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(16,185,129,0.15)"; }}
                     >
                       Accept
                     </button>
                     <button
                       onClick={() => onRejectChange(segment.id)}
-                      className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30 text-[10px] font-bold transition cursor-pointer"
+                      style={{
+                        padding: "5px 12px",
+                        borderRadius: "5px",
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        border: "1px solid rgba(244,63,94,0.3)",
+                        background: "rgba(244,63,94,0.15)",
+                        color: "var(--text-rose)",
+                        transition: "all 0.2s ease"
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(244,63,94,0.25)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(244,63,94,0.15)"; }}
                     >
                       Reject
                     </button>
                   </div>
                 )}
               </div>
-              <div style={{ fontSize: 12, lineHeight: 1.5, color: "var(--text-secondary)" }}>
+              <div style={{ 
+                fontSize: "12px", 
+                lineHeight: "1.6", 
+                color: "var(--text-secondary)",
+                padding: "8px 10px",
+                borderRadius: "6px",
+                backgroundColor: darkMode ? "rgba(15, 23, 42, 0.4)" : "rgba(255, 255, 255, 0.8)",
+                border: "1px solid var(--border-light)"
+              }}>
                 {renderDiff(segment.originalTargetText, segment.target)}
               </div>
             </div>

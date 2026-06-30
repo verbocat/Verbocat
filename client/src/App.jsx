@@ -40,7 +40,8 @@ import {
   updateDocumentLanguages,
   toggleTrackChanges,
   acceptTrackedChange,
-  rejectTrackedChange
+  rejectTrackedChange,
+  acceptAllTrackedChanges
 } from "./services/api.js";
 import { ExportModal } from "./components/ExportModal.jsx";
 import { ShareModal } from "./components/ShareModal.jsx";
@@ -251,6 +252,61 @@ export default function App() {
     socket.on("track-changes-toggled", ({ enabled }) => {
       setTrackChangesEnabled(enabled);
       showToast(`Track Changes was toggled ${enabled ? "ON" : "OFF"} by the creator.`, "info");
+    });
+
+    socket.on("typing-update", ({ segmentIndex, targetText, originalTargetText, trackedBy }) => {
+      setSegments((prev) => {
+        const sourceSeg = prev[segmentIndex];
+        if (!sourceSeg) return prev;
+
+        const cleanString = (str) => {
+          if (!str) return "";
+          return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+        };
+
+        const propagateTranslation = (targetA, sourceB) => {
+          if (!targetA) return "";
+          const tagsInSourceB = sourceB.match(/<[^>]+>/g) || [];
+          let tagIdx = 0;
+          let propagated = targetA.replace(/<[^>]+>/g, () => {
+            if (tagIdx < tagsInSourceB.length) {
+              return tagsInSourceB[tagIdx++];
+            }
+            return "";
+          });
+          while (tagIdx < tagsInSourceB.length) {
+            propagated += tagsInSourceB[tagIdx++];
+          }
+          return propagated;
+        };
+
+        const cleanedSource = cleanString(sourceSeg.source);
+
+        return prev.map((seg, idx) => {
+          if (idx === segmentIndex) {
+            const updated = { ...seg, target: targetText };
+            if (originalTargetText !== undefined) updated.originalTargetText = originalTargetText;
+            if (trackedBy !== undefined) updated.trackedBy = trackedBy;
+            return updated;
+          }
+          if (cleanedSource && cleanString(seg.source) === cleanedSource) {
+            const updated = { ...seg, target: propagateTranslation(targetText, seg.source) };
+            if (originalTargetText !== undefined) {
+              updated.originalTargetText = seg.target || "";
+            }
+            if (trackedBy !== undefined) updated.trackedBy = trackedBy;
+            return updated;
+          }
+          return seg;
+        });
+      });
+    });
+
+    socket.on("all-changes-accepted", () => {
+      setSegments((prev) =>
+        prev.map((seg) => ({ ...seg, originalTargetText: null, trackedBy: null }))
+      );
+      showToast("All changes accepted by the creator.", "info");
     });
 
     socket.on("access-request-received", (data) => {
@@ -1090,7 +1146,7 @@ export default function App() {
       setSegments((prev) =>
         prev.map((s) => {
           if (s.id === id || (cleanedSource && cleanString(s.source) === cleanedSource)) {
-            return { ...s, target: s.originalTargetText !== null ? s.originalTargetText : "", originalTargetText: null, trackedBy: null };
+            return { ...s, target: s.originalTargetText || "", originalTargetText: null, trackedBy: null };
           }
           return s;
         })
@@ -1102,12 +1158,34 @@ export default function App() {
     }
   };
 
+  const handleAcceptAllChanges = async () => {
+    if (!documentId) return;
+    try {
+      await acceptAllTrackedChanges(documentId);
+      setSegments((prev) =>
+        prev.map((seg) => ({ ...seg, originalTargetText: null, trackedBy: null }))
+      );
+      showToast("All changes accepted successfully.");
+    } catch (err) {
+      console.error("Failed to accept all changes:", err);
+      showToast(err.response?.data?.error || "Failed to accept all changes.", "error");
+    }
+  };
+
   const handleSegmentTyping = (id, value) => {
     let sourceText = "";
+    let isTrackInit = false;
+    let trackOrig = null;
+
     setSegments((previous) => {
       const targetSeg = previous.find((s) => s.id === id);
       if (targetSeg) {
         sourceText = targetSeg.source;
+        const isOwnerLocal = ownerId === user?.id;
+        if (trackChangesEnabled && !isOwnerLocal && !targetSeg.originalTargetText) {
+          isTrackInit = true;
+          trackOrig = targetSeg.target || "";
+        }
       }
 
       const cleanString = (str) => {
@@ -1134,15 +1212,32 @@ export default function App() {
       const cleanedSource = cleanString(sourceText);
 
       return previous.map((segment) => {
+        let updated = { ...segment };
         if (segment.id === id) {
-          return { ...segment, target: value };
+          updated.target = value;
+          if (isTrackInit) {
+            updated.originalTargetText = trackOrig;
+            updated.trackedBy = user?.email;
+          }
+        } else if (cleanedSource && cleanString(segment.source) === cleanedSource) {
+          updated.target = propagateTranslation(value, segment.source);
+          if (isTrackInit) {
+            updated.originalTargetText = segment.target || "";
+            updated.trackedBy = user?.email;
+          }
         }
-        if (cleanedSource && cleanString(segment.source) === cleanedSource) {
-          return { ...segment, target: propagateTranslation(value, segment.source) };
-        }
-        return segment;
+        return updated;
       });
     });
+
+    if (socketRef.current) {
+      socketRef.current.emit("typing-update", {
+        segmentIndex: id - 1,
+        targetText: value,
+        originalTargetText: isTrackInit ? trackOrig : undefined,
+        trackedBy: isTrackInit ? user?.email : undefined
+      });
+    }
   };
 
   const updateTranslation = async (id, value) => {
@@ -2407,6 +2502,8 @@ export default function App() {
             trackChangesEnabled={trackChangesEnabled}
             onToggleTrackChanges={handleToggleTrackChanges}
             isOwner={ownerId === user?.id}
+            onAcceptAllChanges={handleAcceptAllChanges}
+            hasTrackedChanges={segments.some(s => s.originalTargetText)}
           />
 
           {/* QA panel (collapsible modal) */}

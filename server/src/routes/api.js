@@ -1630,6 +1630,48 @@ apiRouter.post("/documents/:id/segments/:index/reject-change", checkAuth, async 
   }
 });
 
+// Accept All Changes (Owner Only)
+apiRouter.post("/documents/:id/accept-all-changes", checkAuth, async (request, response) => {
+  try {
+    const doc = await verifyDocumentAccess(request, response, "read");
+    if (!doc) return;
+
+    const isStaff = ["admin", "verbolabs_staff"].includes(request.profile.role);
+    if (!isStaff && doc.owner_id !== request.user.id) {
+      return response.status(403).json({ error: "Only the document creator can accept all changes." });
+    }
+
+    // Clear tracking columns on all segments of this document
+    const { error } = await supabase
+      .from("document_segments")
+      .update({
+        original_target_text: null,
+        tracked_by: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq("document_id", doc.id);
+
+    if (error) {
+      return handleDatabaseError(error, response, "Failed to accept all changes.");
+    }
+
+    // Broadcast update via Socket.io
+    const { getIo } = require("../services/socket");
+    const io = getIo();
+    if (io) {
+      io.to(doc.id).emit("all-changes-accepted", {
+        documentId: doc.id,
+        updatedBy: request.user.email
+      });
+    }
+
+    response.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    response.status(500).json({ error: "Server error." });
+  }
+});
+
 module.exports = {
   apiRouter
 };
