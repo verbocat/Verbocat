@@ -37,7 +37,10 @@ import {
   startAudit,
   cancelAudit,
   getAuditStatus,
-  updateDocumentLanguages
+  updateDocumentLanguages,
+  toggleTrackChanges,
+  acceptTrackedChange,
+  rejectTrackedChange
 } from "./services/api.js";
 import { ExportModal } from "./components/ExportModal.jsx";
 import { ShareModal } from "./components/ShareModal.jsx";
@@ -86,6 +89,7 @@ export default function App() {
   });
   const [permission, setPermission] = useState("write");
   const [ownerId, setOwnerId] = useState(null);
+  const [trackChangesEnabled, setTrackChangesEnabled] = useState(false);
   const [hasNoAccess, setHasNoAccess] = useState(false);
   const [hasPendingAccessRequest, setHasPendingAccessRequest] = useState(false);
   const [accessRequestMessage, setAccessRequestMessage] = useState("");
@@ -144,6 +148,7 @@ export default function App() {
       setTargetLanguage(doc.targetLang);
       setPermission(doc.permission || "write");
       setOwnerId(doc.ownerId);
+      setTrackChangesEnabled(doc.trackChangesEnabled || false);
       showToast(`Loaded collaborative document: ${doc.name}`);
 
       // Fetch pending requests if the user is owner or staff
@@ -220,7 +225,7 @@ export default function App() {
       setCellLocks(new Map(locks));
     });
 
-    socket.on("segment-updated", ({ segmentIndex, targetText, status, contextJira, contextDescription, mqmAccuracyScore, mqmReport }) => {
+    socket.on("segment-updated", ({ segmentIndex, targetText, status, contextJira, contextDescription, mqmAccuracyScore, mqmReport, originalTargetText, trackedBy }) => {
       setSegments((prev) =>
         prev.map((seg, idx) => {
           if (idx === segmentIndex) {
@@ -234,11 +239,18 @@ export default function App() {
             if (contextDescription !== undefined) updatedSeg.contextDescription = contextDescription;
             if (mqmAccuracyScore !== undefined) updatedSeg.mqmAccuracyScore = mqmAccuracyScore;
             if (mqmReport !== undefined) updatedSeg.mqmReport = mqmReport;
+            if (originalTargetText !== undefined) updatedSeg.originalTargetText = originalTargetText;
+            if (trackedBy !== undefined) updatedSeg.trackedBy = trackedBy;
             return updatedSeg;
           }
           return seg;
         })
       );
+    });
+
+    socket.on("track-changes-toggled", ({ enabled }) => {
+      setTrackChangesEnabled(enabled);
+      showToast(`Track Changes was toggled ${enabled ? "ON" : "OFF"} by the creator.`, "info");
     });
 
     socket.on("access-request-received", (data) => {
@@ -1022,6 +1034,72 @@ export default function App() {
     );
 
     showToast("Glossary applied to current translation");
+  };
+
+  const handleToggleTrackChanges = async () => {
+    if (!documentId) return;
+    const nextVal = !trackChangesEnabled;
+    try {
+      await toggleTrackChanges(documentId, nextVal);
+      setTrackChangesEnabled(nextVal);
+      showToast(`Track Changes ${nextVal ? "enabled" : "disabled"}.`);
+    } catch (err) {
+      console.error("Failed to toggle Track Changes:", err);
+      showToast("Failed to toggle Track Changes.", "error");
+    }
+  };
+
+  const handleAcceptChange = async (id) => {
+    if (!documentId) return;
+    const segmentIndex = segments.findIndex((s) => s.id === id);
+    if (segmentIndex === -1) return;
+    try {
+      await acceptTrackedChange(documentId, segmentIndex);
+      const cleanString = (str) => {
+        if (!str) return "";
+        return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+      };
+      const cleanedSource = cleanString(segments[segmentIndex].source);
+      setSegments((prev) =>
+        prev.map((seg) => {
+          if (seg.id === id || (cleanedSource && cleanString(seg.source) === cleanedSource)) {
+            return { ...seg, originalTargetText: null, trackedBy: null };
+          }
+          return seg;
+        })
+      );
+      showToast("Change accepted.");
+    } catch (err) {
+      console.error("Failed to accept tracked change:", err);
+      showToast("Failed to accept change.", "error");
+    }
+  };
+
+  const handleRejectChange = async (id) => {
+    if (!documentId) return;
+    const segmentIndex = segments.findIndex((s) => s.id === id);
+    if (segmentIndex === -1) return;
+    try {
+      const seg = segments[segmentIndex];
+      await rejectTrackedChange(documentId, segmentIndex);
+      const cleanString = (str) => {
+        if (!str) return "";
+        return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+      };
+      const cleanedSource = cleanString(seg.source);
+      setSegments((prev) =>
+        prev.map((s) => {
+          if (s.id === id || (cleanedSource && cleanString(s.source) === cleanedSource)) {
+            return { ...s, target: s.originalTargetText !== null ? s.originalTargetText : "", originalTargetText: null, trackedBy: null };
+          }
+          return s;
+        })
+      );
+      showToast("Change rejected and reverted.");
+    } catch (err) {
+      console.error("Failed to reject tracked change:", err);
+      showToast("Failed to reject change.", "error");
+    }
   };
 
   const handleSegmentTyping = (id, value) => {
@@ -2326,6 +2404,9 @@ export default function App() {
             setFilterStatus={setFilterStatus}
             onUpload={handleUpload}
             onOpenContext={() => setShowContextPanel(true)}
+            trackChangesEnabled={trackChangesEnabled}
+            onToggleTrackChanges={handleToggleTrackChanges}
+            isOwner={ownerId === user?.id}
           />
 
           {/* QA panel (collapsible modal) */}
@@ -2417,6 +2498,9 @@ export default function App() {
                   onSaveContext={saveSegmentContext}
                   onTranslateWithContext={handleTranslateSegmentWithContext}
                   onTyping={handleSegmentTyping}
+                  isOwner={ownerId === user?.id}
+                  onAcceptChange={handleAcceptChange}
+                  onRejectChange={handleRejectChange}
                 />
               )}
             />

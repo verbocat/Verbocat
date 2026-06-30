@@ -262,3 +262,19 @@ export const updateDocumentLanguages = async (documentId, sourceLang, targetLang
   return response.data;
 };
 
+export const toggleTrackChanges = async (documentId, enabled) => {
+  const response = await api.post(`/api/documents/${documentId}/track-changes`, { enabled });
+  return response.data;
+};
+
+export const acceptTrackedChange = async (documentId, segmentIndex) => {
+  const response = await api.post(`/api/documents/${documentId}/segments/${segmentIndex}/accept-change`);
+  return response.data;
+};
+
+export const rejectTrackedChange = async (documentId, segmentIndex) => {
+  const response = await api.post(`/api/documents/${documentId}/segments/${segmentIndex}/reject-change`);
+  return response.data;
+};
+
+

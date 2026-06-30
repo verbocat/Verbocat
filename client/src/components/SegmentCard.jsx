@@ -1,6 +1,70 @@
 import { useState, useRef, useEffect } from "react";
 import { Copy, Check, ArrowRight, AlertTriangle, Lock, Sparkles, Award, UploadCloud, Trash2, Image, MessageSquare } from "lucide-react";
 
+/* ── LCS Word Diff Utility for Track Changes review ───────────────── */
+const computeWordDiff = (oldStr, newStr) => {
+  const tokenize = (str) => {
+    if (!str) return [];
+    return str.split(/(<[^>]+>|\s+)/g).filter(Boolean);
+  };
+
+  const a = tokenize(oldStr);
+  const b = tokenize(newStr);
+
+  const dp = Array(a.length + 1).fill().map(() => Array(b.length + 1).fill(0));
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      if (a[i - 1] === b[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1] + 1;
+      } else {
+        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+  }
+
+  const diff = [];
+  let i = a.length, j = b.length;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && a[i - 1] === b[j - 1]) {
+      diff.unshift({ type: "normal", value: a[i - 1] });
+      i--;
+      j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      diff.unshift({ type: "added", value: b[j - 1] });
+      j--;
+    } else {
+      diff.unshift({ type: "removed", value: a[i - 1] });
+      i--;
+    }
+  }
+  return diff;
+};
+
+const renderDiff = (oldStr, newStr) => {
+  const diff = computeWordDiff(oldStr, newStr);
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", whiteSpace: "pre-wrap" }}>
+      {diff.map((token, index) => {
+        if (token.type === "added") {
+          return (
+            <span key={index} style={{ color: "#34d399", textDecoration: "underline", background: "rgba(52,211,153,0.1)", padding: "0 2px", borderRadius: 3 }}>
+              {token.value}
+            </span>
+          );
+        } else if (token.type === "removed") {
+          return (
+            <span key={index} style={{ color: "#f87171", textDecoration: "line-through", background: "rgba(248,113,113,0.1)", padding: "0 2px", borderRadius: 3 }}>
+              {token.value}
+            </span>
+          );
+        } else {
+          return <span key={index}>{token.value}</span>;
+        }
+      })}
+    </div>
+  );
+};
+
 /* ── Glossary highlight tooltip ─────────────────────────────── */
 const GlossaryHighlight = ({ term, children }) => {
   const [show, setShow] = useState(false);
@@ -82,7 +146,8 @@ export const SegmentCard = ({
   darkMode, index, segment, theme, translationGlossary = [],
   onCopy, onUpdateTranslation, onToggleVerify, onVerifyAndNext,
   lockInfo, onFocusSegment, onBlurSegment, readOnly,
-  onSaveContext, onTranslateWithContext, onTyping
+  onSaveContext, onTranslateWithContext, onTyping,
+  isOwner, onAcceptChange, onRejectChange
 }) => {
   const editorRef = useRef(null);
   const lastSaved = useRef(segment.target || "");
@@ -588,6 +653,44 @@ export const SegmentCard = ({
             </div>
           )}
 
+
+          {segment.originalTargetText && (
+            <div style={{
+              marginTop: 8,
+              padding: 10,
+              borderRadius: 8,
+              border: "1px solid rgba(245,158,11,0.25)",
+              background: "rgba(245,158,11,0.05)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 8
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-amber)" }}>
+                  Tracked Change (Edited by {segment.trackedBy})
+                </span>
+                {isOwner && (
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button
+                      onClick={() => onAcceptChange(segment.id)}
+                      className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 text-[10px] font-bold transition cursor-pointer"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      onClick={() => onRejectChange(segment.id)}
+                      className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30 text-[10px] font-bold transition cursor-pointer"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div style={{ fontSize: 12, lineHeight: 1.5, color: "var(--text-secondary)" }}>
+                {renderDiff(segment.originalTargetText, segment.target)}
+              </div>
+            </div>
+          )}
 
         </div>
 

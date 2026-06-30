@@ -458,7 +458,9 @@ apiRouter.get("/documents/:id", checkAuth, async (request, response) => {
       contextJira: seg.context_jira || "",
       contextDescription: seg.context_description || "",
       mqmAccuracyScore: seg.mqm_accuracy_score !== undefined && seg.mqm_accuracy_score !== null ? seg.mqm_accuracy_score : 100,
-      mqmReport: seg.mqm_report || null
+      mqmReport: seg.mqm_report || null,
+      originalTargetText: seg.original_target_text || null,
+      trackedBy: seg.tracked_by || null
     }));
 
     response.json({
@@ -469,6 +471,7 @@ apiRouter.get("/documents/:id", checkAuth, async (request, response) => {
       sourceLang: doc.source_lang,
       targetLang: doc.target_lang,
       permission: userPermission,
+      trackChangesEnabled: doc.track_changes_enabled || false,
       segments: formattedSegments
     });
   } catch (error) {
@@ -497,7 +500,7 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
     // Fetch the source text and context
     const { data: dbSegment } = await supabase
       .from("document_segments")
-      .select("source_text, context_jira, context_description")
+      .select("source_text, context_jira, context_description, target_text, original_target_text, tracked_by")
       .eq("document_id", doc.id)
       .eq("segment_index", segmentIndex)
       .single();
@@ -531,12 +534,12 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
       return propagated;
     };
 
-    // Find all duplicate segment indices and their source texts in the document
-    let matchingSegs = [{ segment_index: segmentIndex, source_text: sourceText }];
+    // Find all duplicate segment indices and their source/target texts in the document
+    let matchingSegs = [{ segment_index: segmentIndex, source_text: sourceText, target_text: dbSegment.target_text, original_target_text: dbSegment.original_target_text, tracked_by: dbSegment.tracked_by }];
     if (sourceText) {
       const { data: allSegs } = await supabase
         .from("document_segments")
-        .select("segment_index, source_text")
+        .select("segment_index, source_text, target_text, original_target_text, tracked_by")
         .eq("document_id", doc.id);
       
       const cleanedSource = cleanString(sourceText);
@@ -545,16 +548,38 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
       }
     }
 
+    const isOwner = doc.owner_id === request.user.id;
+    const isTracking = doc.track_changes_enabled && !isOwner;
+
     // Perform individual updates for each duplicate segment in parallel to preserve original tags
     const updatePromises = matchingSegs.map(async (seg) => {
       const idx = seg.segment_index;
       const segmentFields = { ...updateFields };
-      if (idx === segmentIndex) {
-        if (targetText !== undefined) segmentFields.target_text = targetText;
-      } else {
-        if (targetText !== undefined) {
-          segmentFields.target_text = propagateTranslation(targetText, seg.source_text);
+      
+      if (targetText !== undefined) {
+        const newTarget = idx === segmentIndex 
+          ? targetText 
+          : propagateTranslation(targetText, seg.source_text);
+          
+        if (isTracking) {
+          // If first edit since tracking enabled, store the current target as the original
+          if (!seg.original_target_text) {
+            segmentFields.original_target_text = seg.target_text || "";
+          }
+          segmentFields.target_text = newTarget;
+          segmentFields.tracked_by = request.user.email;
+        } else {
+          // Owner edit or tracking disabled: commit directly, clear tracked state
+          segmentFields.target_text = newTarget;
+          segmentFields.original_target_text = null;
+          segmentFields.tracked_by = null;
         }
+      }
+
+      // If owner approves the segment, clear tracked changes
+      if (isOwner && status === "approved") {
+        segmentFields.original_target_text = null;
+        segmentFields.tracked_by = null;
       }
 
       return supabase
@@ -581,6 +606,25 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
           ? targetText 
           : propagateTranslation(targetText, seg.source_text);
 
+        // Compute resulting fields for broadcast
+        let finalOriginal = seg.original_target_text;
+        let finalTrackedBy = seg.tracked_by;
+        if (targetText !== undefined) {
+          if (isTracking) {
+            if (!seg.original_target_text) {
+              finalOriginal = seg.target_text || "";
+            }
+            finalTrackedBy = request.user.email;
+          } else {
+            finalOriginal = null;
+            finalTrackedBy = null;
+          }
+        }
+        if (isOwner && status === "approved") {
+          finalOriginal = null;
+          finalTrackedBy = null;
+        }
+
         io.to(doc.id).emit("segment-updated", {
           segmentIndex: idx,
           targetText: propagatedTarget,
@@ -589,6 +633,8 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
           contextDescription,
           mqmAccuracyScore: undefined,
           mqmReport: null,
+          originalTargetText: finalOriginal,
+          trackedBy: finalTrackedBy,
           updatedBy: request.user.email
         });
       });
@@ -1343,6 +1389,229 @@ apiRouter.post("/documents/:id/access-requests/:requestId/respond", checkAuth, a
         requestId,
         action,
         userId: targetUserId
+      });
+    }
+
+    response.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    response.status(500).json({ error: "Server error." });
+  }
+});
+
+// Toggle Track Changes (Owner Only)
+apiRouter.post("/documents/:id/track-changes", checkAuth, async (request, response) => {
+  try {
+    const doc = await verifyDocumentAccess(request, response, "read");
+    if (!doc) return;
+
+    const isStaff = ["admin", "verbolabs_staff"].includes(request.profile.role);
+    if (!isStaff && doc.owner_id !== request.user.id) {
+      return response.status(403).json({ error: "Only the document creator can toggle Track Changes." });
+    }
+
+    const { enabled } = request.body;
+    if (enabled === undefined) {
+      return response.status(400).json({ error: "Missing 'enabled' boolean in request body." });
+    }
+
+    const { error } = await supabase
+      .from("documents")
+      .update({ track_changes_enabled: !!enabled })
+      .eq("id", doc.id);
+
+    if (error) {
+      return response.status(500).json({ error: "Failed to update track changes status." });
+    }
+
+    // Broadcast track changes toggle via Socket.io
+    const { getIo } = require("../services/socket");
+    const io = getIo();
+    if (io) {
+      io.to(doc.id).emit("track-changes-toggled", {
+        documentId: doc.id,
+        enabled: !!enabled
+      });
+    }
+
+    response.json({ success: true, enabled: !!enabled });
+  } catch (err) {
+    console.error(err);
+    response.status(500).json({ error: "Server error." });
+  }
+});
+
+// Accept Change (Owner Only)
+apiRouter.post("/documents/:id/segments/:index/accept-change", checkAuth, async (request, response) => {
+  try {
+    const doc = await verifyDocumentAccess(request, response, "read");
+    if (!doc) return;
+
+    const isStaff = ["admin", "verbolabs_staff"].includes(request.profile.role);
+    if (!isStaff && doc.owner_id !== request.user.id) {
+      return response.status(403).json({ error: "Only the document creator can accept tracked changes." });
+    }
+
+    const segmentIndex = parseInt(request.params.index, 10);
+
+    // Fetch the segment to find duplicates
+    const { data: dbSegment } = await supabase
+      .from("document_segments")
+      .select("source_text")
+      .eq("document_id", doc.id)
+      .eq("segment_index", segmentIndex)
+      .single();
+
+    if (!dbSegment) {
+      return response.status(404).json({ error: "Segment not found." });
+    }
+
+    const sourceText = dbSegment.source_text;
+
+    // Helper to clean string
+    const cleanString = (str) => {
+      if (!str) return "";
+      return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+    };
+
+    // Find duplicates to accept on all of them
+    let matchingSegs = [{ segment_index: segmentIndex }];
+    if (sourceText) {
+      const { data: allSegs } = await supabase
+        .from("document_segments")
+        .select("segment_index, source_text")
+        .eq("document_id", doc.id);
+      
+      const cleanedSource = cleanString(sourceText);
+      if (allSegs && allSegs.length > 0) {
+        matchingSegs = allSegs.filter((s) => cleanString(s.source_text) === cleanedSource);
+      }
+    }
+
+    const matchingIndices = matchingSegs.map(s => s.segment_index);
+
+    // Commit change by clearing original text and tracked_by
+    const { error } = await supabase
+      .from("document_segments")
+      .update({
+        original_target_text: null,
+        tracked_by: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq("document_id", doc.id)
+      .in("segment_index", matchingIndices);
+
+    if (error) {
+      return response.status(500).json({ error: "Failed to accept change." });
+    }
+
+    // Broadcast accept to all clients
+    const { getIo } = require("../services/socket");
+    const io = getIo();
+    if (io) {
+      matchingIndices.forEach((idx) => {
+        io.to(doc.id).emit("segment-updated", {
+          segmentIndex: idx,
+          mqmAccuracyScore: undefined,
+          mqmReport: null,
+          originalTargetText: null,
+          trackedBy: null,
+          updatedBy: request.user.email
+        });
+      });
+    }
+
+    response.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    response.status(500).json({ error: "Server error." });
+  }
+});
+
+// Reject Change (Owner Only)
+apiRouter.post("/documents/:id/segments/:index/reject-change", checkAuth, async (request, response) => {
+  try {
+    const doc = await verifyDocumentAccess(request, response, "read");
+    if (!doc) return;
+
+    const isStaff = ["admin", "verbolabs_staff"].includes(request.profile.role);
+    if (!isStaff && doc.owner_id !== request.user.id) {
+      return response.status(403).json({ error: "Only the document creator can reject tracked changes." });
+    }
+
+    const segmentIndex = parseInt(request.params.index, 10);
+
+    // Fetch the segment to find duplicates and get its original target text
+    const { data: dbSegment } = await supabase
+      .from("document_segments")
+      .select("source_text, original_target_text")
+      .eq("document_id", doc.id)
+      .eq("segment_index", segmentIndex)
+      .single();
+
+    if (!dbSegment) {
+      return response.status(404).json({ error: "Segment not found." });
+    }
+
+    const sourceText = dbSegment.source_text;
+
+    // Helper to clean string
+    const cleanString = (str) => {
+      if (!str) return "";
+      return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+    };
+
+    // Find duplicates to revert
+    let matchingSegs = [{ segment_index: segmentIndex, original_target_text: dbSegment.original_target_text }];
+    if (sourceText) {
+      const { data: allSegs } = await supabase
+        .from("document_segments")
+        .select("segment_index, source_text, original_target_text")
+        .eq("document_id", doc.id);
+      
+      const cleanedSource = cleanString(sourceText);
+      if (allSegs && allSegs.length > 0) {
+        matchingSegs = allSegs.filter((s) => cleanString(s.source_text) === cleanedSource);
+      }
+    }
+
+    // Perform individual reverts (setting target_text back to original_target_text and clearing tracked fields)
+    const updatePromises = matchingSegs.map(async (seg) => {
+      const revertedTarget = seg.original_target_text !== null ? seg.original_target_text : "";
+      return supabase
+        .from("document_segments")
+        .update({
+          target_text: revertedTarget,
+          original_target_text: null,
+          tracked_by: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq("document_id", doc.id)
+        .eq("segment_index", seg.segment_index);
+    });
+
+    const updateResults = await Promise.all(updatePromises);
+    const failedUpdate = updateResults.find((r) => r.error);
+    if (failedUpdate) {
+      console.error("Segment revert error:", failedUpdate.error);
+      return response.status(500).json({ error: "Failed to reject change." });
+    }
+
+    // Broadcast reject/revert to all clients via Socket.io
+    const { getIo } = require("../services/socket");
+    const io = getIo();
+    if (io) {
+      matchingSegs.forEach((seg) => {
+        const revertedTarget = seg.original_target_text !== null ? seg.original_target_text : "";
+        io.to(doc.id).emit("segment-updated", {
+          segmentIndex: seg.segment_index,
+          targetText: revertedTarget,
+          mqmAccuracyScore: undefined,
+          mqmReport: null,
+          originalTargetText: null,
+          trackedBy: null,
+          updatedBy: request.user.email
+        });
       });
     }
 

@@ -3,7 +3,7 @@ import { LANGUAGES } from "../constants/languages.js";
 import {
   FileText, ArrowRight, Search, Filter, Sparkles,
   Save, Upload, Download, Trash2, RefreshCw, ChevronDown, Plus, Link2,
-  FolderOpen, Sliders
+  FolderOpen, Sliders, GitBranch
 } from "lucide-react";
 
 export const WorkspaceToolbar = ({
@@ -13,7 +13,8 @@ export const WorkspaceToolbar = ({
   setSearchQuery, stats, sourceLanguage, onSourceLanguageChange,
   targetLanguage, onTargetLanguageChange, fileName, theme,
   canTranslate = true, fileExtension, filterStatus, setFilterStatus, onUpload,
-  onOpenContext, onRunQc, isAuditing
+  onOpenContext, onRunQc, isAuditing,
+  trackChangesEnabled, onToggleTrackChanges, isOwner
 }) => {
   const [showDocMenu, setShowDocMenu] = useState(false);
   const docMenuRef = useRef(null);
@@ -88,6 +89,23 @@ export const WorkspaceToolbar = ({
           />
           <span>{isAuditing ? "Auditing…" : "Run QC"}</span>
         </button>
+
+        {/* Track Changes (Owner Only) */}
+        {isOwner && (
+          <button
+            onClick={onToggleTrackChanges}
+            disabled={!canAct}
+            className={`ab ${trackChangesEnabled ? "ab-track-changes-active" : ""}`}
+            style={trackChangesEnabled ? {
+              background: "rgba(16,185,129,0.15)",
+              color: "var(--emerald)",
+              border: "1px solid rgba(16,185,129,0.25)"
+            } : undefined}
+          >
+            <GitBranch style={{ width: 12, height: 12, color: trackChangesEnabled ? "var(--emerald)" : "var(--text-muted)", flexShrink: 0 }} />
+            <span>Track Changes: {trackChangesEnabled ? "ON" : "OFF"}</span>
+          </button>
+        )}
 
         {/* Context */}
         <button onClick={onOpenContext} disabled={!canAct} className="ab ab-context">
