@@ -588,19 +588,7 @@ export default function App() {
       segments.flatMap((segment) => {
         const list = [];
         
-        // Rule-based issues
-        if (segment.qaIssues) {
-          segment.qaIssues.forEach((issue) => {
-            list.push({
-              id: segment.id,
-              type: "rule",
-              severity: "Warning",
-              issue: issue,
-              source: segment.source,
-              target: segment.target
-            });
-          });
-        }
+        
         
         // MQM issues
         let mqm = segment.mqmReport;
@@ -2447,14 +2435,6 @@ export default function App() {
                   <div style={{ display: "flex", flexDirection: "column" }}>
                     <span style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase" }}>Total Words</span>
                     <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{estimateData.totalWordCount}</span>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", marginTop: 4 }}>
-                    <span style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase" }}>Est. Duration</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{estimateData.estimatedDurationMin} min</span>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", marginTop: 4 }}>
-                    <span style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase" }}>Est. Cost (USD)</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "var(--emerald)" }}>~${estimateData.estimatedCostUsd}</span>
                   </div>
                 </div>
 

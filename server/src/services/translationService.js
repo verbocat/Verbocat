@@ -1,5 +1,4 @@
 const { supabase } = require("../config/supabase");
-const { runQaChecks } = require("../utils/qa");
 const {
   createProviderState,
   translateChunk
@@ -242,7 +241,7 @@ const translateSegments = async (segments, target, sourceLang, contextSettings) 
       id: segment.id,
       translated: targetText,
       provider: provider,
-      qaIssues: runQaChecks(segment.source, targetText),
+      qaIssues: [],
       mqmAccuracyScore: 100,
       mqmReport: null
     };
@@ -314,7 +313,7 @@ const translateSegmentWithContext = async ({
 
   return {
     translated: cleanedTranslation,
-    qaIssues: runQaChecks(sourceText, cleanedTranslation),
+    qaIssues: [],
     mqmAccuracyScore,
     mqmReport
   };

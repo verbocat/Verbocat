@@ -470,7 +470,7 @@ export const SegmentCard = ({
                 ...((readOnly || segment.verified || lockInfo)
                   ? { opacity: 0.55, cursor: lockInfo ? "not-allowed" : readOnly ? "default" : "text", pointerEvents: lockInfo ? "none" : "auto" }
                   : {}),
-                paddingRight: (segment.mqmAccuracyScore !== undefined || (segment.qaIssues && segment.qaIssues.length > 0) || (parsedMqmReport && parsedMqmReport.errors && parsedMqmReport.errors.length > 0)) ? "105px" : undefined
+                paddingRight: (segment.mqmAccuracyScore !== undefined || (parsedMqmReport && parsedMqmReport.errors && parsedMqmReport.errors.length > 0)) ? "105px" : undefined
               }}
             />
 
@@ -522,7 +522,7 @@ export const SegmentCard = ({
                 )}
 
                 {/* QA Alert Mark */}
-                {((segment.qaIssues && segment.qaIssues.length > 0) || (parsedMqmReport && parsedMqmReport.errors && parsedMqmReport.errors.length > 0)) && (
+                {(parsedMqmReport && parsedMqmReport.errors && parsedMqmReport.errors.length > 0) && (
                   <span 
                     style={{
                       display: "flex",
@@ -536,7 +536,7 @@ export const SegmentCard = ({
                       color: "#f87171",
                       boxShadow: "0 2px 6px rgba(0,0,0,0.2)"
                     }}
-                    title={`${(segment.qaIssues?.length || 0) + (parsedMqmReport?.errors?.length || 0)} issues detected`}
+                    title={`${parsedMqmReport?.errors?.length || 0} issues detected`}
                   >
                     <AlertTriangle style={{ width: 11, height: 11 }} />
                   </span>
@@ -588,13 +588,7 @@ export const SegmentCard = ({
             </div>
           )}
 
-          {segment.qaIssues?.length > 0 && (
-            <div className="seg-qa-chips">
-              {segment.qaIssues.map((issue, i) => (
-                <span key={`qa-${segment.id}-${i}`} className="seg-qa-chip">{issue}</span>
-              ))}
-            </div>
-          )}
+
         </div>
 
         {/* Col 5: Actions */}

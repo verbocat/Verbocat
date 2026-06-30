@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { AlertOctagon, AlertTriangle, CheckCircle2, ArrowRight, ShieldAlert, Award, FileCode, Sparkles } from "lucide-react";
+import { AlertOctagon, AlertTriangle, CheckCircle2, ArrowRight, ShieldAlert, Award } from "lucide-react";
 
 export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, onGoToSegment, onClose }) => {
   const [activeFilter, setActiveFilter] = useState("all");
@@ -45,12 +45,9 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
   let criticalCount = 0;
   let majorCount = 0;
   let minorCount = 0;
-  let ruleCount = 0;
 
   qaIssuesList.forEach(item => {
-    if (item.type === "rule") {
-      ruleCount++;
-    } else if (item.type === "mqm") {
+    if (item.type === "mqm") {
       const sev = String(item.severity || "").toLowerCase();
       if (sev === "critical") criticalCount++;
       else if (sev === "major") majorCount++;
@@ -64,7 +61,6 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
     if (activeFilter === "critical") return item.type === "mqm" && String(item.severity || "").toLowerCase() === "critical";
     if (activeFilter === "major") return item.type === "mqm" && String(item.severity || "").toLowerCase() === "major";
     if (activeFilter === "minor") return item.type === "mqm" && String(item.severity || "").toLowerCase() === "minor";
-    if (activeFilter === "rule") return item.type === "rule";
     return true;
   });
 
@@ -160,7 +156,7 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
         </div>
 
         {/* Right column: Severity Breakdown Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 lg:w-3/5">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:w-3/5">
           <div className="bg-rose-500/5 border border-rose-500/10 rounded-xl p-3 flex flex-col justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-rose-400">Critical</span>
             <div className="flex items-baseline gap-1.5 mt-2">
@@ -182,14 +178,6 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
             <div className="flex items-baseline gap-1.5 mt-2">
               <span className="text-2xl font-bold font-mono text-yellow-400">{minorCount}</span>
               <AlertTriangle className="w-3 h-3 text-yellow-400/60" />
-            </div>
-          </div>
-
-          <div className="bg-blue-500/5 border border-blue-500/10 rounded-xl p-3 flex flex-col justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400">Auto Rules</span>
-            <div className="flex items-baseline gap-1.5 mt-2">
-              <span className="text-2xl font-bold font-mono text-blue-400">{ruleCount}</span>
-              <FileCode className="w-3 h-3 text-blue-400/60" />
             </div>
           </div>
         </div>
@@ -238,15 +226,7 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
             <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full" />
             Minor ({minorCount})
           </button>
-          <button
-            onClick={() => setActiveFilter("rule")}
-            className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1 ${
-              activeFilter === "rule" ? "bg-blue-500/20 text-blue-300 border border-blue-500/30" : "text-zinc-400 hover:text-zinc-200"
-            }`}
-          >
-            <span className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
-            Rules ({ruleCount})
-          </button>
+
         </div>
       </div>
 
@@ -254,7 +234,7 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
       {filteredIssues.length > 0 ? (
         <div className="grid gap-3 max-h-[68vh] overflow-y-auto pr-1">
           {filteredIssues.map((item, index) => {
-            const isMqm = item.type === "mqm";
+            const isMqm = true;
             const severityColor = 
               item.severity === "Critical" ? "text-rose-400 bg-rose-500/10 border border-rose-500/20" :
               item.severity === "Major" ? "text-amber-400 bg-amber-500/10 border border-amber-500/20" :
