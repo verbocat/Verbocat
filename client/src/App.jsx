@@ -1031,11 +1031,39 @@ export default function App() {
       if (targetSeg) {
         sourceText = targetSeg.source;
       }
-      return previous.map((segment) =>
-        (segment.id === id || (sourceText && segment.source === sourceText))
-          ? { ...segment, target: value }
-          : segment
-      );
+
+      const cleanString = (str) => {
+        if (!str) return "";
+        return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+      };
+
+      const propagateTranslation = (targetA, sourceB) => {
+        if (!targetA) return "";
+        const tagsInSourceB = sourceB.match(/<[^>]+>/g) || [];
+        let tagIdx = 0;
+        let propagated = targetA.replace(/<[^>]+>/g, () => {
+          if (tagIdx < tagsInSourceB.length) {
+            return tagsInSourceB[tagIdx++];
+          }
+          return "";
+        });
+        while (tagIdx < tagsInSourceB.length) {
+          propagated += tagsInSourceB[tagIdx++];
+        }
+        return propagated;
+      };
+
+      const cleanedSource = cleanString(sourceText);
+
+      return previous.map((segment) => {
+        if (segment.id === id) {
+          return { ...segment, target: value };
+        }
+        if (cleanedSource && cleanString(segment.source) === cleanedSource) {
+          return { ...segment, target: propagateTranslation(value, segment.source) };
+        }
+        return segment;
+      });
     });
   };
 
@@ -1046,11 +1074,39 @@ export default function App() {
       if (targetSeg) {
         sourceText = targetSeg.source;
       }
-      return previous.map((segment) =>
-        (segment.id === id || (sourceText && segment.source === sourceText))
-          ? { ...segment, target: value, verified: false }
-          : segment
-      );
+
+      const cleanString = (str) => {
+        if (!str) return "";
+        return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+      };
+
+      const propagateTranslation = (targetA, sourceB) => {
+        if (!targetA) return "";
+        const tagsInSourceB = sourceB.match(/<[^>]+>/g) || [];
+        let tagIdx = 0;
+        let propagated = targetA.replace(/<[^>]+>/g, () => {
+          if (tagIdx < tagsInSourceB.length) {
+            return tagsInSourceB[tagIdx++];
+          }
+          return "";
+        });
+        while (tagIdx < tagsInSourceB.length) {
+          propagated += tagsInSourceB[tagIdx++];
+        }
+        return propagated;
+      };
+
+      const cleanedSource = cleanString(sourceText);
+
+      return previous.map((segment) => {
+        if (segment.id === id) {
+          return { ...segment, target: value, verified: false };
+        }
+        if (cleanedSource && cleanString(segment.source) === cleanedSource) {
+          return { ...segment, target: propagateTranslation(value, segment.source), verified: false };
+        }
+        return segment;
+      });
     });
 
     if (documentId) {
@@ -1075,8 +1131,16 @@ export default function App() {
         sourceText = targetSeg.source;
         nextVerified = !targetSeg.verified;
       }
+      
+      const cleanString = (str) => {
+        if (!str) return "";
+        return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+      };
+
+      const cleanedSource = cleanString(sourceText);
+
       return previous.map((segment) => {
-        if (segment.id === id || (sourceText && segment.source === sourceText)) {
+        if (segment.id === id || (cleanedSource && cleanString(segment.source) === cleanedSource)) {
           return { ...segment, verified: nextVerified };
         }
         return segment;
@@ -1104,8 +1168,16 @@ export default function App() {
       if (targetSeg) {
         sourceText = targetSeg.source;
       }
+
+      const cleanString = (str) => {
+        if (!str) return "";
+        return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+      };
+
+      const cleanedSource = cleanString(sourceText);
+
       return previous.map((segment) =>
-        (segment.id === id || (sourceText && segment.source === sourceText))
+        (segment.id === id || (cleanedSource && cleanString(segment.source) === cleanedSource))
           ? { ...segment, verified: true }
           : segment
       );

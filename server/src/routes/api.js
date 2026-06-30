@@ -508,27 +508,66 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
 
     const sourceText = dbSegment.source_text;
 
-    // Find all duplicate segment indices in the document
-    let updatedIndices = [segmentIndex];
+    // Clean string helper (ignores tags, normalizes whitespace)
+    const cleanString = (str) => {
+      if (!str) return "";
+      return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+    };
+
+    // Propagate translation helper (replaces tag content but preserves original tags in target/sourceB)
+    const propagateTranslation = (targetA, sourceB) => {
+      if (!targetA) return "";
+      const tagsInSourceB = sourceB.match(/<[^>]+>/g) || [];
+      let tagIdx = 0;
+      let propagated = targetA.replace(/<[^>]+>/g, () => {
+        if (tagIdx < tagsInSourceB.length) {
+          return tagsInSourceB[tagIdx++];
+        }
+        return "";
+      });
+      while (tagIdx < tagsInSourceB.length) {
+        propagated += tagsInSourceB[tagIdx++];
+      }
+      return propagated;
+    };
+
+    // Find all duplicate segment indices and their source texts in the document
+    let matchingSegs = [{ segment_index: segmentIndex, source_text: sourceText }];
     if (sourceText) {
-      const { data: matchingSegs } = await supabase
+      const { data: allSegs } = await supabase
         .from("document_segments")
-        .select("segment_index")
-        .eq("document_id", doc.id)
-        .eq("source_text", sourceText);
-      if (matchingSegs && matchingSegs.length > 0) {
-        updatedIndices = matchingSegs.map((s) => s.segment_index);
+        .select("segment_index, source_text")
+        .eq("document_id", doc.id);
+      
+      const cleanedSource = cleanString(sourceText);
+      if (allSegs && allSegs.length > 0) {
+        matchingSegs = allSegs.filter((s) => cleanString(s.source_text) === cleanedSource);
       }
     }
 
-    const { error: updateError } = await supabase
-      .from("document_segments")
-      .update(updateFields)
-      .eq("document_id", doc.id)
-      .in("segment_index", updatedIndices);
+    // Perform individual updates for each duplicate segment in parallel to preserve original tags
+    const updatePromises = matchingSegs.map(async (seg) => {
+      const idx = seg.segment_index;
+      const segmentFields = { ...updateFields };
+      if (idx === segmentIndex) {
+        if (targetText !== undefined) segmentFields.target_text = targetText;
+      } else {
+        if (targetText !== undefined) {
+          segmentFields.target_text = propagateTranslation(targetText, seg.source_text);
+        }
+      }
 
-    if (updateError) {
-      console.error("Segment update error:", updateError);
+      return supabase
+        .from("document_segments")
+        .update(segmentFields)
+        .eq("document_id", doc.id)
+        .eq("segment_index", idx);
+    });
+
+    const updateResults = await Promise.all(updatePromises);
+    const failedUpdate = updateResults.find((r) => r.error);
+    if (failedUpdate) {
+      console.error("Segment update error:", failedUpdate.error);
       return response.status(500).json({ error: "Failed to update segment." });
     }
 
@@ -536,10 +575,15 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
     const { getIo } = require("../services/socket");
     const io = getIo();
     if (io) {
-      updatedIndices.forEach((idx) => {
+      matchingSegs.forEach((seg) => {
+        const idx = seg.segment_index;
+        const propagatedTarget = (idx === segmentIndex || targetText === undefined)
+          ? targetText 
+          : propagateTranslation(targetText, seg.source_text);
+
         io.to(doc.id).emit("segment-updated", {
           segmentIndex: idx,
-          targetText,
+          targetText: propagatedTarget,
           status: status || "translated",
           contextJira,
           contextDescription,
