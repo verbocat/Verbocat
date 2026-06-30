@@ -1045,7 +1045,7 @@ export default function App() {
       showToast(`Track Changes ${nextVal ? "enabled" : "disabled"}.`);
     } catch (err) {
       console.error("Failed to toggle Track Changes:", err);
-      showToast("Failed to toggle Track Changes.", "error");
+      showToast(err.response?.data?.error || "Failed to toggle Track Changes.", "error");
     }
   };
 
@@ -1071,7 +1071,7 @@ export default function App() {
       showToast("Change accepted.");
     } catch (err) {
       console.error("Failed to accept tracked change:", err);
-      showToast("Failed to accept change.", "error");
+      showToast(err.response?.data?.error || "Failed to accept change.", "error");
     }
   };
 
@@ -1098,7 +1098,7 @@ export default function App() {
       showToast("Change rejected and reverted.");
     } catch (err) {
       console.error("Failed to reject tracked change:", err);
-      showToast("Failed to reject change.", "error");
+      showToast(err.response?.data?.error || "Failed to reject change.", "error");
     }
   };
 

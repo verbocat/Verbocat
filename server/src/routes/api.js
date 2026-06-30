@@ -325,6 +325,15 @@ function handleDatabaseError(error, response, fallbackMsg) {
     console.error(error);
     const msg = String(error.message || "");
     const code = String(error.code || "");
+    
+    // Missing column migration check (PG code 42703 is undefined_column)
+    if (code === '42703' || msg.includes("track_changes_enabled") || msg.includes("original_target_text") || msg.includes("tracked_by")) {
+      response.status(500).json({
+        error: `Database columns are missing. Please run the SQL migration script (server/src/config/migration_track_changes.sql) in your Supabase SQL Editor to add the required columns. Details: ${msg}`
+      });
+      return true;
+    }
+
     if (code === 'PGRST205' || msg.includes("audit_jobs") || msg.includes("document_access_requests")) {
       const missingTable = msg.includes("document_access_requests") ? "document_access_requests" : "audit_jobs";
       response.status(500).json({ error: `Database table '${missingTable}' is missing. Please run the SQL migration script (server/src/config/migration.sql) in your Supabase SQL Editor to create it.` });
@@ -1421,7 +1430,7 @@ apiRouter.post("/documents/:id/track-changes", checkAuth, async (request, respon
       .eq("id", doc.id);
 
     if (error) {
-      return response.status(500).json({ error: "Failed to update track changes status." });
+      return handleDatabaseError(error, response, "Failed to update track changes status.");
     }
 
     // Broadcast track changes toggle via Socket.io
@@ -1502,7 +1511,7 @@ apiRouter.post("/documents/:id/segments/:index/accept-change", checkAuth, async 
       .in("segment_index", matchingIndices);
 
     if (error) {
-      return response.status(500).json({ error: "Failed to accept change." });
+      return handleDatabaseError(error, response, "Failed to accept change.");
     }
 
     // Broadcast accept to all clients
@@ -1593,8 +1602,7 @@ apiRouter.post("/documents/:id/segments/:index/reject-change", checkAuth, async 
     const updateResults = await Promise.all(updatePromises);
     const failedUpdate = updateResults.find((r) => r.error);
     if (failedUpdate) {
-      console.error("Segment revert error:", failedUpdate.error);
-      return response.status(500).json({ error: "Failed to reject change." });
+      return handleDatabaseError(failedUpdate.error, response, "Failed to reject change.");
     }
 
     // Broadcast reject/revert to all clients via Socket.io
