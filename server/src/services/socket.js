@@ -6,38 +6,6 @@ let io = null;
 // Track active users and segment locks in memory for high-performance and auto-cleanup
 const activeUsers = new Map(); // Map<documentId, Map<socketId, userInfo>>
 const documentLocks = new Map(); // Map<documentId, Map<segmentIndex, lockInfo>>
-const pendingUnlockTimeouts = new Map(); // Map<string, NodeJS.Timeout>
-
-function scheduleUnlock(documentId, segmentIndex, socketId) {
-  const key = `${documentId}:${segmentIndex}`;
-  if (pendingUnlockTimeouts.has(key)) {
-    clearTimeout(pendingUnlockTimeouts.get(key));
-  }
-
-  const timeout = setTimeout(() => {
-    pendingUnlockTimeouts.delete(key);
-    const roomLocks = documentLocks.get(documentId);
-    if (roomLocks) {
-      const lock = roomLocks.get(segmentIndex);
-      if (lock && lock.socketId === socketId) {
-        roomLocks.delete(segmentIndex);
-        if (io) {
-          io.to(documentId).emit("lock-update", Array.from(roomLocks.entries()));
-        }
-      }
-    }
-  }, 30000); // 30 seconds
-
-  pendingUnlockTimeouts.set(key, timeout);
-}
-
-function cancelUnlock(documentId, segmentIndex) {
-  const key = `${documentId}:${segmentIndex}`;
-  if (pendingUnlockTimeouts.has(key)) {
-    clearTimeout(pendingUnlockTimeouts.get(key));
-    pendingUnlockTimeouts.delete(key);
-  }
-}
 
 function initSocket(server) {
   io = new Server(server, {
@@ -182,13 +150,10 @@ function initSocket(server) {
         return socket.emit("lock-failed", { segmentIndex, message: "This cell is already being edited" });
       }
 
-      // Cancel any pending unlock timeout for this segment
-      cancelUnlock(documentId, segmentIndex);
-
-      // Auto-schedule unlock for any previous locks held by this same socket session
+      // Auto-release any previous locks held by this same socket session immediately
       for (const [idx, lock] of roomLocks.entries()) {
         if (lock.socketId === socket.id && idx !== segmentIndex) {
-          scheduleUnlock(documentId, idx, socket.id);
+          roomLocks.delete(idx);
         }
       }
 
@@ -221,8 +186,8 @@ function initSocket(server) {
       if (roomLocks) {
         const existingLock = roomLocks.get(segmentIndex);
         if (existingLock && existingLock.socketId === socket.id) {
-          // Schedule unlock with 30s delay instead of deleting immediately
-          scheduleUnlock(documentId, segmentIndex, socket.id);
+          roomLocks.delete(segmentIndex);
+          io.to(documentId).emit("lock-update", Array.from(roomLocks.entries()));
         }
       }
 
@@ -264,12 +229,21 @@ function initSocket(server) {
         }
       }
 
-      // 2. Auto-schedule unlock for all locks held by this socket session with 30s delay
+      // 2. Auto-release all locks held by this socket session immediately
       const roomLocks = documentLocks.get(documentId);
       if (roomLocks) {
+        let changed = false;
         for (const [segmentIndex, lockInfo] of roomLocks.entries()) {
           if (lockInfo.socketId === socket.id) {
-            scheduleUnlock(documentId, segmentIndex, socket.id);
+            roomLocks.delete(segmentIndex);
+            changed = true;
+          }
+        }
+        if (changed) {
+          if (roomLocks.size === 0) {
+            documentLocks.delete(documentId);
+          } else {
+            io.to(documentId).emit("lock-update", Array.from(roomLocks.entries()));
           }
         }
       }

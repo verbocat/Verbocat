@@ -302,7 +302,7 @@ export const SegmentCard = ({
     }
   };
 
-  // Inactivity timer: 30 seconds threshold
+  // Inactivity timer: 10 seconds threshold
   const inactivityTimerRef = useRef(null);
 
   const resetInactivityTimer = () => {
@@ -314,7 +314,7 @@ export const SegmentCard = ({
       if (editorRef.current && document.activeElement === editorRef.current) {
         editorRef.current.blur();
       }
-    }, 30000); // 30 seconds inactivity
+    }, 10000); // 10 seconds inactivity
   };
 
   useEffect(() => {
