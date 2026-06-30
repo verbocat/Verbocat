@@ -2268,13 +2268,14 @@ export default function App() {
             onOpenContext={() => setShowContextPanel(true)}
           />
 
-          {/* QA panel (collapsible) */}
+          {/* QA panel (collapsible modal) */}
           <QAPanel
             qaIssuesList={qaIssuesList}
             segments={segments}
             showQaPanel={showQaPanel}
             theme={theme}
             onGoToSegment={goToSegment}
+            onClose={() => setShowQaPanel(false)}
           />
 
           {/* Zone 3: Segment editor */}

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { AlertOctagon, AlertTriangle, CheckCircle2, ArrowRight, ShieldAlert, Award, FileCode, Sparkles } from "lucide-react";
 
-export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, onGoToSegment }) => {
+export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, onGoToSegment, onClose }) => {
   const [activeFilter, setActiveFilter] = useState("all");
 
   if (!showQaPanel) return null;
@@ -94,10 +94,31 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
   }
 
   return (
-    <section className={`rounded-2xl border p-4 mb-3 mx-1 transition-all duration-300 ${theme.cardStrong} shadow-2xl backdrop-blur-md`}>
-      
-      {/* 1. Header & Aggregate Metrics */}
-      <div className="flex flex-col lg:flex-row justify-between gap-6 pb-6 border-b border-white/5">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+      <div 
+        className={`w-full max-w-5xl h-[80vh] flex flex-col rounded-2xl border ${theme.cardStrong} shadow-2xl overflow-hidden`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Modal Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-zinc-900/50">
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="w-5 h-5 text-indigo-400" />
+            <h3 className="text-sm font-extrabold text-zinc-100 uppercase tracking-widest">
+              QC Audit Workspace
+            </h3>
+          </div>
+          <button 
+            onClick={onClose}
+            className="text-zinc-400 hover:text-white text-xl font-bold bg-white/5 hover:bg-white/10 w-8 h-8 rounded-full flex items-center justify-center transition"
+          >
+            &times;
+          </button>
+        </div>
+
+        {/* Modal Body (Scrollable container) */}
+        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
+          {/* 1. Header & Aggregate Metrics */}
+          <div className="flex flex-col lg:flex-row justify-between gap-6 pb-6 border-b border-white/5">
         
         {/* Left column: MQM Accuracy gauge */}
         <div className="flex-1 min-w-[280px]">
@@ -231,7 +252,7 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
 
       {/* 3. Issue List / Grid */}
       {filteredIssues.length > 0 ? (
-        <div className="grid gap-3 max-h-[32vh] overflow-y-auto pr-1">
+        <div className="grid gap-3 max-h-[46vh] overflow-y-auto pr-1">
           {filteredIssues.map((item, index) => {
             const isMqm = item.type === "mqm";
             const severityColor = 
@@ -299,7 +320,10 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
 
                 <div className="flex justify-end border-t border-white/5 pt-2.5">
                   <button
-                    onClick={() => onGoToSegment(item.id)}
+                    onClick={() => {
+                      onGoToSegment(item.id);
+                      if (onClose) onClose();
+                    }}
                     className="flex items-center gap-1.5 text-xs font-bold text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/15 border border-indigo-500/20 px-3.5 py-1.5 rounded-xl transition duration-200"
                   >
                     <span>Inspect & Edit</span>
@@ -327,6 +351,8 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
           </p>
         </div>
       )}
-    </section>
+        </div>
+      </div>
+    </div>
   );
 };
