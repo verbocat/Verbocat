@@ -94,7 +94,7 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
   }
 
   return (
-    <section className={`rounded-2xl border p-6 mb-6 transition-all duration-300 ${theme.cardStrong} shadow-2xl backdrop-blur-md`}>
+    <section className={`rounded-2xl border p-4 mb-3 mx-1 transition-all duration-300 ${theme.cardStrong} shadow-2xl backdrop-blur-md`}>
       
       {/* 1. Header & Aggregate Metrics */}
       <div className="flex flex-col lg:flex-row justify-between gap-6 pb-6 border-b border-white/5">
@@ -231,7 +231,7 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
 
       {/* 3. Issue List / Grid */}
       {filteredIssues.length > 0 ? (
-        <div className="grid gap-3 max-h-[70vh] overflow-y-auto pr-1">
+        <div className="grid gap-3 max-h-[32vh] overflow-y-auto pr-1">
           {filteredIssues.map((item, index) => {
             const isMqm = item.type === "mqm";
             const severityColor = 

@@ -867,8 +867,8 @@ export const SegmentCard = ({
                             AI Quality Suggestion to reach 90%+
                           </span>
                         </div>
-                        <p style={{ fontSize: 11.5, color: "var(--text-primary)", margin: 0, fontStyle: "italic" }}>
-                          "{parsedMqmReport.improvementSuggestion}"
+                        <p style={{ fontSize: 11.5, color: "var(--text-primary)", margin: 0, fontStyle: "italic", whiteSpace: "pre-wrap" }}>
+                          {parsedMqmReport.improvementSuggestion}
                         </p>
                         <button
                           type="button"

@@ -480,7 +480,11 @@ For each flagged error, evaluate whether the error is genuine (accept) or false 
         explanation: e.comment || ""
       })),
       clarifyingQuestions: [],
-      improvementSuggestion: finalErrors.length > 0 ? "Corrected translation errors found in audit." : "",
+      improvementSuggestion: finalErrors.length > 0 
+        ? `ISSUES DETECTED BY MQM AUDIT:\n` + finalErrors.map(e => 
+            `[${e.severity}] ${e.category}\n${e.comment || e.explanation || ""}\n- Replace:\n"${e.span}"\n+ With:\n"${e.correction || ""}"`
+          ).join("\n\n")
+        : "",
       hash,
       promptVersion: MQM_PROMPT_VERSION,
       schemaVersion: MQM_SCHEMA_VERSION
