@@ -94,15 +94,15 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
   }
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[200] flex flex-col bg-zinc-950/98 backdrop-blur-md overflow-hidden" onClick={onClose}>
       <div 
-        className={`w-full max-w-5xl h-[80vh] flex flex-col rounded-2xl border ${theme.cardStrong} shadow-2xl overflow-hidden`}
+        className="w-full h-full flex flex-col overflow-hidden bg-transparent"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-zinc-900/50">
           <div className="flex items-center gap-2">
-            <ShieldAlert className="w-5 h-5 text-indigo-400" />
+            <ShieldAlert className="w-4 h-4 text-indigo-400" />
             <h3 className="text-sm font-extrabold text-zinc-100 uppercase tracking-widest">
               QC Audit Workspace
             </h3>
@@ -123,7 +123,7 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
         {/* Left column: MQM Accuracy gauge */}
         <div className="flex-1 min-w-[280px]">
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">
-            <Award className="w-4 h-4 text-indigo-400" />
+            <Award className="w-3.5 h-3.5 text-indigo-400" />
             <span>Average MQM Quality Health</span>
           </div>
           
@@ -165,7 +165,7 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
             <span className="text-[10px] font-bold uppercase tracking-wider text-rose-400">Critical</span>
             <div className="flex items-baseline gap-1.5 mt-2">
               <span className="text-2xl font-bold font-mono text-rose-400">{criticalCount}</span>
-              <AlertOctagon className="w-3.5 h-3.5 text-rose-400/60" />
+              <AlertOctagon className="w-3 h-3 text-rose-400/60" />
             </div>
           </div>
           
@@ -173,7 +173,7 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
             <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">Major</span>
             <div className="flex items-baseline gap-1.5 mt-2">
               <span className="text-2xl font-bold font-mono text-amber-400">{majorCount}</span>
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-400/60" />
+              <AlertTriangle className="w-3 h-3 text-amber-400/60" />
             </div>
           </div>
 
@@ -181,7 +181,7 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
             <span className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">Minor</span>
             <div className="flex items-baseline gap-1.5 mt-2">
               <span className="text-2xl font-bold font-mono text-yellow-400">{minorCount}</span>
-              <AlertTriangle className="w-3.5 h-3.5 text-yellow-400/60" />
+              <AlertTriangle className="w-3 h-3 text-yellow-400/60" />
             </div>
           </div>
 
@@ -189,7 +189,7 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
             <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400">Auto Rules</span>
             <div className="flex items-baseline gap-1.5 mt-2">
               <span className="text-2xl font-bold font-mono text-blue-400">{ruleCount}</span>
-              <FileCode className="w-3.5 h-3.5 text-blue-400/60" />
+              <FileCode className="w-3 h-3 text-blue-400/60" />
             </div>
           </div>
         </div>
@@ -252,7 +252,7 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
 
       {/* 3. Issue List / Grid */}
       {filteredIssues.length > 0 ? (
-        <div className="grid gap-3 max-h-[46vh] overflow-y-auto pr-1">
+        <div className="grid gap-3 max-h-[68vh] overflow-y-auto pr-1">
           {filteredIssues.map((item, index) => {
             const isMqm = item.type === "mqm";
             const severityColor = 
@@ -327,7 +327,7 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
                     className="flex items-center gap-1.5 text-xs font-bold text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/15 border border-indigo-500/20 px-3.5 py-1.5 rounded-xl transition duration-200"
                   >
                     <span>Inspect & Edit</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
+                    <ArrowRight className="w-3 h-3" />
                   </button>
                 </div>
               </div>
@@ -337,8 +337,8 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
       ) : (
         /* Empty / Success State */
         <div className="flex flex-col items-center justify-center py-10 px-4 text-center bg-zinc-950/20 border border-dashed border-zinc-800 rounded-2xl">
-          <div className="w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-3">
-            <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+          <div className="w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
           </div>
           <h3 className="text-base font-bold text-zinc-100">
             No Quality Issues Found
