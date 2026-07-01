@@ -45,11 +45,32 @@ const getTargetSpecificRules = (targetLang, sourceLang, contextSettings = null) 
   const formality = contextSettings?.formality || "Neutral";
   const domain = contextSettings?.domain || "General";
 
+  let domainGuidelines = "";
+  const lowerDomain = domain.toLowerCase();
+  if (lowerDomain.includes("legal") || lowerDomain.includes("contract") || lowerDomain.includes("agreement")) {
+    domainGuidelines = `
+- LEGAL DOMAIN CONSTRAINTS (STRICT):
+  * Do NOT recommend replacing established, legally precise translations with colloquial or generic terms.
+  * For example, "to the extent of conflict" must be translated as "संघर्ष की सीमा तक" (exact scope of conflict), NOT generalized to "संघर्ष के मामले में" (in case of conflict).
+  * "Invocation" in lien/securities context means enforcement/calling-upon, translated as "प्रवर्तन" or "आह्वान", NOT "आवेदन" (application).
+  * Do NOT change precise legal terms like "successors and permitted assigns" unless they are grammatically incorrect.
+`;
+  } else if (lowerDomain.includes("banking") || lowerDomain.includes("finance") || lowerDomain.includes("financial")) {
+    domainGuidelines = `
+- FINANCIAL & BANKING DOMAIN CONSTRAINTS (STRICT):
+  * "Drawing Power" is a standard banking term referring to the borrowing limit based on collateral. It must remain "ड्राइंग पावर" or "आहरण सीमा", NOT translated literally to general terms like "उपयोग की शक्ति".
+  * "At actuals" refers to the actual expenses incurred (वास्तविक लागत / वास्तविक व्यय के अनुसार), NOT the value of the asset (वास्तविक मूल्य).
+  * "Ad valorem duty" is a legal tax based on value, translated as "मूल्यानुसार शुल्क" or "एड वैलोरम ड्यूटी", NOT generic "शुल्क".
+  * Do NOT replace industry-standard English/loan terms that are commonly used in Hindi banking documents (e.g. "Key Facts Statement", "ROC", "CIBIL") unless requested.
+`;
+  }
+
   return `
 - TARGET GRAMMAR & COMPLIANCE: Ensure the translation is grammatically correct, matches correct gender/number agreements, uses proper punctuation (such as full stops or language-specific sentence terminators like purna-viram in Hindi), and respects syntax rules native to the ${targetLangName} language.
 - TONE & FORMALITY COMPLIANCE: The translation must adhere strictly to a ${formality} level of formality and ${tone} tone suitable for the ${domain} domain.
 - CAPITALIZATION & ACRONYMS: Ensure standard acronyms and names are capitalized and formatted appropriately based on ${targetLangName} professional conventions.
 - ANTI-HALLUCINATION & LEGAL PRECISION: Do NOT suggest stylistic changes that weaken legal precision, technical accuracy, or domain terminology. Do NOT flag standard list indices or numbers as errors.
+${domainGuidelines}
 `;
 };
 
@@ -141,24 +162,35 @@ Target Language: ${targetLangName} (from ${sourceLangName})`;
 };
 
 // ── Pass 2 & 3 Prompts for Verification ──────────────────────────────
-const getPass2SystemPrompt = (targetLangName, sourceLangName) => {
+const getPass2SystemPrompt = (targetLangName, sourceLangName, targetSpecificRules = "") => {
   return `You are a professional translator and proofreader.
 Your task is to take a translation, review the flagged errors, and output a single, corrected version of the translation text (post-edited text) that fixes all valid flagged errors. Keep the rest of the translation unchanged. Do not introduce new errors.
+
+TARGET-SPECIFIC LOCALIZATION & GRAMMAR RULES (CRITICAL):
+${targetSpecificRules}
 
 Target Language: ${targetLangName} (from ${sourceLangName})`;
 };
 
-const getPass3SystemPrompt = (targetLangName, sourceLangName) => {
+const getPass3SystemPrompt = (targetLangName, sourceLangName, targetSpecificRules = "") => {
   return `You are a translation quality assurance judge.
 You will be shown:
-1. The original translation.
-2. A post-edited translation that attempts to fix flagged errors.
-3. A list of flagged errors.
+1. The original source text.
+2. The original translation.
+3. A post-edited translation that attempts to fix flagged errors.
+4. A list of flagged errors.
 
-For each flagged error, compare the original translation with the post-edited translation.
+For each flagged error, compare the original translation with the post-edited translation and the source text.
 Decide if the original text at that span had a genuine error that was correctly resolved in the post-edited translation.
-Output "accept" if it was a genuine error.
-Output "reject" if the error flag was false positive noise, and the original text was correct or preferred.
+
+Reject rules (very important):
+- Reject any error flags that are false positive noise.
+- Reject corrections that introduce colloquial or generic wording in place of legally precise translations (e.g. "संघर्ष की सीमा तक" is legally accurate and should NOT be replaced with generic "संघर्ष के मामले में").
+- Reject corrections that attempt to literally translate established banking/financial terms (e.g., "Drawing Power" must remain "ड्राइंग पावर" or "आहरण सीमा", reject any change to "उपयोग की शक्ति"; "actuals" must remain "वास्तविक लागत/व्यय", reject any change to "वास्तविक मूल्य").
+- Reject grammatical nits or verb form changes that are actually correct when read in continuation with the previous segment.
+
+Output "accept" if it was a genuine error that is correctly fixed.
+Output "reject" if the original translation was correct, acceptable, or preferred.
 
 Target Language: ${targetLangName} (from ${sourceLangName})`;
 };
@@ -461,10 +493,17 @@ ${nextTarget ? `- Next Translation: "${nextTarget}"` : ""}`;
       console.log(`[MQM Escalation] Running 3-Pass Self-Check for: "${sourceText.substring(0, 35)}..." (isFullAudit: ${isFullAudit}, hasCritical: ${hasCritical})`);
       
       // Pass 2: Post-Edited Clean String
-      const pass2Sys = getPass2SystemPrompt(targetLangName, sourceLangName);
-      const pass2User = `Original Translation: "${translatedText}"
+      const pass2Sys = getPass2SystemPrompt(targetLangName, sourceLangName, targetSpecificRules);
+      const pass2User = `Source Segment: "${sourceText}"
+Original Translation: "${translatedText}"
 Flagged Errors:
 ${JSON.stringify(detectedErrors, null, 2)}
+
+SLIDING WINDOW LOCAL CONTEXT:
+${prevSource ? `- Previous Source: "${prevSource}"` : ""}
+${prevTarget ? `- Previous Translation: "${prevTarget}"` : ""}
+${nextSource ? `- Next Source: "${nextSource}"` : ""}
+${nextTarget ? `- Next Translation: "${nextTarget}"` : ""}
 
 Please output the corrected version of the translation text (postEditedText) fixing these errors.`;
 
@@ -479,11 +518,18 @@ Please output the corrected version of the translation text (postEditedText) fix
       const postEditedText = pass2Result.postEditedText || translatedText;
 
       // Pass 3: Verdict Comparison
-      const pass3Sys = getPass3SystemPrompt(targetLangName, sourceLangName);
-      const pass3User = `Original Translation: "${translatedText}"
+      const pass3Sys = getPass3SystemPrompt(targetLangName, sourceLangName, targetSpecificRules);
+      const pass3User = `Source Segment: "${sourceText}"
+Original Translation: "${translatedText}"
 Post-Edited Translation: "${postEditedText}"
 Flagged Errors:
 ${JSON.stringify(detectedErrors, null, 2)}
+
+SLIDING WINDOW LOCAL CONTEXT:
+${prevSource ? `- Previous Source: "${prevSource}"` : ""}
+${prevTarget ? `- Previous Translation: "${prevTarget}"` : ""}
+${nextSource ? `- Next Source: "${nextSource}"` : ""}
+${nextTarget ? `- Next Translation: "${nextTarget}"` : ""}
 
 For each flagged error, evaluate whether the error is genuine (accept) or false positive noise (reject).`;
 
