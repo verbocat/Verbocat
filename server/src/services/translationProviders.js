@@ -508,11 +508,16 @@ Translate to: ${targetLangName} (from ${sourceLangName})`;
 
   if (prevSource || nextSource) {
     textPrompt += `\n\nSLIDING WINDOW LOCAL TRANSLATION CONTEXT:
-Use the adjacent segments to resolve pronoun reference, gender continuity, terminology alignment, and stylistic consistency:
+Use the adjacent segments to resolve pronoun reference, gender continuity, terminology alignment, and semantic ambiguities:
 ${prevSource ? `- Previous Segment Source: "${prevSource}"` : ""}
 ${prevTarget ? `- Previous Segment Translation: "${prevTarget}"` : ""}
 ${nextSource ? `- Next Segment Source: "${nextSource}"` : ""}
-${nextTarget ? `- Next Segment Translation: "${nextTarget}"` : ""}`;
+${nextTarget ? `- Next Segment Translation: "${nextTarget}"` : ""}
+
+DIRECTIVES FOR USING CONTEXT:
+1. Ensure the translation of the current segment is grammatically, stylistically, and terminally consistent with the adjacent segments.
+2. If the previous segment ends with a colon (":"), a comma (","), a conjunction, or is a conditional statement (e.g. "if:", "यदि:"), translate the current segment as a direct continuation of that clause (matching its grammatical mood, tense, and flow).
+3. If an English term is ambiguous (e.g., "Term of Loan"), inspect the adjacent segments (if the next segment is a duration like "36 months", then "Term of Loan" refers to duration/tenure, translate it accordingly, e.g. "ऋण की अवधि" in Hindi).`;
   }
 
   const userContent = [];

@@ -127,6 +127,11 @@ ${targetSpecificRules}
 ${glossaryRules}
 ${visualRules}
 
+SLIDING WINDOW LOCAL CONTEXT & COHERENCE DIRECTIVE (CRITICAL):
+- You are provided with a sliding window of local context (Previous Segment and Next Segment sources/translations) in the user prompt.
+- CONTINUATION CHECK: If the previous segment ends with a colon (":"), a comma (","), a conjunction, or is a conditional statement (e.g., "यदि", "if", "provided that"), the current segment is a grammatical continuation of the previous segment. Evaluate its grammar, tense, and verb form as a continuation. Do NOT flag a verb tense/form (like 'होता है' or 'हो जाएगी' in Hindi) as an error if it makes perfect grammatical sense as a sub-clause of the previous segment.
+- TERMINOLOGY & COHERENCE CHECK: Use adjacent segments to resolve ambiguous terms. For example, if the source term is "Term of Loan" and the next segment mentions a duration (like "36 months" / "36 महीने"), the correct translation of "Term" is "tenure/duration" (e.g., "अवधि" in Hindi). Do NOT flag "अवधि" as an error or suggest changing it to a legal condition term (like "शर्त").
+
 TECHNICAL MARKS & SYSTEM RULES:
 - Ignore system-protected protected tags like "<5261>", "</5261>" or place-holders. Do NOT flag them as untranslated or spelling errors.
 - Email addresses and phone numbers should remain untranslated; do not flag them.
