@@ -304,7 +304,9 @@ const translateSegmentWithContext = async ({
       prevTarget,
       nextSource,
       nextTarget,
-      isFullAudit: true
+      isFullAudit: true,
+      screenshotBuffer,
+      screenshotMimeType
     });
     mqmAccuracyScore = mqmReport?.accuracyScore !== undefined ? mqmReport.accuracyScore : 100;
   } catch (err) {

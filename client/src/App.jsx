@@ -955,7 +955,7 @@ export default function App() {
 
       for (let i = 0; i < segmentsToTranslate.length; i += BATCH_SIZE) {
         const batch = segmentsToTranslate.slice(i, i + BATCH_SIZE);
-        const data = await translateBatch(batch, targetLanguage, sourceLanguage, contextSettings, documentId);
+        const data = await translateBatch(batch, targetLanguage, sourceLanguage, { ...contextSettings, glossary: translationGlossary }, documentId);
         const results = data.results || [];
 
         if (results.length > 0 && i === 0) {
@@ -1028,7 +1028,7 @@ export default function App() {
     setShowEstimateModal(true);
     setEstimateData(null);
     try {
-      const data = await getAuditEstimate(documentId, contextSettings);
+      const data = await getAuditEstimate(documentId, { ...contextSettings, glossary: translationGlossary });
       setEstimateData(data);
     } catch (err) {
       console.error("Failed to fetch pre-flight audit estimate:", err);
@@ -1045,7 +1045,7 @@ export default function App() {
     setShowEstimateModal(false);
     showToast("Starting background Quality Control Audit...", "info");
     try {
-      const result = await startAudit(documentId, contextSettings);
+      const result = await startAudit(documentId, { ...contextSettings, glossary: translationGlossary });
       if (result.success && result.jobId) {
         const job = await getAuditStatus(documentId, result.jobId);
         setActiveJob(job);
@@ -1439,7 +1439,7 @@ export default function App() {
         contextJira,
         contextDescription,
         screenshot,
-        contextSettings,
+        contextSettings: { ...contextSettings, glossary: translationGlossary },
         sourceLang: sourceLanguage,
         targetLang: targetLanguage
       });

@@ -39,47 +39,41 @@ const getLangName = (code) => {
   }
 };
 
-const getTargetSpecificRules = (targetLang, sourceLang) => {
+const getTargetSpecificRules = (targetLang, sourceLang, contextSettings = null) => {
   const targetLangName = getLangName(targetLang);
-  const isTargetHindi = String(targetLang || "").toLowerCase().startsWith("hi");
-  const isTargetEnglish = String(targetLang || "").toLowerCase().startsWith("en");
+  const tone = contextSettings?.tone || "General";
+  const formality = contextSettings?.formality || "Neutral";
+  const domain = contextSettings?.domain || "General";
 
-  if (isTargetHindi) {
-    return `
-- HINDI GRAMMAR & GENDER COMPLIANCE: Check for grammatical agreement in Hindi. Adjective/possessive agreement must match the noun gender.
-  - "सहमति" (consent) is feminine, so "आपका सहमति" is grammatically incorrect (must be "आपकी सहमति").
-  - "सहमति पत्र" (consent letter) is masculine, so "आपका सहमति पत्र" is correct.
-  - HINDI GENITIVE AGREEMENT (CRITICAL): In Hindi possessive phrases (e.g., "X की Y" or "X का Y"), the genitive postposition ('का', 'की', 'के') agrees in gender/number with the POSSESSED noun 'Y', NOT the owner noun 'X'. Since 'अस्वीकृति' (dishonour) is FEMININE, it must always be "भुगतान निर्देशों की अस्वीकृति" (using the feminine 'की'). Do NOT flag 'की' as an error in this context and do NOT suggest changing it to 'का'.
-- ACRONYM & TRANSLITERATION PRESERVATION: 
-  * Only short-form uppercase English acronyms, abbreviations, and initialization codes (e.g., 'RBI', 'PDC', 'KYC', 'CIBIL', 'OTP', 'NACH', 'e-NACH', 'SPDC') must remain in their original English uppercase form. If the translation transliterates these (like 'आरबीआई' or 'पीडीसी'), flag it as a Terminology error.
-  * Standard financial, technical, or banking terms (such as 'Margin Call', 'Flexi Loan', 'Loan Agreement', 'Lender', 'Borrower') MUST be transliterated into Devanagari script (e.g. 'मार्जिन कॉल', 'फ्लेक्सी लोन', 'लोन एग्रीमेंट', 'लेंडर'). Do NOT flag Devanagari transliterations of these terms as errors and do NOT suggest leaving them in English Latin characters.
-- LIST INDEX MAPPING: Standard English list indices (like letters or numbers, e.g. "h.)") can be translated to corresponding Hindi listing characters (like "झ.)"). Do not flag standard Devanagari listing ordering as errors.
-- CONJUNCTIONS: Verify if equivalent Hindi conjunctions (like 'और', 'लेकिन', 'या') are present before reporting missing English conjunctions (like 'and', 'but', 'or').
-- DISSENT ON FORMALITY: Hindi banking/legal translations must be formal. Do NOT flag formal phrasing (e.g. "पुष्टि करता है", "अधीन", "प्रभारों") as "Too Formal" or suggest casual rewrites. For example, translate 'charges' as 'प्रभारों' rather than the transliterated 'चार्जों'.
-- STRICT LEGAL PRECISION & ANTI-HALLUCINATION: 
-  * Do NOT suggest stylistic changes that weaken legal precision. For example, "partnership firm" must remain "साझेदारी फर्म" (Firm), do NOT suggest changing it to "साझेदारी कंपनी" (Company) as they are distinct legal entities.
-  * "duly represented" is formally translated as "उचित रूप से प्रतिनिधित्व". Do NOT recommend casual/informal phrases like "सही तरीके से" in formal agreements.
-  * Do not invent or hallucinate errors. If the translation is grammatically correct, formal, and legally accurate, return an empty errors list.
+  return `
+- TARGET GRAMMAR & COMPLIANCE: Ensure the translation is grammatically correct, matches correct gender/number agreements, uses proper punctuation (such as full stops or language-specific sentence terminators like purna-viram in Hindi), and respects syntax rules native to the ${targetLangName} language.
+- TONE & FORMALITY COMPLIANCE: The translation must adhere strictly to a ${formality} level of formality and ${tone} tone suitable for the ${domain} domain.
+- CAPITALIZATION & ACRONYMS: Ensure standard acronyms and names are capitalized and formatted appropriately based on ${targetLangName} professional conventions.
+- ANTI-HALLUCINATION & LEGAL PRECISION: Do NOT suggest stylistic changes that weaken legal precision, technical accuracy, or domain terminology. Do NOT flag standard list indices or numbers as errors.
 `;
-  } else if (isTargetEnglish) {
-    return `
-- ENGLISH GRAMMAR & SYNTAX: Ensure strict adherence to English grammar rules, including correct subject-verb agreement, verb tenses, preposition usage, and article placement ('a', 'an', 'the').
-  - Note: Assertive sentences cannot use 'any' in place of 'a' or 'some' (e.g., "There is any material change" is grammatically incorrect; it must be "There is a material change").
-- LEGAL/BANKING TERMINOLOGY: Standard banking and legal terms must use precise English equivalents. For example, 'प्रभारों' should be translated as 'charges', 'सहमति' as 'consent', 'सहमति पत्र' as 'consent letter' or 'consent form'.
-- CAPITALIZATION: Ensure proper capitalization of standard acronyms (e.g., NRI, AMB, CIBIL, KYC, OTP, ATM, GST), proper nouns, and the start of sentences.
-- PHRASING & FLOW: Phrasing must sound natural and professional. Avoid literal translations of Hindi idioms or sentence structures (e.g. "PCHFL की राय में" should be translated as "In the opinion of PCHFL" or "In PCHFL's opinion").
-`;
-  } else {
-    return `
-- GRAMMAR & SYNTAX: Ensure correct grammar, syntax, gender/plural agreement, and formatting in the target language (${targetLangName}).
-- ACRONYM PRESERVATION: Keep standard alphanumeric acronyms and abbreviations in their original uppercase Latin form if standard in ${targetLangName} technical/banking documents.
-- CONJUNCTIONS & PREPOSITIONS: Do not report false omissions of conjunctions/prepositions. Verify if the target language equivalent is present.
-`;
+};
+
+const getGlossaryRules = (sourceText, glossary) => {
+  if (!glossary || !Array.isArray(glossary) || glossary.length === 0) return "";
+  const matches = [];
+  for (const entry of glossary) {
+    if (!entry.source || !entry.target) continue;
+    const escaped = entry.source.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const isLatin = /^[A-Za-z0-9\s]+$/.test(entry.source);
+    const regex = isLatin ? new RegExp(`\\b${escaped}\\b`, "i") : new RegExp(escaped, "i");
+    if (regex.test(sourceText)) {
+      matches.push(entry);
+    }
   }
+  if (matches.length === 0) return "";
+  return `
+- TERMINOLOGY & GLOSSARY COMPLIANCE (STRICT): The following approved term mappings MUST be adhered to. Any deviation (e.g., using a different synonym or transliterating when it should remain in Latin) must be flagged as a 'terminology' error:
+${matches.map(m => `  * Source term: "${m.source}" -> Approved Target term: "${m.target}"`).join("\n")}
+`;
 };
 
 // ── Pass 1 Error Detection Prompt ────────────────────────────────────
-const getPass1SystemPrompt = (targetLangName, sourceLangName, targetSpecificRules) => {
+const getPass1SystemPrompt = (targetLangName, sourceLangName, targetSpecificRules, glossaryRules, visualRules) => {
   return `You are an expert translation quality auditor specialized in the MQM (Multidimensional Quality Metrics) framework.
 Your task is to analyze the translation of a text segment and detect errors.
 
@@ -130,6 +124,8 @@ Errors: [
 
 TARGET-SPECIFIC LOCALIZATION & GRAMMAR RULES (CRITICAL):
 ${targetSpecificRules}
+${glossaryRules}
+${visualRules}
 
 TECHNICAL MARKS & SYSTEM RULES:
 - Ignore system-protected protected tags like "<5261>", "</5261>" or place-holders. Do NOT flag them as untranslated or spelling errors.
@@ -267,7 +263,7 @@ const callOpenAI = async (messages, responseFormat, retries = 1) => {
  */
 const verifyAndSanitizeSpans = (errors, targetText) => {
   const verified = [];
-  const cleanText = (t) => String(t || "").replace(/[\s\u200b\u200c\u200d\u00a0]+/g, "").trim();
+  const cleanText = (t) => String(t || "").replace(/[\s\u200b\u200c\u200d\u00a0\.\,\?\"\'\।]+/g, "").trim().toLowerCase();
   const normalizedTarget = cleanText(targetText);
 
   for (const err of errors) {
@@ -275,28 +271,36 @@ const verifyAndSanitizeSpans = (errors, targetText) => {
     const span = String(err.span || "").trim();
     if (!span) continue;
 
-    const normalizedSpan = cleanText(span);
-    if (!normalizedTarget.toLowerCase().includes(normalizedSpan.toLowerCase())) {
-      console.log(`[MQM Filter] Discarded hallucinated error span (not found in target text): "${span}"`);
+    // 1. Verbatim case-insensitive substring check
+    const idx = targetText.toLowerCase().indexOf(span.toLowerCase());
+    if (idx !== -1) {
+      err.span = targetText.substring(idx, idx + span.length);
+      verified.push(err);
       continue;
     }
 
-    // Capture exact casing from translation
-    const exactIdx = targetText.toLowerCase().indexOf(span.toLowerCase());
-    if (exactIdx !== -1) {
-      err.span = targetText.substring(exactIdx, exactIdx + span.length);
+    // 2. Fuzzy spaces/punctuation matching check
+    const normalizedSpan = cleanText(span);
+    if (normalizedSpan && normalizedTarget.includes(normalizedSpan)) {
+      const words = span.split(/\s+/).filter(Boolean);
+      if (words.length > 0) {
+        const firstWord = words[0].toLowerCase();
+        const lastWord = words[words.length - 1].toLowerCase();
+        const firstIdx = targetText.toLowerCase().indexOf(firstWord);
+        const lastIdx = targetText.toLowerCase().lastIndexOf(lastWord);
+        if (firstIdx !== -1 && lastIdx !== -1 && lastIdx >= firstIdx) {
+          err.span = targetText.substring(firstIdx, lastIdx + lastWord.length);
+          verified.push(err);
+          continue;
+        }
+      }
     }
-    verified.push(err);
+
+    console.log(`[MQM Filter] Discarded hallucinated error span (not found in target text): "${span}"`);
   }
   return verified;
 };
 
-/**
- * Main MQM evaluation for a single segment.
- * Runs Pass 1 detection.
- * If isFullAudit === true or a critical error is flagged in Pass 1:
- *   Escalates and executes Pass 2 (Post-edit) and Pass 3 (Verdict Comparison).
- */
 const evaluateTranslationMQM = async ({
   sourceText,
   translatedText,
@@ -312,7 +316,9 @@ const evaluateTranslationMQM = async ({
   isFullAudit = false,
   documentId = null,
   glossaryVersion = "v1",
-  onCriticalEscalate = null
+  onCriticalEscalate = null,
+  screenshotBuffer = null,
+  screenshotMimeType = null
 }) => {
   if (!OPENAI_API_KEY) {
     return {
@@ -347,13 +353,25 @@ const evaluateTranslationMQM = async ({
 
   const sourceLangName = getLangName(sourceLang);
   const targetLangName = getLangName(targetLang);
-  const targetSpecificRules = getTargetSpecificRules(targetLang, sourceLang);
+  const targetSpecificRules = getTargetSpecificRules(targetLang, sourceLang, contextSettings);
+  const glossaryRules = getGlossaryRules(sourceText, contextSettings?.glossary);
+
+  let visualRules = "";
+  if (screenshotBuffer) {
+    visualRules = `
+- VISUAL & LAYOUT INSPECTION: Inspect the provided screenshot of the segment context. Check for:
+  * Truncation: Is the translated text cut off or overlapping other elements?
+  * Visual Fit: Is the text too long or short for the button/card/column?
+  * Visual Context: Does the translation match the visual meaning (e.g. is 'Home' translated as 'मुख्य पृष्ठ' (page) or 'घर' (building) contextually)?
+  If there is a visual layout issue, flag it as a 'locale' or 'style' error.
+`;
+  }
 
   const wordCount = Math.max(1, sourceText.trim().split(/\s+/).filter(Boolean).length);
 
   try {
     // ── Pass 1: Error Detection ──
-    const pass1Sys = getPass1SystemPrompt(targetLangName, sourceLangName, targetSpecificRules);
+    const pass1Sys = getPass1SystemPrompt(targetLangName, sourceLangName, targetSpecificRules, glossaryRules, visualRules);
     const pass1User = `Source Segment: "${sourceText}"
 Translated Segment: "${translatedText}"
 
@@ -369,10 +387,23 @@ ${prevTarget ? `- Previous Translation: "${prevTarget}"` : ""}
 ${nextSource ? `- Next Source: "${nextSource}"` : ""}
 ${nextTarget ? `- Next Translation: "${nextTarget}"` : ""}`;
 
+    const userContent = [
+      { type: "text", text: pass1User }
+    ];
+    if (screenshotBuffer) {
+      const mime = screenshotMimeType || "image/png";
+      userContent.push({
+        type: "image_url",
+        image_url: {
+          url: `data:${mime};base64,${screenshotBuffer.toString("base64")}`
+        }
+      });
+    }
+
     const pass1Result = await callOpenAI(
       [
         { role: "system", content: pass1Sys },
-        { role: "user", content: pass1User }
+        { role: "user", content: userContent }
       ],
       { type: "json_schema", json_schema: mqmSchema }
     );
@@ -380,9 +411,13 @@ ${nextTarget ? `- Next Translation: "${nextTarget}"` : ""}`;
     let detectedErrors = pass1Result.errors || [];
     detectedErrors = verifyAndSanitizeSpans(detectedErrors, translatedText);
 
-    // Run Acronym rules
-    checkAcronymErrors(sourceText, translatedText, detectedErrors);
-    resolveOverlappingErrors(detectedErrors, translatedText);
+    // Run custom rule corrections if target specific functions are defined
+    if (typeof checkAcronymErrors === "function") {
+      checkAcronymErrors(sourceText, translatedText, detectedErrors);
+    }
+    if (typeof resolveOverlappingErrors === "function") {
+      resolveOverlappingErrors(detectedErrors, translatedText);
+    }
 
     const hasCritical = detectedErrors.some(e => e.severity === "critical");
     const runSelfCheck = isFullAudit || hasCritical;
@@ -515,10 +550,36 @@ const evaluateBatchPass1 = async ({
   segments,
   targetLang,
   sourceLang,
-  targetSpecificRules
+  contextSettings
 }) => {
   const sourceLangName = getLangName(sourceLang);
   const targetLangName = getLangName(targetLang);
+  const targetSpecificRules = getTargetSpecificRules(targetLang, sourceLang, contextSettings);
+
+  // Match glossary terms for all segments in batch
+  let glossaryRules = "";
+  if (contextSettings?.glossary && Array.isArray(contextSettings.glossary) && contextSettings.glossary.length > 0) {
+    const matchedEntries = [];
+    for (const seg of segments) {
+      for (const entry of contextSettings.glossary) {
+        if (!entry.source || !entry.target) continue;
+        const escaped = entry.source.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const isLatin = /^[A-Za-z0-9\s]+$/.test(entry.source);
+        const regex = isLatin ? new RegExp(`\\b${escaped}\\b`, "i") : new RegExp(escaped, "i");
+        if (regex.test(seg.source_text)) {
+          if (!matchedEntries.some(m => m.source === entry.source)) {
+            matchedEntries.push(entry);
+          }
+        }
+      }
+    }
+    if (matchedEntries.length > 0) {
+      glossaryRules = `
+- TERMINOLOGY & GLOSSARY COMPLIANCE (STRICT): The following approved term mappings MUST be adhered to. Any deviation (e.g., using a different synonym or transliterating when it should remain in Latin) must be flagged as a 'terminology' error:
+${matchedEntries.map(m => `  * Source term: "${m.source}" -> Approved Target term: "${m.target}"`).join("\n")}
+`;
+    }
+  }
 
   const sysPrompt = `You are an expert translation quality auditor specialized in the MQM (Multidimensional Quality Metrics) framework.
 Your task is to analyze the translation of multiple sequential text segments and detect errors.
@@ -550,7 +611,7 @@ Errors: [
   {
     "segmentIndex": 1,
     "span": "detalles de cuenta",
-    "correction": "los detalles de su cuenta",
+    "correction": "los details de su cuenta",
     "category": "fluency",
     "severity": "minor",
     "comment": "Grammar error: missing article before 'detalles'"
@@ -559,6 +620,7 @@ Errors: [
 
 TARGET-SPECIFIC LOCALIZATION & GRAMMAR RULES (CRITICAL):
 ${targetSpecificRules}
+${glossaryRules}
 
 TECHNICAL MARKS & SYSTEM RULES:
 - Ignore system protected tags like "<5261>", "</5261>" or place-holders. Do NOT flag them.
@@ -620,7 +682,7 @@ Translation: "${seg.target_text || ""}"
  * Execute Document-wide MQM background audit.
  * Coordinates batch Pass 1 calls and concurrent worker pool (p-limit) for Phase 4 self-checks.
  */
-const auditDocumentMQM = async (documentId, jobId) => {
+const auditDocumentMQM = async (documentId, jobId, contextSettings = null) => {
   const { getIo } = require("./socket");
   const io = getIo();
 
@@ -646,6 +708,8 @@ const auditDocumentMQM = async (documentId, jobId) => {
     if (fetchErr || !segments || segments.length === 0) {
       throw new Error("No segments found to audit.");
     }
+
+
 
     // Set job initial metrics
     await supabase
@@ -789,7 +853,7 @@ const auditDocumentMQM = async (documentId, jobId) => {
             sourceLang: doc.source_lang,
             contextJira: seg.context_jira || "",
             contextDescription: seg.context_description || "",
-            contextSettings: null,
+            contextSettings: contextSettings,
             prevSource: prevSegment?.source_text,
             prevTarget: prevSegment?.target_text,
             nextSource: nextSegment?.source_text,

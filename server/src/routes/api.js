@@ -905,7 +905,7 @@ apiRouter.post("/documents/:id/audit/start", checkAuth, async (request, response
     (async () => {
       try {
         const { auditDocumentMQM } = require("../services/mqmService");
-        await auditDocumentMQM(documentId, job.id);
+        await auditDocumentMQM(documentId, job.id, request.body.contextSettings);
       } catch (err) {
         console.error(`[Background Audit Crash] Job ${job.id}:`, err);
       }
@@ -1024,7 +1024,7 @@ apiRouter.post("/documents/:id/audit", checkAuth, async (request, response) => {
     if (job) {
       (async () => {
         const { auditDocumentMQM } = require("../services/mqmService");
-        await auditDocumentMQM(documentId, job.id);
+        await auditDocumentMQM(documentId, job.id, request.body.contextSettings);
       })();
     }
   } catch (e) {
