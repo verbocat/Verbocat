@@ -90,6 +90,91 @@ const createProviderState = () => ({
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
+const getTargetSpecificTranslationRules = (targetLang, sourceLang, contextSettings = null) => {
+  const getLangName = (code) => {
+    try {
+      return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code;
+    } catch (e) {
+      return code;
+    }
+  };
+
+  const targetLangName = getLangName(targetLang);
+  const tone = contextSettings?.tone || "General";
+  const formality = contextSettings?.formality || "Neutral";
+  const domain = contextSettings?.domain || "General";
+  const isHindi = targetLang.toLowerCase().startsWith("hi");
+
+  let domainGuidelines = "";
+  const lowerDomain = domain.toLowerCase();
+  
+  if (lowerDomain.includes("legal") || lowerDomain.includes("contract") || lowerDomain.includes("agreement")) {
+    domainGuidelines = `
+- LEGAL DOMAIN CONSTRAINTS (STRICT):
+  * Use legally precise, standard formal language native to ${targetLangName} contract drafting.
+  * Never replace established legal terms with colloquial equivalents (e.g. translate "to the extent of conflict" as "संघर्ष की सीमा तक" in Hindi, NOT "संघर्ष के मामले में").
+  * Translate "invocation" of security/lien as enforcement ("प्रवर्तन" or "आह्वान" in Hindi), NOT "आवेदन" (application).
+  * Translate boilerplate lists of representatives (e.g. "legal heirs, executors and administrators") completely without omitting any elements.
+`;
+  } else if (lowerDomain.includes("banking") || lowerDomain.includes("finance") || lowerDomain.includes("financial")) {
+    domainGuidelines = `
+- FINANCIAL & BANKING DOMAIN CONSTRAINTS (STRICT):
+  * Do NOT literally translate established financial terms. "Drawing Power" must remain "ड्राइंग पावर" or "आहरण सीमा", NOT "उपयोग की शक्ति".
+  * "At actuals" refers to the actual expenses/costs incurred (वास्तविक लागत / वास्तविक व्यय के अनुसार), NOT the asset value (वास्तविक मूल्य).
+  * "Ad valorem duty" is a value-based tax/duty, translated as "मूल्यानुसार शुल्क" or "एड वैलोरम ड्यूटी" in Hindi, NOT generic "शुल्क".
+  * Keep standard banking terms or acronyms (e.g., "Key Facts Statement", "ROC", "CIBIL", "PDC") in their professional English/Latin representation if commonly used in local target documents.
+`;
+  } else if (lowerDomain.includes("tech") || lowerDomain.includes("software") || lowerDomain.includes("it")) {
+    domainGuidelines = `
+- TECHNICAL & SOFTWARE IT DOMAIN CONSTRAINTS (STRICT):
+  * Maintain industry-standard technical terms (e.g., "interface", "dashboard", "database", "repository") rather than forced, obscure native equivalents.
+  * Preserve all code variables, placeholder patterns, and syntax keywords (e.g., "{user_name}", "%d", "&&", "||") exactly as they are in the source text. Do NOT translate them.
+`;
+  } else if (lowerDomain.includes("medical") || lowerDomain.includes("health") || lowerDomain.includes("healthcare")) {
+    domainGuidelines = `
+- MEDICAL & HEALTHCARE DOMAIN CONSTRAINTS (STRICT):
+  * Enforce strict compliance with standard medical nomenclature (e.g. anatomical terms, pharmaceutical brand names, clinical diagnoses).
+  * Avoid any colloquialisms, casual translations, or layperson approximations of clinical terminology.
+`;
+  }
+
+  let languageSpecific = "";
+  if (isHindi) {
+    languageSpecific = `
+- Since the target language is Hindi, you MUST write the output strictly in the Devanagari script. Do NOT use Perso-Arabic (Urdu) characters under any circumstances.
+- Always place a space after the Hindi purna-viram ('।') full stop when starting a new sentence (e.g. 'है। हमारी' -> 'है। हमारी').
+- HINDI GENDER AGREEMENT: Ensure perfect grammatical gender and possessive agreement for common banking words in Hindi:
+  * 'अस्वीकृति' (dishonour/rejection) is FEMININE (e.g. 'भुगतान निर्देशों की अस्वीकृति', NOT 'भुगतान निर्देशों का अस्वीकृति').
+  * 'सहमति' (consent) is FEMININE (e.g., 'आपकी सहमति').
+  * 'सहमति पत्र' (consent letter) is MASCULINE (e.g., 'का सहमति पत्र' / 'आपका सहमति पत्र').
+  * 'मांग' (demand) is FEMININE (e.g., 'मांग की जाएगी').
+  * 'अवधि' (period/tenure) is FEMININE (e.g., 'ऋण की अवधि').
+  * 'अधिकार' (right) is MASCULINE (e.g., 'लेंडर का अधिकार').
+  * 'निर्देश' / 'निर्देशों' / 'अनुदेश' (instructions) is MASCULINE (e.g., 'भुगतान निर्देशों का पालन').
+- HINDI COMMON TRANSLATIONS:
+  * 'unattested' -> translate as 'गैर-हस्ताक्षरित' (do NOT write 'बिना हस्ताक्षरित').
+  * 'legal heirs, executors and administrators' -> translate as 'कानूनी उत्तराधिकारी, निष्पादक और प्रशासक'.
+  * 'loan-cum-pledge agreement' -> translate as 'ऋण-सह-गिरवी समझौता'.
+  * 'repayment mode/mandate' -> translate as 'पुनर्भुगतान मोड/जनादेश' or 'पुनर्भुगतान मोड/आदेश'.
+  * 'undertakes' / 'undertaking' -> translate as 'वचन देता है' or 'वचनबद्ध है' / 'वचनबद्धता' (do NOT leave as English 'undertaking' in Hindi).
+  * 'governing' -> translate as 'नियंत्रित करने वाला'.
+  * 'sanctioned details' -> translate as 'अनुमोदित विवरण'.`;
+  } else {
+    // General multilingual grammar guidelines
+    languageSpecific = `
+- Ensure standard grammatical gender, case, and possessive agreements in ${targetLangName}.
+- Respect local punctuation, capitalization, and naming conventions of the ${targetLangName} professional community.
+- Preserve standard acronyms and uppercase brand abbreviations.`;
+  }
+
+  return `
+- TARGET GRAMMAR & COMPLIANCE: Ensure the translation is grammatically correct, matches correct gender/number agreements, and uses standard punctuation/syntax native to the ${targetLangName} language.
+- TONE & FORMALITY COMPLIANCE: The translation must adhere strictly to a ${formality} level of formality and ${tone} tone suitable for the ${domain} domain.
+${languageSpecific}
+${domainGuidelines}
+`;
+};
+
 const buildTranslationSystemPrompt = (targetLang, sourceLang, contextSettings, contextJira = "", contextDescription = "") => {
   const getLangName = (code) => {
     try {
@@ -101,7 +186,6 @@ const buildTranslationSystemPrompt = (targetLang, sourceLang, contextSettings, c
 
   const sourceName = getLangName(sourceLang);
   const targetName = getLangName(targetLang);
-  const isHindi = targetLang.toLowerCase().startsWith("hi");
 
   // Determine Tone and Formality
   const tone = contextSettings?.tone || "General";
@@ -135,16 +219,7 @@ const buildTranslationSystemPrompt = (targetLang, sourceLang, contextSettings, c
 - Avoid all formal, textbook, literal, or corporate translations.
 - Rewrite sentences to sound like natural spoken language. Use active voice and warm phrasing.
 - For English: Use everyday conversational terms and contractions (e.g. "don't", "can't", "it's"). Translate rigid legalese or rules into simple conversational explanations.
-  * Example of extremely informal translation:
-    - Formal: "Please note that your inquiry about the loan application has been updated in your CIBIL credit records."
-    - Extremely Informal / Day-to-Day: "Hey, just a heads-up: your loan application query has been updated on your CIBIL report."
-    - Another Example:
-    - Formal: "PFL may increase, decrease, or change the interest rate based on the applicable RPLR at its sole discretion..."
-    - Extremely Informal / Day-to-Day: "PFL can raise, lower, or change the interest rates whenever they need to, and they'll let you know on their website."
 - For Hindi: Use highly conversational Hinglish/colloquial phrasing that people speak in real life. Completely avoid rigid, academic, or heavy Sanskritized words.
-  * Example of extremely informal translation:
-    - Formal: "कृपया ध्यान दें कि आपके ऋण आवेदन के संबंध में पूछताछ आपके सिबिल (CIBIL) क्रेडिट रिकॉर्ड में अपडेट कर दी गई है।"
-    - Extremely Informal / Day-to-Day: "हे, बस बताना था कि आपके लोन एप्लीकेशन की जानकारी आपके CIBIL रिकॉर्ड में अपडेट कर दी गई है।"
 - Under no circumstances should the translation sound stiff, legalistic, or machine-translated.`;
   } else if (tone === "Professional" || formality === "Formal" || formality === "Very Formal") {
     styleInstructions = `
@@ -156,28 +231,7 @@ const buildTranslationSystemPrompt = (targetLang, sourceLang, contextSettings, c
 - Translate standardly, keeping the original style, structure, and level of formality of the source text.`;
   }
 
-  let languageSpecificInstructions = "";
-  if (isHindi) {
-    languageSpecificInstructions = `
-- Since the target language is Hindi, you MUST write the output strictly in the Devanagari script. Do NOT use Perso-Arabic (Urdu) characters under any circumstances.
-- Always place a space after the Hindi purna-viram ('।') full stop when starting a new sentence (e.g. 'है। हमारी' -> 'है। हमारी').
-- HINDI LEGAL & BANKING GENDER AGREEMENT: Ensure perfect grammatical gender and possessive agreement for common banking words in Hindi:
-  * 'अस्वीकृति' (dishonour/rejection) is FEMININE. You MUST use feminine possessive/adjectives with it (e.g., write 'भुगतान निर्देशों की अस्वीकृति', NOT 'भुगतान निर्देशों का अस्वीकृति').
-  * 'सहमति' (consent) is FEMININE (e.g., 'आपकी सहमति').
-  * 'सहमति पत्र' (consent letter) is MASCULINE (e.g., 'आपका सहमति पत्र').
-  * 'मांग' (demand) is FEMININE (e.g., 'मांग की जाएगी').
-  * 'अवधि' (period/tenure) is FEMININE (e.g., 'ऋण की अवधि').
-  * 'अधिकार' (right) is MASCULINE (e.g., 'लेंडर का अधिकार').
-  * 'निर्देश' / 'निर्देशों' / 'अनुदेश' (instructions) is MASCULINE (e.g., 'भुगतान निर्देशों का पालन').
-- HINDI LEGAL TERMINOLOGY GLOSSARY:
-  * 'unattested' -> translate as 'गैर-हस्ताक्षरित' (do NOT write 'बिना हस्ताक्षरित').
-  * 'legal heirs, executors and administrators' -> translate as 'कानूनी उत्तराधिकारी, निष्पादक और प्रशासक'.
-  * 'loan-cum-pledge agreement' -> translate as 'ऋण-सह-गिरवी समझौता'.
-  * 'repayment mode/mandate' -> translate as 'पुनर्भुगतान मोड/जनादेश' or 'पुनर्भुगतान मोड/आदेश'.
-  * 'undertakes' / 'undertaking' -> translate as 'वचन देता है' or 'वचनबद्ध है' / 'वचनबद्धता' (do NOT leave as English 'undertaking' in Hindi).
-  * 'governing' -> translate as 'नियंत्रित करने वाला'.
-  * 'sanctioned details' -> translate as 'अनुमोदित विवरण'.`;
-  }
+  const targetSpecificRules = getTargetSpecificTranslationRules(targetLang, sourceLang, contextSettings);
 
   const baseInstructions = `You are an expert human localizer and professional translator. You translate text from ${sourceName} to ${targetName}.
 Your goal is to produce translations that read as if they were originally written by a native speaker of ${targetName}, rather than a machine.
@@ -185,7 +239,9 @@ Your goal is to produce translations that read as if they were originally writte
 CRITICAL STYLE DIRECTIVES:
 - IGNORE the original text's tone/formality if it is formal. YOU MUST OVERRIDE the style to perfectly match the requested Tone (${tone}) and Formality (${formality}).
 ${styleInstructions}
-${languageSpecificInstructions}
+
+TARGET LANGUAGE & DOMAIN RULES (STRICT):
+${targetSpecificRules}
 
 - Custom instructions, Jira context, or user feedback (if provided) always take absolute precedence over the default style instructions. If the user requests a change in tone, formality, style, or specific wording via custom instructions/description, you MUST follow those instructions fully.
 - DO NOT leave standard English words (such as 'belonging', 'tackling', 'fellow travelers', 'stakeholders', 'champions') untranslated or transliterated verbatim in the target sentence, unless they are proper brand names (e.g. 'Tripadvisor', 'Viator') or technical codes. Translate them into correct, natural, standard terms of the target language.
@@ -467,6 +523,7 @@ const getProviderStatus = () => ({
   }
 
   const baseSystemPrompt = buildTranslationSystemPrompt(targetLang, sourceLang, contextSettings, contextJira, contextDescription);
+  const targetSpecificRules = getTargetSpecificTranslationRules(targetLang, sourceLang, contextSettings);
 
   const jsonFormattingInstructions = `\n\nCRITICAL OUTPUT FORMATTING: You are a pure translation engine. You MUST ONLY output valid JSON. Your response must be a JSON object containing a single key "translation" containing the translated string. Output a JSON object like this:
 {
@@ -561,7 +618,58 @@ DIRECTIVES FOR USING CONTEXT:
     if (!parsed || typeof parsed.translation !== "string") {
       throw new Error("Invalid response format from OpenAI");
     }
-    const rawTranslation = parsed.translation.trim();
+    let rawTranslation = parsed.translation.trim();
+
+    // ── Pass 2: Self-Correction Proofreading Loop ──
+    const proofreadSysPrompt = `You are an expert translation editor and quality assurance proofreader.
+Your task is to review the candidate translation and output a corrected, refined final translation that is highly accurate and fluent in ${targetLangName}.
+
+TARGET LANGUAGE & DOMAIN RULES (STRICT):
+${targetSpecificRules}
+
+Specifically proofread for:
+1. Omissions: Ensure that no boilerplate clauses or legal details (such as lists of heirs, administrators, executors, or key details) were omitted. If something is missing, restore it.
+2. Terminology: Correct any literal or generic translations of industry terms (e.g. ensure 'Drawing Power' remains 'ड्राइंग पावर/आहरण सीमा', 'invocation' remains 'प्रवर्तन', and 'actuals' remains 'वास्तविक लागत').
+3. Preservation: Ensure that no alphabetic list indicators or acronyms were translated.
+
+Output your final translation inside a JSON object with a single "translation" key:
+{
+  "translation": "your_refined_translation_here"
+}`;
+
+    const proofreadUserPrompt = `Source Segment: "${protectedSource}"
+Candidate Translation: "${rawTranslation}"
+
+SLIDING WINDOW LOCAL TRANSLATION CONTEXT:
+${prevSource ? `- Previous Source: "${prevSource}"` : ""}
+${prevTarget ? `- Previous Translation: "${prevTarget}"` : ""}
+${nextSource ? `- Next Source: "${nextSource}"` : ""}
+${nextTarget ? `- Next Translation: "${nextTarget}"` : ""}`;
+
+    const proofreadPayload = {
+      model: OPENAI_MODEL,
+      messages: [
+        { role: "system", content: proofreadSysPrompt },
+        { role: "user", content: proofreadUserPrompt }
+      ],
+      temperature: 0.0,
+      response_format: { type: "json_object" }
+    };
+
+    const proofreadResponse = await axios.post("https://api.openai.com/v1/chat/completions", proofreadPayload, {
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      timeout: 120000
+    });
+
+    const proofreadContent = proofreadResponse.data?.choices?.[0]?.message?.content;
+    const proofreadParsed = JSON.parse(proofreadContent);
+    if (proofreadParsed && typeof proofreadParsed.translation === "string") {
+      rawTranslation = proofreadParsed.translation.trim();
+    }
+
     // Restore protected HTML tags
     return restoreProtectedTags(rawTranslation, tags);
   } catch (error) {

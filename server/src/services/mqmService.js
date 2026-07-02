@@ -94,7 +94,32 @@ ${matches.map(m => `  * Source term: "${m.source}" -> Approved Target term: "${m
 };
 
 // ── Pass 1 Error Detection Prompt ────────────────────────────────────
-const getPass1SystemPrompt = (targetLangName, sourceLangName, targetSpecificRules, glossaryRules, visualRules) => {
+const getGlobalContextStr = (globalReport, segmentIndex) => {
+  if (!globalReport || segmentIndex === null) return "";
+
+  const majorErrorsForSeg = (globalReport.majorErrors || []).filter(e => e.segmentIndex === segmentIndex);
+  const inconsistenciesForSeg = (globalReport.inconsistencies || []).filter(inc =>
+    inc.variants.some(v => v.segmentIndex === segmentIndex)
+  );
+
+  let majorErrorsPrompt = "";
+  if (majorErrorsForSeg.length > 0) {
+    majorErrorsPrompt = "\n- POTENTIAL MAJOR/CRITICAL ERRORS FOUND IN GLOBAL SCAN FOR THIS SEGMENT (RE-VERIFICATION REQUIRED):\n  Re-verify each of these potential errors. If they are genuine, confirm them. If they are false positives, do NOT flag them.\n" +
+      majorErrorsForSeg.map(e => "  * Span \"" + e.span + "\" -> Correction \"" + e.correction + "\". Reason: " + e.comment).join("\n") + "\n";
+  }
+
+  let inconsistenciesPrompt = "";
+  if (inconsistenciesForSeg.length > 0) {
+    inconsistenciesPrompt = "\n- POTENTIAL TERMINOLOGY INCONSISTENCIES FOR THIS SEGMENT:\n  The global scan detected inconsistent translation of terms. Check if the translation in this segment uses an incorrect variant. If so, flag it as a 'terminology' error and suggest the recommended translation.\n" +
+      inconsistenciesForSeg.map(inc => "  * Source term: \"" + inc.sourceTerm + "\" (Recommended translation: \"" + inc.recommendedTranslation + "\")\n    Offending variants/segments:\n" +
+        inc.variants.map(v => "      - Segment " + v.segmentIndex + ": \"" + v.targetTranslation + "\"").join("\n")).join("\n") + "\n";
+  }
+
+  return "\n- GLOBAL DOCUMENT CONTEXT:\n  * Domain: " + (globalReport.detectedDomain || "General") + "\n  * Tone/Formality: " + (globalReport.detectedToneFormality || "Neutral") + "\n" + majorErrorsPrompt + inconsistenciesPrompt;
+};
+
+const getPass1SystemPrompt = (targetLangName, sourceLangName, targetSpecificRules, glossaryRules, visualRules, globalReport = null, segmentIndex = null) => {
+  const globalContextStr = getGlobalContextStr(globalReport, segmentIndex);
   return `You are an expert translation quality auditor specialized in the MQM (Multidimensional Quality Metrics) framework.
 Your task is to analyze the translation of a text segment and detect errors.
 
@@ -147,6 +172,7 @@ TARGET-SPECIFIC LOCALIZATION & GRAMMAR RULES (CRITICAL):
 ${targetSpecificRules}
 ${glossaryRules}
 ${visualRules}
+${globalContextStr}
 
 SLIDING WINDOW LOCAL CONTEXT & COHERENCE DIRECTIVE (CRITICAL):
 - You are provided with a sliding window of local context (Previous Segment and Next Segment sources/translations) in the user prompt.
@@ -162,17 +188,20 @@ Target Language: ${targetLangName} (from ${sourceLangName})`;
 };
 
 // ── Pass 2 & 3 Prompts for Verification ──────────────────────────────
-const getPass2SystemPrompt = (targetLangName, sourceLangName, targetSpecificRules = "") => {
+const getPass2SystemPrompt = (targetLangName, sourceLangName, targetSpecificRules = "", globalReport = null, segmentIndex = null) => {
+  const globalContextStr = getGlobalContextStr(globalReport, segmentIndex);
   return `You are a professional translator and proofreader.
 Your task is to take a translation, review the flagged errors, and output a single, corrected version of the translation text (post-edited text) that fixes all valid flagged errors. Keep the rest of the translation unchanged. Do not introduce new errors.
 
 TARGET-SPECIFIC LOCALIZATION & GRAMMAR RULES (CRITICAL):
 ${targetSpecificRules}
+${globalContextStr}
 
 Target Language: ${targetLangName} (from ${sourceLangName})`;
 };
 
-const getPass3SystemPrompt = (targetLangName, sourceLangName, targetSpecificRules = "") => {
+const getPass3SystemPrompt = (targetLangName, sourceLangName, targetSpecificRules = "", globalReport = null, segmentIndex = null) => {
+  const globalContextStr = getGlobalContextStr(globalReport, segmentIndex);
   return `You are a translation quality assurance judge.
 You will be shown:
 1. The original source text.
@@ -188,6 +217,7 @@ Reject rules (very important):
 - Reject corrections that introduce colloquial or generic wording in place of legally precise translations (e.g. "संघर्ष की सीमा तक" is legally accurate and should NOT be replaced with generic "संघर्ष के मामले में").
 - Reject corrections that attempt to literally translate established banking/financial terms (e.g., "Drawing Power" must remain "ड्राइंग पावर" or "आहरण सीमा", reject any change to "उपयोग की शक्ति"; "actuals" must remain "वास्तविक लागत/व्यय", reject any change to "वास्तविक मूल्य").
 - Reject grammatical nits or verb form changes that are actually correct when read in continuation with the previous segment.
+${globalContextStr}
 
 Output "accept" if it was a genuine error that is correctly fixed.
 Output "reject" if the original translation was correct, acceptable, or preferred.
@@ -355,7 +385,9 @@ const evaluateTranslationMQM = async ({
   glossaryVersion = "v1",
   onCriticalEscalate = null,
   screenshotBuffer = null,
-  screenshotMimeType = null
+  screenshotMimeType = null,
+  globalReport = null,
+  segmentIndex = null
 }) => {
   if (!OPENAI_API_KEY) {
     return {
@@ -368,25 +400,8 @@ const evaluateTranslationMQM = async ({
     };
   }
 
-  // 1. Caching Check
+  // 1. Caching Check (Bypassed database caching to force fresh evaluation every time)
   const hash = calculateMqmHash(sourceText, translatedText, glossaryVersion, MQM_PROMPT_VERSION);
-  if (documentId) {
-    try {
-      const { data: cachedSegs } = await supabase
-        .from("document_segments")
-        .select("mqm_accuracy_score, mqm_report")
-        .eq("document_id", documentId)
-        .not("mqm_report", "is", null);
-      
-      const hit = cachedSegs?.find(s => s.mqm_report && s.mqm_report.hash === hash);
-      if (hit) {
-        console.log(`[MQM Cache] Hit cached evaluation for: "${sourceText.substring(0, 35)}..."`);
-        return hit.mqm_report;
-      }
-    } catch (e) {
-      console.warn("[MQM Cache Check] Error checking Supabase MQM cache:", e.message);
-    }
-  }
 
   const sourceLangName = getLangName(sourceLang);
   const targetLangName = getLangName(targetLang);
@@ -408,7 +423,7 @@ const evaluateTranslationMQM = async ({
 
   try {
     // ── Pass 1: Error Detection ──
-    const pass1Sys = getPass1SystemPrompt(targetLangName, sourceLangName, targetSpecificRules, glossaryRules, visualRules);
+    const pass1Sys = getPass1SystemPrompt(targetLangName, sourceLangName, targetSpecificRules, glossaryRules, visualRules, globalReport, segmentIndex);
     const pass1User = `Source Segment: "${sourceText}"
 Translated Segment: "${translatedText}"
 
@@ -493,7 +508,7 @@ ${nextTarget ? `- Next Translation: "${nextTarget}"` : ""}`;
       console.log(`[MQM Escalation] Running 3-Pass Self-Check for: "${sourceText.substring(0, 35)}..." (isFullAudit: ${isFullAudit}, hasCritical: ${hasCritical})`);
       
       // Pass 2: Post-Edited Clean String
-      const pass2Sys = getPass2SystemPrompt(targetLangName, sourceLangName, targetSpecificRules);
+      const pass2Sys = getPass2SystemPrompt(targetLangName, sourceLangName, targetSpecificRules, globalReport, segmentIndex);
       const pass2User = `Source Segment: "${sourceText}"
 Original Translation: "${translatedText}"
 Flagged Errors:
@@ -518,7 +533,7 @@ Please output the corrected version of the translation text (postEditedText) fix
       const postEditedText = pass2Result.postEditedText || translatedText;
 
       // Pass 3: Verdict Comparison
-      const pass3Sys = getPass3SystemPrompt(targetLangName, sourceLangName, targetSpecificRules);
+      const pass3Sys = getPass3SystemPrompt(targetLangName, sourceLangName, targetSpecificRules, globalReport, segmentIndex);
       const pass3User = `Source Segment: "${sourceText}"
 Original Translation: "${translatedText}"
 Post-Edited Translation: "${postEditedText}"
@@ -601,7 +616,8 @@ const evaluateBatchPass1 = async ({
   segments,
   targetLang,
   sourceLang,
-  contextSettings
+  contextSettings,
+  globalReport = null
 }) => {
   const sourceLangName = getLangName(sourceLang);
   const targetLangName = getLangName(targetLang);
@@ -630,6 +646,31 @@ const evaluateBatchPass1 = async ({
 ${matchedEntries.map(m => `  * Source term: "${m.source}" -> Approved Target term: "${m.target}"`).join("\n")}
 `;
     }
+  }
+
+  let globalContextStr = "";
+  if (globalReport) {
+    const majorErrorsInBatch = (globalReport.majorErrors || []).filter(e => 
+      segments.some(seg => seg.segment_index === e.segmentIndex)
+    );
+    const inconsistenciesInBatch = (globalReport.inconsistencies || []).filter(inc =>
+      inc.variants.some(v => segments.some(seg => seg.segment_index === v.segmentIndex))
+    );
+
+    let majorErrorsPrompt = "";
+    if (majorErrorsInBatch.length > 0) {
+      majorErrorsPrompt = "\n- FLAGGED MAJOR/CRITICAL ERRORS IN THIS BATCH (RE-VERIFICATION REQUIRED):\n  The global scan detected these potential major/critical errors in this batch. Re-verify each of them carefully. If they are genuine, include them in the errors output. If they are false positives, do not output them.\n" +
+        majorErrorsInBatch.map(e => "  * Segment " + e.segmentIndex + ": Span \"" + e.span + "\" -> Correction \"" + e.correction + "\". Reason: " + e.comment).join("\n") + "\n";
+    }
+
+    let inconsistenciesPrompt = "";
+    if (inconsistenciesInBatch.length > 0) {
+      inconsistenciesPrompt = "\n- FLAGGED TERMINOLOGY INCONSISTENCIES:\n  The global scan detected inconsistent translation of terms across segments. If the segment has an incorrect variant, flag it as a 'terminology' error:\n" +
+        inconsistenciesInBatch.map(inc => "  * Source term: \"" + inc.sourceTerm + "\" (Recommended translation: \"" + inc.recommendedTranslation + "\")\n    Offending segments/variants:\n" +
+          inc.variants.map(v => "      - Segment " + v.segmentIndex + ": \"" + v.targetTranslation + "\"").join("\n")).join("\n") + "\n";
+    }
+
+    globalContextStr = "\n- GLOBAL DOCUMENT CONTEXT:\n  * Domain: " + (globalReport.detectedDomain || "General") + "\n  * Tone/Formality: " + (globalReport.detectedToneFormality || "Neutral") + "\n" + majorErrorsPrompt + inconsistenciesPrompt;
   }
 
   const sysPrompt = `You are an expert translation quality auditor specialized in the MQM (Multidimensional Quality Metrics) framework.
@@ -672,6 +713,7 @@ Errors: [
 TARGET-SPECIFIC LOCALIZATION & GRAMMAR RULES (CRITICAL):
 ${targetSpecificRules}
 ${glossaryRules}
+${globalContextStr}
 
 TECHNICAL MARKS & SYSTEM RULES:
 - Ignore system protected tags like "<5261>", "</5261>" or place-holders. Do NOT flag them.
@@ -733,12 +775,152 @@ Translation: "${seg.target_text || ""}"
  * Execute Document-wide MQM background audit.
  * Coordinates batch Pass 1 calls and concurrent worker pool (p-limit) for Phase 4 self-checks.
  */
+/**
+ * Phase 1: Global Document Context & Translation Inconsistency Scan
+ * Scans all segments of the document (chunked by source word count) to identify global context and inconsistencies.
+ */
+const scanDocumentGlobally = async (segments, targetLang, sourceLang, contextSettings) => {
+  const sourceLangName = getLangName(sourceLang);
+  const targetLangName = getLangName(targetLang);
+
+  // Group segments into chunks such that the total source word count of segments in a chunk does not exceed 1000 words.
+  const chunks = [];
+  let currentChunk = [];
+  let currentWordCount = 0;
+
+  for (const seg of segments) {
+    const wordCount = (seg.source_text || "").trim().split(/\s+/).filter(Boolean).length;
+    if (currentWordCount + wordCount > 1000 && currentChunk.length > 0) {
+      chunks.push(currentChunk);
+      currentChunk = [seg];
+      currentWordCount = wordCount;
+    } else {
+      currentChunk.push(seg);
+      currentWordCount += wordCount;
+    }
+  }
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk);
+  }
+
+  const sysPrompt = "You are a translation quality manager specialized in the MQM (Multidimensional Quality Metrics) framework.\n" +
+    "Your task is to analyze the source texts and translations of a document chunk to extract:\n" +
+    "1. The global domain context, overall tone, formality, and styling rules.\n" +
+    "2. All major, clear translation errors (such as critical mistranslations, major omissions, or obvious glossary violations) inside the chunk.\n" +
+    "3. Terminology inconsistencies (e.g. if the same source word/phrase is translated differently in different parts of the chunk).\n\n" +
+    "You must output a JSON object containing the global document profile.";
+
+  const globalScanSchema = {
+    name: "global_document_scan",
+    strict: true,
+    schema: {
+      type: "object",
+      properties: {
+        detectedDomain: { type: "string", description: "Brief description of the domain and topic of the document" },
+        detectedToneFormality: { type: "string", description: "The tone and formality level detected across the document" },
+        majorErrors: {
+          type: "array",
+          description: "List of major, clear translation errors identified in this chunk",
+          items: {
+            type: "object",
+            properties: {
+              segmentIndex: { type: "integer", description: "The 0-based segment index where this error occurs" },
+              span: { type: "string", description: "Exact offending word/phrase from the translation text" },
+              correction: { type: "string", description: "The recommended corrected translation" },
+              category: { type: "string", enum: ["accuracy", "fluency", "terminology", "style", "locale"] },
+              severity: { type: "string", enum: ["major", "critical"] },
+              comment: { type: "string", description: "Reason why this is a major/critical error" }
+            },
+            required: ["segmentIndex", "span", "correction", "category", "severity", "comment"],
+            additionalProperties: false
+          }
+        },
+        inconsistencies: {
+          type: "array",
+          description: "List of key terms or phrases that are translated inconsistently across segments",
+          items: {
+            type: "object",
+            properties: {
+              sourceTerm: { type: "string", description: "The term in the source language" },
+              variants: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    segmentIndex: { type: "integer", description: "The 0-based index of the segment containing this variant" },
+                    targetTranslation: { type: "string", description: "The translation of the term in this segment" }
+                  },
+                  required: ["segmentIndex", "targetTranslation"],
+                  additionalProperties: false
+                }
+              },
+              recommendedTranslation: { type: "string", description: "The recommended correct translation for this source term to maintain consistency" },
+              reasoning: { type: "string", description: "Why these variants are inconsistent or which one is correct/incorrect" }
+            },
+            required: ["sourceTerm", "variants", "recommendedTranslation", "reasoning"],
+            additionalProperties: false
+          }
+        }
+      },
+      required: ["detectedDomain", "detectedToneFormality", "majorErrors", "inconsistencies"],
+      additionalProperties: false
+    }
+  };
+
+  const mergedReport = {
+    detectedDomain: "",
+    detectedToneFormality: "",
+    majorErrors: [],
+    inconsistencies: []
+  };
+
+  const domainSamples = [];
+  const toneSamples = [];
+
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    console.log("[MQM Global Scan] Scanning chunk " + (i + 1) + "/" + chunks.length + " (" + chunk.length + " segments)...");
+
+    const segmentListStr = chunk.map(seg => "\nSegment Index: " + seg.segment_index + "\nSource: \"" + seg.source_text + "\"\nTranslation: \"" + (seg.target_text || "") + "\"").join("\n---\n");
+
+    const userPrompt = "Below are all the segments of this chunk:\n---\n" + segmentListStr + "\n---\nPlease perform a global quality review to find major errors, inconsistencies, and establish the document profile for this chunk.";
+
+    try {
+      const result = await callOpenAI(
+        [
+          { role: "system", content: sysPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        { type: "json_schema", json_schema: globalScanSchema }
+      );
+
+      if (result) {
+        if (result.detectedDomain) domainSamples.push(result.detectedDomain);
+        if (result.detectedToneFormality) toneSamples.push(result.detectedToneFormality);
+        if (Array.isArray(result.majorErrors)) {
+          mergedReport.majorErrors.push(...result.majorErrors);
+        }
+        if (Array.isArray(result.inconsistencies)) {
+          mergedReport.inconsistencies.push(...result.inconsistencies);
+        }
+      }
+    } catch (err) {
+      console.error("[MQM Global Scan] Failed to scan chunk " + (i + 1) + ":", err.message);
+    }
+  }
+
+  mergedReport.detectedDomain = domainSamples.length > 0 ? domainSamples[0] : "General";
+  mergedReport.detectedToneFormality = toneSamples.length > 0 ? toneSamples[0] : "Neutral";
+
+  return mergedReport;
+};
+
 const auditDocumentMQM = async (documentId, jobId, contextSettings = null) => {
   const { getIo } = require("./socket");
   const io = getIo();
 
   try {
-    console.log(`[Audit Job ${jobId}] Starting background audit...`);
+    console.log("[Audit Job " + jobId + "] Starting background audit...");
 
     const { data: doc, error: docErr } = await supabase
       .from("documents")
@@ -747,7 +929,7 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null) => {
       .single();
 
     if (docErr || !doc) {
-      throw new Error(`Document not found: ${documentId}`);
+      throw new Error("Document not found: " + documentId);
     }
 
     const { data: segments, error: fetchErr } = await supabase
@@ -760,8 +942,6 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null) => {
       throw new Error("No segments found to audit.");
     }
 
-
-
     // Set job initial metrics
     await supabase
       .from("audit_jobs")
@@ -773,6 +953,16 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null) => {
         updated_at: new Date().toISOString()
       })
       .eq("id", jobId);
+
+    // Phase 1: Run Global Document-Wide Scan (Chunked by Word Count)
+    console.log("[Audit Job " + jobId + "] Running Phase 1: Global document-wide scan...");
+    const globalReport = await scanDocumentGlobally(
+      segments,
+      doc.target_lang,
+      doc.source_lang,
+      contextSettings
+    );
+    console.log("[Audit Job " + jobId + "] Phase 1 complete. Detected domain: \"" + globalReport.detectedDomain + "\", tone: \"" + globalReport.detectedToneFormality + "\", major errors: " + globalReport.majorErrors.length + ", inconsistencies: " + globalReport.inconsistencies.length);
 
     // Group segments by batches of 8 for Pass 1 detection calls
     const batchSize = 8;
@@ -787,7 +977,7 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null) => {
       errorsMapBySegment[seg.segment_index] = [];
     });
 
-    console.log(`[Audit Job ${jobId}] Running Pass 1 Batch error detection in parallel...`);
+    console.log("[Audit Job " + jobId + "] Running Pass 1 Batch error detection in parallel...");
     const batchLimit = pLimit(5); // concurrency limit for batch calls
 
     await Promise.all(
@@ -809,7 +999,8 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null) => {
               segments: batch,
               targetLang: doc.target_lang,
               sourceLang: doc.source_lang,
-              targetSpecificRules
+              contextSettings,
+              globalReport
             });
 
             for (const err of rawErrors) {
@@ -819,7 +1010,7 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null) => {
               }
             }
           } catch (err) {
-            console.error(`[Audit Job ${jobId}] Batch error detection failed for range.`, err.message);
+            console.error("[Audit Job " + jobId + "] Batch error detection failed for range.", err.message);
             // We'll fallback to running individual Pass 1 on these segments in next phase
             batch.forEach(seg => {
               seg.needsIndividualPass1 = true;
@@ -837,20 +1028,17 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null) => {
       .single();
 
     if (currentJobStatus?.status === "cancelled") {
-      console.log(`[Audit Job ${jobId}] Cancelled before detailed checks.`);
+      console.log("[Audit Job " + jobId + "] Cancelled before detailed checks.");
       return;
     }
 
-    console.log(`[Audit Job ${jobId}] Running detailed Phase 4 verification on segments with errors...`);
+    console.log("[Audit Job " + jobId + "] Running detailed Phase 2 verification on segments...");
     const limit = pLimit(10);
     let completedCount = 0;
     let failedCount = 0;
 
-    // Local duplication cache map to avoid evaluating identical translation pairs twice
-    const evaluatedCacheMap = new Map();
-
     const processSegment = async (seg) => {
-      // 1. Check cancellation loop
+      // Check cancellation loop
       const { data: job } = await supabase
         .from("audit_jobs")
         .select("status")
@@ -861,28 +1049,22 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null) => {
         return;
       }
 
-      // Check local cache
-      const cacheKey = `${seg.source_text}|||${seg.target_text || ""}`;
-      if (evaluatedCacheMap.has(cacheKey)) {
-        const cachedReport = evaluatedCacheMap.get(cacheKey);
-        await saveSegmentAuditResult(doc.id, seg, cachedReport, io);
-        completedCount++;
-        await updateHeartbeat(jobId, completedCount, failedCount);
-        return;
-      }
-
       const prevSegment = segments.find(s => s.segment_index === seg.segment_index - 1);
       const nextSegment = segments.find(s => s.segment_index === seg.segment_index + 1);
 
       const pass1Errors = errorsMapBySegment[seg.segment_index] || [];
       const hasErrors = pass1Errors.length > 0;
-      const needsFullAudit = hasErrors || seg.needsIndividualPass1;
+      
+      const hasGlobalErrors = (globalReport?.majorErrors || []).some(e => e.segmentIndex === seg.segment_index) ||
+                              (globalReport?.inconsistencies || []).some(inc => inc.variants.some(v => v.segmentIndex === seg.segment_index));
+      
+      const needsFullAudit = hasErrors || seg.needsIndividualPass1 || hasGlobalErrors;
 
       try {
         let mqmReport = null;
 
         if (!needsFullAudit) {
-          // No errors detected in Batch Pass 1, save instantly as clean
+          // No errors detected in Batch Pass 1 or Global scan, save instantly as clean
           const wordCount = Math.max(1, seg.source_text.trim().split(/\s+/).filter(Boolean).length);
           const hash = calculateMqmHash(seg.source_text, seg.target_text || "", "v1", MQM_PROMPT_VERSION);
           
@@ -896,7 +1078,7 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null) => {
             schemaVersion: MQM_SCHEMA_VERSION
           };
         } else {
-          // Run full 3-Pass evaluation pipeline
+          // Run full 3-Pass evaluation pipeline with global context
           mqmReport = await evaluateTranslationMQM({
             sourceText: seg.source_text,
             translatedText: seg.target_text || "",
@@ -910,22 +1092,21 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null) => {
             nextSource: nextSegment?.source_text,
             nextTarget: nextSegment?.target_text,
             isFullAudit: true,
-            documentId: doc.id
+            documentId: doc.id,
+            globalReport,
+            segmentIndex: seg.segment_index
           });
         }
 
         if (mqmReport.evaluationFailed) {
           failedCount++;
-        } else {
-          // Cache successful result locally for identical translations
-          evaluatedCacheMap.set(cacheKey, mqmReport);
         }
 
         await saveSegmentAuditResult(doc.id, seg, mqmReport, io);
         completedCount++;
 
       } catch (err) {
-        console.error(`[Audit Job ${jobId}] Failed segment index ${seg.segment_index}:`, err.message);
+        console.error("[Audit Job " + jobId + "] Failed segment index " + seg.segment_index + ":", err.message);
         failedCount++;
       }
 
@@ -1088,5 +1269,7 @@ module.exports = {
   computeSegmentMQMScore,
   computeDocumentMQMScore,
   evaluateTranslationMQM,
-  auditDocumentMQM
+  auditDocumentMQM,
+  scanDocumentGlobally,
+  evaluateBatchPass1
 };
