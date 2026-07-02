@@ -94,24 +94,37 @@ ${matches.map(m => `  * Source term: "${m.source}" -> Approved Target term: "${m
 };
 
 // ── Pass 1 Error Detection Prompt ────────────────────────────────────
-const getGlobalContextStr = (globalReport, segmentIndex) => {
-  if (!globalReport || segmentIndex === null) return "";
+const getGlobalContextStr = (globalReport, segmentIndices = null) => {
+  if (!globalReport) return "";
 
-  const majorErrorsForSeg = (globalReport.majorErrors || []).filter(e => e.segmentIndex === segmentIndex);
-  const inconsistenciesForSeg = (globalReport.inconsistencies || []).filter(inc =>
-    inc.variants.some(v => v.segmentIndex === segmentIndex)
-  );
+  let majorErrorsForBatch = [];
+  let inconsistenciesForBatch = [];
+
+  if (Array.isArray(segmentIndices)) {
+    majorErrorsForBatch = (globalReport.majorErrors || []).filter(e => segmentIndices.includes(e.segmentIndex));
+    inconsistenciesForBatch = (globalReport.inconsistencies || []).filter(inc =>
+      inc.variants.some(v => segmentIndices.includes(v.segmentIndex))
+    );
+  } else if (typeof segmentIndices === "number") {
+    majorErrorsForBatch = (globalReport.majorErrors || []).filter(e => e.segmentIndex === segmentIndices);
+    inconsistenciesForBatch = (globalReport.inconsistencies || []).filter(inc =>
+      inc.variants.some(v => v.segmentIndex === segmentIndices)
+    );
+  } else {
+    majorErrorsForBatch = globalReport.majorErrors || [];
+    inconsistenciesForBatch = globalReport.inconsistencies || [];
+  }
 
   let majorErrorsPrompt = "";
-  if (majorErrorsForSeg.length > 0) {
-    majorErrorsPrompt = "\n- POTENTIAL MAJOR/CRITICAL ERRORS FOUND IN GLOBAL SCAN FOR THIS SEGMENT (RE-VERIFICATION REQUIRED):\n  Re-verify each of these potential errors. If they are genuine, confirm them. If they are false positives, do NOT flag them.\n" +
-      majorErrorsForSeg.map(e => "  * Span \"" + e.span + "\" -> Correction \"" + e.correction + "\". Reason: " + e.comment).join("\n") + "\n";
+  if (majorErrorsForBatch.length > 0) {
+    majorErrorsPrompt = "\n- POTENTIAL MAJOR/CRITICAL ERRORS FOUND IN GLOBAL SCAN FOR THIS BATCH (RE-VERIFICATION REQUIRED):\n  Re-verify each of these potential errors. If they are genuine, confirm them. If they are false positives, do NOT flag them.\n" +
+      majorErrorsForBatch.map(e => "  * Segment " + e.segmentIndex + ": Span \"" + e.span + "\" -> Correction \"" + e.correction + "\". Reason: " + e.comment).join("\n") + "\n";
   }
 
   let inconsistenciesPrompt = "";
-  if (inconsistenciesForSeg.length > 0) {
-    inconsistenciesPrompt = "\n- POTENTIAL TERMINOLOGY INCONSISTENCIES FOR THIS SEGMENT:\n  The global scan detected inconsistent translation of terms. Check if the translation in this segment uses an incorrect variant. If so, flag it as a 'terminology' error and suggest the recommended translation.\n" +
-      inconsistenciesForSeg.map(inc => "  * Source term: \"" + inc.sourceTerm + "\" (Recommended translation: \"" + inc.recommendedTranslation + "\")\n    Offending variants/segments:\n" +
+  if (inconsistenciesForBatch.length > 0) {
+    inconsistenciesPrompt = "\n- POTENTIAL TERMINOLOGY INCONSISTENCIES FOR THIS BATCH:\n  The global scan detected inconsistent translation of terms. Check if the translation in this batch uses an incorrect variant. If so, flag it as a 'terminology' error and suggest the recommended translation.\n" +
+      inconsistenciesForBatch.map(inc => "  * Source term: \"" + inc.sourceTerm + "\" (Recommended translation: \"" + inc.recommendedTranslation + "\")\n    Offending variants/segments:\n" +
         inc.variants.map(v => "      - Segment " + v.segmentIndex + ": \"" + v.targetTranslation + "\"").join("\n")).join("\n") + "\n";
   }
 
@@ -477,9 +490,19 @@ Do not rewrite the entire translation.
 Only report verified MQM issues.`;
 };
 
-const getPass2SystemPrompt = (targetLangName, sourceLangName, targetSpecificRules = "", globalReport = null, segmentIndex = null) => {
-  const globalContextStr = getGlobalContextStr(globalReport, segmentIndex);
+const getPass2SystemPrompt = (targetLangName, sourceLangName, targetSpecificRules = "", globalReport = null, segmentIndices = null) => {
+  const globalContextStr = getGlobalContextStr(globalReport, segmentIndices);
   return `You are a professional localization post-editor.
+
+Your task is to produce a corrected version of the target translations for a batch of segments by applying the provided MQM error corrections.
+
+Your objective is MINIMAL EDITING.
+
+Do NOT improve the translation.
+Do NOT rewrite the sentence.
+Do NOT retranslate the source.
+
+Only correct the verified errors.
 
 Your task is to produce a corrected version of the target translation by applying the provided MQM error corrections.
 
@@ -673,22 +696,26 @@ ${globalContextStr}
 OUTPUT
 --------------------------------------------------
 
-Return ONLY the final corrected translation.
+Return corrections list with correctedText matching the segmentIndex.
 
 Do NOT explain the changes.
 
 Do NOT include notes.
 
-Do NOT include markdown.
-
-Do NOT return the original translation.
-
-Return exactly one corrected translation.`;
+Do NOT include markdown.`;
 };
 
-const getPass3SystemPrompt = (targetLangName, sourceLangName, targetSpecificRules = "", globalReport = null, segmentIndex = null) => {
-  const globalContextStr = getGlobalContextStr(globalReport, segmentIndex);
+const getPass3SystemPrompt = (targetLangName, sourceLangName, targetSpecificRules = "", globalReport = null, segmentIndices = null) => {
+  const globalContextStr = getGlobalContextStr(globalReport, segmentIndices);
   return `You are an independent Translation Quality Assurance Judge.
+
+Your role is NOT to find new translation errors.
+
+Your role is ONLY to evaluate whether each flagged MQM issue in a batch of segments represents a genuine translation error that was correctly fixed in the post-edited translation.
+
+Your objective is HIGH PRECISION.
+
+If you are uncertain, reject the correction.
 
 Your role is NOT to find new translation errors.
 
@@ -1064,6 +1091,57 @@ const verdictsSchema = {
     additionalProperties: false
   }
 };
+
+const batchPostEditSchema = {
+  name: "batch_post_edits",
+  strict: true,
+  schema: {
+    type: "object",
+    properties: {
+      corrections: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            segmentIndex: { type: "integer", description: "The segment index matching the segment_index of the input segments" },
+            correctedText: { type: "string", description: "The final corrected translation text for this segment" }
+          },
+          required: ["segmentIndex", "correctedText"],
+          additionalProperties: false
+        }
+      }
+    },
+    required: ["corrections"],
+    additionalProperties: false
+  }
+};
+
+const batchVerdictsSchema = {
+  name: "batch_verdicts",
+  strict: true,
+  schema: {
+    type: "object",
+    properties: {
+      verdicts: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            segmentIndex: { type: "integer", description: "The segment index matching the segment_index of the input segments" },
+            span: { type: "string", description: "The span corresponding to the error being evaluated" },
+            rationale: { type: "string", description: "Step-by-step comparison and justification for accepting or rejecting the error" },
+            verdict: { type: "string", enum: ["accept", "reject"], description: "Whether the flagged error is genuine (accept) or false positive noise (reject)" }
+          },
+          required: ["segmentIndex", "span", "rationale", "verdict"],
+          additionalProperties: false
+        }
+      }
+    },
+    required: ["verdicts"],
+    additionalProperties: false
+  }
+};
+
 
 // ── OpenAI Calling Helper with 1 retry ───────────────────────────────
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -1615,6 +1693,96 @@ Translation: "${seg.target_text || ""}"
   }
 };
 
+const evaluateBatchPass2 = async ({
+  batch,
+  detectedErrors,
+  targetLang,
+  sourceLang,
+  contextSettings,
+  globalReport = null
+}) => {
+  const sourceLangName = getLangName(sourceLang);
+  const targetLangName = getLangName(targetLang);
+  const targetSpecificRules = getTargetSpecificRules(targetLang, sourceLang, contextSettings);
+
+  const segmentIndices = batch.map(seg => seg.segment_index);
+  const pass2Sys = getPass2SystemPrompt(targetLangName, sourceLangName, targetSpecificRules, globalReport, segmentIndices);
+
+  const pass2User = `Segments Batch:
+${batch.map(seg => `Segment Index: ${seg.segment_index}
+Source: "${seg.source_text}"
+Original Translation: "${seg.target_text || ""}"`).join("\n---\n")}
+
+Flagged Errors:
+${JSON.stringify(detectedErrors, null, 2)}
+
+Please output the corrected version of the translation text (correctedText) for each segment index that has flagged errors. Keep unchanged segments exactly as is.`;
+
+  try {
+    const result = await callOpenAI(
+      [
+        { role: "system", content: pass2Sys },
+        { role: "user", content: pass2User }
+      ],
+      { type: "json_schema", json_schema: batchPostEditSchema }
+    );
+    return result.corrections || [];
+  } catch (err) {
+    console.error("[MQM Batch Pass 2 Failed]", err.message);
+    throw err;
+  }
+};
+
+const evaluateBatchPass3 = async ({
+  batch,
+  corrections,
+  detectedErrors,
+  targetLang,
+  sourceLang,
+  contextSettings,
+  globalReport = null
+}) => {
+  const sourceLangName = getLangName(sourceLang);
+  const targetLangName = getLangName(targetLang);
+  const targetSpecificRules = getTargetSpecificRules(targetLang, sourceLang, contextSettings);
+
+  const segmentIndices = batch.map(seg => seg.segment_index);
+  const pass3Sys = getPass3SystemPrompt(targetLangName, sourceLangName, targetSpecificRules, globalReport, segmentIndices);
+
+  const correctionsMap = {};
+  for (const c of corrections) {
+    correctionsMap[c.segmentIndex] = c.correctedText;
+  }
+
+  const pass3User = `Segments Batch:
+${batch.map(seg => {
+    const postEdit = correctionsMap[seg.segment_index] || seg.target_text || "";
+    return `Segment Index: ${seg.segment_index}
+Source: "${seg.source_text}"
+Original Translation: "${seg.target_text || ""}"
+Post-Edited Translation: "${postEdit}"`;
+  }).join("\n---\n")}
+
+Flagged Errors:
+${JSON.stringify(detectedErrors, null, 2)}
+
+For each flagged error, evaluate whether the error is genuine (accept) or false positive noise (reject).`;
+
+  try {
+    const result = await callOpenAI(
+      [
+        { role: "system", content: pass3Sys },
+        { role: "user", content: pass3User }
+      ],
+      { type: "json_schema", json_schema: batchVerdictsSchema }
+    );
+    return result.verdicts || [];
+  } catch (err) {
+    console.error("[MQM Batch Pass 3 Failed]", err.message);
+    throw err;
+  }
+};
+
 /**
  * Execute Document-wide MQM background audit.
  * Coordinates batch Pass 1 calls and concurrent worker pool (p-limit) for Phase 4 self-checks.
@@ -1808,26 +1976,36 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null) => {
     );
     console.log("[Audit Job " + jobId + "] Phase 1 complete. Detected domain: \"" + globalReport.detectedDomain + "\", tone: \"" + globalReport.detectedToneFormality + "\", major errors: " + globalReport.majorErrors.length + ", inconsistencies: " + globalReport.inconsistencies.length);
 
-    // Group segments by batches of 8 for Pass 1 detection calls
-    const batchSize = 8;
+    // Group segments into batches chunked by source word count (max 1000 words per batch)
     const segmentBatches = [];
-    for (let i = 0; i < segments.length; i += batchSize) {
-      segmentBatches.push(segments.slice(i, i + batchSize));
+    let currentBatch = [];
+    let currentWords = 0;
+    for (const seg of segments) {
+      const words = (seg.source_text || "").trim().split(/\s+/).filter(Boolean).length;
+      if (currentWords + words > 1000 && currentBatch.length > 0) {
+        segmentBatches.push(currentBatch);
+        currentBatch = [seg];
+        currentWords = words;
+      } else {
+        currentBatch.push(seg);
+        currentWords += words;
+      }
+    }
+    if (currentBatch.length > 0) {
+      segmentBatches.push(currentBatch);
     }
 
-    const targetSpecificRules = getTargetSpecificRules(doc.target_lang, doc.source_lang);
-    const errorsMapBySegment = {};
-    segments.forEach(seg => {
-      errorsMapBySegment[seg.segment_index] = [];
-    });
+    console.log("[Audit Job " + jobId + "] Running 3-Pass Batch Pipeline on " + segmentBatches.length + " word-count chunked batches...");
+    let completedCount = 0;
+    let failedCount = 0;
 
-    console.log("[Audit Job " + jobId + "] Running Pass 1 Batch error detection in parallel...");
-    const batchLimit = pLimit(2); // concurrency limit for batch calls (reduced to avoid rate limits)
+    // Use concurrency limit of 1 to perfectly throttle TPM limit spikes
+    const batchLimit = pLimit(1);
 
     await Promise.all(
       segmentBatches.map(batch =>
         batchLimit(async () => {
-          // Check cancellation
+          // Check cancellation before processing batch
           const { data: currentJob } = await supabase
             .from("audit_jobs")
             .select("status")
@@ -1839,6 +2017,7 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null) => {
           }
 
           try {
+            // ── Pass 1: Batch Error Detection ──
             const rawErrors = await evaluateBatchPass1({
               segments: batch,
               targetLang: doc.target_lang,
@@ -1847,133 +2026,105 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null) => {
               globalReport
             });
 
-            for (const err of rawErrors) {
-              const segIdx = err.segmentIndex;
-              if (errorsMapBySegment[segIdx]) {
-                errorsMapBySegment[segIdx].push(err);
-              }
-            }
-          } catch (err) {
-            console.error("[Audit Job " + jobId + "] Batch error detection failed for range.", err.message);
-            // We'll fallback to running individual Pass 1 on these segments in next phase
-            batch.forEach(seg => {
-              seg.needsIndividualPass1 = true;
+            // Sanitize spans to make sure they exist in the actual target translations
+            let detectedErrors = (rawErrors || []).filter(err => {
+              const seg = batch.find(s => s.segment_index === err.segmentIndex);
+              if (!seg) return false;
+              const targetText = seg.target_text || "";
+              return targetText.toLowerCase().includes(String(err.span).toLowerCase());
             });
+
+            let finalErrors = detectedErrors;
+
+            if (detectedErrors.length > 0) {
+              // ── Pass 2: Batch Post-Editing ──
+              const corrections = await evaluateBatchPass2({
+                batch,
+                detectedErrors,
+                targetLang: doc.target_lang,
+                sourceLang: doc.source_lang,
+                contextSettings,
+                globalReport
+              });
+
+              // ── Pass 3: Batch Verdict QA Judging ──
+              const verdicts = await evaluateBatchPass3({
+                batch,
+                corrections,
+                detectedErrors,
+                targetLang: doc.target_lang,
+                sourceLang: doc.source_lang,
+                contextSettings,
+                globalReport
+              });
+
+              // Filter accepted errors based on verdicts
+              finalErrors = detectedErrors.filter(err => {
+                const matchingVerdict = verdicts.find(v =>
+                  v.segmentIndex === err.segmentIndex &&
+                  String(v.span).toLowerCase() === String(err.span).toLowerCase()
+                );
+                const accepted = matchingVerdict ? matchingVerdict.verdict === "accept" : true;
+                if (!accepted) {
+                  console.log("[MQM Self-Check] Rejected false-positive error in Segment #" + err.segmentIndex + ": \"" + err.span + "\" (Rationale: " + (matchingVerdict?.rationale || "None") + ")");
+                }
+                return accepted;
+              });
+            }
+
+            // Save results for all segments in the batch
+            for (const seg of batch) {
+              const segErrors = finalErrors.filter(e => e.segmentIndex === seg.segment_index);
+              const wordCount = Math.max(1, seg.source_text.trim().split(/\s+/).filter(Boolean).length);
+              const accuracyScore = computeSegmentMQMScore(segErrors, wordCount);
+              const hash = calculateMqmHash(seg.source_text, seg.target_text || "", "v1", MQM_PROMPT_VERSION);
+
+              const mqmReport = {
+                accuracyScore,
+                errors: segErrors.map(e => ({
+                  category: e.category,
+                  severity: e.severity,
+                  snippet: e.span,
+                  correction: e.correction || "",
+                  explanation: e.comment || ""
+                })),
+                clarifyingQuestions: [],
+                improvementSuggestion: segErrors.length > 0
+                  ? "ISSUES DETECTED BY MQM AUDIT:\n" + segErrors.map(e =>
+                    "[" + e.severity + "] " + e.category + "\n" + (e.comment || "") + "\n- Replace:\n\"" + e.span + "\"\n+ With:\n\"" + (e.correction || "") + "\""
+                  ).join("\n\n")
+                  : "",
+                hash,
+                promptVersion: MQM_PROMPT_VERSION,
+                schemaVersion: MQM_SCHEMA_VERSION
+              };
+
+              await saveSegmentAuditResult(doc.id, seg, mqmReport, io);
+              completedCount++;
+            }
+
+          } catch (err) {
+            console.error("[MQM Batch Evaluation Failed] error: " + err.message);
+            for (const seg of batch) {
+              // Mark segments in failed batch as failed
+              const wordCount = Math.max(1, seg.source_text.trim().split(/\s+/).filter(Boolean).length);
+              const hash = calculateMqmHash(seg.source_text, seg.target_text || "", "v1", MQM_PROMPT_VERSION);
+              const failedReport = {
+                evaluationFailed: true,
+                accuracyScore: 100,
+                errors: [],
+                clarifyingQuestions: [],
+                improvementSuggestion: "",
+                hash,
+                promptVersion: MQM_PROMPT_VERSION,
+                schemaVersion: MQM_SCHEMA_VERSION
+              };
+              await saveSegmentAuditResult(doc.id, seg, failedReport, io);
+              failedCount++;
+            }
           }
-        })
-      )
-    );
 
-    // Check cancellation before phase 2
-    const { data: currentJobStatus } = await supabase
-      .from("audit_jobs")
-      .select("status")
-      .eq("id", jobId)
-      .single();
-
-    if (currentJobStatus?.status === "cancelled") {
-      console.log("[Audit Job " + jobId + "] Cancelled before detailed checks.");
-      return;
-    }
-
-    console.log("[Audit Job " + jobId + "] Running detailed Phase 2 verification on segments...");
-    const limit = pLimit(2); // concurrency limit (reduced to avoid rate limits)
-    let completedCount = 0;
-    let failedCount = 0;
-
-    const processSegment = async (seg) => {
-      // Check cancellation loop
-      const { data: job } = await supabase
-        .from("audit_jobs")
-        .select("status")
-        .eq("id", jobId)
-        .single();
-
-      if (job?.status === "cancelled") {
-        return;
-      }
-
-      const prevSegment = segments.find(s => s.segment_index === seg.segment_index - 1);
-      const nextSegment = segments.find(s => s.segment_index === seg.segment_index + 1);
-
-      const pass1Errors = errorsMapBySegment[seg.segment_index] || [];
-      const hasErrors = pass1Errors.length > 0;
-
-      const hasGlobalErrors = (globalReport?.majorErrors || []).some(e => e.segmentIndex === seg.segment_index) ||
-        (globalReport?.inconsistencies || []).some(inc => inc.variants.some(v => v.segmentIndex === seg.segment_index));
-
-      const needsFullAudit = hasErrors || seg.needsIndividualPass1 || hasGlobalErrors;
-
-      try {
-        let mqmReport = null;
-
-        if (!needsFullAudit) {
-          // No errors detected in Batch Pass 1 or Global scan, save instantly as clean
-          const wordCount = Math.max(1, seg.source_text.trim().split(/\s+/).filter(Boolean).length);
-          const hash = calculateMqmHash(seg.source_text, seg.target_text || "", "v1", MQM_PROMPT_VERSION);
-
-          mqmReport = {
-            accuracyScore: 100,
-            errors: [],
-            clarifyingQuestions: [],
-            improvementSuggestion: "",
-            hash,
-            promptVersion: MQM_PROMPT_VERSION,
-            schemaVersion: MQM_SCHEMA_VERSION
-          };
-        } else {
-          // Run full 3-Pass evaluation pipeline with global context
-          mqmReport = await evaluateTranslationMQM({
-            sourceText: seg.source_text,
-            translatedText: seg.target_text || "",
-            targetLang: doc.target_lang,
-            sourceLang: doc.source_lang,
-            contextJira: seg.context_jira || "",
-            contextDescription: seg.context_description || "",
-            contextSettings: contextSettings,
-            prevSource: prevSegment?.source_text,
-            prevTarget: prevSegment?.target_text,
-            nextSource: nextSegment?.source_text,
-            nextTarget: nextSegment?.target_text,
-            isFullAudit: true,
-            documentId: doc.id,
-            globalReport,
-            segmentIndex: seg.segment_index
-          });
-        }
-
-        if (mqmReport.evaluationFailed) {
-          failedCount++;
-        }
-
-        await saveSegmentAuditResult(doc.id, seg, mqmReport, io);
-        completedCount++;
-
-      } catch (err) {
-        console.error("[Audit Job " + jobId + "] Failed segment index " + seg.segment_index + ":", err.message);
-        failedCount++;
-      }
-
-      await updateHeartbeat(jobId, completedCount, failedCount);
-    };
-
-    let fullAuditIndex = 0;
-    await Promise.all(
-      segments.map(seg =>
-        limit(async () => {
-          const pass1Errors = errorsMapBySegment[seg.segment_index] || [];
-          const hasErrors = pass1Errors.length > 0;
-          const hasGlobalErrors = (globalReport?.majorErrors || []).some(e => e.segmentIndex === seg.segment_index) ||
-            (globalReport?.inconsistencies || []).some(inc => inc.variants.some(v => v.segmentIndex === seg.segment_index));
-          const needsFullAudit = hasErrors || seg.needsIndividualPass1 || hasGlobalErrors;
-
-          if (needsFullAudit) {
-            // Stagger full audits by 800ms per segment to distribute TPM consumption evenly
-            const delay = fullAuditIndex * 800;
-            fullAuditIndex++;
-            await sleep(delay);
-          }
-          await processSegment(seg);
+          await updateHeartbeat(jobId, completedCount, failedCount);
         })
       )
     );

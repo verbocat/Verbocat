@@ -5,9 +5,6 @@ const mqmService = require("../src/services/mqmService");
 async function runGlobalScanTest() {
   console.log("Running MQM Global Scan and Chunking Verification Tests...");
 
-  // Mock segments with intentional errors
-  // - Segment 3 has a gender agreement typo ("अपना सहमति") and transliterated acronym ("एनआरआई")
-  // - Segment 4 has a critical legal mistranslation: "Borrower" translated as "ऋणदाता" (Lender)
   const segments = [
     {
       segment_index: 0,
@@ -49,40 +46,47 @@ async function runGlobalScanTest() {
     const report = await mqmService.scanDocumentGlobally(segments, targetLang, sourceLang, contextSettings);
     console.log("Global Scan Report:", JSON.stringify(report, null, 2));
 
-    console.log("\n--- Phase 2: Running Segment Audit with Global Context ---");
-    // Audit Segment 4 (Borrower -> Lender mistranslation)
-    const seg4 = segments[4];
-    const seg4Mqm = await mqmService.evaluateTranslationMQM({
-      sourceText: seg4.source_text,
-      translatedText: seg4.target_text,
+    console.log("\n--- Phase 2: Running 3-Pass Batch Pipeline on Segments ---");
+    
+    // Pass 1: Batch detection
+    console.log("Calling evaluateBatchPass1...");
+    const rawErrors = await mqmService.evaluateBatchPass1({
+      segments,
       targetLang,
       sourceLang,
-      contextJira: "Global Scan Test Case",
-      contextDescription: "Consent must be translated as सहमति पत्र. Acronym NRI must be Latin.",
       contextSettings,
-      isFullAudit: true,
-      globalReport: report,
-      segmentIndex: 4
+      globalReport: report
     });
+    console.log("Detected Errors:", JSON.stringify(rawErrors, null, 2));
 
-    console.log("Segment 4 Audit Result:", JSON.stringify(seg4Mqm, null, 2));
+    if (rawErrors.length > 0) {
+      // Pass 2: Batch Post-Editing
+      console.log("\nCalling evaluateBatchPass2...");
+      const corrections = await mqmService.evaluateBatchPass2({
+        batch: segments,
+        detectedErrors: rawErrors,
+        targetLang,
+        sourceLang,
+        contextSettings,
+        globalReport: report
+      });
+      console.log("Post-Edited Corrections:", JSON.stringify(corrections, null, 2));
 
-    // Audit Segment 3 (Consent & NRI issues)
-    const seg3 = segments[3];
-    const seg3Mqm = await mqmService.evaluateTranslationMQM({
-      sourceText: seg3.source_text,
-      translatedText: seg3.target_text,
-      targetLang,
-      sourceLang,
-      contextJira: "Global Scan Test Case",
-      contextDescription: "Consent must be translated as सहमति पत्र. Acronym NRI must be Latin.",
-      contextSettings,
-      isFullAudit: true,
-      globalReport: report,
-      segmentIndex: 3
-    });
-
-    console.log("Segment 3 Audit Result:", JSON.stringify(seg3Mqm, null, 2));
+      // Pass 3: Batch Verdict QA Judging
+      console.log("\nCalling evaluateBatchPass3...");
+      const verdicts = await mqmService.evaluateBatchPass3({
+        batch: segments,
+        corrections,
+        detectedErrors: rawErrors,
+        targetLang,
+        sourceLang,
+        contextSettings,
+        globalReport: report
+      });
+      console.log("Judge Verdicts:", JSON.stringify(verdicts, null, 2));
+    } else {
+      console.log("No errors detected in Pass 1.");
+    }
 
   } catch (err) {
     console.error("Test execution failed:", err);
