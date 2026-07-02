@@ -942,7 +942,9 @@ const verdictsSchema = {
 };
 
 // ── OpenAI Calling Helper with 1 retry ───────────────────────────────
-const callOpenAI = async (messages, responseFormat, retries = 1) => {
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const callOpenAI = async (messages, responseFormat, retries = 4, attempt = 1) => {
   if (!OPENAI_API_KEY) {
     throw new Error("Missing OpenAI API Key");
   }
@@ -960,15 +962,25 @@ const callOpenAI = async (messages, responseFormat, retries = 1) => {
           Authorization: `Bearer ${OPENAI_API_KEY}`,
           "Content-Type": "application/json"
         },
-        timeout: 45000
+        timeout: 60000
       }
     );
     const content = response.data?.choices?.[0]?.message?.content;
     return JSON.parse(content);
   } catch (err) {
-    if (retries > 0) {
-      console.warn(`[MQM OpenAI API Call] Failed, retrying once... Error: ${err.message}`);
-      return callOpenAI(messages, responseFormat, retries - 1);
+    const isRateLimit = err.response?.status === 429;
+    const isNetworkError = !err.response || err.code === "ECONNRESET" || err.code === "ETIMEDOUT";
+
+    if (retries > 0 && (isRateLimit || isNetworkError || err.response?.status >= 500)) {
+      // Exponential backoff: attempt 1 -> 2s, attempt 2 -> 4s, attempt 3 -> 8s, attempt 4 -> 16s
+      // Plus a random jitter of up to 1 second to avoid synchronization spikes
+      const baseDelay = Math.pow(2, attempt) * 1000;
+      const jitter = Math.random() * 1000;
+      const delay = baseDelay + jitter;
+
+      console.warn(`[MQM OpenAI API Call] Failed with status ${err.response?.status || err.code} on attempt ${attempt}. Retrying in ${Math.round(delay)}ms... Error: ${err.message}`);
+      await sleep(delay);
+      return callOpenAI(messages, responseFormat, retries - 1, attempt + 1);
     }
     throw err;
   }
@@ -1647,7 +1659,7 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null) => {
     });
 
     console.log("[Audit Job " + jobId + "] Running Pass 1 Batch error detection in parallel...");
-    const batchLimit = pLimit(5); // concurrency limit for batch calls
+    const batchLimit = pLimit(2); // concurrency limit for batch calls (reduced to avoid rate limits)
 
     await Promise.all(
       segmentBatches.map(batch =>
@@ -1702,7 +1714,7 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null) => {
     }
 
     console.log("[Audit Job " + jobId + "] Running detailed Phase 2 verification on segments...");
-    const limit = pLimit(10);
+    const limit = pLimit(2); // concurrency limit (reduced to avoid rate limits)
     let completedCount = 0;
     let failedCount = 0;
 
