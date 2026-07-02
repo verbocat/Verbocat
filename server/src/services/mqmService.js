@@ -1068,10 +1068,38 @@ const verdictsSchema = {
 // ── OpenAI Calling Helper with 1 retry ───────────────────────────────
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Global throttling parameters to guarantee stay within 30k TPM limits
+let lastCallTime = 0;
+const GLOBAL_COOLDOWN_MS = 2500; // 2.5 seconds minimum between any OpenAI requests
+
+const parseRetryAfter = (errorMessage) => {
+  if (!errorMessage) return null;
+  const match = errorMessage.match(/try again in ([0-9.]+)(ms|s|m)/i);
+  if (match) {
+    const value = parseFloat(match[1]);
+    const unit = match[2].toLowerCase();
+    if (unit === "ms") return value;
+    if (unit === "s") return value * 1000;
+    if (unit === "m") return value * 60 * 1000;
+  }
+  return null;
+};
+
 const callOpenAI = async (messages, responseFormat, retries = 6, attempt = 1) => {
   if (!OPENAI_API_KEY) {
     throw new Error("Missing OpenAI API Key");
   }
+
+  // Enforce global throttle/cooldown using projected execution time
+  const now = Date.now();
+  let targetTime = lastCallTime === 0 ? now : Math.max(now, lastCallTime + GLOBAL_COOLDOWN_MS);
+  lastCallTime = targetTime;
+
+  const sleepTime = targetTime - now;
+  if (sleepTime > 0) {
+    await sleep(sleepTime);
+  }
+
   try {
     const response = await axios.post(
       "https://api.openai.com/v1/chat/completions",
@@ -1096,11 +1124,22 @@ const callOpenAI = async (messages, responseFormat, retries = 6, attempt = 1) =>
     const isNetworkError = !err.response || err.code === "ECONNRESET" || err.code === "ETIMEDOUT";
 
     if (retries > 0 && (isRateLimit || isNetworkError || err.response?.status >= 500)) {
-      // Exponential backoff: attempt 1 -> 3s, attempt 2 -> 6s, attempt 3 -> 12s, attempt 4 -> 24s...
-      // Plus a random jitter of up to 1 second
-      const baseDelay = Math.pow(2, attempt) * 1500;
-      const jitter = Math.random() * 1000;
-      const delay = baseDelay + jitter;
+      let delay = 0;
+      if (isRateLimit) {
+        const errorMsg = err.response?.data?.error?.message || err.message || "";
+        const parsedDelay = parseRetryAfter(errorMsg);
+        if (parsedDelay !== null) {
+          delay = parsedDelay + 1500; // Add 1.5s buffer to reset window safely
+          console.warn(`[MQM OpenAI API Call] Rate limit parsed from error. Sleeping for ${Math.round(delay)}ms... Error: ${errorMsg}`);
+        }
+      }
+
+      if (delay === 0) {
+        // Fallback to exponential backoff
+        const baseDelay = Math.pow(2, attempt) * 2000;
+        const jitter = Math.random() * 1000;
+        delay = baseDelay + jitter;
+      }
 
       console.warn(`[MQM OpenAI API Call] Failed with status ${err.response?.status || err.code} on attempt ${attempt}. Retrying in ${Math.round(delay)}ms... Error: ${err.message}`);
       await sleep(delay);
