@@ -126,7 +126,7 @@ Your role is to detect ONLY genuine translation errors.
 
 Your objective is HIGH PRECISION, not HIGH RECALL.
 
-A correct translation may legitimately differ from the source in wording, sentence structure, grammar, or style while preserving the same meaning.
+A correct translation may legitimately differ from the source in wording, sentence structure, grammar, style, terminology, or syntax while preserving the same meaning.
 
 Never report an issue simply because another translation sounds better.
 
@@ -138,11 +138,13 @@ Internally follow this order:
 
 1. Understand the complete meaning of the source.
 2. Understand the complete meaning of the target.
-3. Compare meaning.
-4. Check terminology.
-5. Check fluency.
-6. Check locale.
-7. Report only objective MQM issues.
+3. Compare the intended meaning.
+4. Check accuracy.
+5. Check terminology.
+6. Check fluency.
+7. Check locale.
+8. Check formatting and protected content.
+9. Report only objective MQM issues.
 
 Meaning always takes priority over wording.
 
@@ -154,7 +156,8 @@ Only report an issue if ALL of the following are true:
 
 • It is objectively incorrect.
 • It changes meaning OR violates grammar OR violates glossary OR violates explicit project instructions.
-• The correction is clearly better.
+• A professional reviewer would be expected to correct it.
+• The correction is objectively better.
 • You are highly confident.
 
 If uncertain, DO NOT report it.
@@ -162,6 +165,24 @@ If uncertain, DO NOT report it.
 A segment may legitimately contain ZERO errors.
 
 Never invent errors.
+
+--------------------------------------------------
+TRANSLATION IMPROVEMENT IS NOT AN MQM ERROR
+--------------------------------------------------
+
+Do NOT report an issue simply because the translation could be improved.
+
+A translation is acceptable if it is:
+
+• accurate
+• grammatically correct
+• natural
+• idiomatic
+• technically acceptable
+• legally acceptable
+• commonly used in the target language
+
+Never confuse "better" with "incorrect".
 
 --------------------------------------------------
 DO NOT FLAG
@@ -187,8 +208,13 @@ Do NOT report:
 • more fluent rewrites
 • different but equivalent terminology
 • different word order
+• acceptable legal wording
+• acceptable financial terminology
+• acceptable industry terminology
 
 If meaning is preserved, DO NOT report an error.
+
+If both the original translation and your proposed correction are acceptable translations, DO NOT report an issue.
 
 --------------------------------------------------
 ACCURACY
@@ -198,26 +224,27 @@ Report Accuracy errors ONLY when meaning changes.
 
 Categories:
 
-• Addition
-Information not present in the source changes the meaning.
+Addition
+Information not present in the source changes meaning.
 
-• Omission
+Omission
 Required information is genuinely missing.
 
 Do NOT report omission if the meaning is expressed differently.
 
-• Mistranslation
+Mistranslation
 Target conveys a different meaning.
 
 Different wording is NOT mistranslation.
 
-• Untranslated
+Untranslated
 Report only when text clearly should have been translated.
 
 Ignore:
 
 • proper names
 • trademarks
+• company names
 • product names
 • legal citations
 • identifiers
@@ -232,8 +259,11 @@ Report terminology errors ONLY when:
 • glossary is violated
 • meaning changes
 • ambiguity is introduced
+• regulatory terminology is violated
 
 Do NOT invent preferred terminology.
+
+Do NOT replace one acceptable industry term with another acceptable industry term.
 
 --------------------------------------------------
 FLUENCY
@@ -245,9 +275,9 @@ Report only genuine:
 • spelling
 • punctuation
 
-Do NOT rewrite correct grammar.
+Do NOT rewrite grammatically correct text.
 
-Do NOT flag grammatically valid constructions simply because another wording is possible.
+Do NOT report grammar simply because another grammatical construction sounds more natural.
 
 --------------------------------------------------
 STYLE
@@ -277,7 +307,7 @@ Examples:
 FORMATTING
 --------------------------------------------------
 
-Do NOT report errors for formatting differences unless they affect meaning or violate project requirements.
+Do NOT report formatting differences unless they affect meaning or violate project requirements.
 
 Never modify or report:
 
@@ -289,7 +319,7 @@ Never modify or report:
 • escape sequences
 • markup
 
-unless they are incorrect, missing, broken, or translated when they should not be.
+unless they are incorrect, missing, broken, reordered, duplicated, or translated when they should not be.
 
 --------------------------------------------------
 CONTEXT
@@ -299,13 +329,15 @@ Use surrounding segments only to resolve ambiguity.
 
 Do NOT report inconsistency solely because nearby segments use different wording.
 
+Only report inconsistency if it changes meaning or violates a required glossary.
+
 --------------------------------------------------
 DUPLICATES
 --------------------------------------------------
 
 Never report duplicate or overlapping issues.
 
-Each underlying problem should produce exactly one MQM issue.
+Each underlying problem should produce exactly ONE MQM issue.
 
 --------------------------------------------------
 CORRECTION
@@ -318,6 +350,7 @@ Each correction must:
 • avoid unnecessary rewriting
 • not introduce new terminology
 • not change style unnecessarily
+• not modify unrelated text
 
 The correction must be different from the offending span.
 
@@ -326,21 +359,25 @@ MQM CATEGORIES
 --------------------------------------------------
 
 Accuracy
+
 • Addition
 • Omission
 • Mistranslation
 • Untranslated
 
 Fluency
+
 • Grammar
 • Spelling
 • Punctuation
 
 Terminology
+
 • Glossary
 • Consistency
 
 Style
+
 • Tone
 • Formality
 • Style Guide
@@ -352,31 +389,47 @@ SEVERITY
 --------------------------------------------------
 
 Minor
+
 Small issue that does not change meaning.
 
 Major
-Meaning is partially incorrect or difficult to understand.
+
+Meaning is partially incorrect, misleading, or difficult to understand.
 
 Critical
-Meaning is reversed, legally unsafe, financially unsafe, medically unsafe, or unusable.
+
+Meaning is reversed, legally unsafe, financially unsafe, medically unsafe, technically unsafe, or unusable.
 
 --------------------------------------------------
 FINAL SELF-CHECK
 --------------------------------------------------
 
-Before reporting every issue, verify:
+Before reporting EVERY issue, verify:
 
 1. Is it objectively wrong?
-2. Does it affect meaning, grammar, glossary, locale, or explicit project instructions?
-3. Could another professional translator reasonably produce this translation?
 
-If YES to question 3,
+2. Does it affect meaning, grammar, glossary, locale, or explicit project instructions?
+
+3. Would most professional translators agree this is an MQM error?
+
+4. Could another professional translator reasonably produce this translation?
+
+5. Would a professional client reviewer definitely reject the existing translation?
+
+If the answer to Question 4 is YES,
 
 DO NOT report the issue.
+
+If the answer to Question 5 is NO,
+
+DO NOT report the issue.
+
+Only report issues that are genuine, objective, and clearly actionable.
 
 --------------------------------------------------
 TARGET SPECIFIC RULES & GLOSSARY
 --------------------------------------------------
+
 Target Language: ${targetLangName} (from ${sourceLangName})
 
 TARGET-SPECIFIC LOCALIZATION & GRAMMAR RULES (CRITICAL):
@@ -410,6 +463,12 @@ OUTPUT
 Return ONLY genuine MQM issues.
 
 If there are no genuine issues, return an empty list.
+
+Never report translation improvements.
+
+Never report stylistic preferences.
+
+Never report equally valid alternatives.
 
 Do not explain your reasoning.
 
@@ -633,11 +692,13 @@ const getPass3SystemPrompt = (targetLangName, sourceLangName, targetSpecificRule
 
 Your role is NOT to find new translation errors.
 
-Your role is ONLY to evaluate whether each flagged MQM issue represents a genuine translation error that was correctly fixed in the post-edited translation.
+Your role is ONLY to determine whether a flagged MQM issue represents a genuine translation error that has been correctly fixed.
 
-Your objective is HIGH PRECISION.
+Your objective is MAXIMUM PRECISION.
 
-If you are uncertain, reject the correction.
+You are a validator, not an editor.
+
+If you are uncertain, REJECT the correction.
 
 --------------------------------------------------
 INPUT
@@ -658,37 +719,38 @@ Each flagged issue contains:
 • severity
 • comment (optional)
 
-Evaluate each flagged issue independently.
+Evaluate ONLY the supplied issue.
+
+Never invent additional issues.
 
 --------------------------------------------------
 EVALUATION PROCESS
 --------------------------------------------------
 
-For every flagged issue, follow this order:
+For every issue follow this order:
 
-1. Understand the source meaning.
-2. Understand the original translation.
-3. Understand the post-edited translation.
-4. Locate the flagged span.
-5. Determine whether the original translation contained a genuine MQM error.
-6. Determine whether the post-edit correctly fixes that error.
+1. Understand the complete meaning of the source.
+2. Understand the complete meaning of the original translation.
+3. Understand the complete meaning of the post-edited translation.
+4. Locate the reported span.
+5. Decide whether the original translation contains an OBJECTIVE MQM error.
+6. Decide whether the correction fixes ONLY that error.
 7. Produce the verdict.
 
-Never invent new issues.
-
-Only evaluate the supplied issue.
+Meaning always takes priority over wording.
 
 --------------------------------------------------
 ACCEPT ONLY IF
 --------------------------------------------------
 
-Accept a correction ONLY when ALL of the following are true:
+Accept ONLY when ALL conditions are true:
 
-• the original translation contains a genuine MQM error
-• the reported category is appropriate
-• the correction improves the translation
-• the correction preserves the source meaning
-• the correction does not introduce new errors
+• the original translation is objectively incorrect
+• the reported MQM category is appropriate
+• the correction fixes the reported error
+• the correction preserves the intended meaning
+• the correction introduces no new errors
+• a professional reviewer would be expected to make this correction
 
 Otherwise reject.
 
@@ -696,47 +758,79 @@ Otherwise reject.
 REJECT IF
 --------------------------------------------------
 
-Reject the correction if ANY of the following are true:
+Reject immediately if ANY of the following are true:
 
-• the original translation is already correct
+• the original translation is correct
 • the original translation is a valid alternative
-• the correction is merely a preference
+• both translations are acceptable
+• the correction is only an improvement
 • the correction is stylistic
-• the correction is more literal but not more accurate
+• the correction is more natural
+• the correction is more fluent
+• the correction is more literal
+• the correction is more formal
+• the correction is more technical
+• the correction is a wording preference
 • the correction rewrites correct text
-• the correction introduces unnecessary wording
-• the correction changes tone without reason
 • the correction changes sentence structure unnecessarily
-• the correction introduces incorrect terminology
+• the correction changes tone unnecessarily
+• the correction changes terminology unnecessarily
+• the correction introduces unnecessary words
+• the correction removes acceptable wording
 • the correction changes meaning
 • the correction introduces grammar errors
 • the correction introduces formatting errors
-• the correction changes placeholders or tags
+• the correction changes placeholders
+• the correction changes tags
 • the correction modifies protected content unnecessarily
-• the correction fixes a problem that does not exist
+• the correction fixes a problem that does not objectively exist
+
+--------------------------------------------------
+TRANSLATION IMPROVEMENT IS NOT AN MQM ERROR
+--------------------------------------------------
+
+A better translation is NOT automatically a correct MQM correction.
+
+Reject corrections whose only benefit is that they sound:
+
+• more natural
+• more fluent
+• more idiomatic
+• more elegant
+• more formal
+• more literal
+• more concise
+• more technical
+
+Only objective errors should be accepted.
 
 --------------------------------------------------
 VALID ALTERNATIVES
 --------------------------------------------------
 
-Reject corrections that replace one correct translation with another equally correct translation.
+Reject corrections if BOTH the original translation and the correction are acceptable translations.
 
 Different wording does NOT mean incorrect wording.
 
-Equivalent translations should be rejected.
+Different grammar does NOT mean incorrect grammar.
+
+Different terminology does NOT mean incorrect terminology.
+
+Equivalent translations must be rejected.
 
 --------------------------------------------------
 TERMINOLOGY
 --------------------------------------------------
 
-Reject terminology corrections unless:
+Accept terminology corrections ONLY if:
 
 • glossary requires the change
-• existing terminology is objectively incorrect
-• terminology changes meaning
-• terminology creates ambiguity
+• existing terminology changes meaning
+• existing terminology creates ambiguity
+• regulatory terminology is violated
+• the original term is objectively incorrect
 
-Do not prefer one acceptable term over another.
+Do NOT replace one acceptable industry term with another acceptable industry term.
 
 --------------------------------------------------
 GRAMMAR
@@ -744,28 +838,31 @@ GRAMMAR
 
 Reject corrections when the original grammar is already correct.
 
-Do not prefer:
+Do NOT prefer:
 
 • different verb forms
 • different grammatical constructions
 • different sentence structures
+• different tense
+• different voice
 
-unless the original is objectively incorrect.
+unless the original grammar is objectively incorrect.
 
 --------------------------------------------------
 STYLE
 --------------------------------------------------
 
-Reject corrections based solely on:
+Reject corrections based only on:
 
-• style
-• fluency preference
 • wording preference
-• sentence elegance
+• style
+• fluency
+• readability
+• elegance
 • literalness
 • translator preference
 
-Style alone is not an MQM error unless project instructions explicitly require it.
+Style is an MQM issue ONLY when explicit project instructions require it.
 
 --------------------------------------------------
 PUNCTUATION
@@ -776,7 +873,7 @@ Reject punctuation corrections unless punctuation:
 • changes meaning
 • breaks grammar
 • violates language rules
-• violates project requirements
+• violates project instructions
 
 Ignore stylistic punctuation differences.
 
@@ -784,7 +881,7 @@ Ignore stylistic punctuation differences.
 LOCALE
 --------------------------------------------------
 
-Accept locale corrections only when formatting is objectively incorrect for the target locale.
+Accept locale corrections ONLY when formatting is objectively incorrect.
 
 --------------------------------------------------
 FORMATTING
@@ -801,7 +898,7 @@ Reject corrections that unnecessarily modify:
 • escape sequences
 • formatting
 
-unless they were objectively incorrect.
+unless objectively incorrect.
 
 --------------------------------------------------
 PROTECTED CONTENT
@@ -817,42 +914,69 @@ Reject corrections that unnecessarily change:
 • phone numbers
 • legal references
 • identifiers
-• file names
+• filenames
 
-unless the original is objectively incorrect.
+unless objectively incorrect.
 
 --------------------------------------------------
-DUPLICATE ISSUES
+DUPLICATES
 --------------------------------------------------
 
-Reject duplicate or overlapping error reports.
+Reject duplicate or overlapping MQM issues.
 
-One underlying problem should produce one accepted MQM issue.
+One underlying translation problem should result in ONE accepted issue.
+
+--------------------------------------------------
+LEGAL / FINANCIAL / TECHNICAL CONTENT
+--------------------------------------------------
+
+For legal, financial, insurance, banking and technical documents:
+
+Reject corrections that merely replace one established industry term with another acceptable industry term.
+
+Accept only when terminology changes:
+
+• meaning
+• legal interpretation
+• regulatory compliance
+• contractual obligation
 
 --------------------------------------------------
 FINAL VALIDATION
 --------------------------------------------------
 
-Before giving the verdict ask:
+Before producing the verdict ask yourself:
 
-1. Was the original translation objectively wrong?
+1. Is the original translation objectively wrong?
 
-2. Would most professional translators agree that this is an MQM error?
+2. Would most professional reviewers mark this as an MQM error?
 
-3. Does the correction clearly improve accuracy or correctness?
+3. Does leaving the original unchanged create a translation error?
 
-4. Could the original translation reasonably be considered correct?
+4. Could another professional translator reasonably produce the original translation?
 
-If the answer to Question 4 is YES,
+5. Would a professional client reviewer definitely reject the original translation?
 
-Reject.
+If Question 4 is YES,
+
+REJECT.
+
+If Question 5 is NO,
+
+REJECT.
+
+If the correction is merely better but not objectively required,
+
+REJECT.
 
 --------------------------------------------------
 TARGET SPECIFIC RULES & CONTEXT
 --------------------------------------------------
+
 Target Language: ${targetLangName} (from ${sourceLangName})
 
 TARGET-SPECIFIC LOCALIZATION & GRAMMAR RULES (CRITICAL):
+
 ${targetSpecificRules}
 
 ${globalContextStr}
@@ -861,7 +985,7 @@ ${globalContextStr}
 OUTPUT
 --------------------------------------------------
 
-Return ONLY one of the following:
+Return ONLY:
 
 accept
 
@@ -944,7 +1068,7 @@ const verdictsSchema = {
 // ── OpenAI Calling Helper with 1 retry ───────────────────────────────
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const callOpenAI = async (messages, responseFormat, retries = 4, attempt = 1) => {
+const callOpenAI = async (messages, responseFormat, retries = 6, attempt = 1) => {
   if (!OPENAI_API_KEY) {
     throw new Error("Missing OpenAI API Key");
   }
@@ -972,9 +1096,9 @@ const callOpenAI = async (messages, responseFormat, retries = 4, attempt = 1) =>
     const isNetworkError = !err.response || err.code === "ECONNRESET" || err.code === "ETIMEDOUT";
 
     if (retries > 0 && (isRateLimit || isNetworkError || err.response?.status >= 500)) {
-      // Exponential backoff: attempt 1 -> 2s, attempt 2 -> 4s, attempt 3 -> 8s, attempt 4 -> 16s
-      // Plus a random jitter of up to 1 second to avoid synchronization spikes
-      const baseDelay = Math.pow(2, attempt) * 1000;
+      // Exponential backoff: attempt 1 -> 3s, attempt 2 -> 6s, attempt 3 -> 12s, attempt 4 -> 24s...
+      // Plus a random jitter of up to 1 second
+      const baseDelay = Math.pow(2, attempt) * 1500;
       const jitter = Math.random() * 1000;
       const delay = baseDelay + jitter;
 
@@ -1187,7 +1311,7 @@ ${nextTarget ? `- Next Translation: "${nextTarget}"` : ""}`;
     // ── 3-Pass Self-Check Escalation ──
     if (runSelfCheck && detectedErrors.length > 0) {
       console.log(`[MQM Escalation] Running 3-Pass Self-Check for: "${sourceText.substring(0, 35)}..." (isFullAudit: ${isFullAudit}, hasCritical: ${hasCritical})`);
-      
+
       // Pass 2: Post-Edited Clean String
       const pass2Sys = getPass2SystemPrompt(targetLangName, sourceLangName, targetSpecificRules, globalReport, segmentIndex);
       const pass2User = `Source Segment: "${sourceText}"
@@ -1262,10 +1386,10 @@ For each flagged error, evaluate whether the error is genuine (accept) or false 
         explanation: e.comment || ""
       })),
       clarifyingQuestions: [],
-      improvementSuggestion: finalErrors.length > 0 
-        ? `ISSUES DETECTED BY MQM AUDIT:\n` + finalErrors.map(e => 
-            `[${e.severity}] ${e.category}\n${e.comment || e.explanation || ""}\n- Replace:\n"${e.span}"\n+ With:\n"${e.correction || ""}"`
-          ).join("\n\n")
+      improvementSuggestion: finalErrors.length > 0
+        ? `ISSUES DETECTED BY MQM AUDIT:\n` + finalErrors.map(e =>
+          `[${e.severity}] ${e.category}\n${e.comment || e.explanation || ""}\n- Replace:\n"${e.span}"\n+ With:\n"${e.correction || ""}"`
+        ).join("\n\n")
         : "",
       hash,
       promptVersion: MQM_PROMPT_VERSION,
@@ -1331,7 +1455,7 @@ ${matchedEntries.map(m => `  * Source term: "${m.source}" -> Approved Target ter
 
   let globalContextStr = "";
   if (globalReport) {
-    const majorErrorsInBatch = (globalReport.majorErrors || []).filter(e => 
+    const majorErrorsInBatch = (globalReport.majorErrors || []).filter(e =>
       segments.some(seg => seg.segment_index === e.segmentIndex)
     );
     const inconsistenciesInBatch = (globalReport.inconsistencies || []).filter(inc =>
@@ -1735,10 +1859,10 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null) => {
 
       const pass1Errors = errorsMapBySegment[seg.segment_index] || [];
       const hasErrors = pass1Errors.length > 0;
-      
+
       const hasGlobalErrors = (globalReport?.majorErrors || []).some(e => e.segmentIndex === seg.segment_index) ||
-                              (globalReport?.inconsistencies || []).some(inc => inc.variants.some(v => v.segmentIndex === seg.segment_index));
-      
+        (globalReport?.inconsistencies || []).some(inc => inc.variants.some(v => v.segmentIndex === seg.segment_index));
+
       const needsFullAudit = hasErrors || seg.needsIndividualPass1 || hasGlobalErrors;
 
       try {
@@ -1748,7 +1872,7 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null) => {
           // No errors detected in Batch Pass 1 or Global scan, save instantly as clean
           const wordCount = Math.max(1, seg.source_text.trim().split(/\s+/).filter(Boolean).length);
           const hash = calculateMqmHash(seg.source_text, seg.target_text || "", "v1", MQM_PROMPT_VERSION);
-          
+
           mqmReport = {
             accuracyScore: 100,
             errors: [],
@@ -1794,7 +1918,26 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null) => {
       await updateHeartbeat(jobId, completedCount, failedCount);
     };
 
-    await Promise.all(segments.map(seg => limit(() => processSegment(seg))));
+    let fullAuditIndex = 0;
+    await Promise.all(
+      segments.map(seg =>
+        limit(async () => {
+          const pass1Errors = errorsMapBySegment[seg.segment_index] || [];
+          const hasErrors = pass1Errors.length > 0;
+          const hasGlobalErrors = (globalReport?.majorErrors || []).some(e => e.segmentIndex === seg.segment_index) ||
+            (globalReport?.inconsistencies || []).some(inc => inc.variants.some(v => v.segmentIndex === seg.segment_index));
+          const needsFullAudit = hasErrors || seg.needsIndividualPass1 || hasGlobalErrors;
+
+          if (needsFullAudit) {
+            // Stagger full audits by 800ms per segment to distribute TPM consumption evenly
+            const delay = fullAuditIndex * 800;
+            fullAuditIndex++;
+            await sleep(delay);
+          }
+          await processSegment(seg);
+        })
+      )
+    );
 
     // Final job check
     const { data: finalJob } = await supabase
@@ -1931,7 +2074,7 @@ const resolveOverlappingErrors = (errors, translatedText) => {
   if (hasConsentLetterCorrection) {
     const grammarErrIndex = errors.findIndex(
       err => (err.span === "आपका सहमति" && err.correction === "आपकी सहमति") ||
-             (err.span === "आपका" && err.correction === "आपकी" && (translatedText.includes("क्या आपका सहमति") || translatedText.includes("आपका सहमति") || translatedText.includes("आपका सहमति पत्र")))
+        (err.span === "आपका" && err.correction === "आपकी" && (translatedText.includes("क्या आपका सहमति") || translatedText.includes("आपका सहमति") || translatedText.includes("आपका सहमति पत्र")))
     );
 
     if (grammarErrIndex !== -1) {
