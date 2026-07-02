@@ -123,6 +123,13 @@ const getPass1SystemPrompt = (targetLangName, sourceLangName, targetSpecificRule
   return `You are an expert translation quality auditor specialized in the MQM (Multidimensional Quality Metrics) framework.
 Your task is to analyze the translation of a text segment and detect errors.
 
+AUDITOR BEHAVIORAL DIRECTIVES (STRICT):
+- Be highly conservative. Do NOT flag stylistic preferences, valid alternative phrasings, or correct translations.
+- Subjunctive verb forms (such as 'किया जाए' in Hindi) are grammatically correct and natural in conditional contexts. Do NOT flag them as errors or try to over-correct them to indicative forms (like 'किया जाता है').
+- Verify word existence. Do NOT flag conjunctions (such as 'कि') or punctuation as missing if they are already present in the target translation.
+- Ensure the 'correction' is genuinely different from the offending 'span'. Never output identical text for both.
+- Do not output duplicate or overlapping error flags for the same word/phrase in the segment.
+
 MQM ERROR TAXONOMY (Core):
 - accuracy: Addition (extra words changing meaning), Omission (key information left out), Mistranslation (incorrect meaning), Untranslated (words left in source language).
 - fluency: Grammar (syntax, gender agreement, conjugation), Spelling (typos), Punctuation.
@@ -213,7 +220,12 @@ For each flagged error, compare the original translation with the post-edited tr
 Decide if the original text at that span had a genuine error that was correctly resolved in the post-edited translation.
 
 Reject rules (very important):
-- Reject any error flags that are false positive noise.
+- Reject any error flags that are false positive noise, style nits, or valid alternative translations. If the original translation is correct, natural, or standard, you MUST reject the correction.
+- Reject corrections that attempt to replace standard, natural terms (e.g., "पहला चार्ज" for "first charge") with less natural technical jargon (e.g., "प्राथमिक चार्ज").
+- Reject corrections that over-correct subjunctive verb moods (e.g. changing 'किया जाए' to 'किया जाता है'). Subjunctive is correct in conditional contexts.
+- Reject corrections that claim a conjunction/word (like 'कि') is missing when it is already clearly present in the translation text.
+- Reject any correction where the suggested correction is identical to the offending span.
+- Reject corrections that duplicate/repeat error flags for the same word in the same segment.
 - Reject corrections that introduce colloquial or generic wording in place of legally precise translations (e.g. "संघर्ष की सीमा तक" is legally accurate and should NOT be replaced with generic "संघर्ष के मामले में").
 - Reject corrections that attempt to literally translate established banking/financial terms (e.g., "Drawing Power" must remain "ड्राइंग पावर" or "आहरण सीमा", reject any change to "उपयोग की शक्ति"; "actuals" must remain "वास्तविक लागत/व्यय", reject any change to "वास्तविक मूल्य").
 - Reject grammatical nits or verb form changes that are actually correct when read in continuation with the previous segment.
@@ -338,6 +350,13 @@ const verifyAndSanitizeSpans = (errors, targetText) => {
     const span = String(err.span || "").trim();
     if (!span) continue;
 
+    // Filter out errors where span and correction are identical
+    const correction = String(err.correction || "").trim();
+    if (span.toLowerCase() === correction.toLowerCase()) {
+      console.log(`[MQM Filter] Discarded identical span and correction: "${span}"`);
+      continue;
+    }
+
     // 1. Verbatim case-insensitive substring check
     const idx = targetText.toLowerCase().indexOf(span.toLowerCase());
     if (idx !== -1) {
@@ -365,7 +384,19 @@ const verifyAndSanitizeSpans = (errors, targetText) => {
 
     console.log(`[MQM Filter] Discarded hallucinated error span (not found in target text): "${span}"`);
   }
-  return verified;
+
+  // Deduplicate errors targeting the exact same span, correction, and category
+  const seenErrors = new Set();
+  const uniqueErrors = [];
+  for (const err of verified) {
+    const key = `${err.span.toLowerCase()}|||${(err.correction || "").toLowerCase()}|||${err.category}`;
+    if (!seenErrors.has(key)) {
+      seenErrors.add(key);
+      uniqueErrors.push(err);
+    }
+  }
+
+  return uniqueErrors;
 };
 
 const evaluateTranslationMQM = async ({

@@ -141,7 +141,7 @@ const getTargetSpecificTranslationRules = (targetLang, sourceLang, contextSettin
   let languageSpecific = "";
   if (isHindi) {
     languageSpecific = `
-- Since the target language is Hindi, you MUST write the output strictly in the Devanagari script. Do NOT use Perso-Arabic (Urdu) characters under any circumstances.
+- Since the target language is Hindi, you MUST write the output strictly in the Devanagari script. Do NOT use Perso-Arabic (Urdu) characters or Urdu-only vocabulary under any circumstances. Every word must be standard Hindi written in Devanagari.
 - Always place a space after the Hindi purna-viram ('।') full stop when starting a new sentence (e.g. 'है। हमारी' -> 'है। हमारी').
 - HINDI GENDER AGREEMENT: Ensure perfect grammatical gender and possessive agreement for common banking words in Hindi:
   * 'अस्वीकृति' (dishonour/rejection) is FEMININE (e.g. 'भुगतान निर्देशों की अस्वीकृति', NOT 'भुगतान निर्देशों का अस्वीकृति').
@@ -235,6 +235,11 @@ const buildTranslationSystemPrompt = (targetLang, sourceLang, contextSettings, c
 
   const baseInstructions = `You are an expert human localizer and professional translator. You translate text from ${sourceName} to ${targetName}.
 Your goal is to produce translations that read as if they were originally written by a native speaker of ${targetName}, rather than a machine.
+
+CRITICAL LANGUAGE PURITY DIRECTIVES (SUPER STRICT):
+- You MUST translate the text ONLY into the target language (${targetName}).
+- Under no circumstances should you include words, characters, or script from any other language (for example, do NOT output Urdu/Arabic script or vocabulary when translating to Hindi).
+- The output translation must be written strictly and purely in the standard script and vocabulary native to ${targetName}. Do NOT mix scripts or languages, except for preserving system tags or approved uppercase English acronyms.
 
 CRITICAL STYLE DIRECTIVES:
 - IGNORE the original text's tone/formality if it is formal. YOU MUST OVERRIDE the style to perfectly match the requested Tone (${tone}) and Formality (${formality}).
@@ -397,6 +402,37 @@ const translateWithProviders = async (sourceTexts, protectedTexts, target, provi
 
 // Local definition removed — imported from tagProtection utility instead.
 
+const isScriptValidForLanguage = (text, targetLang) => {
+  const cleanLang = String(targetLang || "").toLowerCase();
+  
+  // 1. If target is Hindi, strictly forbid any Perso-Arabic characters
+  if (cleanLang.startsWith("hi")) {
+    if (/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text)) {
+      return false;
+    }
+  }
+
+  // 2. Multilingual Script Purity Rule:
+  // If target language is European or Latin-based (e.g. en, es, fr, de, it, pt),
+  // forbid any non-Latin scripts (like Arabic, Cyrillic, Devanagari, Han/Chinese, Japanese, Hangul)
+  const isLatinBased = /^(en|es|fr|de|it|pt|nl|sv|no|da|fi|pl)/.test(cleanLang);
+  if (isLatinBased) {
+    if (/[\u0900-\u097F\u0600-\u06FF\u0400-\u04FF\u4E00-\u9FFF]/.test(text)) {
+      return false;
+    }
+  }
+
+  // 3. Forbid other target language scripts from leaking into each other.
+  const isArabicBased = /^(ar|ur|fa|ps|sd)/.test(cleanLang);
+  if (!isArabicBased && /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(text)) {
+    if (/[\u0621-\u064A]/.test(text)) {
+      return false;
+    }
+  }
+
+  return true;
+};
+
 const translateChunk = async (texts, target, source = DEFAULT_SOURCE_LANG, providerState = createProviderState(), contextSettings = null) => {
   if (!target || !validateLang(target)) {
     throw new Error("Invalid or missing target language");
@@ -458,6 +494,12 @@ const translateChunk = async (texts, target, source = DEFAULT_SOURCE_LANG, provi
 
       let translated = translatedArray[j];
       let currentProvider = provider;
+
+      // Validate script purity to prevent foreign scripts/Urdu leakage
+      if (translated && !isScriptValidForLanguage(translated, target)) {
+        console.warn(`[Translation Validation Failed] Unsafe script detected in translation for target "${target}": "${translated}"`);
+        translated = null; // force fallback to source text
+      }
 
       if (!translated || translated.trim() === "" || currentProvider === "Fallback") {
         translated = text;
