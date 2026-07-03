@@ -90,6 +90,59 @@ const createProviderState = () => ({
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_MODEL = "gpt-4o-mini";
 
+const parseRetryAfter = (errorMessage) => {
+  if (!errorMessage) return null;
+  const match = errorMessage.match(/try again in ([0-9.]+)(ms|s|m)/i);
+  if (match) {
+    const value = parseFloat(match[1]);
+    const unit = match[2].toLowerCase();
+    if (unit === "ms") return value;
+    if (unit === "s") return value * 1000;
+    if (unit === "m") return value * 60 * 1000;
+  }
+  return null;
+};
+
+const callOpenAIWithRetry = async (payload, retries = 5, attempt = 1) => {
+  try {
+    const response = await axios.post("https://api.openai.com/v1/chat/completions", payload, {
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      timeout: 120000
+    });
+    return response;
+  } catch (err) {
+    const isRateLimit = err.response?.status === 429;
+    const isNetworkError = !err.response || err.code === "ECONNRESET" || err.code === "ETIMEDOUT";
+
+    if (retries > 0 && (isRateLimit || isNetworkError || err.response?.status >= 500)) {
+      let delay = 0;
+      if (isRateLimit) {
+        const errorMsg = err.response?.data?.error?.message || err.message || "";
+        const parsedDelay = parseRetryAfter(errorMsg);
+        if (parsedDelay !== null) {
+          delay = parsedDelay + 1500; // Add 1.5s buffer
+          console.warn(`[Translation OpenAI API Call] Rate limit parsed from error. Sleeping for ${Math.round(delay)}ms... Error: ${errorMsg}`);
+        }
+      }
+
+      if (delay === 0) {
+        // Fallback to exponential backoff
+        const baseDelay = Math.pow(2, attempt) * 2000;
+        const jitter = Math.random() * 1000;
+        delay = baseDelay + jitter;
+      }
+
+      console.warn(`[Translation OpenAI API Call] Failed with status ${err.response?.status || err.code} on attempt ${attempt}. Retrying in ${Math.round(delay)}ms... Error: ${err.message}`);
+      await sleep(delay);
+      return callOpenAIWithRetry(payload, retries - 1, attempt + 1);
+    }
+    throw err;
+  }
+};
+
 const getTargetSpecificTranslationRules = (targetLang, sourceLang, contextSettings = null) => {
   const getLangName = (code) => {
     try {
@@ -304,13 +357,7 @@ const translateWithOpenAI = async (protectedTexts, target, source = DEFAULT_SOUR
     response_format: { type: "json_object" }
   };
 
-  const response = await axios.post("https://api.openai.com/v1/chat/completions", payload, {
-    headers: {
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    timeout: 120000
-  });
+  const response = await callOpenAIWithRetry(payload);
 
   const content = response.data?.choices?.[0]?.message?.content;
   try {
@@ -646,13 +693,7 @@ DIRECTIVES FOR USING CONTEXT:
     response_format: { type: "json_object" }
   };
 
-  const response = await axios.post("https://api.openai.com/v1/chat/completions", payload, {
-    headers: {
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    timeout: 120000
-  });
+  const response = await callOpenAIWithRetry(payload);
 
   const content = response.data?.choices?.[0]?.message?.content;
   try {
@@ -698,13 +739,7 @@ ${nextTarget ? `- Next Translation: "${nextTarget}"` : ""}`;
       response_format: { type: "json_object" }
     };
 
-    const proofreadResponse = await axios.post("https://api.openai.com/v1/chat/completions", proofreadPayload, {
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      timeout: 120000
-    });
+    const proofreadResponse = await callOpenAIWithRetry(proofreadPayload);
 
     const proofreadContent = proofreadResponse.data?.choices?.[0]?.message?.content;
     const proofreadParsed = JSON.parse(proofreadContent);

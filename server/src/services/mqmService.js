@@ -1148,7 +1148,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Global throttling parameters to guarantee stay within 30k TPM limits
 let lastCallTime = 0;
-const GLOBAL_COOLDOWN_MS = 2500; // 2.5 seconds minimum between any OpenAI requests
+const GLOBAL_COOLDOWN_MS = 5000; // 5.0 seconds minimum between any OpenAI requests
 
 const parseRetryAfter = (errorMessage) => {
   if (!errorMessage) return null;
@@ -1200,6 +1200,10 @@ const callOpenAI = async (messages, responseFormat, retries = 6, attempt = 1) =>
   } catch (err) {
     const isRateLimit = err.response?.status === 429;
     const isNetworkError = !err.response || err.code === "ECONNRESET" || err.code === "ETIMEDOUT";
+
+    if (isRateLimit) {
+      console.error("[MQM OpenAI API Call 429 Error Details]:", JSON.stringify(err.response?.data || err.message));
+    }
 
     if (retries > 0 && (isRateLimit || isNetworkError || err.response?.status >= 500)) {
       let delay = 0;
@@ -1802,7 +1806,7 @@ const scanDocumentGlobally = async (segments, targetLang, sourceLang, contextSet
 
   for (const seg of segments) {
     const wordCount = (seg.source_text || "").trim().split(/\s+/).filter(Boolean).length;
-    if (currentWordCount + wordCount > 1000 && currentChunk.length > 0) {
+    if (currentWordCount + wordCount > 250 && currentChunk.length > 0) { // Reduced to 250 words for safer low-tier token limits
       chunks.push(currentChunk);
       currentChunk = [seg];
       currentWordCount = wordCount;
@@ -1982,7 +1986,7 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null) => {
     let currentWords = 0;
     for (const seg of segments) {
       const words = (seg.source_text || "").trim().split(/\s+/).filter(Boolean).length;
-      if (currentWords + words > 1000 && currentBatch.length > 0) {
+      if (currentWords + words > 400 && currentBatch.length > 0) {
         segmentBatches.push(currentBatch);
         currentBatch = [seg];
         currentWords = words;
