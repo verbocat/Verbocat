@@ -37,13 +37,16 @@ export const WorkspaceToolbar = ({
       <div className="action-row1">
 
         {/* New File — always prominent */}
-        <label className="ab ab-newfile" style={{ cursor: "pointer" }}>
-          <Plus style={{ width: 12, height: 12, flexShrink: 0 }} />
-          <span>New File</span>
-          <input type="file" onChange={onUpload} className="hidden" />
-        </label>
-
-        <div className="action-sep" />
+        {isOwner && (
+          <>
+            <label className="ab ab-newfile" style={{ cursor: "pointer" }}>
+              <Plus style={{ width: 12, height: 12, flexShrink: 0 }} />
+              <span>New File</span>
+              <input type="file" onChange={onUpload} className="hidden" />
+            </label>
+            <div className="action-sep" />
+          </>
+        )}
 
         {/* Auto-Translate */}
         <button
@@ -132,50 +135,52 @@ export const WorkspaceToolbar = ({
         </button>
 
         {/* Document dropdown */}
-        <div className="relative" ref={docMenuRef}>
-          <button onClick={() => setShowDocMenu(!showDocMenu)} className="ab">
-            <FileText style={{ width: 12, height: 12, flexShrink: 0 }} />
-            <span>Document</span>
-            <ChevronDown style={{ width: 10, height: 10, marginLeft: 1, flexShrink: 0 }} />
-          </button>
+        {isOwner && (
+          <div className="relative" ref={docMenuRef}>
+            <button onClick={() => setShowDocMenu(!showDocMenu)} className="ab">
+              <FileText style={{ width: 12, height: 12, flexShrink: 0 }} />
+              <span>Document</span>
+              <ChevronDown style={{ width: 10, height: 10, marginLeft: 1, flexShrink: 0 }} />
+            </button>
 
-          {showDocMenu && (
-            <div className="dropdown-menu" style={{ top: "calc(100% + 4px)", left: 0 }}>
-              <label className="dropdown-item cursor-pointer">
-                <FolderOpen style={{ width: 13, height: 13, opacity: 0.65, flexShrink: 0 }} />
-                Load Saved File
-                <input type="file" accept=".json"
-                  onChange={(e) => { onLoadProject(e); setShowDocMenu(false); }}
-                  className="hidden" />
-              </label>
+            {showDocMenu && (
+              <div className="dropdown-menu" style={{ top: "calc(100% + 4px)", left: 0 }}>
+                <label className="dropdown-item cursor-pointer">
+                  <FolderOpen style={{ width: 13, height: 13, opacity: 0.65, flexShrink: 0 }} />
+                  Load Saved File
+                  <input type="file" accept=".json"
+                    onChange={(e) => { onLoadProject(e); setShowDocMenu(false); }}
+                    className="hidden" />
+                </label>
 
-              <button className="dropdown-item" disabled={!canAct}
-                onClick={() => { onSaveProject(); setShowDocMenu(false); }}>
-                <Save style={{ width: 13, height: 13, opacity: 0.65, flexShrink: 0 }} />
-                Save Session
-              </button>
+                <button className="dropdown-item" disabled={!canAct}
+                  onClick={() => { onSaveProject(); setShowDocMenu(false); }}>
+                  <Save style={{ width: 13, height: 13, opacity: 0.65, flexShrink: 0 }} />
+                  Save Session
+                </button>
 
-              <label className={`dropdown-item ${!canAct ? "opacity-30 pointer-events-none" : "cursor-pointer"}`}>
-                <Upload style={{ width: 13, height: 13, opacity: 0.65, flexShrink: 0 }} />
-                Import XLIFF
-                <input type="file" accept=".xlf,.xliff"
-                  onChange={(e) => { onImportXliff(e); setShowDocMenu(false); }}
-                  className="hidden" disabled={!canAct} />
-              </label>
+                <label className={`dropdown-item ${!canAct ? "opacity-30 pointer-events-none" : "cursor-pointer"}`}>
+                  <Upload style={{ width: 13, height: 13, opacity: 0.65, flexShrink: 0 }} />
+                  Import XLIFF
+                  <input type="file" accept=".xlf,.xliff"
+                    onChange={(e) => { onImportXliff(e); setShowDocMenu(false); }}
+                    className="hidden" disabled={!canAct} />
+                </label>
 
-              <label className={`dropdown-item ${!canAct ? "opacity-30 pointer-events-none" : "cursor-pointer"}`}>
-                <Link2 style={{ width: 13, height: 13, opacity: 0.65, flexShrink: 0 }} />
-                Relink Template
-                <input type="file" accept=".html,.htm,.docx,.pptx,.xlsx,.txt"
-                  onChange={(e) => { onRelinkHtml(e); setShowDocMenu(false); }}
-                  className="hidden" disabled={!canAct} />
-              </label>
-            </div>
-          )}
-        </div>
+                <label className={`dropdown-item ${!canAct ? "opacity-30 pointer-events-none" : "cursor-pointer"}`}>
+                  <Link2 style={{ width: 13, height: 13, opacity: 0.65, flexShrink: 0 }} />
+                  Relink Template
+                  <input type="file" accept=".html,.htm,.docx,.pptx,.xlsx,.txt"
+                    onChange={(e) => { onRelinkHtml(e); setShowDocMenu(false); }}
+                    className="hidden" disabled={!canAct} />
+                </label>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Close File */}
-        {canAct && (
+        {isOwner && canAct && (
           <button onClick={onCloseProject} className="ab ab-close-file" title="Close File">
             <Trash2 style={{ width: 12, height: 12, flexShrink: 0 }} />
             <span>Close File</span>
@@ -222,7 +227,7 @@ export const WorkspaceToolbar = ({
 
         {/* Source language */}
         <div className="lang-wrap">
-          <select value={sourceLanguage} onChange={(e) => onSourceLanguageChange(e.target.value)} className="lang-select">
+          <select value={sourceLanguage} onChange={(e) => onSourceLanguageChange(e.target.value)} className="lang-select" disabled={!isOwner}>
             {LANGUAGES.map((l) => (
               <option key={`src-${l.code}`} value={l.code}>{l.flag} {l.name}</option>
             ))}
@@ -235,7 +240,7 @@ export const WorkspaceToolbar = ({
 
         {/* Target language */}
         <div className="lang-wrap">
-          <select value={targetLanguage} onChange={(e) => onTargetLanguageChange(e.target.value)} className="lang-select">
+          <select value={targetLanguage} onChange={(e) => onTargetLanguageChange(e.target.value)} className="lang-select" disabled={!isOwner}>
             {LANGUAGES.map((l) => (
               <option key={`tgt-${l.code}`} value={l.code}>{l.flag} {l.name}</option>
             ))}

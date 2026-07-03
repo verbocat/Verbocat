@@ -1553,7 +1553,7 @@ apiRouter.post("/documents/:id/segments/:index/reject-change", checkAuth, async 
     // Fetch the segment to find duplicates and get its original target text
     const { data: dbSegment } = await supabase
       .from("document_segments")
-      .select("source_text, original_target_text")
+      .select("source_text, target_text, original_target_text")
       .eq("document_id", doc.id)
       .eq("segment_index", segmentIndex)
       .single();
@@ -1571,11 +1571,11 @@ apiRouter.post("/documents/:id/segments/:index/reject-change", checkAuth, async 
     };
 
     // Find duplicates to revert
-    let matchingSegs = [{ segment_index: segmentIndex, original_target_text: dbSegment.original_target_text }];
+    let matchingSegs = [{ segment_index: segmentIndex, target_text: dbSegment.target_text, original_target_text: dbSegment.original_target_text }];
     if (sourceText) {
       const { data: allSegs } = await supabase
         .from("document_segments")
-        .select("segment_index, source_text, original_target_text")
+        .select("segment_index, source_text, target_text, original_target_text")
         .eq("document_id", doc.id);
       
       const cleanedSource = cleanString(sourceText);
@@ -1586,7 +1586,7 @@ apiRouter.post("/documents/:id/segments/:index/reject-change", checkAuth, async 
 
     // Perform individual reverts (setting target_text back to original_target_text and clearing tracked fields)
     const updatePromises = matchingSegs.map(async (seg) => {
-      const revertedTarget = seg.original_target_text !== null ? seg.original_target_text : "";
+      const revertedTarget = seg.original_target_text !== null ? seg.original_target_text : (seg.target_text || "");
       return supabase
         .from("document_segments")
         .update({
@@ -1610,7 +1610,7 @@ apiRouter.post("/documents/:id/segments/:index/reject-change", checkAuth, async 
     const io = getIo();
     if (io) {
       matchingSegs.forEach((seg) => {
-        const revertedTarget = seg.original_target_text !== null ? seg.original_target_text : "";
+        const revertedTarget = seg.original_target_text !== null ? seg.original_target_text : (seg.target_text || "");
         io.to(doc.id).emit("segment-updated", {
           segmentIndex: seg.segment_index,
           targetText: revertedTarget,

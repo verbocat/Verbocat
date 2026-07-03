@@ -1146,7 +1146,13 @@ export default function App() {
       setSegments((prev) =>
         prev.map((s) => {
           if (s.id === id || (cleanedSource && cleanString(s.source) === cleanedSource)) {
-            return { ...s, target: s.originalTargetText || "", originalTargetText: null, trackedBy: null };
+            const hasOrig = s.originalTargetText !== null && s.originalTargetText !== undefined;
+            return {
+              ...s,
+              target: hasOrig ? s.originalTargetText : s.target,
+              originalTargetText: null,
+              trackedBy: null
+            };
           }
           return s;
         })
