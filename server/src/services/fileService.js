@@ -53,32 +53,49 @@ const processUploadedFile = async (file) => {
   const parser = getParser(ext);
 
   if (!parser) {
+    try {
+      if (fs.existsSync(file.path)) {
+        fs.unlinkSync(file.path);
+      }
+    } catch (e) {
+      console.error("Failed to delete temp file:", e);
+    }
     const error = new Error(`Unsupported file type: ${ext}`);
     error.status = 400;
     throw error;
   }
 
-  const { segments, template } = await parser.parseFile(file.path);
-  const fileId = uuidv4();
-  
-  // Store template in Supabase (we reuse the html_files table for all formats)
-  const { error: insertError } = await supabase
-    .from("html_files")
-    .insert([{ id: fileId, content: template }]);
+  try {
+    const { segments, template } = await parser.parseFile(file.path);
+    const fileId = uuidv4();
+    
+    // Store template in Supabase (we reuse the html_files table for all formats)
+    const { error: insertError } = await supabase
+      .from("html_files")
+      .insert([{ id: fileId, content: template }]);
 
-  if (insertError) {
-    console.error("Supabase insert error:", insertError);
-    const error = new Error("Failed to save document template securely to the database.");
-    error.status = 500;
-    throw error;
+    if (insertError) {
+      console.error("Supabase insert error:", insertError);
+      const error = new Error("Failed to save document template securely to the database.");
+      error.status = 500;
+      throw error;
+    }
+
+    return {
+      type: ext.substring(1),
+      fileId,
+      segments,
+      originalName: file.originalname.replace(ext, "")
+    };
+  } finally {
+    try {
+      if (fs.existsSync(file.path)) {
+        fs.unlinkSync(file.path);
+      }
+    } catch (e) {
+      console.error("Failed to delete temp file in finally block:", e);
+    }
   }
-
-  return {
-    type: ext.substring(1),
-    fileId,
-    segments,
-    originalName: file.originalname.replace(ext, "")
-  };
 };
 
 const exportHtml = async (fileId, segments, ext = '.html') => {

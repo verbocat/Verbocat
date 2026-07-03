@@ -25,5 +25,8 @@ export const LANGUAGES = [
   { code: "pl", name: "Polish", flag: "🇵🇱" },
   { code: "id", name: "Indonesian", flag: "🇮🇩" },
   { code: "vi", name: "Vietnamese", flag: "🇻🇳" },
-  { code: "th", name: "Thai", flag: "🇹🇭" }
+  { code: "th", name: "Thai", flag: "🇹🇭" },
+  { code: "sv", name: "Swedish", flag: "🇸🇪" },
+  { code: "no", name: "Norwegian", flag: "🇳🇴" },
+  { code: "da", name: "Danish", flag: "🇩🇰" }
 ];
