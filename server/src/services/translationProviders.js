@@ -175,7 +175,7 @@ const getTargetSpecificTranslationRules = (targetLang, sourceLang, contextSettin
   * Do NOT literally translate established financial terms. "Drawing Power" must remain "ड्राइंग पावर" or "आहरण सीमा", NOT "उपयोग की शक्ति".
   * "At actuals" refers to the actual expenses/costs incurred (वास्तविक लागत / वास्तविक व्यय के अनुसार), NOT the asset value (वास्तविक मूल्य).
   * "Ad valorem duty" is a value-based tax/duty, translated as "मूल्यानुसार शुल्क" or "एड वैलोरम ड्यूटी" in Hindi, NOT generic "शुल्क".
-  * Keep standard banking terms or acronyms (e.g., "Key Facts Statement", "ROC", "CIBIL", "PDC") in their professional English/Latin representation if commonly used in local target documents.
+  * Keep standard banking terms or acronyms (e.g., "Key Facts Statement", "ROC", "CIBIL", "PDC") in their target language script/transliteration as shortforms/abbreviations (e.g., 'आरओसी', 'सिबिल', 'पीडीसी' for Hindi) rather than keeping them in Latin script.
 `;
   } else if (lowerDomain.includes("tech") || lowerDomain.includes("software") || lowerDomain.includes("it")) {
     domainGuidelines = `
@@ -292,25 +292,16 @@ Your goal is to produce translations that read as if they were originally writte
 CRITICAL LANGUAGE PURITY DIRECTIVES (SUPER STRICT):
 - You MUST translate the text ONLY into the target language (${targetName}).
 - Under no circumstances should you include words, characters, or script from any other language (for example, do NOT output Urdu/Arabic script or vocabulary when translating to Hindi).
-- The output translation must be written strictly and purely in the standard script and vocabulary native to ${targetName}. Do NOT mix scripts or languages, except for preserving system tags or approved uppercase English acronyms.
+- The output translation must be written strictly and purely in the standard script and vocabulary native to ${targetName}. Do NOT mix scripts or languages, except for preserving system tags.
 
 CRITICAL STYLE DIRECTIVES:
 - IGNORE the original text's tone/formality if it is formal. YOU MUST OVERRIDE the style to perfectly match the requested Tone (${tone}) and Formality (${formality}).
 ${styleInstructions}
 
-TARGET LANGUAGE & DOMAIN RULES (STRICT):
-${targetSpecificRules}
-
-- Custom instructions, Jira context, or user feedback (if provided) always take absolute precedence over the default style instructions. If the user requests a change in tone, formality, style, or specific wording via custom instructions/description, you MUST follow those instructions fully.
-- DO NOT leave standard English words (such as 'belonging', 'tackling', 'fellow travelers', 'stakeholders', 'champions') untranslated or transliterated verbatim in the target sentence, unless they are proper brand names (e.g. 'Tripadvisor', 'Viator') or technical codes. Translate them into correct, natural, standard terms of the target language.
-- Ensure perfect grammatical correctness, phrasing, and gender agreement in the target language.
-- Avoid literal, machine-like translations. The translation must sound natural and idiomatic in the target language.
-- Technical terms MUST be transliterated appropriately.
-- ABBREVIATIONS & ACRONYMS: Abbreviations MUST always be kept as abbreviations. Standard abbreviations (like 'Sr. No.', 'No.', 'Ltd.', 'Pvt.', 'Co.', 'Ref.', 'Cl.', 'Qty.', 'Amt.') must be translated to their corresponding standard abbreviations in the target language (e.g. 'Sr. No.' -> 'ক্র: নং' or 'ক্র.সং.', 'Ltd.' -> 'লিমিটেড' or 'লি.'), or kept entirely in English if commonly used in target business documents (e.g. 'Pvt. Ltd.'). NEVER output a mixed combination of partial English abbreviations and translated words (e.g. do NOT write 'Sr. ক্রমিক নং' or 'Sr. ক্র: নং'; either translate it fully to the target language abbreviation 'ক্র: নং' or preserve it in English 'Sr. No.').
+- ABBREVIATIONS & ACRONYMS: Abbreviations, acronyms, and shortforms (e.g., 'SMA/NPA', 'SMA-1', 'PDC', 'RBI', 'KYC', 'CIBIL', 'OTP', 'PAN') MUST always be kept as abbreviations/shortforms in the target translation. Under no circumstances should they be expanded to their full forms (e.g., do NOT expand 'SMA' to 'Special Mention Account' or 'विशेष उल्लेख खाता'). If the target language uses a script other than Latin (e.g., Hindi, Bengali), they MUST be transliterated/abbreviated in the target script (e.g., 'एसएमए/एनपीए', 'एसएमए-1', 'पीडीसी', 'आरबीआई', 'केवाईसी', 'सिबिल', 'ओटीपी', 'पैन' for Hindi, and similarly for other non-Latin languages). If the target language uses Latin script (e.g., Spanish, French), they must remain as abbreviations in Latin script. Standard abbreviations (like 'Sr. No.', 'No.', 'Ltd.', 'Pvt.', 'Co.', 'Ref.', 'Cl.', 'Qty.', 'Amt.') must be translated to their corresponding standard abbreviations in the target language.
 - SECTION IDENTIFIERS & LETTERS: Always preserve Latin/English letters (A, B, C, D, I, II) representing document sections, annexures, parts, schedules, or lists (e.g., 'Annex A', 'Annex B', 'Part C', 'Clause 4(a)'). Do NOT translate or transliterate these identifier letters into the target script (e.g. do NOT write 'অ্যানেক্স বি' or 'पार्ट बी' or 'अनुभाग ए'). Keep them in Latin characters, e.g. write 'Annex B' or keep the B as English 'B' like 'অ্যানেক্স B' or 'Annex B'.
 - ARABIC NUMERALS (0-9): Do NOT translate, convert, or localize standard English/Arabic numbers (e.g. '3', '15', '30', '160017') into native script digits (such as Bengali ৩ or Devanagari ३). All numerical digits MUST remain as standard ASCII English digits (0-9) in the target translation.
 - DO NOT translate, transliterate, or localize list indices, alphabetic bullet points, numbering, section numbers, or clause labels (e.g. 'h.', 'j.', 'k.', 'l.', 'm.', 'b)', 'd)', 'a)', 's)', 'c)', 'r).', '1.', '2)', '5.', '16(a)'). They must be preserved EXACTLY as they appear in the original source text (keeping the same English alphabet/numbers and punctuation, e.g. keeping 'h.' as 'h.', 'b)' as 'b)', etc.).
-- Uppercase English abbreviations, acronyms, or proper names (e.g. 'PDC', 'RBI', 'KYC', 'CIBIL', 'OTP', 'PAN') MUST be preserved EXACTLY in their original English uppercase form. Do NOT translate or transliterate them into Devanagari (e.g. do NOT write 'पीडीसी' for 'PDC', or 'आरबीआई' for 'RBI').
 - STRICT COMPLETENESS & BOILERPLATE PRESERVATION: You MUST translate every single phrase, word, definition, and clause of the source text. Under no circumstances should you omit, summarize, truncate, or leave out any boilerplate legal details (such as lists of heirs, legal executors, administrators, covenants, or conditions). Every single legal term and detail in the source must have a direct, fully translated equivalent in the target translation.
 - YOU MUST TRANSLATE EVERY SINGLE TEXT SEGMENT FULLY. Under no circumstances should you leave any segment untranslated, copy the English source verbatim, or return empty values for long or complex legal segments. Every segment MUST be translated into the target language.
 - Do NOT translate or transliterate contact prefixes or abbreviation labels like 'T', 'F', 'M', 'Tel', 'Mob', 'Fax', 'Email', 'Email ID'. Keep them exactly as they are in the original English text.

@@ -79,14 +79,14 @@ const getTargetSpecificRules = (targetLang, sourceLang, contextSettings = null) 
   * "Drawing Power" is a standard banking term referring to the borrowing limit based on collateral. It must remain "ड्राइंग पावर" or "आहरण सीमा", NOT translated literally to general terms like "उपयोग की शक्ति".
   * "At actuals" refers to the actual expenses incurred (वास्तविक लागत / वास्तविक व्यय के अनुसार), NOT the value of the asset (वास्तविक मूल्य).
   * "Ad valorem duty" is a legal tax based on value, translated as "मूल्यानुसार शुल्क" or "एड वैलोरम ड्यूटी", NOT generic "शुल्क".
-  * Do NOT replace industry-standard English/loan terms that are commonly used in Hindi banking documents (e.g. "Key Facts Statement", "ROC", "CIBIL") unless requested.
+  * Keep standard banking terms or acronyms (e.g., "Key Facts Statement", "ROC", "CIBIL", "PDC") in their target language script/transliteration as shortforms/abbreviations (e.g., 'आरओसी', 'सिবিল', 'पीडीसी' for Hindi) rather than keeping them in Latin script.
 `;
   }
 
   return `
 - TARGET GRAMMAR & COMPLIANCE: Ensure the translation is grammatically correct, matches correct gender/number agreements, uses proper punctuation (such as full stops or language-specific sentence terminators like purna-viram in Hindi), and respects syntax rules native to the ${targetLangName} language.
 - TONE & FORMALITY COMPLIANCE: The translation must adhere strictly to a ${formality} level of formality and ${tone} tone suitable for the ${domain} domain.
-- CAPITALIZATION & ACRONYMS: Ensure standard acronyms and names are capitalized and formatted appropriately based on ${targetLangName} professional conventions.
+- CAPITALIZATION & ACRONYMS: Ensure standard acronyms and abbreviations are preserved as shortforms/abbreviations (not expanded to full forms) in the target translation. If the target language script is different from Latin (e.g., Devanagari for Hindi), acronyms and abbreviations must be transliterated/abbreviated in the target script (e.g., 'एसएमए/एनपीए', 'आरबीआई' for Hindi), NOT kept in Latin/English script.
 - ANTI-HALLUCINATION & LEGAL PRECISION: Do NOT suggest stylistic changes that weaken legal precision, technical accuracy, or domain terminology. Do NOT flag standard list indices or numbers as errors.
 ${domainGuidelines}
 `;
@@ -2253,32 +2253,35 @@ const updateHeartbeat = async (jobId, completed, failed) => {
 
 // ── Acronym & Localization Rules ──
 const checkAcronymErrors = (sourceText, translatedText, errors) => {
-  const acronyms = [
-    { latin: "NRI", devanagari: "एनआरआई" },
-    { latin: "AMB", devanagari: "एएमबी" },
-    { latin: "CIBIL", devanagari: "सिबिल" },
-    { latin: "CIBIL", devanagari: "सीआईबीआईएल" },
-    { latin: "KYC", devanagari: "केवाईसी" },
-    { latin: "OTP", devanagari: "ओटीपी" },
-    { latin: "ATM", devanagari: "एटीएम" }
+  // Acronyms should remain in their short/abbreviated form in the target language's native script.
+  // Flag as terminology error if they are expanded to full words/phrases (e.g., 'Special Mention Account' / 'विशेष उल्लेख खाता' for SMA).
+  const expansions = [
+    { latin: "SMA", expanded: "विशेष उल्लेख खाता" },
+    { latin: "NPA", expanded: "गैर-निष्पादित संपत्ति" },
+    { latin: "NPA", expanded: "गैर-निष्पादित परिसंपत्ति" },
+    { latin: "NPA", expanded: "गैर निष्पादित संपत्ति" },
+    { latin: "NPA", expanded: "गैर निष्पादित परिसंपत्ति" },
+    { latin: "NRI", expanded: "अनिवासी भारतीय" },
+    { latin: "KYC", expanded: "अपने ग्राहक को जानें" },
+    { latin: "OTP", expanded: "एक बार का पासवर्ड" },
+    { latin: "ATM", expanded: "स्वचालित टेलर मशीन" }
   ];
 
-  for (const item of acronyms) {
+  for (const item of expansions) {
     const sourceRegex = new RegExp(`\\b${item.latin}\\b`, "i");
     if (sourceRegex.test(sourceText)) {
-      const transRegex = new RegExp(item.devanagari, "g");
+      const transRegex = new RegExp(item.expanded, "i");
       if (transRegex.test(translatedText)) {
         const alreadyReported = errors.some(
-          err => err.span && (err.span.includes(item.devanagari) || err.correction === item.latin)
+          err => err.span && err.span.includes(item.expanded)
         );
 
         if (!alreadyReported) {
           errors.push({
             category: "terminology",
             severity: "minor",
-            span: item.devanagari,
-            correction: item.latin,
-            comment: `Acronyms like '${item.latin}' must remain in English/Latin script instead of being transliterated to '${item.devanagari}'.`
+            span: item.expanded,
+            comment: `Acronym '${item.latin}' must remain as an abbreviation/shortform instead of being expanded to '${item.expanded}'.`
           });
         }
       }

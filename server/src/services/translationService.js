@@ -78,6 +78,8 @@ const postProcessTranslation = (source, target, targetLang) => {
   }
 
   // 2. Acronym translation restoration (e.g. targetLang is Hindi)
+  // Disabled: shortform abbreviations should be kept in the target language's native script (e.g., Devanagari for Hindi).
+  /*
   if (targetLang && targetLang.toLowerCase().startsWith("hi")) {
     const acronymsMap = {
       "आरबीआई": "RBI",
@@ -103,6 +105,7 @@ const postProcessTranslation = (source, target, targetLang) => {
       output = output.replace(regex, acronymsMap[key]);
     });
   }
+  */
 
   return output;
 };
@@ -364,5 +367,6 @@ module.exports = {
   translateSegments,
   isSafeTmTranslation,
   translateSegmentWithContext,
-  ensureEnglishNumerals
+  ensureEnglishNumerals,
+  postProcessTranslation
 };
