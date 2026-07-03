@@ -11,6 +11,24 @@ const MQM_SCHEMA_VERSION = "v1.0.0";
 
 const SEVERITY_WEIGHT = { minor: 1, major: 5, critical: 25 };
 
+const isPureListMarkerOrNumber = (text) => {
+  const clean = String(text || "").trim().toLowerCase();
+  if (!clean) return true;
+  // 1. Purely numbers, punctuation, spaces, brackets, hyphens
+  const onlyNumbersAndPunct = /^[0-9\s\.\,\-\(\)\/\\\[\]\{\}\:\;\?।_&%#$@*+]*$/.test(clean);
+  if (onlyNumbersAndPunct) return true;
+
+  // 2. Short list pointers with letters (e.g., "a.", "i.", "(ix)", "r).")
+  const onlyPointersAndPunct = /^[a-z0-9\s\.\,\-\(\)\/\\\[\]\{\}\:\;\?।_&%#$@*+]*$/.test(clean);
+  if (onlyPointersAndPunct) {
+    const stripped = clean.replace(/[\s\.\,\-\(\)\/\\\[\]\{\}\:\;\?।_&%#$@*+]/g, "");
+    if (stripped.length <= 3) {
+      return true;
+    }
+  }
+  return false;
+};
+
 // Segment-level scoring: zero-out applies if a verified critical error exists
 function computeSegmentMQMScore(errors, wordCount) {
   if (errors.some(e => e.severity === "critical")) return 0;
@@ -203,6 +221,7 @@ DO NOT FLAG
 
 Do NOT report:
 
+• standard list indicators, section numbers, or pure numeric markers (e.g. '1.', '2.', '(a)', 'i)', etc.) as translation omissions or errors.
 • valid alternative translations
 • synonymous wording
 • natural paraphrases
@@ -1326,6 +1345,17 @@ const evaluateTranslationMQM = async ({
     };
   }
 
+  if (isPureListMarkerOrNumber(sourceText)) {
+    return {
+      accuracyScore: 100,
+      errors: [],
+      clarifyingQuestions: [],
+      improvementSuggestion: "",
+      promptVersion: MQM_PROMPT_VERSION,
+      schemaVersion: MQM_SCHEMA_VERSION
+    };
+  }
+
   // 1. Caching Check (Bypassed database caching to force fresh evaluation every time)
   const hash = calculateMqmHash(sourceText, translatedText, glossaryVersion, MQM_PROMPT_VERSION);
 
@@ -1914,7 +1944,11 @@ const scanDocumentGlobally = async (segments, targetLang, sourceLang, contextSet
         if (result.detectedDomain) domainSamples.push(result.detectedDomain);
         if (result.detectedToneFormality) toneSamples.push(result.detectedToneFormality);
         if (Array.isArray(result.majorErrors)) {
-          mergedReport.majorErrors.push(...result.majorErrors);
+          const cleanMajorErrors = result.majorErrors.filter(err => {
+            const seg = segments.find(s => s.segment_index === err.segmentIndex);
+            return seg ? !isPureListMarkerOrNumber(seg.source_text) : true;
+          });
+          mergedReport.majorErrors.push(...cleanMajorErrors);
         }
         if (Array.isArray(result.inconsistencies)) {
           mergedReport.inconsistencies.push(...result.inconsistencies);
@@ -2034,6 +2068,7 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null) => {
             let detectedErrors = (rawErrors || []).filter(err => {
               const seg = batch.find(s => s.segment_index === err.segmentIndex);
               if (!seg) return false;
+              if (isPureListMarkerOrNumber(seg.source_text)) return false;
               const targetText = seg.target_text || "";
               return targetText.toLowerCase().includes(String(err.span).toLowerCase());
             });
