@@ -86,7 +86,7 @@ const getTargetSpecificRules = (targetLang, sourceLang, contextSettings = null) 
   return `
 - TARGET GRAMMAR & COMPLIANCE: Ensure the translation is grammatically correct, matches correct gender/number agreements, uses proper punctuation (such as full stops or language-specific sentence terminators like purna-viram in Hindi), and respects syntax rules native to the ${targetLangName} language.
 - TONE & FORMALITY COMPLIANCE: The translation must adhere strictly to a ${formality} level of formality and ${tone} tone suitable for the ${domain} domain.
-- CAPITALIZATION & ACRONYMS: Ensure standard acronyms and abbreviations are preserved as shortforms/abbreviations (not expanded to full forms) in the target translation. If the target language script is different from Latin (e.g., Devanagari for Hindi), acronyms and abbreviations must be transliterated/abbreviated in the target script (e.g., 'एसएमए/एनपीए', 'आरबीआई' for Hindi), NOT kept in Latin/English script.
+- CAPITALIZATION & ACRONYMS: Ensure standard acronyms and abbreviations (including connected versions like 'SMA-1', 'SMA-2', 'SMA-0', 'SMA/NPA') are preserved as shortforms/abbreviations (not expanded to full forms) in the target translation. If the target language script is different from Latin (e.g., Devanagari for Hindi), acronyms and abbreviations must be transliterated/abbreviated in the target script (e.g., 'एसएमए/एनपीए', 'एसएमए-1', 'आरबीआई' for Hindi), NOT kept in Latin/English script.
 - ANTI-HALLUCINATION & LEGAL PRECISION: Do NOT suggest stylistic changes that weaken legal precision, technical accuracy, or domain terminology. Do NOT flag standard list indices or numbers as errors.
 ${domainGuidelines}
 `;
@@ -2253,8 +2253,46 @@ const updateHeartbeat = async (jobId, completed, failed) => {
 
 // ── Acronym & Localization Rules ──
 const checkAcronymErrors = (sourceText, translatedText, errors) => {
-  // Acronyms should remain in their short/abbreviated form in the target language's native script.
-  // Flag as terminology error if they are expanded to full words/phrases (e.g., 'Special Mention Account' / 'विशेष उल्लेख खाता' for SMA).
+  // Acronyms should remain in their original uppercase Latin script format (e.g. 'KYC', 'GST', 'SMA-1').
+  // Flag as terminology error if they are transliterated (e.g. 'केवाईसी', 'जीएसटी', 'एसएमए-1') or expanded.
+  const acronyms = [
+    { latin: "SMA", devanagari: "एसएमए" },
+    { latin: "NPA", devanagari: "एनपीए" },
+    { latin: "NRI", devanagari: "एनआरआई" },
+    { latin: "CIBIL", devanagari: "सिबिल" },
+    { latin: "CIBIL", devanagari: "सीआईबीआईएल" },
+    { latin: "KYC", devanagari: "केवाईसी" },
+    { latin: "OTP", devanagari: "ओटीपी" },
+    { latin: "ATM", devanagari: "एटीएम" },
+    { latin: "GST", devanagari: "जीएसटी" },
+    { latin: "PAN", devanagari: "पैन" },
+    { latin: "PDC", devanagari: "पीडीसी" }
+  ];
+
+  // 1. Check for transliterated acronyms
+  for (const item of acronyms) {
+    const sourceRegex = new RegExp(`\\b${item.latin}\\b`, "i");
+    if (sourceRegex.test(sourceText)) {
+      const transRegex = new RegExp(item.devanagari, "g");
+      if (transRegex.test(translatedText)) {
+        const alreadyReported = errors.some(
+          err => err.span && (err.span.includes(item.devanagari) || err.correction === item.latin)
+        );
+
+        if (!alreadyReported) {
+          errors.push({
+            category: "terminology",
+            severity: "minor",
+            span: item.devanagari,
+            correction: item.latin,
+            comment: `Acronyms like '${item.latin}' must remain in English/Latin script instead of being transliterated to '${item.devanagari}'.`
+          });
+        }
+      }
+    }
+  }
+
+  // 2. Check for expanded acronyms
   const expansions = [
     { latin: "SMA", expanded: "विशेष उल्लेख खाता" },
     { latin: "NPA", expanded: "गैर-निष्पादित संपत्ति" },

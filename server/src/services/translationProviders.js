@@ -298,7 +298,7 @@ CRITICAL STYLE DIRECTIVES:
 - IGNORE the original text's tone/formality if it is formal. YOU MUST OVERRIDE the style to perfectly match the requested Tone (${tone}) and Formality (${formality}).
 ${styleInstructions}
 
-- ABBREVIATIONS & ACRONYMS: Abbreviations, acronyms, and shortforms (e.g., 'SMA/NPA', 'SMA-1', 'PDC', 'RBI', 'KYC', 'CIBIL', 'OTP', 'PAN') MUST always be kept as abbreviations/shortforms in the target translation. Under no circumstances should they be expanded to their full forms (e.g., do NOT expand 'SMA' to 'Special Mention Account' or 'विशेष उल्लेख खाता'). If the target language uses a script other than Latin (e.g., Hindi, Bengali), they MUST be transliterated/abbreviated in the target script (e.g., 'एसएमए/एनपीए', 'एसएमए-1', 'पीडीसी', 'आरबीआई', 'केवाईसी', 'सिबिल', 'ओटीपी', 'पैन' for Hindi, and similarly for other non-Latin languages). If the target language uses Latin script (e.g., Spanish, French), they must remain as abbreviations in Latin script. Standard abbreviations (like 'Sr. No.', 'No.', 'Ltd.', 'Pvt.', 'Co.', 'Ref.', 'Cl.', 'Qty.', 'Amt.') must be translated to their corresponding standard abbreviations in the target language.
+- ABBREVIATIONS & ACRONYMS: Abbreviations, acronyms, and shortforms (e.g., 'SMA/NPA', 'SMA-1', 'SMA-2', 'SMA-0', 'PDC', 'RBI', 'KYC', 'CIBIL', 'OTP', 'PAN', 'GST') MUST always be kept as abbreviations/shortforms in the target translation. Under no circumstances should they be expanded to their full forms (e.g., do NOT expand 'SMA' to 'Special Mention Account' or 'विशेष उल्लेख खाता', and do NOT expand 'SMA-1' to 'विशेष उल्लेख खाता-1'). All shortform abbreviations and acronyms (like 'SMA-1', 'SMA-2', 'SMA-0', 'GST', 'KYC', 'RBI', 'PAN', 'CIBIL', etc.) MUST be kept EXACTLY as they are in the source (i.e. in Latin script, capitalized, and abbreviated) in ALL target languages (e.g., in Hindi, write 'SMA-1', 'GST', 'KYC', 'RBI', NOT 'एसएमए-1', 'जीएसटी', 'केवाईसी', 'आरबीआई'). Standard abbreviations (like 'Sr. No.', 'No.', 'Ltd.', 'Pvt.', 'Co.', 'Ref.', 'Cl.', 'Qty.', 'Amt.') must be translated to their corresponding standard abbreviations in the target language, or kept in English if commonly used.
 - SECTION IDENTIFIERS & LETTERS: Always preserve Latin/English letters (A, B, C, D, I, II) representing document sections, annexures, parts, schedules, or lists (e.g., 'Annex A', 'Annex B', 'Part C', 'Clause 4(a)'). Do NOT translate or transliterate these identifier letters into the target script (e.g. do NOT write 'অ্যানেক্স বি' or 'पार्ट बी' or 'अनुभाग ए'). Keep them in Latin characters, e.g. write 'Annex B' or keep the B as English 'B' like 'অ্যানেক্স B' or 'Annex B'.
 - ARABIC NUMERALS (0-9): Do NOT translate, convert, or localize standard English/Arabic numbers (e.g. '3', '15', '30', '160017') into native script digits (such as Bengali ৩ or Devanagari ३). All numerical digits MUST remain as standard ASCII English digits (0-9) in the target translation.
 - DO NOT translate, transliterate, or localize list indices, alphabetic bullet points, numbering, section numbers, or clause labels (e.g. 'h.', 'j.', 'k.', 'l.', 'm.', 'b)', 'd)', 'a)', 's)', 'c)', 'r).', '1.', '2)', '5.', '16(a)'). They must be preserved EXACTLY as they appear in the original source text (keeping the same English alphabet/numbers and punctuation, e.g. keeping 'h.' as 'h.', 'b)' as 'b)', etc.).
@@ -445,9 +445,18 @@ const translateWithProviders = async (sourceTexts, protectedTexts, target, provi
 const isScriptValidForLanguage = (text, targetLang) => {
   const cleanLang = String(targetLang || "").toLowerCase();
   
+  // Strip tags/placeholders first to avoid false positives on tag characters
+  const cleanText = String(text || "").replace(/__TAG_\d+__/g, "");
+
   // 1. If target is Hindi, strictly forbid any Perso-Arabic characters
   if (cleanLang.startsWith("hi")) {
-    if (/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text)) {
+    if (/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(cleanText)) {
+      return false;
+    }
+    // Strip uppercase acronyms, abbreviations, and indices (e.g. SMA-1, KYC, A, 1) before script purity check
+    const textWithoutAcronyms = cleanText.replace(/\b[A-Z0-9]{1,}(?:[-/][A-Z0-9]+)*\b/g, "");
+    // Reject any remaining Latin/English script characters in Hindi translation
+    if (/[a-zA-Z]/.test(textWithoutAcronyms)) {
       return false;
     }
   }
@@ -457,15 +466,15 @@ const isScriptValidForLanguage = (text, targetLang) => {
   // forbid any non-Latin scripts (like Arabic, Cyrillic, Devanagari, Han/Chinese, Japanese, Hangul)
   const isLatinBased = /^(en|es|fr|de|it|pt|nl|sv|no|da|fi|pl)/.test(cleanLang);
   if (isLatinBased) {
-    if (/[\u0900-\u097F\u0600-\u06FF\u0400-\u04FF\u4E00-\u9FFF]/.test(text)) {
+    if (/[\u0900-\u097F\u0600-\u06FF\u0400-\u04FF\u4E00-\u9FFF]/.test(cleanText)) {
       return false;
     }
   }
 
   // 3. Forbid other target language scripts from leaking into each other.
   const isArabicBased = /^(ar|ur|fa|ps|sd)/.test(cleanLang);
-  if (!isArabicBased && /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(text)) {
-    if (/[\u0621-\u064A]/.test(text)) {
+  if (!isArabicBased && /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(cleanText)) {
+    if (/[\u0621-\u064A]/.test(cleanText)) {
       return false;
     }
   }

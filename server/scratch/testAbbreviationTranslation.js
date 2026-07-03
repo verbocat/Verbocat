@@ -14,17 +14,27 @@ async function runTests() {
     {
       source: "Please note RBI guidelines.",
       translated: "कृपया आरबीआई दिशानिर्देशों का पालन करें।",
-      expectedContain: "आरबीआई"
+      expectedContain: "RBI"
     },
     {
       source: "Classification of loan account as SMA/NPA.",
       translated: "ऋण खाते का वर्गीकरण एसएमए/एनपीए के रूप में।",
-      expectedContain: "एसएमए/एनपीए"
+      expectedContain: "SMA/NPA"
     },
     {
       source: "Check your SMA-1 status.",
       translated: "अपनी एसएमए-1 स्थिति की जाँच करें।",
-      expectedContain: "एसएमए-1"
+      expectedContain: "SMA-1"
+    },
+    {
+      source: "Account is SMA-2.",
+      translated: "खाता एसएमए-2 है।",
+      expectedContain: "SMA-2"
+    },
+    {
+      source: "Report SMA-0 classification.",
+      translated: "एसएमए-0 वर्गीकरण की रिपोर्ट करें।",
+      expectedContain: "SMA-0"
     }
   ];
 
@@ -43,7 +53,7 @@ async function runTests() {
   // Test 2: MQM Acronym / Transliteration Verification
   console.log("\n--- Test 2: MQM Evaluation Acronym check ---");
   
-  // Transliterated RBI/NRI/etc. should NOT be flagged as terminology errors anymore
+  // Transliterated RBI/NRI/etc. SHOULD be flagged as terminology errors
   const mqmInput1 = {
     sourceText: "Please check your NRI status for opening the account.",
     translatedText: "कृपया खाता खोलने के लिए अपनी एनआरआई स्थिति की जांच करें।",
@@ -52,13 +62,13 @@ async function runTests() {
   };
 
   const report1 = await evaluateTranslationMQM(mqmInput1);
-  console.log("Report for Transliterated NRI (should have 0 terminology/acronym errors):");
+  console.log("Report for Transliterated NRI (should flag 'एनआरआई' as terminology/acronym error):");
   console.log(JSON.stringify(report1, null, 2));
   
-  const hasAcronymError1 = (report1?.errors || []).some(e => e.category === "terminology" && (e.span === "एनआरआई" || e.span === "NRI"));
-  console.log(`Has Acronym Error: ${hasAcronymError1 ? "YES (FAILED)" : "NO (SUCCESS)"}`);
-  if (hasAcronymError1) {
-    throw new Error("Transliterated acronym was incorrectly flagged as an error!");
+  const hasAcronymError1 = (report1?.errors || []).some(e => e.category === "terminology" && (e.span === "एनआरआई" || e.span === "NRI" || e.snippet === "एनआरआई"));
+  console.log(`Has Acronym Error (Transliterated): ${hasAcronymError1 ? "YES (SUCCESS)" : "NO (FAILED)"}`);
+  if (!hasAcronymError1) {
+    throw new Error("Transliterated acronym was not flagged as an error!");
   }
 
   // Expanded NRI (e.g. "अनिवासी भारतीय") SHOULD be flagged as a terminology error because it is expanded
@@ -85,6 +95,8 @@ async function runTests() {
     const testSources = [
       "Classification of loan account as SMA/NPA.",
       "SMA-1 classification is applicable.",
+      "The loan account is tagged as SMA-2.",
+      "SMA-0 status should be monitored.",
       "Submit your KYC documents along with your PAN details."
     ];
 

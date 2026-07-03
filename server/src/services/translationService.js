@@ -78,15 +78,13 @@ const postProcessTranslation = (source, target, targetLang) => {
   }
 
   // 2. Acronym translation restoration (e.g. targetLang is Hindi)
-  // Disabled: shortform abbreviations should be kept in the target language's native script (e.g., Devanagari for Hindi).
-  /*
+  // Ensures that transliterated acronyms are restored back to their original uppercase English/Latin script format.
   if (targetLang && targetLang.toLowerCase().startsWith("hi")) {
     const acronymsMap = {
       "आरबीआई": "RBI",
       "आर.बी.आई.": "RBI",
       "आरबीआइ": "RBI",
       "आर.बी.आइ.": "RBI",
-      "आरबीआई": "RBI",
       "आरबीआय": "RBI",
       "पीडीसी": "PDC",
       "पी.डी.सी.": "PDC",
@@ -97,7 +95,15 @@ const postProcessTranslation = (source, target, targetLang) => {
       "सिबिल": "CIBIL",
       "पैन": "PAN",
       "एनआरआई": "NRI",
-      "एन.आर.आई.": "NRI"
+      "एन.आर.आई.": "NRI",
+      "जीएसटी": "GST",
+      "जी.एस.टी.": "GST",
+      "एसएमए": "SMA",
+      "एस.एम.ए.": "SMA",
+      "एनपीए": "NPA",
+      "एन.पी.ए.": "NPA",
+      "एटीएम": "ATM",
+      "ए.टी.एम.": "ATM"
     };
     
     Object.keys(acronymsMap).forEach(key => {
@@ -105,7 +111,6 @@ const postProcessTranslation = (source, target, targetLang) => {
       output = output.replace(regex, acronymsMap[key]);
     });
   }
-  */
 
   return output;
 };
