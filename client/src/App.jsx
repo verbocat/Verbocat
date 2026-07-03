@@ -939,9 +939,28 @@ export default function App() {
     setIsTranslating(true);
     setProgress(0);
 
-    const segmentsToTranslate = segments.filter(
-      (s) => !isJunkSegment(s.source) && (!s.target || s.target.replace(/<\/?\d+>/g, "").trim() === "")
-    );
+    const segmentsToTranslate = segments.filter((s) => {
+      if (isJunkSegment(s.source)) return false;
+      const cleanTarget = (s.target || "").replace(/<\/?\d+>/g, "").trim();
+      if (cleanTarget === "") return true;
+
+      // If target is identical to source, and we are translating to a different language, it's a failed fallback
+      const cleanSource = s.source.replace(/<\/?\d+>/g, "").trim();
+      const hasLetters = /\p{L}/u.test(cleanSource);
+      const isListPointer = /^\(?[a-zA-Z0-9]+\)?\.?$/i.test(cleanSource) || /^\d+(\.\d+)*$/i.test(cleanSource);
+      const isUrl = /https?:\/\/[^\s]+/i.test(cleanSource);
+
+      if (
+        targetLanguage !== sourceLanguage &&
+        cleanSource.toLowerCase() === cleanTarget.toLowerCase() &&
+        hasLetters &&
+        !isListPointer &&
+        !isUrl
+      ) {
+        return true;
+      }
+      return false;
+    });
 
     if (segmentsToTranslate.length === 0) {
       setIsTranslating(false);

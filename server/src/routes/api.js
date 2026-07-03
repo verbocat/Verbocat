@@ -93,16 +93,34 @@ apiRouter.post("/translate-batch", checkAuth, checkTranslateAccess, async (reque
 
       const updatePromises = result.results.map(async (item) => {
         const segmentIndex = item.id - 1; // client IDs are 1-indexed
-        
+
+        const cleanSource = String(item.source || "").replace(/<[^>]+>/g, "").trim();
+        const hasLetters = /\p{L}/u.test(cleanSource);
+        const isListPointer = /^\(?[a-zA-Z0-9]+\)?\.?$/i.test(cleanSource) || /^\d+(\.\d+)*$/i.test(cleanSource);
+        const isUrl = /https?:\/\/[^\s]+/i.test(cleanSource);
+
+        const isFallback = target !== source &&
+          item.translated &&
+          item.source &&
+          item.translated.trim() === item.source.trim() &&
+          hasLetters &&
+          !isListPointer &&
+          !isUrl;
+
+        const updateFields = {
+          target_text: isFallback ? "" : item.translated,
+          status: isFallback ? "draft" : "translated",
+          updated_at: new Date().toISOString()
+        };
+
+        if (!isFallback) {
+          updateFields.mqm_accuracy_score = item.mqmAccuracyScore !== undefined ? item.mqmAccuracyScore : 100;
+          updateFields.mqm_report = item.mqmReport || null;
+        }
+
         const { error } = await supabase
           .from("document_segments")
-          .update({
-            target_text: item.translated,
-            status: "translated",
-            mqm_accuracy_score: item.mqmAccuracyScore !== undefined ? item.mqmAccuracyScore : 100,
-            mqm_report: item.mqmReport || null,
-            updated_at: new Date().toISOString()
-          })
+          .update(updateFields)
           .eq("document_id", documentId)
           .eq("segment_index", segmentIndex);
 
@@ -113,10 +131,10 @@ apiRouter.post("/translate-batch", checkAuth, checkTranslateAccess, async (reque
           if (io) {
             io.to(documentId).emit("segment-updated", {
               segmentIndex,
-              targetText: item.translated,
-              status: "translated",
-              mqmAccuracyScore: item.mqmAccuracyScore,
-              mqmReport: item.mqmReport,
+              targetText: updateFields.target_text,
+              status: updateFields.status,
+              mqmAccuracyScore: updateFields.mqm_accuracy_score,
+              mqmReport: updateFields.mqm_report,
               updatedBy: request.user.email
             });
           }
