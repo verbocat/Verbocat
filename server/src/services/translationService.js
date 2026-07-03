@@ -10,9 +10,48 @@ const normalizeText = (text) =>
     .replace(/\s+/g, " ")
     .trim();
 
+const zeroDigits = [
+  0x0966, // Devanagari (Hindi, Marathi, etc.)
+  0x09E6, // Bengali
+  0x0A66, // Gurmukhi (Punjabi)
+  0x0AE6, // Gujarati
+  0x0B66, // Oriya
+  0x0BE6, // Tamil
+  0x0C66, // Telugu
+  0x0CE6, // Kannada
+  0x0D66, // Malayalam
+  0x0660, // Arabic-Indic
+  0x06F0, // Extended Arabic-Indic (Persian, Urdu)
+  0x0F20, // Tibetan
+  0x17E0, // Khmer
+  0x1810, // Mongolian
+  0x1946, // Limbu
+  0x19D0, // New Tai Lue
+  0x1A80, // Tai Tham Hora
+  0x1A90, // Tai Tham Tham
+  0x1B50, // Balinese
+  0x1BB0, // Sudanese
+  0x1C40, // Lepcha
+  0x1C50, // Ol Chiki
+  0xA620, // Vai
+  0xA8D0, // Saurashtra
+  0xA900, // Kayah Li
+  0xA9D0, // Javanese
+  0xAA50, // Cham
+  0xABF0, // Meetei Mayek
+  0xFF10, // Fullwidth digits
+];
+
 const ensureEnglishNumerals = (text) => {
-  return String(text || "").replace(/[०-९]/g, (match) => {
-    return String.fromCharCode(match.charCodeAt(0) - 0x0966 + 48);
+  if (!text) return "";
+  return String(text).replace(/./gu, (char) => {
+    const code = char.codePointAt(0);
+    for (const zero of zeroDigits) {
+      if (code >= zero && code <= zero + 9) {
+        return String.fromCharCode(code - zero + 48);
+      }
+    }
+    return char;
   });
 };
 
@@ -324,5 +363,6 @@ const translateSegmentWithContext = async ({
 module.exports = {
   translateSegments,
   isSafeTmTranslation,
-  translateSegmentWithContext
+  translateSegmentWithContext,
+  ensureEnglishNumerals
 };
