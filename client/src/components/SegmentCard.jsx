@@ -471,8 +471,11 @@ export const SegmentCard = ({
       clearTimeout(inactivityTimerRef.current);
     }
     const t = htmlToTarget(e.currentTarget);
+    const hasChanged = t !== lastSaved.current;
     lastSaved.current = t;
-    if (t !== segment.target) onUpdateTranslation(segment.id, t);
+    if (hasChanged) {
+      onUpdateTranslation(segment.id, t);
+    }
     setTimeout(() => setSuggestions([]), 200);
     if (onBlurSegment) {
       onBlurSegment(segment.id - 1);
