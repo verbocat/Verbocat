@@ -282,4 +282,14 @@ export const acceptAllTrackedChanges = async (documentId) => {
   return response.data;
 };
 
+export const fetchPublicAccess = async (documentId) => {
+  const response = await api.get(`/api/documents/${documentId}/public-access`);
+  return response.data;
+};
+
+export const updatePublicAccess = async (documentId, publicAccess) => {
+  const response = await api.put(`/api/documents/${documentId}/public-access`, { publicAccess });
+  return response.data;
+};
+
 

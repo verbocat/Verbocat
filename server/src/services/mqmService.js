@@ -2276,7 +2276,7 @@ const checkAcronymErrors = (sourceText, translatedText, errors) => {
       const transRegex = new RegExp(item.devanagari, "g");
       if (transRegex.test(translatedText)) {
         const alreadyReported = errors.some(
-          err => err.span && (err.span.includes(item.devanagari) || err.correction === item.latin)
+          err => err.category === "terminology" && err.span && (err.span.includes(item.devanagari) || err.correction === item.latin)
         );
 
         if (!alreadyReported) {

@@ -2333,17 +2333,6 @@ export default function App() {
             >
               {hasPendingAccessRequest ? "Access Request Pending" : "Request Access"}
             </button>
-            <button
-              onClick={() => {
-                setHasNoAccess(false);
-                const newUrl = `${window.location.origin}${window.location.pathname}`;
-                window.history.pushState({ path: newUrl }, '', newUrl);
-                setDocumentId(null);
-              }}
-              className="w-full rounded-xl py-3 text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border border-transparent transition-all cursor-pointer"
-            >
-              Go to Dashboard
-            </button>
           </div>
           {accessRequestMessage && (
             <div className="text-[11px] text-[var(--text-emerald)] bg-[var(--emerald-glow)] border border-[var(--emerald-glow)] rounded-xl p-2.5 font-bold">

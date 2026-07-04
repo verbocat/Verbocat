@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { X, UserPlus, Trash2, Copy, Check, Lock, Globe, Shield } from "lucide-react";
-import { fetchDocumentAccess, grantDocumentAccess, revokeDocumentAccess, searchUsers } from "../services/api.js";
+import { fetchDocumentAccess, grantDocumentAccess, revokeDocumentAccess, searchUsers, fetchPublicAccess, updatePublicAccess } from "../services/api.js";
 
 export function ShareModal({ isOpen, onClose, documentId, docName }) {
   const [email, setEmail] = useState("");
@@ -11,6 +11,8 @@ export function ShareModal({ isOpen, onClose, documentId, docName }) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
   
+  const [publicAccess, setPublicAccess] = useState("none");
+
   // Suggestion states
   const [emailSuggestions, setEmailSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -44,11 +46,26 @@ export function ShareModal({ isOpen, onClose, documentId, docName }) {
     try {
       const data = await fetchDocumentAccess(documentId);
       setAccessList(data);
+
+      const pubRes = await fetchPublicAccess(documentId);
+      setPublicAccess(pubRes.publicAccess || "none");
     } catch (err) {
       console.error(err);
       setError("Failed to load access list.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const togglePublicAccess = async () => {
+    setError("");
+    const nextAccessVal = publicAccess === "write" ? "none" : "write";
+    try {
+      const res = await updatePublicAccess(documentId, nextAccessVal);
+      setPublicAccess(res.publicAccess);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to update public access link sharing settings.");
     }
   };
 
@@ -175,6 +192,28 @@ export function ShareModal({ isOpen, onClose, documentId, docName }) {
                 )}
               </button>
             </div>
+
+            {/* Public Link Sharing toggle card */}
+            <div className="flex items-center justify-between p-3.5 bg-[var(--bg-input)] border border-[var(--border-medium)] rounded-xl mt-3 select-none">
+              <div className="space-y-1">
+                <span className="text-xs font-bold text-[var(--text-primary)]">Public Link Sharing</span>
+                <p className="text-[10px] text-[var(--text-secondary)] font-bold">
+                  {publicAccess === "write" ? "Anyone with the link can edit" : "Restricted: Only invited people can access"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={togglePublicAccess}
+                className={`rounded-xl px-4 py-2 text-[10px] font-bold border transition-all cursor-pointer shadow-md ${
+                  publicAccess === "write"
+                    ? "bg-[var(--emerald-glow)] border-[var(--emerald-glow)] text-[var(--text-emerald)] hover:bg-[var(--emerald-glow)]"
+                    : "bg-[var(--accent)] border-[var(--accent)] text-white hover:bg-[var(--accent-hover)]"
+                }`}
+              >
+                {publicAccess === "write" ? "Restrict Access" : "Share with Anyone to Edit"}
+              </button>
+            </div>
+
           </div>
 
           <hr className="border-[var(--border-subtle)]" />

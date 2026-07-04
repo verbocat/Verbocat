@@ -388,6 +388,11 @@ async function verifyDocumentAccess(request, response, requiredPermission = "rea
     return doc;
   }
 
+  // Check public access first
+  if (doc.public_access === "write" || (requiredPermission === "read" && doc.public_access === "read")) {
+    return doc;
+  }
+
   // Check explicit access
   const { data: access, error: accessError } = await supabase
     .from("document_access")
@@ -465,14 +470,20 @@ apiRouter.get("/documents/:id", checkAuth, async (request, response) => {
     if (isStaff || doc.owner_id === request.user.id) {
       userPermission = "write";
     } else {
-      const { data: access } = await supabase
-        .from("document_access")
-        .select("permission")
-        .eq("document_id", doc.id)
-        .eq("user_id", request.user.id)
-        .single();
-      if (access) {
-        userPermission = access.permission;
+      if (doc.public_access === "write") {
+        userPermission = "write";
+      } else {
+        const { data: access } = await supabase
+          .from("document_access")
+          .select("permission")
+          .eq("document_id", doc.id)
+          .eq("user_id", request.user.id)
+          .single();
+        if (access) {
+          userPermission = access.permission;
+        } else if (doc.public_access === "read") {
+          userPermission = "read";
+        }
       }
     }
 
@@ -499,6 +510,7 @@ apiRouter.get("/documents/:id", checkAuth, async (request, response) => {
       targetLang: doc.target_lang,
       permission: userPermission,
       trackChangesEnabled: doc.track_changes_enabled || false,
+      publicAccess: doc.public_access || "none",
       segments: formattedSegments
     });
   } catch (error) {
@@ -1086,6 +1098,51 @@ apiRouter.get("/documents/:id/access", checkAuth, async (request, response) => {
     }));
 
     response.json(list);
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Internal server error." });
+  }
+});
+
+// Get public access state of a document
+apiRouter.get("/documents/:id/public-access", checkAuth, async (request, response) => {
+  try {
+    const doc = await verifyDocumentAccess(request, response, "read");
+    if (!doc) return;
+    response.json({ publicAccess: doc.public_access || "none" });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Internal server error." });
+  }
+});
+
+// Update public access state of a document
+apiRouter.put("/documents/:id/public-access", checkAuth, async (request, response) => {
+  try {
+    const doc = await verifyDocumentAccess(request, response, "read");
+    if (!doc) return;
+
+    const isStaff = ["admin", "verbolabs_staff"].includes(request.profile.role);
+    if (!isStaff && doc.owner_id !== request.user.id) {
+      return response.status(403).json({ error: "Access management restricted to owner or staff." });
+    }
+
+    const { publicAccess } = request.body;
+    if (!["none", "read", "write"].includes(publicAccess)) {
+      return response.status(400).json({ error: "Invalid public access value." });
+    }
+
+    const { error: updateError } = await supabase
+      .from("documents")
+      .update({ public_access: publicAccess })
+      .eq("id", doc.id);
+
+    if (updateError) {
+      console.error("Failed to update public access:", updateError);
+      return response.status(500).json({ error: "Failed to update public access." });
+    }
+
+    response.json({ message: "Public access updated successfully.", publicAccess });
   } catch (error) {
     console.error(error);
     response.status(500).json({ error: "Internal server error." });
