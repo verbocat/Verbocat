@@ -100,6 +100,15 @@ export const Header = ({
             style={{ marginLeft: 4, marginRight: 4, flexShrink: 0 }}
           >
             <div className="theme-toggle-extreme-track">
+              {/* Floating stars (only visible in dark mode) */}
+              <div className="star star-1"></div>
+              <div className="star star-2"></div>
+              <div className="star star-3"></div>
+
+              {/* Floating clouds (only visible in light mode) */}
+              <div className="cloud cloud-1"></div>
+              <div className="cloud cloud-2"></div>
+
               <div className="theme-toggle-extreme-ball">
                 {darkMode ? (
                   <Moon className="theme-toggle-extreme-icon moon" />

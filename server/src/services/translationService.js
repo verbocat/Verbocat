@@ -4,6 +4,7 @@ const {
   translateChunk,
   isLegitimatelyIdentical
 } = require("./translationProviders");
+const { enqueue } = require("./queueManager");
 
 const normalizeText = (text) =>
   String(text || "")
@@ -160,7 +161,7 @@ const isSafeTmTranslation = (source, target, targetLang) => {
 const isPersistableProvider = (provider) =>
   provider && provider !== "Fallback" && provider !== "Cached Fallback";
 
-const translateSegments = async (segments, target, sourceLang, contextSettings) => {
+const translateSegments = async (segments, target, sourceLang, contextSettings, userId) => {
   const providerState = createProviderState();
 
   const uniqueSources = [...new Set(segments.map((s) => s.source))];
@@ -226,7 +227,15 @@ const translateSegments = async (segments, target, sourceLang, contextSettings) 
   console.log(`[Translation] Splitting ${uniqueMissingSources.length} segments into ${adaptiveChunks.length} adaptive chunks`);
 
   for (const chunkSources of adaptiveChunks) {
-    const translatedChunk = await translateChunk(chunkSources, target, actualSourceLang, providerState, contextSettings);
+    const chunkChars = chunkSources.reduce((sum, text) => sum + String(text || "").length, 0);
+    const estimatedTokens = 1000 + Math.round(chunkChars / 4) * 2;
+
+    const translatedChunk = await enqueue({
+      type: "translation",
+      estimatedTokens,
+      userId,
+      execute: () => translateChunk(chunkSources, target, actualSourceLang, providerState, contextSettings)
+    });
 
     const insertRows = [];
 
@@ -289,7 +298,13 @@ const translateSegments = async (segments, target, sourceLang, contextSettings) 
     // Retry one-by-one for maximum reliability
     for (const source of stillUntranslated) {
       try {
-        const retryResult = await translateChunk([source], target, actualSourceLang, providerState, contextSettings);
+        const estimatedTokens = 1000 + Math.round(String(source || "").length / 4) * 2;
+        const retryResult = await enqueue({
+          type: "translation",
+          estimatedTokens,
+          userId,
+          execute: () => translateChunk([source], target, actualSourceLang, providerState, contextSettings)
+        });
         if (retryResult && retryResult[0]) {
           const retried = retryResult[0];
           const processedText = postProcessTranslation(source, retried.translated, target);

@@ -84,7 +84,7 @@ apiRouter.post("/upload", checkAuth, upload.single("file"), async (request, resp
 apiRouter.post("/translate-batch", checkAuth, checkTranslateAccess, async (request, response) => {
   try {
     const { segments, target, source, contextSettings, fileName, documentId } = request.body;
-    const result = await translateSegments(segments, target, source, contextSettings);
+    const result = await translateSegments(segments, target, source, contextSettings, request.user.id);
     
     // Save translations to document_segments in DB if documentId is provided
     if (documentId && result.results && result.results.length > 0) {
@@ -958,7 +958,7 @@ apiRouter.post("/documents/:id/audit/start", checkAuth, async (request, response
     (async () => {
       try {
         const { auditDocumentMQM } = require("../services/mqmService");
-        await auditDocumentMQM(documentId, job.id, request.body.contextSettings);
+        await auditDocumentMQM(documentId, job.id, request.body.contextSettings, request.user.id);
       } catch (err) {
         console.error(`[Background Audit Crash] Job ${job.id}:`, err);
       }
@@ -1049,6 +1049,23 @@ apiRouter.get("/documents/:id/audit/status/:jobId", checkAuth, async (request, r
       return response.status(404).json({ error: "Audit job not found." });
     }
 
+    // Dynamic queue position calculation
+    if (job.status === "pending") {
+      const { count, error: countError } = await supabase
+        .from("audit_jobs")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending")
+        .lt("created_at", job.created_at);
+
+      if (!countError) {
+        job.queuePosition = (count || 0) + 1;
+      } else {
+        job.queuePosition = 1;
+      }
+    } else {
+      job.queuePosition = 0;
+    }
+
     response.json(job);
   } catch (error) {
     console.error("Fetch audit status failed:", error);
@@ -1077,7 +1094,7 @@ apiRouter.post("/documents/:id/audit", checkAuth, async (request, response) => {
     if (job) {
       (async () => {
         const { auditDocumentMQM } = require("../services/mqmService");
-        await auditDocumentMQM(documentId, job.id, request.body.contextSettings);
+        await auditDocumentMQM(documentId, job.id, request.body.contextSettings, request.user.id);
       })();
     }
   } catch (e) {

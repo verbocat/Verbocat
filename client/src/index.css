@@ -115,6 +115,10 @@
 }
 
 /* Font Size Classes */
+:root.font-very-small {
+  --editor-font-size-source: 9.5px;
+  --editor-font-size-target: 10px;
+}
 :root.font-small {
   --editor-font-size-source: 11px;
   --editor-font-size-target: 11.5px;
@@ -126,6 +130,10 @@
 :root.font-large {
   --editor-font-size-source: 14.5px;
   --editor-font-size-target: 15px;
+}
+:root.font-very-large {
+  --editor-font-size-source: 16.5px;
+  --editor-font-size-target: 17px;
 }
 
 /* ================================================================
@@ -180,7 +188,7 @@ code, .font-mono { font-family: "IBM Plex Mono", monospace; }
   font-size: 13.5px;
   font-weight: 700;
   letter-spacing: -0.4px;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 /* Topbar breadcrumb */
@@ -1564,8 +1572,17 @@ code, .font-mono { font-family: "IBM Plex Mono", monospace; }
 }
 
 /* ================================================================
-   EXTREME ANIMATED THEME TOGGLE BUTTON
+   EXTREME ANIMATED THEME TOGGLE BUTTON & SMOOTH TRANSITION
    ================================================================ */
+/* Global transitions for theme-sensitive elements */
+body, .topbar, .seg-row, .seg-editor, .nav-btn, .modal-card, .btn-secondary, .btn-cta, .settings-row, .glossary-dropdown {
+  transition: background 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+              background-color 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+              color 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.6s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
 .theme-toggle-extreme {
   position: relative;
   width: 52px;
@@ -1577,18 +1594,18 @@ code, .font-mono { font-family: "IBM Plex Mono", monospace; }
   cursor: pointer;
   outline: none;
   overflow: hidden;
-  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2), inset 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .theme-toggle-extreme:hover {
-  transform: scale(1.08) translateY(-1px);
+  transform: scale(1.1) translateY(-1px);
   border-color: var(--accent);
-  box-shadow: 0 0 12px var(--accent-glow), 0 4px 15px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 0 15px var(--accent-glow), 0 4px 15px rgba(0, 0, 0, 0.25);
 }
 
 .theme-toggle-extreme:active {
-  transform: scale(0.92) translateY(0px);
+  transform: scale(0.9) translateY(0px);
 }
 
 .theme-toggle-extreme-track {
@@ -1597,6 +1614,47 @@ code, .font-mono { font-family: "IBM Plex Mono", monospace; }
   position: relative;
 }
 
+/* Twinkling stars (Dark mode only) */
+.star {
+  position: absolute;
+  background: #ffffff;
+  border-radius: 50%;
+  opacity: 0;
+  transform: scale(0);
+  transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.star-1 { top: 6px; left: 8px; width: 2px; height: 2px; }
+.star-2 { top: 15px; left: 11px; width: 3px; height: 3px; }
+.star-3 { top: 7px; left: 16px; width: 1.5px; height: 1.5px; }
+
+.theme-toggle-extreme.dark-active .star {
+  opacity: 0.85;
+  transform: scale(1);
+  animation: star-twinkle 1.8s infinite alternate ease-in-out;
+}
+.theme-toggle-extreme.dark-active .star-1 { animation-delay: 0.2s; }
+.theme-toggle-extreme.dark-active .star-2 { animation-delay: 0.5s; }
+
+/* Drifting clouds (Light mode only) */
+.cloud {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
+  opacity: 0;
+  transform: translateY(5px);
+  transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.cloud-1 { bottom: 3px; right: 6px; width: 14px; height: 6px; }
+.cloud-2 { bottom: 6px; right: 12px; width: 10px; height: 5px; }
+
+.theme-toggle-extreme.light-active .cloud {
+  opacity: 0.95;
+  transform: translateY(0);
+  animation: cloud-drift 4s infinite alternate ease-in-out;
+}
+.theme-toggle-extreme.light-active .cloud-2 { animation-delay: 1.5s; }
+
+/* Bouncy spring ball transition with gooey stretch */
 .theme-toggle-extreme-ball {
   position: absolute;
   top: 0;
@@ -1608,7 +1666,16 @@ code, .font-mono { font-family: "IBM Plex Mono", monospace; }
   align-items: center;
   justify-content: center;
   box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), 0 0 6px var(--accent-glow);
-  transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  transition: left 0.5s cubic-bezier(0.68, -0.6, 0.27, 1.6), 
+              width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              background-color 0.4s ease,
+              box-shadow 0.4s ease;
+}
+
+/* On click active state (simulated gooey stretch) */
+.theme-toggle-extreme:active .theme-toggle-extreme-ball {
+  width: 30px;
+  border-radius: 11px;
 }
 
 /* Light Active State */
@@ -1650,6 +1717,16 @@ code, .font-mono { font-family: "IBM Plex Mono", monospace; }
 .theme-toggle-extreme-icon.moon {
   color: #fae8ff;
   animation: extreme-moon-sway 3s ease-in-out infinite alternate;
+}
+
+@keyframes star-twinkle {
+  0% { opacity: 0.3; transform: scale(0.8); }
+  100% { opacity: 1; transform: scale(1.2); }
+}
+
+@keyframes cloud-drift {
+  0% { transform: translateX(0) scale(1); }
+  100% { transform: translateX(-4px) scale(1.05); }
 }
 
 @keyframes extreme-icon-pop {

@@ -103,6 +103,7 @@ export default function App() {
   const [isEstimating, setIsEstimating] = useState(false);
   const [estimateData, setEstimateData] = useState(null);
   const [activeJob, setActiveJob] = useState(null);
+  const [translationQueuePosition, setTranslationQueuePosition] = useState(0);
 
   useEffect(() => {
     if (darkMode) {
@@ -113,8 +114,14 @@ export default function App() {
   }, [darkMode]);
 
   useEffect(() => {
-    document.documentElement.classList.remove("font-small", "font-medium", "font-large");
-    document.documentElement.classList.add(`font-${editorFontSize}`);
+    document.documentElement.classList.remove(
+      "font-very-small",
+      "font-small",
+      "font-medium",
+      "font-large",
+      "font-very-large"
+    );
+    document.documentElement.classList.add(`font-${editorFontSize.replace(" ", "-")}`);
   }, [editorFontSize]);
 
   useEffect(() => {
@@ -227,6 +234,10 @@ export default function App() {
     socket.on("connect", () => {
       console.log("Connected to collaborative workspace socket");
       socket.emit("join-document", { documentId });
+    });
+
+    socket.on("translation-queue-update", ({ position }) => {
+      setTranslationQueuePosition(position);
     });
 
     socket.on("room-state", ({ users, locks }) => {
@@ -2713,7 +2724,7 @@ export default function App() {
               <div className="progress-toast">
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--sky)" }}>
-                    Translating
+                    {translationQueuePosition > 0 ? `Queued (Position #${translationQueuePosition})` : "Translating"}
                   </span>
                   <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "var(--text-primary)" }}>
                     {progress}%
@@ -2894,7 +2905,9 @@ export default function App() {
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>
-              QC Audit in Progress...
+              {activeJob.status === "pending" && activeJob.queuePosition > 0
+                ? `QC Audit Queued (Pos #${activeJob.queuePosition})`
+                : "QC Audit in Progress..."}
             </span>
             <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)" }}>
               {activeJob.completed_segments}/{activeJob.total_segments}

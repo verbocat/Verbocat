@@ -3,6 +3,8 @@ const crypto = require("crypto");
 const pLimitModule = require("p-limit");
 const pLimit = pLimitModule.default || pLimitModule;
 const { supabase } = require("../config/supabase");
+const { AsyncLocalStorage } = require("async_hooks");
+const auditContextStorage = new AsyncLocalStorage();
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_MODEL = "gpt-4o";
@@ -1167,7 +1169,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Global throttling parameters to guarantee stay within 30k TPM limits
 let lastCallTime = 0;
-const GLOBAL_COOLDOWN_MS = 5000; // 5.0 seconds minimum between any OpenAI requests
+const GLOBAL_COOLDOWN_MS = 1500; // Spaced slightly to prevent rapid consecutive bursts, but much faster than 5.0 seconds!
 
 const parseRetryAfter = (errorMessage) => {
   if (!errorMessage) return null;
@@ -1182,7 +1184,7 @@ const parseRetryAfter = (errorMessage) => {
   return null;
 };
 
-const callOpenAI = async (messages, responseFormat, retries = 6, attempt = 1) => {
+const callOpenAIDirect = async (messages, responseFormat, retries = 6, attempt = 1) => {
   if (!OPENAI_API_KEY) {
     throw new Error("Missing OpenAI API Key");
   }
@@ -1244,10 +1246,24 @@ const callOpenAI = async (messages, responseFormat, retries = 6, attempt = 1) =>
 
       console.warn(`[MQM OpenAI API Call] Failed with status ${err.response?.status || err.code} on attempt ${attempt}. Retrying in ${Math.round(delay)}ms... Error: ${err.message}`);
       await sleep(delay);
-      return callOpenAI(messages, responseFormat, retries - 1, attempt + 1);
+      return callOpenAIDirect(messages, responseFormat, retries - 1, attempt + 1);
     }
     throw err;
   }
+};
+
+const callOpenAI = async (messages, responseFormat, retries = 6, attempt = 1) => {
+  const { enqueue } = require("./queueManager");
+  const context = auditContextStorage.getStore();
+  const userId = context?.userId || null;
+  const estimatedTokens = Math.round(JSON.stringify(messages).length / 4) + 1500;
+
+  return enqueue({
+    type: "audit_pass",
+    estimatedTokens,
+    userId,
+    execute: () => callOpenAIDirect(messages, responseFormat, retries, attempt)
+  });
 };
 
 /**
@@ -1965,12 +1981,13 @@ const scanDocumentGlobally = async (segments, targetLang, sourceLang, contextSet
   return mergedReport;
 };
 
-const auditDocumentMQM = async (documentId, jobId, contextSettings = null) => {
+const auditDocumentMQM = async (documentId, jobId, contextSettings = null, userId = null) => {
   const { getIo } = require("./socket");
   const io = getIo();
 
-  try {
-    console.log("[Audit Job " + jobId + "] Starting background audit...");
+  return auditContextStorage.run({ userId }, async () => {
+    try {
+      console.log("[Audit Job " + jobId + "] Starting background audit...");
 
     const { data: doc, error: docErr } = await supabase
       .from("documents")
@@ -2198,17 +2215,18 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null) => {
       });
     }
 
-  } catch (error) {
-    console.error(`[Audit Job ${jobId}] Fatal crash:`, error.message);
-    await supabase
-      .from("audit_jobs")
-      .update({
-        status: "failed",
-        error_message: error.message,
-        updated_at: new Date().toISOString()
-      })
-      .eq("id", jobId);
-  }
+    } catch (error) {
+      console.error(`[Audit Job ${jobId}] Fatal crash:`, error.message);
+      await supabase
+        .from("audit_jobs")
+        .update({
+          status: "failed",
+          error_message: error.message,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", jobId);
+    }
+  });
 };
 
 const saveSegmentAuditResult = async (documentId, segment, mqmReport, io) => {
