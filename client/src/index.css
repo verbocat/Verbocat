@@ -50,12 +50,82 @@
   --radius-lg:      12px;
   --radius-xl:      16px;
 
-  /* Typography */
+  /* Typography defaults */
   font-family: "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   font-feature-settings: "cv02","cv03","cv04","cv11","ss01";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+
+  /* Font size variables */
+  --editor-font-size-source: 12.5px;
+  --editor-font-size-target: 13px;
+}
+
+/* Light Theme Variables */
+:root.light-mode {
+  /* Surfaces */
+  --bg-base:       #f8fafc;
+  --bg-panel:      #f1f5f9;
+  --bg-surface:    #ffffff;
+  --bg-elevated:   #e2e8f0;
+  --bg-hover:      rgba(0, 0, 0, 0.035);
+  --bg-active:     rgba(91, 106, 240, 0.06);
+  --bg-input:      #f8fafc;
+
+  /* Borders */
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-medium: rgba(0, 0, 0, 0.14);
+  --border-strong: rgba(0, 0, 0, 0.24);
+  --border-focus:  rgba(91, 106, 240, 0.55);
+
+  /* Accents */
+  --accent:         #3b82f6;
+  --accent-hover:   #2563eb;
+  --accent-glow:    rgba(59, 130, 246, 0.18);
+  --accent-faint:   rgba(59, 130, 246, 0.06);
+  --emerald:        #10b981;
+  --emerald-glow:   rgba(16, 185, 129, 0.15);
+  --amber:          #d97706;
+  --rose:           #e11d48;
+  --sky:            #0284c7;
+
+  /* Text */
+  --text-primary:   #0f172a;
+  --text-secondary: #475569;
+  --text-muted:     #64748b;
+  --text-accent:    #2563eb;
+  --text-emerald:   #047857;
+  --text-amber:     #b45309;
+  --text-rose:      #be123c;
+}
+
+/* Light mode overrides for hardcoded dark values */
+:root.light-mode .topbar {
+  background: rgba(241, 245, 249, 0.96) !important;
+}
+:root.light-mode .seg-editor:focus {
+  background: #ffffff !important;
+}
+:root.light-mode .seg-row:hover {
+  background: rgba(0, 0, 0, 0.015) !important;
+}
+:root.light-mode .seg-dot.dot-pending {
+  background: #cbd5e1 !important;
+}
+
+/* Font Size Classes */
+:root.font-small {
+  --editor-font-size-source: 11px;
+  --editor-font-size-target: 11.5px;
+}
+:root.font-medium {
+  --editor-font-size-source: 12.5px;
+  --editor-font-size-target: 13px;
+}
+:root.font-large {
+  --editor-font-size-source: 14.5px;
+  --editor-font-size-target: 15px;
 }
 
 /* ================================================================
@@ -664,7 +734,7 @@ code, .font-mono { font-family: "IBM Plex Mono", monospace; }
   min-width: 0;
 }
 .seg-source-text {
-  font-size: 12.5px;
+  font-size: var(--editor-font-size-source);
   font-weight: 400;
   color: rgba(200,210,235,0.75);
   line-height: 1.6;
@@ -716,7 +786,7 @@ code, .font-mono { font-family: "IBM Plex Mono", monospace; }
 
 /* Target editor — THE visual center */
 .seg-editor {
-  font-size: 13px;
+  font-size: var(--editor-font-size-target);
   font-weight: 400;
   line-height: 1.65;
   color: var(--text-primary);

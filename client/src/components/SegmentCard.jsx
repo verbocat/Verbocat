@@ -147,7 +147,7 @@ export const SegmentCard = ({
   onCopy, onUpdateTranslation, onToggleVerify, onVerifyAndNext,
   lockInfo, onFocusSegment, onBlurSegment, readOnly,
   onSaveContext, onTranslateWithContext, onTyping,
-  isOwner, onAcceptChange, onRejectChange
+  isOwner, onAcceptChange, onRejectChange, autocompleteEnabled = true
 }) => {
   const editorRef = useRef(null);
   const lastSaved = useRef(segment.target || "");
@@ -627,7 +627,7 @@ export const SegmentCard = ({
               </div>
             )}
 
-            {suggestions.length > 0 && (
+            {autocompleteEnabled && suggestions.length > 0 && (
               <div className="glossary-dropdown">
                 <div className="glossary-header">
                   <span>Glossary Suggestions</span>

@@ -162,12 +162,13 @@ export const fetchDocument = async (documentId) => {
   return response.data;
 };
 
-export const updateSegment = async (documentId, segmentIndex, targetText, status, contextJira, contextDescription) => {
+export const updateSegment = async (documentId, segmentIndex, targetText, status, contextJira, contextDescription, autoPropagate = true) => {
   const response = await api.put(`/api/documents/${documentId}/segments/${segmentIndex}`, {
     targetText,
     status,
     contextJira,
-    contextDescription
+    contextDescription,
+    autoPropagate
   });
   return response.data;
 };

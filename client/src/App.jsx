@@ -72,6 +72,9 @@ export default function App() {
   const [sourceLanguage, setSourceLanguage] = useState("en");
   const [targetLanguage, setTargetLanguage] = useState("hi");
   const [darkMode, setDarkMode] = useState(true);
+  const [editorFontSize, setEditorFontSize] = useState("medium");
+  const [autocompleteEnabled, setAutocompleteEnabled] = useState(true);
+  const [autoPropagateEnabled, setAutoPropagateEnabled] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [toast, setToast] = useState(null);
@@ -100,6 +103,19 @@ export default function App() {
   const [isEstimating, setIsEstimating] = useState(false);
   const [estimateData, setEstimateData] = useState(null);
   const [activeJob, setActiveJob] = useState(null);
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.remove("light-mode");
+    } else {
+      document.documentElement.classList.add("light-mode");
+    }
+  }, [darkMode]);
+
+  useEffect(() => {
+    document.documentElement.classList.remove("font-small", "font-medium", "font-large");
+    document.documentElement.classList.add(`font-${editorFontSize}`);
+  }, [editorFontSize]);
 
   useEffect(() => {
     if (isAuth) {
@@ -289,7 +305,7 @@ export default function App() {
             if (trackedBy !== undefined) updated.trackedBy = trackedBy;
             return updated;
           }
-          if (cleanedSource && cleanString(seg.source) === cleanedSource) {
+          if (autoPropagateEnabled && cleanedSource && cleanString(seg.source) === cleanedSource) {
             const updated = { ...seg, target: propagateTranslation(targetText, seg.source) };
             if (originalTargetText !== undefined) {
               if (originalTargetText === null) {
@@ -1352,7 +1368,7 @@ export default function App() {
               }
             }
           }
-        } else if (cleanedSource && cleanString(segment.source) === cleanedSource) {
+        } else if (autoPropagateEnabled && cleanedSource && cleanString(segment.source) === cleanedSource) {
           const propagatedVal = propagateTranslation(value, segment.source);
           updated.target = propagatedVal;
           if (trackChangesEnabled && !isOwnerLocal) {
@@ -1419,7 +1435,7 @@ export default function App() {
         if (segment.id === id) {
           return { ...segment, target: value, verified: false };
         }
-        if (cleanedSource && cleanString(segment.source) === cleanedSource) {
+        if (autoPropagateEnabled && cleanedSource && cleanString(segment.source) === cleanedSource) {
           return { ...segment, target: propagateTranslation(value, segment.source), verified: false };
         }
         return segment;
@@ -1430,7 +1446,7 @@ export default function App() {
       const segmentIndex = segments.findIndex((s) => s.id === id);
       if (segmentIndex !== -1) {
         try {
-          await updateSegment(documentId, segmentIndex, value, "draft");
+          await updateSegment(documentId, segmentIndex, value, "draft", undefined, undefined, autoPropagateEnabled);
         } catch (err) {
           console.error("Failed to update segment in database:", err);
           showToast(`Failed to save translation to database: ${err.message || err}`, "error");
@@ -1457,7 +1473,7 @@ export default function App() {
       const cleanedSource = cleanString(sourceText);
 
       return previous.map((segment) => {
-        if (segment.id === id || (cleanedSource && cleanString(segment.source) === cleanedSource)) {
+        if (segment.id === id || (autoPropagateEnabled && cleanedSource && cleanString(segment.source) === cleanedSource)) {
           return { ...segment, verified: nextVerified };
         }
         return segment;
@@ -1469,7 +1485,7 @@ export default function App() {
       if (segmentIndex !== -1) {
         try {
           const targetText = segments[segmentIndex].target;
-          await updateSegment(documentId, segmentIndex, targetText, nextVerified ? "approved" : "draft");
+          await updateSegment(documentId, segmentIndex, targetText, nextVerified ? "approved" : "draft", undefined, undefined, autoPropagateEnabled);
         } catch (err) {
           console.error("Failed to update verification in database:", err);
           showToast(`Failed to save verification state: ${err.message || err}`, "error");
@@ -1494,7 +1510,7 @@ export default function App() {
       const cleanedSource = cleanString(sourceText);
 
       return previous.map((segment) =>
-        (segment.id === id || (cleanedSource && cleanString(segment.source) === cleanedSource))
+        (segment.id === id || (autoPropagateEnabled && cleanedSource && cleanString(segment.source) === cleanedSource))
           ? { ...segment, verified: true }
           : segment
       );
@@ -1505,7 +1521,7 @@ export default function App() {
       if (segmentIndex !== -1) {
         try {
           const targetText = segments[segmentIndex].target;
-          await updateSegment(documentId, segmentIndex, targetText, "approved");
+          await updateSegment(documentId, segmentIndex, targetText, "approved", undefined, undefined, autoPropagateEnabled);
         } catch (err) {
           console.error("Failed to verify in database:", err);
           showToast(`Failed to save verification state: ${err.message || err}`, "error");
@@ -2539,7 +2555,15 @@ export default function App() {
         show={showSettingsModal}
         onClose={() => setShowSettingsModal(false)}
         darkMode={darkMode}
-        onToggleDarkMode={() => setDarkMode((value) => !value)}
+        editorFontSize={editorFontSize}
+        autocompleteEnabled={autocompleteEnabled}
+        autoPropagateEnabled={autoPropagateEnabled}
+        onApplySettings={({ darkMode, editorFontSize, autocompleteEnabled, autoPropagateEnabled }) => {
+          setDarkMode(darkMode);
+          setEditorFontSize(editorFontSize);
+          setAutocompleteEnabled(autocompleteEnabled);
+          setAutoPropagateEnabled(autoPropagateEnabled);
+        }}
         onLogout={logout}
         userRole={user ? user.role : ""}
         userEmail={user ? user.email : ""}
@@ -2731,6 +2755,7 @@ export default function App() {
                   isOwner={ownerId === user?.id}
                   onAcceptChange={handleAcceptChange}
                   onRejectChange={handleRejectChange}
+                  autocompleteEnabled={autocompleteEnabled}
                 />
               )}
             />

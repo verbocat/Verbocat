@@ -524,7 +524,7 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
     if (!doc) return;
 
     const segmentIndex = parseInt(request.params.index, 10);
-    const { targetText, status, contextJira, contextDescription } = request.body;
+    const { targetText, status, contextJira, contextDescription, autoPropagate } = request.body;
 
     const updateFields = {
       updated_at: new Date().toISOString()
@@ -573,7 +573,7 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
 
     // Find all duplicate segment indices and their source/target texts in the document
     let matchingSegs = [{ segment_index: segmentIndex, source_text: sourceText, target_text: dbSegment.target_text, original_target_text: dbSegment.original_target_text, tracked_by: dbSegment.tracked_by }];
-    if (sourceText) {
+    if (sourceText && autoPropagate !== false) {
       const { data: allSegs } = await supabase
         .from("document_segments")
         .select("segment_index, source_text, target_text, original_target_text, tracked_by")

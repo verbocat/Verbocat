@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { X, Sun, Moon, LogOut, User, ShieldCheck, Sliders } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, LogOut, User, ShieldCheck, Sliders } from "lucide-react";
 
 const Toggle = ({ on, onToggle }) => (
   <button type="button" onClick={onToggle} className={`toggle ${on ? "on" : "off"}`}>
@@ -8,13 +8,43 @@ const Toggle = ({ on, onToggle }) => (
 );
 
 export const SettingsModal = ({
-  show, onClose, darkMode, onToggleDarkMode, onLogout, userRole, userEmail, theme
+  show,
+  onClose,
+  darkMode,
+  editorFontSize,
+  autocompleteEnabled,
+  autoPropagateEnabled,
+  onApplySettings,
+  onLogout,
+  userRole,
+  userEmail,
+  theme
 }) => {
-  const [autocomplete, setAutocomplete] = useState(true);
-  const [autoPropagate, setAutoPropagate] = useState(true);
-  const [fontSize, setFontSize] = useState("medium");
+  const [localDarkMode, setLocalDarkMode] = useState(darkMode);
+  const [localFontSize, setLocalFontSize] = useState(editorFontSize);
+  const [localAutocomplete, setLocalAutocomplete] = useState(autocompleteEnabled);
+  const [localAutoPropagate, setLocalAutoPropagate] = useState(autoPropagateEnabled);
+
+  useEffect(() => {
+    if (show) {
+      setLocalDarkMode(darkMode);
+      setLocalFontSize(editorFontSize);
+      setLocalAutocomplete(autocompleteEnabled);
+      setLocalAutoPropagate(autoPropagateEnabled);
+    }
+  }, [show, darkMode, editorFontSize, autocompleteEnabled, autoPropagateEnabled]);
 
   if (!show) return null;
+
+  const handleApply = () => {
+    onApplySettings({
+      darkMode: localDarkMode,
+      editorFontSize: localFontSize,
+      autocompleteEnabled: localAutocomplete,
+      autoPropagateEnabled: localAutoPropagate
+    });
+    onClose();
+  };
 
   return (
     <div className="modal-overlay">
@@ -47,25 +77,27 @@ export const SettingsModal = ({
         {/* Body */}
         <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-
-
-          {/* Editor Preferences */}
+          {/* Appearance Preference */}
           <div>
-            <span className="settings-section-label">Editor Preferences</span>
+            <span className="settings-section-label">Appearance</span>
             <div>
               <div className="settings-row" style={{ borderRadius: "var(--radius-md) var(--radius-md) 0 0" }}>
                 <div>
-                  <span className="settings-label">Glossary Autocomplete</span>
-                  <span className="settings-desc">Show terminology suggestions while typing</span>
+                  <span className="settings-label">Interface Theme</span>
+                  <span className="settings-desc">Choose between dark mode and light mode</span>
                 </div>
-                <Toggle on={autocomplete} onToggle={() => setAutocomplete(v => !v)} />
-              </div>
-              <div className="settings-row" style={{ borderTop: "none", borderRadius: 0 }}>
-                <div>
-                  <span className="settings-label">Auto-Propagate Segments</span>
-                  <span className="settings-desc">Apply translations across identical source texts</span>
+                <div className="seg-control">
+                  <button type="button"
+                    className={`seg-control-btn ${!localDarkMode ? "active" : ""}`}
+                    onClick={() => setLocalDarkMode(false)}>
+                    Light
+                  </button>
+                  <button type="button"
+                    className={`seg-control-btn ${localDarkMode ? "active" : ""}`}
+                    onClick={() => setLocalDarkMode(true)}>
+                    Dark
+                  </button>
                 </div>
-                <Toggle on={autoPropagate} onToggle={() => setAutoPropagate(v => !v)} />
               </div>
               <div className="settings-row" style={{ borderTop: "none", borderRadius: "0 0 var(--radius-md) var(--radius-md)" }}>
                 <div>
@@ -75,12 +107,33 @@ export const SettingsModal = ({
                 <div className="seg-control">
                   {["small", "medium", "large"].map(s => (
                     <button key={s} type="button"
-                      className={`seg-control-btn ${fontSize === s ? "active" : ""}`}
-                      onClick={() => setFontSize(s)}>
+                      className={`seg-control-btn ${localFontSize === s ? "active" : ""}`}
+                      onClick={() => setLocalFontSize(s)}>
                       {s}
                     </button>
                   ))}
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Editor Preferences */}
+          <div>
+            <span className="settings-section-label">Translation Preferences</span>
+            <div>
+              <div className="settings-row" style={{ borderRadius: "var(--radius-md) var(--radius-md) 0 0" }}>
+                <div>
+                  <span className="settings-label">Glossary Autocomplete</span>
+                  <span className="settings-desc">Show terminology suggestions while typing</span>
+                </div>
+                <Toggle on={localAutocomplete} onToggle={() => setLocalAutocomplete(v => !v)} />
+              </div>
+              <div className="settings-row" style={{ borderTop: "none", borderRadius: "0 0 var(--radius-md) var(--radius-md)" }}>
+                <div>
+                  <span className="settings-label">Auto-Propagate Segments</span>
+                  <span className="settings-desc">Apply translations across identical source texts</span>
+                </div>
+                <Toggle on={localAutoPropagate} onToggle={() => setLocalAutoPropagate(v => !v)} />
               </div>
             </div>
           </div>
@@ -126,6 +179,46 @@ export const SettingsModal = ({
                 Log Out
               </button>
             </div>
+          </div>
+
+          {/* Apply / Cancel Actions */}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 10 }}>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={onClose}
+              style={{
+                padding: "8px 16px",
+                borderRadius: "var(--radius-md)",
+                fontSize: 12.5,
+                fontWeight: 600,
+                cursor: "pointer",
+                background: "var(--bg-elevated)",
+                border: "1px solid var(--border-medium)",
+                color: "var(--text-secondary)",
+                transition: "all 0.15s ease"
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleApply}
+              style={{
+                padding: "8px 18px",
+                borderRadius: "var(--radius-md)",
+                fontSize: 12.5,
+                fontWeight: 700,
+                cursor: "pointer",
+                background: "var(--accent)",
+                border: "1px solid var(--accent)",
+                color: "#ffffff",
+                boxShadow: "0 4px 12px var(--accent-glow)",
+                transition: "all 0.15s ease"
+              }}
+            >
+              Apply Settings
+            </button>
           </div>
 
         </div>
