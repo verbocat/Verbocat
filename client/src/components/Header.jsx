@@ -91,6 +91,26 @@ export const Header = ({
           </NavBtn>
         )}
 
+        {/* Extreme Animated Theme Toggle Button */}
+        {onToggleDarkMode && (
+          <button
+            onClick={onToggleDarkMode}
+            title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            className={`theme-toggle-extreme ${darkMode ? "dark-active" : "light-active"}`}
+            style={{ marginLeft: 4, marginRight: 4, flexShrink: 0 }}
+          >
+            <div className="theme-toggle-extreme-track">
+              <div className="theme-toggle-extreme-ball">
+                {darkMode ? (
+                  <Moon className="theme-toggle-extreme-icon moon" />
+                ) : (
+                  <Sun className="theme-toggle-extreme-icon sun" />
+                )}
+              </div>
+            </div>
+          </button>
+        )}
+
         {/* Primary upload CTA when no file */}
         {!hasFile && (
           <label className="btn-cta" style={{ cursor: "pointer" }}>

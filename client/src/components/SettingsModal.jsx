@@ -104,14 +104,26 @@ export const SettingsModal = ({
                   <span className="settings-label">Editor Font Size</span>
                   <span className="settings-desc">Default text size in translation rows</span>
                 </div>
-                <div className="seg-control">
-                  {["small", "medium", "large"].map(s => (
-                    <button key={s} type="button"
-                      className={`seg-control-btn ${localFontSize === s ? "active" : ""}`}
-                      onClick={() => setLocalFontSize(s)}>
-                      {s}
-                    </button>
-                  ))}
+                <div style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", maxWidth: 160 }}>
+                  <input
+                    type="range"
+                    min="1"
+                    max="3"
+                    step="1"
+                    value={localFontSize === "small" ? 1 : localFontSize === "large" ? 3 : 2}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      setLocalFontSize(val === 1 ? "small" : val === 3 ? "large" : "medium");
+                    }}
+                    style={{
+                      flex: 1,
+                      accentColor: "var(--accent)",
+                      cursor: "pointer"
+                    }}
+                  />
+                  <span style={{ fontSize: 11.5, fontWeight: 700, minWidth: 48, textTransform: "capitalize", color: "var(--text-primary)", textAlign: "right" }}>
+                    {localFontSize}
+                  </span>
                 </div>
               </div>
             </div>
