@@ -94,18 +94,16 @@ apiRouter.post("/translate-batch", checkAuth, checkTranslateAccess, async (reque
       const updatePromises = result.results.map(async (item) => {
         const segmentIndex = item.id - 1; // client IDs are 1-indexed
 
+        const { isLegitimatelyIdentical } = require("../services/translationProviders");
         const cleanSource = String(item.source || "").replace(/<[^>]+>/g, "").trim();
-        const hasLetters = /\p{L}/u.test(cleanSource);
-        const isListPointer = /^\(?[a-zA-Z0-9]+\)?\.?$/i.test(cleanSource) || /^\d+(\.\d+)*$/i.test(cleanSource);
-        const isUrl = /https?:\/\/[^\s]+/i.test(cleanSource);
+        const cleanTranslated = String(item.translated || "").replace(/<[^>]+>/g, "").trim();
 
         const isFallback = target !== source &&
           item.translated &&
           item.source &&
-          item.translated.trim() === item.source.trim() &&
-          hasLetters &&
-          !isListPointer &&
-          !isUrl;
+          cleanTranslated.toLowerCase() === cleanSource.toLowerCase() &&
+          /\p{L}/u.test(cleanSource) &&
+          !isLegitimatelyIdentical(cleanSource);
 
         const updateFields = {
           target_text: isFallback ? "" : item.translated,

@@ -969,7 +969,7 @@ export default function App() {
     }
 
     try {
-      const BATCH_SIZE = 40;
+      const BATCH_SIZE = 25;
       let completedCount = 0;
 
       for (let i = 0; i < segmentsToTranslate.length; i += BATCH_SIZE) {
@@ -1008,8 +1008,83 @@ export default function App() {
         setProgress(Math.round((completedCount / segmentsToTranslate.length) * 100));
       }
 
+      // ── Post-translation completeness check ──
+      // Scan for any segments that are still untranslated and retry them
+      setProgress(99);
+      let stillUntranslatedCount = 0;
+      const stillUntranslated = [];
+      setSegments((prev) => {
+        prev.forEach((seg) => {
+          if (isJunkSegment(seg.source)) return;
+          const cleanTarget = (seg.target || "").replace(/<\/?\d+>/g, "").trim();
+          const cleanSource = seg.source.replace(/<\/?\d+>/g, "").trim();
+          const hasLetters = /\p{L}/u.test(cleanSource);
+          const isListPointer = /^\(?[a-zA-Z0-9]+\)?\\.?$/i.test(cleanSource) || /^\d+(\.\d+)*$/i.test(cleanSource);
+          const isUrl = /https?:\/\/[^\s]+/i.test(cleanSource);
+          const isAbbrev = /^[A-Z0-9][A-Z0-9.\-\/\s]*$/.test(cleanSource) && cleanSource.length <= 40;
+          const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanSource);
+          const isPhone = /^[+]?[\d\s\-().]+$/.test(cleanSource) && cleanSource.replace(/\D/g, "").length >= 7;
+          const isRomanPointer = /^\(?[ivxlcdm]+\)\.?$/i.test(cleanSource);
+
+          if (
+            targetLanguage !== sourceLanguage &&
+            hasLetters &&
+            !isListPointer &&
+            !isUrl &&
+            !isAbbrev &&
+            !isEmail &&
+            !isPhone &&
+            !isRomanPointer &&
+            (cleanTarget === "" || cleanSource.toLowerCase() === cleanTarget.toLowerCase())
+          ) {
+            stillUntranslated.push(seg);
+          }
+        });
+        return prev;
+      });
+
+      stillUntranslatedCount = stillUntranslated.length;
+
+      if (stillUntranslatedCount > 0) {
+        console.log(`[Post-Translation Check] ${stillUntranslatedCount} segments still untranslated. Retrying...`);
+        const RETRY_BATCH = 5;
+        for (let ri = 0; ri < stillUntranslated.length; ri += RETRY_BATCH) {
+          const retryBatch = stillUntranslated.slice(ri, ri + RETRY_BATCH);
+          try {
+            const retryData = await translateBatch(retryBatch, targetLanguage, sourceLanguage, { ...contextSettings, glossary: translationGlossary }, documentId);
+            const retryResults = retryData.results || [];
+            setSegments((previous) => {
+              const newSegments = [...previous];
+              retryResults.forEach((item) => {
+                const index = newSegments.findIndex((s) => s.id === item.id);
+                if (index !== -1 && item.translated) {
+                  newSegments[index] = {
+                    ...newSegments[index],
+                    target: applyGlossaryTerms(
+                      newSegments[index].source,
+                      item.translated,
+                      translationGlossary
+                    ),
+                    provider: item.provider,
+                    mqmAccuracyScore: item.mqmAccuracyScore !== undefined ? item.mqmAccuracyScore : 100,
+                    mqmReport: item.mqmReport || null
+                  };
+                }
+              });
+              return newSegments;
+            });
+          } catch (retryErr) {
+            console.warn(`[Post-Translation Retry] Batch retry failed:`, retryErr.message);
+          }
+        }
+      }
+
       setIsTranslating(false);
-      showToast("Translation completed!");
+      if (stillUntranslatedCount > 0) {
+        showToast(`Translation completed! ${stillUntranslatedCount} segments were retried for completeness.`);
+      } else {
+        showToast("Translation completed!");
+      }
     } catch (error) {
       console.error("Translation error:", error);
       setIsTranslating(false);

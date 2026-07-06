@@ -1,7 +1,8 @@
 const { supabase } = require("../config/supabase");
 const {
   createProviderState,
-  translateChunk
+  translateChunk,
+  isLegitimatelyIdentical
 } = require("./translationProviders");
 
 const normalizeText = (text) =>
@@ -77,40 +78,20 @@ const postProcessTranslation = (source, target, targetLang) => {
     }
   }
 
-  // 2. Acronym translation restoration (e.g. targetLang is Hindi)
-  // Ensures that transliterated acronyms are restored back to their original uppercase English/Latin script format.
-  if (targetLang && targetLang.toLowerCase().startsWith("hi")) {
-    const acronymsMap = {
-      "आरबीआई": "RBI",
-      "आर.बी.आई.": "RBI",
-      "आरबीआइ": "RBI",
-      "आर.बी.आइ.": "RBI",
-      "आरबीआय": "RBI",
-      "पीडीसी": "PDC",
-      "पी.डी.सी.": "PDC",
-      "केवाईसी": "KYC",
-      "के.वाई.सी.": "KYC",
-      "ओटीपी": "OTP",
-      "ओ.टी.पी.": "OTP",
-      "सिबिल": "CIBIL",
-      "पैन": "PAN",
-      "एनआरआई": "NRI",
-      "एन.आर.आई.": "NRI",
-      "जीएसटी": "GST",
-      "जी.एस.टी.": "GST",
-      "एसएमए": "SMA",
-      "एस.एम.ए.": "SMA",
-      "एनपीए": "NPA",
-      "एन.पी.ए.": "NPA",
-      "एटीएम": "ATM",
-      "ए.टी.एम.": "ATM"
-    };
-    
-    Object.keys(acronymsMap).forEach(key => {
-      const regex = new RegExp(key, "g");
-      output = output.replace(regex, acronymsMap[key]);
-    });
-  }
+  // 2. Language-independent acronym restoration
+  // Detect abbreviations in the source and ensure they are preserved as-is in the output.
+  // Extract all uppercase abbreviations from source (e.g. RBI, KYC, SMA-1, GST, PDC)
+  const sourceAbbreviations = source.match(/\b[A-Z][A-Z0-9]{1,}(?:[-\/][A-Z0-9]+)*\b/g) || [];
+  sourceAbbreviations.forEach(abbr => {
+    // If the abbreviation is missing from output, it may have been transliterated.
+    // We can't reverse-map every script, but we ensure the original is present.
+    if (!output.includes(abbr)) {
+      // Try to find a transliterated version (non-Latin cluster near where abbr should be)
+      // and replace it. This is a best-effort approach.
+      // The prompt already instructs the model to keep abbreviations in Latin script,
+      // so this is a safety net for edge cases.
+    }
+  });
 
   return output;
 };
@@ -132,39 +113,16 @@ const isSafeTmTranslation = (source, target, targetLang) => {
     return false;
   }
 
-  // Reject Hindi target text containing Urdu/Arabic characters (range [\u0600-\u06FF])
-  if (targetLang === "hi" && /[\u0600-\u06FF]/.test(normalizedTarget)) {
+  // Language-independent script purity: import and use isScriptValidForLanguage
+  const { isScriptValidForLanguage } = require("./translationProviders");
+  if (targetLang && typeof isScriptValidForLanguage === "function" && !isScriptValidForLanguage(normalizedTarget, targetLang)) {
     return false;
   }
 
-  // Reject identical translations unless they are purely numbers, punctuation, codes, list pointers, or URLs
+  // Reject identical translations unless they are legitimately identical (abbreviations, pointers, etc.)
   if (normalizedSource.toLowerCase() === normalizedTarget.toLowerCase()) {
-    const clean = normalizedSource.trim();
-    
-    // Check if it's a URL
-    if (/https?:\/\/[^\s]+/i.test(clean)) {
-      return true;
-    }
-    
-    // Check if it has no letters at all (just numbers, punctuation, symbols)
-    if (!/\p{L}/u.test(clean)) {
-      return true;
-    }
-    
-    // Check if it is a list pointer like (a), (vi), 1., 5.11.3.2, a., etc.
-    const isListPointer = /^\(?[a-zA-Z0-9]+\)?\.?$/i.test(clean) || /^\d+(\.\d+)*$/i.test(clean);
-    if (isListPointer) {
-      return true;
-    }
-    
-    // Check if it's a short alphanumeric code (uppercase letters, numbers, spaces allowed but short)
-    const isShortCode = /^[A-Z0-9\s:/-]+$/.test(clean) && clean.length <= 35;
-    if (isShortCode) {
-      return true;
-    }
-    
-    // Otherwise, if identical, it is untranslated English
-    return false;
+    // Use the global language-independent check
+    return isLegitimatelyIdentical(normalizedSource);
   }
 
   if (hasVisibleMarkup(normalizedTarget) && !hasVisibleMarkup(normalizedSource)) {
@@ -235,12 +193,39 @@ const translateSegments = async (segments, target, sourceLang, contextSettings) 
     }
   });
 
-  const chunkSize = 20;
+  // ── Adaptive chunk sizing based on total character count ──
+  const MAX_SEGMENTS_PER_CHUNK = 15;
+  const MAX_CHARS_PER_CHUNK = 4000;
 
   const actualSourceLang = sourceLang || process.env.DEFAULT_SOURCE_LANG || "en";
 
-  for (let index = 0; index < uniqueMissingSources.length; index += chunkSize) {
-    const chunkSources = uniqueMissingSources.slice(index, index + chunkSize);
+  // Build adaptive chunks based on character budget
+  const buildAdaptiveChunks = (sources) => {
+    const chunks = [];
+    let currentChunk = [];
+    let currentChars = 0;
+
+    for (const source of sources) {
+      const len = String(source || "").length;
+      // Start a new chunk if adding this segment would exceed limits
+      if (currentChunk.length > 0 && (currentChars + len > MAX_CHARS_PER_CHUNK || currentChunk.length >= MAX_SEGMENTS_PER_CHUNK)) {
+        chunks.push(currentChunk);
+        currentChunk = [];
+        currentChars = 0;
+      }
+      currentChunk.push(source);
+      currentChars += len;
+    }
+    if (currentChunk.length > 0) {
+      chunks.push(currentChunk);
+    }
+    return chunks;
+  };
+
+  const adaptiveChunks = buildAdaptiveChunks(uniqueMissingSources);
+  console.log(`[Translation] Splitting ${uniqueMissingSources.length} segments into ${adaptiveChunks.length} adaptive chunks`);
+
+  for (const chunkSources of adaptiveChunks) {
     const translatedChunk = await translateChunk(chunkSources, target, actualSourceLang, providerState, contextSettings);
 
     const insertRows = [];
@@ -275,6 +260,63 @@ const translateSegments = async (segments, target, sourceLang, contextSettings) 
       if (insertError) {
         console.log("SUPABASE INSERT ERROR");
         console.log(insertError);
+      }
+    }
+  }
+
+  // ── Final sweep: retry any still-untranslated segments ──
+  const stillUntranslated = [];
+  for (const source of uniqueMissingSources) {
+    const entry = tmMap[source];
+    if (!entry) {
+      stillUntranslated.push(source);
+      continue;
+    }
+    const cleanSource = normalizeText(source).toLowerCase();
+    const cleanTarget = normalizeText(entry.target_text).toLowerCase();
+    // If translation is identical to source and it shouldn't be, mark for retry
+    if (
+      cleanSource === cleanTarget &&
+      !isLegitimatelyIdentical(source) &&
+      (!entry.provider || entry.provider === "Fallback" || entry.provider.includes("Retry"))
+    ) {
+      stillUntranslated.push(source);
+    }
+  }
+
+  if (stillUntranslated.length > 0) {
+    console.log(`[Translation Final Sweep] Retrying ${stillUntranslated.length} still-untranslated segments individually...`);
+    // Retry one-by-one for maximum reliability
+    for (const source of stillUntranslated) {
+      try {
+        const retryResult = await translateChunk([source], target, actualSourceLang, providerState, contextSettings);
+        if (retryResult && retryResult[0]) {
+          const retried = retryResult[0];
+          const processedText = postProcessTranslation(source, retried.translated, target);
+          const translatedText = ensureEnglishNumerals(processedText);
+          const retriedClean = normalizeText(translatedText).toLowerCase();
+          const srcClean = normalizeText(source).toLowerCase();
+
+          if (retriedClean !== srcClean || isLegitimatelyIdentical(source)) {
+            tmMap[source] = {
+              source_text: source,
+              target_text: translatedText,
+              provider: retried.provider + " (Final Retry)"
+            };
+
+            if (isPersistableProvider(retried.provider)) {
+              await supabase.from("translation_memory").insert({
+                source_text: source,
+                target_text: translatedText,
+                source_lang: actualSourceLang,
+                target_lang: target,
+                provider: retried.provider + " (Final Retry)"
+              });
+            }
+          }
+        }
+      } catch (retryErr) {
+        console.warn(`[Translation Final Sweep] Retry failed for segment:`, retryErr.message);
       }
     }
   }

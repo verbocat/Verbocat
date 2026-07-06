@@ -88,7 +88,7 @@ const createProviderState = () => ({
 });
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
-const OPENAI_MODEL = "gpt-4o-mini";
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
 const parseRetryAfter = (errorMessage) => {
   if (!errorMessage) return null;
@@ -376,6 +376,47 @@ const isUsableTranslation = (source, translated) => {
   );
 };
 
+/**
+ * Language-independent check: determines if a segment is legitimately identical
+ * in source and translation (abbreviations, pointers, numbers, URLs, codes).
+ * These segments should NOT be retried.
+ */
+const isLegitimatelyIdentical = (source) => {
+  const clean = String(source || "").replace(/<[^>]+>/g, "").replace(/__TAG_\d+__/g, "").trim();
+  if (!clean) return true;
+
+  // No letters at all (just numbers, punctuation, symbols)
+  if (!/\p{L}/u.test(clean)) return true;
+
+  // URLs
+  if (/^https?:\/\/[^\s]+$/i.test(clean)) return true;
+
+  // Pure abbreviation/acronym: all uppercase Latin letters, digits, hyphens, slashes, dots, spaces
+  // e.g. USA, KFS, AVVNL, UPS-1, SMA-1, SMA/NPA, A.B.C., Sr. No.
+  if (/^[A-Z0-9][A-Z0-9.\-\/\s]*$/i.test(clean) && clean.length <= 40 && /[A-Z]/.test(clean)) {
+    // Must have at least one uppercase letter and be mostly uppercase/digits
+    const upperCount = (clean.match(/[A-Z0-9]/g) || []).length;
+    const totalAlpha = (clean.match(/[a-zA-Z]/g) || []).length;
+    if (totalAlpha === 0 || upperCount / totalAlpha >= 0.5) return true;
+  }
+
+  // List pointers: (A), (1), (i), (ii), (a), a., 1., h., b), r)., 16(a), 5.11.3.2
+  if (/^\(?[a-zA-Z0-9]+\)?\.?$/i.test(clean)) return true;
+  if (/^\d+(\.\d+)*\.?$/i.test(clean)) return true;
+  if (/^\(?[ivxlcdm]+\)\.?$/i.test(clean)) return true;
+
+  // Short alphanumeric codes (e.g. "A-1", "B2", "Part C", etc.) under 10 chars
+  if (/^[A-Z0-9][A-Z0-9\s\-\/\.]*$/i.test(clean) && clean.length <= 10) return true;
+
+  // Email addresses
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) return true;
+
+  // Phone numbers (digits, spaces, dashes, parens, plus)
+  if (/^[+]?[\d\s\-().]+$/.test(clean) && clean.replace(/\D/g, "").length >= 7) return true;
+
+  return false;
+};
+
 // Other provider implementations removed — OpenAI is the sole provider.
 
 // Only use OpenAI as the translation provider.
@@ -563,6 +604,60 @@ const translateChunk = async (texts, target, source = DEFAULT_SOURCE_LANG, provi
       }
 
       results[originalIndex] = { source: text, translated: finalTranslation, provider: currentProvider };
+    }
+  }
+
+  // ── Per-segment retry for untranslated segments ──
+  // Identify segments that came back identical to source but shouldn't be
+  const retryIndices = [];
+  for (let i = 0; i < results.length; i++) {
+    if (!results[i]) continue;
+    const r = results[i];
+    const cleanSource = normalizeTranslatedText(r.source).toLowerCase();
+    const cleanTranslated = normalizeTranslatedText(r.translated).toLowerCase();
+    if (
+      cleanSource === cleanTranslated &&
+      r.provider === "Fallback" &&
+      !isLegitimatelyIdentical(r.source)
+    ) {
+      retryIndices.push(i);
+    }
+  }
+
+  // Retry untranslated segments in micro-batches of 3
+  if (retryIndices.length > 0) {
+    console.log(`[Translation Retry] Retrying ${retryIndices.length} untranslated segments individually...`);
+    const MICRO_BATCH = 3;
+    for (let ri = 0; ri < retryIndices.length; ri += MICRO_BATCH) {
+      const microIndices = retryIndices.slice(ri, ri + MICRO_BATCH);
+      const microTexts = microIndices.map(i => results[i].source);
+      const microProtected = microTexts.map(t => {
+        const { protectedText } = protectTags(t);
+        return protectedText;
+      });
+      const microTags = microTexts.map(t => protectTags(t).tags);
+
+      try {
+        const retryData = await translateWithProviders(microTexts, microProtected, target, providerState, source, contextSettings);
+        if (retryData && retryData.translatedArray) {
+          for (let mj = 0; mj < microIndices.length; mj++) {
+            const idx = microIndices[mj];
+            let retryTranslated = retryData.translatedArray[mj];
+
+            if (retryTranslated && isScriptValidForLanguage(retryTranslated, target)) {
+              const retryClean = normalizeTranslatedText(retryTranslated).toLowerCase();
+              const srcClean = normalizeTranslatedText(results[idx].source).toLowerCase();
+              if (retryClean !== srcClean || isLegitimatelyIdentical(results[idx].source)) {
+                const finalRetry = restoreProtectedTags(retryTranslated, microTags[mj]);
+                results[idx] = { source: results[idx].source, translated: finalRetry, provider: retryData.provider + " (Retry)" };
+                setLimitedCache(successCache, cacheKey(results[idx].source, target), { translated: finalRetry, provider: retryData.provider }, SUCCESS_CACHE_LIMIT);
+              }
+            }
+          }
+        }
+      } catch (retryErr) {
+        console.warn(`[Translation Retry] Micro-batch retry failed:`, retryErr.message);
+      }
     }
   }
 
@@ -760,5 +855,7 @@ module.exports = {
   createProviderState,
   translateChunk,
   getProviderStatus,
-  translateSegmentWithVision
+  translateSegmentWithVision,
+  isLegitimatelyIdentical,
+  isScriptValidForLanguage
 };
