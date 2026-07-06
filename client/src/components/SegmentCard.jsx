@@ -663,7 +663,7 @@ export const SegmentCard = ({
           )}
 
 
-          {segment.originalTargetText && (
+          {segment.originalTargetText && segment.originalTargetText !== segment.target && (
             <div style={{
               marginTop: 12,
               padding: "12px 14px",

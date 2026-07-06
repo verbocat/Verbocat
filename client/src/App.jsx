@@ -292,7 +292,11 @@ export default function App() {
           if (cleanedSource && cleanString(seg.source) === cleanedSource) {
             const updated = { ...seg, target: propagateTranslation(targetText, seg.source) };
             if (originalTargetText !== undefined) {
-              updated.originalTargetText = seg.target || "";
+              if (originalTargetText === null) {
+                updated.originalTargetText = null;
+              } else if (!seg.originalTargetText) {
+                updated.originalTargetText = seg.target || "";
+              }
             }
             if (trackedBy !== undefined) updated.trackedBy = trackedBy;
             return updated;
@@ -1277,14 +1281,33 @@ export default function App() {
     let isTrackInit = false;
     let trackOrig = null;
 
+    const targetSeg = segments.find((s) => s.id === id);
+    const isOwnerLocal = ownerId === user?.id;
+
+    let originalTargetTextToSend = undefined;
+    let trackedByToSend = undefined;
+
+    if (targetSeg && trackChangesEnabled && !isOwnerLocal) {
+      const orig = targetSeg.originalTargetText !== null && targetSeg.originalTargetText !== undefined
+        ? targetSeg.originalTargetText
+        : (targetSeg.target || "");
+      
+      if (value === orig) {
+        originalTargetTextToSend = null;
+        trackedByToSend = null;
+      } else {
+        originalTargetTextToSend = orig;
+        trackedByToSend = user?.email;
+      }
+    }
+
     setSegments((previous) => {
-      const targetSeg = previous.find((s) => s.id === id);
-      if (targetSeg) {
-        sourceText = targetSeg.source;
-        const isOwnerLocal = ownerId === user?.id;
-        if (trackChangesEnabled && !isOwnerLocal && !targetSeg.originalTargetText) {
+      const targetSegLocal = previous.find((s) => s.id === id);
+      if (targetSegLocal) {
+        sourceText = targetSegLocal.source;
+        if (trackChangesEnabled && !isOwnerLocal && !targetSegLocal.originalTargetText) {
           isTrackInit = true;
-          trackOrig = targetSeg.target || "";
+          trackOrig = targetSegLocal.target || "";
         }
       }
 
@@ -1315,15 +1338,36 @@ export default function App() {
         let updated = { ...segment };
         if (segment.id === id) {
           updated.target = value;
-          if (isTrackInit) {
-            updated.originalTargetText = trackOrig;
-            updated.trackedBy = user?.email;
+          if (trackChangesEnabled && !isOwnerLocal) {
+            const orig = segment.originalTargetText !== null && segment.originalTargetText !== undefined
+              ? segment.originalTargetText
+              : (isTrackInit ? trackOrig : null);
+            if (orig !== null) {
+              if (value === orig) {
+                updated.originalTargetText = null;
+                updated.trackedBy = null;
+              } else {
+                updated.originalTargetText = orig;
+                updated.trackedBy = user?.email;
+              }
+            }
           }
         } else if (cleanedSource && cleanString(segment.source) === cleanedSource) {
-          updated.target = propagateTranslation(value, segment.source);
-          if (isTrackInit) {
-            updated.originalTargetText = segment.target || "";
-            updated.trackedBy = user?.email;
+          const propagatedVal = propagateTranslation(value, segment.source);
+          updated.target = propagatedVal;
+          if (trackChangesEnabled && !isOwnerLocal) {
+            const orig = segment.originalTargetText !== null && segment.originalTargetText !== undefined
+              ? segment.originalTargetText
+              : (isTrackInit ? segment.target || "" : null);
+            if (orig !== null) {
+              if (propagatedVal === orig) {
+                updated.originalTargetText = null;
+                updated.trackedBy = null;
+              } else {
+                updated.originalTargetText = orig;
+                updated.trackedBy = user?.email;
+              }
+            }
           }
         }
         return updated;
@@ -1334,8 +1378,8 @@ export default function App() {
       socketRef.current.emit("typing-update", {
         segmentIndex: id - 1,
         targetText: value,
-        originalTargetText: isTrackInit ? trackOrig : undefined,
-        trackedBy: isTrackInit ? user?.email : undefined
+        originalTargetText: originalTargetTextToSend,
+        trackedBy: trackedByToSend
       });
     }
   };
@@ -2592,7 +2636,7 @@ export default function App() {
             onToggleTrackChanges={handleToggleTrackChanges}
             isOwner={ownerId === user?.id}
             onAcceptAllChanges={handleAcceptAllChanges}
-            hasTrackedChanges={segments.some(s => s.originalTargetText)}
+            hasTrackedChanges={segments.some(s => s.originalTargetText && s.originalTargetText !== s.target)}
           />
 
           {/* QA panel (collapsible modal) */}

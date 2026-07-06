@@ -599,12 +599,24 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
           : propagateTranslation(targetText, seg.source_text);
           
         if (isTracking) {
-          // If first edit since tracking enabled, store the current target as the original
           if (!seg.original_target_text) {
-            segmentFields.original_target_text = seg.target_text || "";
+            if (newTarget !== (seg.target_text || "")) {
+              segmentFields.original_target_text = seg.target_text || "";
+              segmentFields.tracked_by = request.user.email;
+            } else {
+              segmentFields.original_target_text = null;
+              segmentFields.tracked_by = null;
+            }
+          } else {
+            if (newTarget === seg.original_target_text) {
+              segmentFields.original_target_text = null;
+              segmentFields.tracked_by = null;
+            } else {
+              segmentFields.original_target_text = seg.original_target_text;
+              segmentFields.tracked_by = request.user.email;
+            }
           }
           segmentFields.target_text = newTarget;
-          segmentFields.tracked_by = request.user.email;
         } else {
           // Owner edit or tracking disabled: commit directly, clear tracked state
           segmentFields.target_text = newTarget;
@@ -649,9 +661,22 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
         if (targetText !== undefined) {
           if (isTracking) {
             if (!seg.original_target_text) {
-              finalOriginal = seg.target_text || "";
+              if (propagatedTarget !== (seg.target_text || "")) {
+                finalOriginal = seg.target_text || "";
+                finalTrackedBy = request.user.email;
+              } else {
+                finalOriginal = null;
+                finalTrackedBy = null;
+              }
+            } else {
+              if (propagatedTarget === seg.original_target_text) {
+                finalOriginal = null;
+                finalTrackedBy = null;
+              } else {
+                finalOriginal = seg.original_target_text;
+                finalTrackedBy = request.user.email;
+              }
             }
-            finalTrackedBy = request.user.email;
           } else {
             finalOriginal = null;
             finalTrackedBy = null;
