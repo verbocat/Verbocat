@@ -72,7 +72,7 @@ export const ExportModal = ({
           </ExportOption>
 
           {/* High-fidelity Word Document for PDF uploads */}
-          {fileExtension === ".pdf" && (
+          {fileExtension?.toLowerCase() === ".pdf" && (
             <ExportOption
               title="Editable Word Document (.docx)"
               desc="Export as a Word document to preserve formatting and edit layout."
@@ -116,7 +116,7 @@ export const ExportModal = ({
           </ExportOption>
 
           {/* HTML relink (only for XLF files) */}
-          {fileExtension !== ".html" && (
+          {fileExtension?.toLowerCase() !== ".html" && (
             <ExportOption
               title="Export as HTML (.html)"
               desc="Relink the original HTML template to generate an HTML output."
