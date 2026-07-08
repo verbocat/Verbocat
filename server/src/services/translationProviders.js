@@ -36,6 +36,17 @@ const validateLang = (lang) => {
   return /^[a-zA-Z-]{2,5}$/.test(lang);
 };
 
+const getLangName = (code) => {
+  const cleanCode = String(code || "").toLowerCase();
+  if (cleanCode === "pt-br" || cleanCode === "pt") return "Brazilian Portuguese";
+  if (cleanCode === "pt-pt") return "European Portuguese";
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code;
+  } catch (e) {
+    return code;
+  }
+};
+
 const cacheKey = (source, target) =>
   `${target}::${normalizeTranslatedText(source).toLowerCase()}`;
 
@@ -144,14 +155,6 @@ const callOpenAIWithRetry = async (payload, retries = 5, attempt = 1) => {
 };
 
 const getTargetSpecificTranslationRules = (targetLang, sourceLang, contextSettings = null) => {
-  const getLangName = (code) => {
-    try {
-      return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code;
-    } catch (e) {
-      return code;
-    }
-  };
-
   const targetLangName = getLangName(targetLang);
   const tone = contextSettings?.tone || "General";
   const formality = contextSettings?.formality || "Neutral";
@@ -229,14 +232,6 @@ ${domainGuidelines}
 };
 
 const buildTranslationSystemPrompt = (targetLang, sourceLang, contextSettings, contextJira = "", contextDescription = "") => {
-  const getLangName = (code) => {
-    try {
-      return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code;
-    } catch (e) {
-      return code;
-    }
-  };
-
   const sourceName = getLangName(sourceLang);
   const targetName = getLangName(targetLang);
 
@@ -316,14 +311,6 @@ const translateWithOpenAI = async (protectedTexts, target, source = DEFAULT_SOUR
   if (!OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY not configured");
   }
-
-  const getLangName = (code) => {
-    try {
-      return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code;
-    } catch (e) {
-      return code;
-    }
-  };
 
   const sourceName = getLangName(source);
   const targetName = getLangName(target);
@@ -688,14 +675,6 @@ const getProviderStatus = () => ({
   if (!OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY not configured");
   }
-
-  const getLangName = (code) => {
-    try {
-      return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code;
-    } catch (e) {
-      return code;
-    }
-  };
 
   const sourceLangName = getLangName(sourceLang);
   const targetLangName = getLangName(targetLang);

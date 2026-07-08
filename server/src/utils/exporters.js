@@ -31,7 +31,7 @@ const generateXliff = (segments, sourceLang = "en", targetLang = "hi", fileName 
 const generateTmx = (segments, sourceLang = "en", targetLang = "hi") => {
   let tmx = `<?xml version="1.0" encoding="UTF-8"?>\n`;
   tmx += `<tmx version="1.4">\n`;
-  tmx += `  <header creationtool="Verbocat" creationtoolversion="1.0" datatype="PlainText" segtype="sentence" adminlang="en-US" srclang="${sourceLang}"/>\n`;
+  tmx += `  <header creationtool="Centroid" creationtoolversion="1.0" datatype="PlainText" segtype="sentence" adminlang="en-US" srclang="${sourceLang}"/>\n`;
   tmx += `  <body>\n`;
   
   segments.forEach((seg) => {

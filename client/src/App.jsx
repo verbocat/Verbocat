@@ -168,8 +168,8 @@ export default function App() {
       setSegments(doc.segments);
       setFileName(doc.name);
       setFileId(doc.fileId);
-      setSourceLanguage(doc.sourceLang);
-      setTargetLanguage(doc.targetLang);
+      setSourceLanguage(doc.sourceLang === "pt" ? "pt-BR" : doc.sourceLang);
+      setTargetLanguage(doc.targetLang === "pt" ? "pt-BR" : doc.targetLang);
       setPermission(doc.permission || "write");
       setOwnerId(doc.ownerId);
       setTrackChangesEnabled(doc.trackChangesEnabled || false);
@@ -469,14 +469,14 @@ export default function App() {
       const accessToken = params.get("access_token");
       
       if (accessToken) {
-        localStorage.setItem("verbocat_token", accessToken);
+        localStorage.setItem("centroid_token", accessToken);
         const refreshToken = params.get("refresh_token");
         if (refreshToken) {
-          localStorage.setItem("verbocat_refresh_token", refreshToken);
+          localStorage.setItem("centroid_refresh_token", refreshToken);
         }
         const expiresIn = params.get("expires_in");
         if (expiresIn) {
-          localStorage.setItem("verbocat_expires_at", String(Date.now() + parseInt(expiresIn, 10) * 1000));
+          localStorage.setItem("centroid_expires_at", String(Date.now() + parseInt(expiresIn, 10) * 1000));
         }
 
         if (hash.includes("type=recovery")) {
@@ -1715,8 +1715,8 @@ export default function App() {
       setSegments(project.segments || []);
       setHistory([]);
       setFuture([]);
-      setSourceLanguage(project.sourceLanguage || "en");
-      setTargetLanguage(project.targetLanguage || "hi");
+      setSourceLanguage((project.sourceLanguage || "en") === "pt" ? "pt-BR" : (project.sourceLanguage || "en"));
+      setTargetLanguage((project.targetLanguage || "hi") === "pt" ? "pt-BR" : (project.targetLanguage || "hi"));
       setCurrentProvider(project.currentProvider || "");
       setShowQaPanel(false);
       glossaryManager.setGlossaryMap(project.glossaryMap || {});

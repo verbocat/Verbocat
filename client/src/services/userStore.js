@@ -6,27 +6,27 @@ const API_URL = import.meta.env.VITE_API_URL
   : "/api";
 
 export const useUserStore = create((set, get) => ({
-  token: localStorage.getItem("verbocat_token") || null,
-  refreshToken: localStorage.getItem("verbocat_refresh_token") || null,
-  expiresAt: localStorage.getItem("verbocat_expires_at") ? parseInt(localStorage.getItem("verbocat_expires_at"), 10) : null,
+  token: localStorage.getItem("centroid_token") || null,
+  refreshToken: localStorage.getItem("centroid_refresh_token") || null,
+  expiresAt: localStorage.getItem("centroid_expires_at") ? parseInt(localStorage.getItem("centroid_expires_at"), 10) : null,
   user: null,
-  isAuth: !!localStorage.getItem("verbocat_token"),
+  isAuth: !!localStorage.getItem("centroid_token"),
   loading: false,
   error: null,
 
   // 1. Log In Action
   login: (token, refreshToken, expiresAt, user) => {
-    localStorage.setItem("verbocat_token", token);
-    if (refreshToken) localStorage.setItem("verbocat_refresh_token", refreshToken);
-    if (expiresAt) localStorage.setItem("verbocat_expires_at", String(expiresAt));
+    localStorage.setItem("centroid_token", token);
+    if (refreshToken) localStorage.setItem("centroid_refresh_token", refreshToken);
+    if (expiresAt) localStorage.setItem("centroid_expires_at", String(expiresAt));
     set({ token, refreshToken, expiresAt, user, isAuth: true, error: null });
   },
 
   // 2. Log Out Action
   logout: () => {
-    localStorage.removeItem("verbocat_token");
-    localStorage.removeItem("verbocat_refresh_token");
-    localStorage.removeItem("verbocat_expires_at");
+    localStorage.removeItem("centroid_token");
+    localStorage.removeItem("centroid_refresh_token");
+    localStorage.removeItem("centroid_expires_at");
     set({ token: null, refreshToken: null, expiresAt: null, user: null, isAuth: false, error: null });
   },
 

@@ -49,7 +49,7 @@ export const ScreenLock = ({ onUnlock }) => {
           <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-sky-500/20 text-sky-400 ring-1 ring-sky-500/50 shadow-[0_0_15px_rgba(14,165,233,0.3)]">
             <Icons.Lock />
           </div>
-          <h3 className="mb-2 text-2xl font-bold tracking-tight text-white">VerboCat Locked</h3>
+          <h3 className="mb-2 text-2xl font-bold tracking-tight text-white">Centroid Locked</h3>
           <p className="mb-8 text-sm text-slate-400">Please enter your secure PIN to access the workspace.</p>
           
           <form onSubmit={handleSubmit} className="w-full">

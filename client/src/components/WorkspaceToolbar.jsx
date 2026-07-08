@@ -228,7 +228,7 @@ export const WorkspaceToolbar = ({
         {/* Source language */}
         <div className="lang-wrap">
           <select value={sourceLanguage} onChange={(e) => onSourceLanguageChange(e.target.value)} className="lang-select" disabled={!isOwner}>
-            {LANGUAGES.map((l) => (
+            {LANGUAGES.filter((l) => !l.hidden).map((l) => (
               <option key={`src-${l.code}`} value={l.code}>{l.flag} {l.name}</option>
             ))}
           </select>
@@ -241,7 +241,7 @@ export const WorkspaceToolbar = ({
         {/* Target language */}
         <div className="lang-wrap">
           <select value={targetLanguage} onChange={(e) => onTargetLanguageChange(e.target.value)} className="lang-select" disabled={!isOwner}>
-            {LANGUAGES.map((l) => (
+            {LANGUAGES.filter((l) => !l.hidden).map((l) => (
               <option key={`tgt-${l.code}`} value={l.code}>{l.flag} {l.name}</option>
             ))}
           </select>

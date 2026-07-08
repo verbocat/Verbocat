@@ -170,7 +170,7 @@ export const AdminDashboard = ({ onClose, theme }) => {
             </svg>
           </div>
           <div>
-            <h1 className="text-lg font-black tracking-tight text-white">VerboCat Admin Center</h1>
+            <h1 className="text-lg font-black tracking-tight text-white">Centroid Admin Center</h1>
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
               Access level: <span className="text-indigo-400 font-black">{currentUser?.role}</span>
             </p>

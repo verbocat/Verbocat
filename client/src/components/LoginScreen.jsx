@@ -86,7 +86,7 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
         if (password.length < 6) {
           throw new Error("Password must be at least 6 characters long");
         }
-        const token = localStorage.getItem("verbocat_token");
+        const token = localStorage.getItem("centroid_token");
         const response = await axios.post(`${API_URL}/auth/reset-password`, 
           { password },
           { headers: { Authorization: `Bearer ${token}` } }
@@ -145,7 +145,7 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
                 <Sparkles className="h-3.5 w-3.5 animate-pulse" />
               </div>
               <span className="text-sm font-extrabold tracking-wider text-white font-mono">
-                VERBOCAT_
+                CENTROID_
               </span>
             </div>
             <div className="flex items-center gap-1.5 bg-neutral-950/40 border border-white/5 rounded-full px-2.5 py-1 text-[10px] text-neutral-400 font-mono">
@@ -478,7 +478,7 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
                 <Sparkles className="h-3.5 w-3.5 animate-pulse" />
               </div>
               <span className="text-sm font-extrabold tracking-wider text-white font-mono">
-                VERBOCAT_
+                CENTROID_
               </span>
             </div>
             <div className="flex items-center gap-1.5 bg-neutral-950/40 border border-white/5 rounded-full px-2.5 py-1 text-[10px] text-neutral-400 font-mono">

@@ -10,7 +10,7 @@ const api = axios.create({
 let refreshPromise = null;
 
 const refreshSessionToken = async () => {
-  const refreshToken = localStorage.getItem("verbocat_refresh_token");
+  const refreshToken = localStorage.getItem("centroid_refresh_token");
   if (!refreshToken) throw new Error("No refresh token available");
 
   if (refreshPromise) return refreshPromise;
@@ -39,8 +39,8 @@ const refreshSessionToken = async () => {
 
 // Automatically inject JWT authentication token to headers and pre-emptively refresh if near expiry
 api.interceptors.request.use(async (config) => {
-  const expiresAt = localStorage.getItem("verbocat_expires_at");
-  let token = localStorage.getItem("verbocat_token");
+  const expiresAt = localStorage.getItem("centroid_expires_at");
+  let token = localStorage.getItem("centroid_token");
 
   // Pre-emptive refresh: if token will expire in less than 1 minute, refresh it first
   if (token && expiresAt && Date.now() > parseInt(expiresAt, 10) - 60000) {

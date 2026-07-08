@@ -119,7 +119,7 @@ export const GlossaryModal = ({
                   onChange={(event) => setGlossarySourceLang(event.target.value)}
                   className={`w-full rounded-xl border px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-sky-300 ${theme.input}`}
                 >
-                  {languages.map((language) => (
+                  {languages.filter((l) => !l.hidden).map((language) => (
                     <option key={`source-${language.code}`} value={language.code}>
                       {language.name}
                     </option>
@@ -136,7 +136,7 @@ export const GlossaryModal = ({
                   onChange={(event) => setGlossaryTargetLang(event.target.value)}
                   className={`w-full rounded-xl border px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-sky-300 ${theme.input}`}
                 >
-                  {languages.map((language) => (
+                  {languages.filter((l) => !l.hidden).map((language) => (
                     <option key={`target-${language.code}`} value={language.code}>
                       {language.name}
                     </option>

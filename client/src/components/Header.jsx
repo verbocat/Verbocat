@@ -2,7 +2,7 @@ import { LANGUAGES } from "../constants/languages.js";
 import { CollaboratorsList } from "./CollaboratorsList.jsx";
 import {
   BookOpen, Users, Settings as SettingsIcon,
-  Sun, Moon, LogOut, Plus, LockKeyhole, Sliders,
+  LogOut, Plus, LockKeyhole, Sliders,
   ChevronRight, FileText, LayoutDashboard
 } from "lucide-react";
 
@@ -37,16 +37,15 @@ export const Header = ({
       {/* Brand */}
       <div className="topbar-brand">
         <svg viewBox="0 0 100 100" style={{ width: 22, height: 22, color: "var(--accent)", flexShrink: 0 }}
-          fill="none" stroke="currentColor" strokeWidth="6.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M 22,38 L 22,12 L 48,28" />
-          <path d="M 78,38 L 78,12 L 52,28" />
-          <path d="M 22,38 C 22,64 32,80 50,80 C 68,80 78,64 78,38" />
-          <ellipse cx="38" cy="48" rx="4.5" ry="5.5" fill="currentColor" />
-          <ellipse cx="62" cy="48" rx="4.5" ry="5.5" fill="currentColor" />
-          <polygon points="46,58 54,58 50,62" fill="currentColor" />
-          <path d="M 44,68 C 47,72 50,72 50,68 Q 50,72 56,68" strokeWidth="4" />
+          fill="none" stroke="currentColor" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M 50,15 L 80,32 L 80,68 L 50,85 L 20,68 L 20,32 Z" opacity="0.4" />
+          <path d="M 50,15 L 50,42" />
+          <path d="M 80,68 L 57,55" />
+          <path d="M 20,68 L 43,55" />
+          <circle cx="50" cy="50" r="8" fill="currentColor" />
+          <circle cx="50" cy="50" r="16" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" />
         </svg>
-        <span className="topbar-brand-name">VerboCat</span>
+        <span className="topbar-brand-name">Centroid</span>
       </div>
 
       <div className="topbar-divider" />
@@ -91,34 +90,6 @@ export const Header = ({
           </NavBtn>
         )}
 
-        {/* Extreme Animated Theme Toggle Button */}
-        {onToggleDarkMode && (
-          <button
-            onClick={onToggleDarkMode}
-            title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-            className={`theme-toggle-extreme ${darkMode ? "dark-active" : "light-active"}`}
-            style={{ marginLeft: 4, marginRight: 4, flexShrink: 0 }}
-          >
-            <div className="theme-toggle-extreme-track">
-              {/* Floating stars (only visible in dark mode) */}
-              <div className="star star-1"></div>
-              <div className="star star-2"></div>
-              <div className="star star-3"></div>
-
-              {/* Floating clouds (only visible in light mode) */}
-              <div className="cloud cloud-1"></div>
-              <div className="cloud cloud-2"></div>
-
-              <div className="theme-toggle-extreme-ball">
-                {darkMode ? (
-                  <Moon className="theme-toggle-extreme-icon moon" />
-                ) : (
-                  <Sun className="theme-toggle-extreme-icon sun" />
-                )}
-              </div>
-            </div>
-          </button>
-        )}
 
         {/* Primary upload CTA when no file */}
         {!hasFile && (
@@ -152,9 +123,14 @@ export const Header = ({
         <div className="topbar-divider" />
 
         {/* Settings */}
-        <NavBtn onClick={onOpenSettings} title="Settings" iconOnly>
-          <SettingsIcon style={{ width: 14, height: 14 }} />
-        </NavBtn>
+        <button
+          onClick={onOpenSettings}
+          title="Workspace Settings"
+          className="settings-btn-premium"
+        >
+          <SettingsIcon style={{ width: 15, height: 15 }} />
+        </button>
+
 
         {/* Lock */}
         {onLock && (

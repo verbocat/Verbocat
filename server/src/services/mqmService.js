@@ -52,6 +52,9 @@ function calculateMqmHash(source, target, glossaryVersion = "v1", promptVersion 
 }
 
 const getLangName = (code) => {
+  const cleanCode = String(code || "").toLowerCase();
+  if (cleanCode === "pt-br" || cleanCode === "pt") return "Brazilian Portuguese";
+  if (cleanCode === "pt-pt") return "European Portuguese";
   try {
     return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code;
   } catch (e) {
@@ -338,22 +341,18 @@ Examples:
 • phone numbers
 
 --------------------------------------------------
-FORMATTING
+FORMATTING AND TAGS (STRICTLY IGNORED)
 --------------------------------------------------
 
-Do NOT report formatting differences unless they affect meaning or violate project requirements.
+Do NOT report formatting differences, markup, HTML/XML tags, placeholder tags, or formatting codes.
 
-Never modify or report:
+Never report or flag as an error:
+• HTML tags (e.g., <b>, <i>, <span...>, </div>, etc.)
+• XML tags or number tags (e.g., <209>, </208>, <210>, </210>, etc.)
+• Placeholders or variables (e.g., {name}, %s, $1, etc.)
+• Markup or escape sequences
 
-• HTML tags
-• XML tags
-• placeholders
-• variables
-• IDs
-• escape sequences
-• markup
-
-unless they are incorrect, missing, broken, reordered, duplicated, or translated when they should not be.
+Even if they are missing, broken, reordered, duplicated, mismatched, misplaced, or translated in the source or translation, you MUST IGNORE them completely. Do NOT flag any issues in the 'errors' output related to these tags or placeholders, nor consider them fluency or formatting errors. Focus purely on the actual translatable natural text.
 
 --------------------------------------------------
 CONTEXT
@@ -1688,7 +1687,7 @@ ${glossaryRules}
 ${globalContextStr}
 
 TECHNICAL MARKS & SYSTEM RULES:
-- Ignore system protected tags like "<5261>", "</5261>" or place-holders. Do NOT flag them.
+- Ignore system protected tags like "<5261>", "</5261>", XML/HTML number tags like "<209>", "</208>", placeholders, or formatting codes. Do NOT flag them under any circumstances.
 - Email addresses and phone numbers should remain untranslated.
 - SUGGESTED CORRECTION REQUIREMENTS: For every error, you MUST provide a valid, grammatically correct replacement in the 'correction' field. The correction MUST be different from the offending 'span' and resolve the error (e.g., if 'span' is 'का अस्वीकृति', the 'correction' should be 'की अस्वीकृति'). Do NOT copy the offending span verbatim into the correction field.
 
