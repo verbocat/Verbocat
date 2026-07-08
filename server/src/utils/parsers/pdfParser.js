@@ -616,7 +616,7 @@ const exportFile = async (templateBase64, segments, targetLang = 'hi') => {
       ? unicodeFont
       : await getStdFont(pickStandardFont(fontName));
 
-    // Estimate erase width — CJK, Indic, Arabic, Latin have different widths
+    // Estimate character width multiplier
     let charWidth = 0.55;
     if (hasNonAscii) {
       const cleanLang = String(targetLang || "").toLowerCase();
@@ -630,10 +630,37 @@ const exportFile = async (templateBase64, segments, targetLang = 'hi') => {
         charWidth = 0.65;
       }
     }
-    const eraseW      = Math.max(width, drawSize * text.length * charWidth) + 8;
-    const eraseH      = height + 4;
 
-    // 1. White rectangle to erase original text
+    // 1. Calculate total width of the translated text at original drawSize
+    let totalTextWidth = 0;
+    const runs = splitIntoScriptRuns(text, unicodeFont);
+    const runFonts = [];
+
+    for (const run of runs) {
+      const runFont = run.isUnicode
+        ? unicodeFont
+        : await getStdFont(pickStandardFont(fontName));
+      runFonts.push(runFont);
+
+      try {
+        totalTextWidth += runFont.widthOfTextAtSize(run.text, drawSize);
+      } catch (_) {
+        totalTextWidth += drawSize * run.text.length * (run.isUnicode ? charWidth : 0.55);
+      }
+    }
+
+    // 2. Dynamically scale down font size if translation exceeds original bounding box width
+    let adjustedDrawSize = drawSize;
+    const maxAllowedWidth = width + 5; // Allow a tiny buffer
+    if (totalTextWidth > maxAllowedWidth && totalTextWidth > 0) {
+      const scaleFactor = maxAllowedWidth / totalTextWidth;
+      const minReadableSize = Math.max(fontSize * 0.6, 5); // Don't scale down below 60% of original or 5pt
+      adjustedDrawSize = Math.max(drawSize * scaleFactor, minReadableSize);
+    }
+
+    // 3. White rectangle to erase original text
+    const eraseW = Math.max(width, drawSize * text.length * charWidth) + 8;
+    const eraseH = height + 4;
     page.drawRectangle({
       x: x - 2, y: y - 2,
       width: eraseW, height: eraseH,
@@ -642,20 +669,17 @@ const exportFile = async (templateBase64, segments, targetLang = 'hi') => {
       borderWidth: 0,
     });
 
-    // 2. Draw translated text at the same position, splitting into script runs
+    // 4. Draw translated runs side-by-side using adjustedDrawSize
     let currentX = x;
-    const runs = splitIntoScriptRuns(text, unicodeFont);
-
-    for (const run of runs) {
-      const runFont = run.isUnicode
-        ? unicodeFont
-        : await getStdFont(pickStandardFont(fontName));
+    for (let i = 0; i < runs.length; i++) {
+      const run = runs[i];
+      const runFont = runFonts[i];
 
       try {
         page.drawText(run.text, {
           x: currentX,
           y,
-          size: drawSize,
+          size: adjustedDrawSize,
           font: runFont,
           color: rgb(0, 0, 0),
           lineBreak: false,
@@ -671,7 +695,7 @@ const exportFile = async (templateBase64, segments, targetLang = 'hi') => {
             page.drawText(run.text, {
               x: currentX,
               y,
-              size: drawSize,
+              size: adjustedDrawSize,
               font: fallback,
               color: rgb(0, 0, 0),
             });
@@ -679,12 +703,12 @@ const exportFile = async (templateBase64, segments, targetLang = 'hi') => {
         }
       }
 
-      // Advance currentX by width of run
+      // Advance currentX by width of run at adjustedDrawSize
       try {
-        const runWidth = runFont.widthOfTextAtSize(run.text, drawSize);
+        const runWidth = runFont.widthOfTextAtSize(run.text, adjustedDrawSize);
         currentX += runWidth;
       } catch (_) {
-        currentX += drawSize * run.text.length * (run.isUnicode ? charWidth : 0.55);
+        currentX += adjustedDrawSize * run.text.length * (run.isUnicode ? charWidth : 0.55);
       }
     }
   }

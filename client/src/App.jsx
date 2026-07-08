@@ -196,6 +196,10 @@ export default function App() {
       const doc = await fetchDocument(documentId);
       setSegments(doc.segments);
       setFileName(doc.name);
+      // Extract and set the file extension dynamically from the document name
+      const extIndex = doc.name.lastIndexOf(".");
+      const ext = extIndex !== -1 ? doc.name.substring(extIndex) : ".html";
+      setFileExtension(ext);
       setFileId(doc.fileId);
       setSourceLanguage(doc.sourceLang === "pt" ? "pt-BR" : doc.sourceLang);
       setTargetLanguage(doc.targetLang === "pt" ? "pt-BR" : doc.targetLang);
@@ -1760,13 +1764,14 @@ export default function App() {
     }
   };
 
-  const handleExportDocument = async () => {
+  const handleExportDocument = async (overrideExt) => {
     try {
-      const blob = await exportFile(fileId, segments, fileExtension, sourceLanguage, targetLanguage, fileName);
+      const ext = overrideExt || fileExtension;
+      const blob = await exportFile(fileId, segments, ext, sourceLanguage, targetLanguage, fileName);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `${fileName}_${targetLanguage}${fileExtension}`);
+      link.setAttribute("download", `${fileName}_${targetLanguage}${ext}`);
       document.body.appendChild(link);
       link.click();
       showToast("Document exported successfully!");
@@ -1776,13 +1781,14 @@ export default function App() {
     }
   };
 
-  const handleExportSourceDocument = async () => {
+  const handleExportSourceDocument = async (overrideExt) => {
     try {
-      const blob = await exportFile(fileId, segments, fileExtension, sourceLanguage, targetLanguage, fileName, true);
+      const ext = overrideExt || fileExtension;
+      const blob = await exportFile(fileId, segments, ext, sourceLanguage, targetLanguage, fileName, true);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `${fileName}_source${fileExtension}`);
+      link.setAttribute("download", `${fileName}_source${ext}`);
       document.body.appendChild(link);
       link.click();
       showToast("Source document exported successfully!");

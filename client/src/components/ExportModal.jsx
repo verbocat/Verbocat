@@ -65,11 +65,27 @@ export const ExportModal = ({
             title={`Translated Document ${fileExtension || ""}`}
             desc="Export the final translated file with original layout preserved."
             accentColor="var(--text-primary)"
-            onAction={() => { onExportDocument(); onClose(); }}
+            onAction={() => { onExportDocument(fileExtension); onClose(); }}
           >
             <Download style={{ width: 12, height: 12 }} />
             Download
           </ExportOption>
+
+          {/* High-fidelity Word Document for PDF uploads */}
+          {fileExtension === ".pdf" && (
+            <ExportOption
+              title="Editable Word Document (.docx)"
+              desc="Export as a Word document to preserve formatting and edit layout."
+              accentColor="var(--text-emerald)"
+              btnBg="rgba(34,197,94,0.08)"
+              btnBorder="rgba(34,197,94,0.25)"
+              btnColor="var(--text-emerald)"
+              onAction={() => { onExportDocument(".docx"); onClose(); }}
+            >
+              <Download style={{ width: 12, height: 12 }} />
+              Download Word
+            </ExportOption>
+          )}
 
           {/* Source Document */}
           <ExportOption
@@ -79,7 +95,7 @@ export const ExportModal = ({
             btnBg="rgba(148,163,184,0.1)"
             btnBorder="rgba(148,163,184,0.3)"
             btnColor="var(--text-muted)"
-            onAction={() => { onExportSourceDocument(); onClose(); }}
+            onAction={() => { onExportSourceDocument(fileExtension); onClose(); }}
           >
             <Download style={{ width: 12, height: 12 }} />
             Download
