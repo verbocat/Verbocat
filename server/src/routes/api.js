@@ -228,6 +228,7 @@ apiRouter.post("/export", async (request, response) => {
     let contentType = "application/octet-stream";
     if (ext === ".html") contentType = "text/html";
     else if (ext === ".txt") contentType = "text/plain";
+    else if (ext === ".pdf") contentType = "application/pdf";
     else if (ext === ".docx") contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     else if (ext === ".pptx") contentType = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
     else if (ext === ".xlsx") contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";

@@ -3,7 +3,7 @@ import { LANGUAGES } from "../constants/languages.js";
 import {
   FileText, ArrowRight, Search, Filter, Sparkles,
   Save, Upload, Download, Trash2, RefreshCw, ChevronDown, Plus, Link2,
-  FolderOpen, Sliders, GitBranch, Check
+  FolderOpen, Sliders, GitBranch, Check, BookOpen
 } from "lucide-react";
 
 export const WorkspaceToolbar = ({
@@ -15,7 +15,7 @@ export const WorkspaceToolbar = ({
   canTranslate = true, fileExtension, filterStatus, setFilterStatus, onUpload,
   onOpenContext, onRunQc, isAuditing,
   trackChangesEnabled, onToggleTrackChanges, isOwner,
-  onAcceptAllChanges, hasTrackedChanges
+  onAcceptAllChanges, hasTrackedChanges, onApplyGlossary
 }) => {
   const [showDocMenu, setShowDocMenu] = useState(false);
   const docMenuRef = useRef(null);
@@ -134,6 +134,17 @@ export const WorkspaceToolbar = ({
           <span>Context</span>
         </button>
 
+        {/* Apply Glossary */}
+        <button
+          onClick={onApplyGlossary}
+          disabled={!canAct}
+          className="ab"
+          title="Apply glossary matching terms to the segments in this file"
+        >
+          <BookOpen style={{ width: 12, height: 12, color: "var(--indigo-400)", flexShrink: 0 }} />
+          <span>Apply Glossary</span>
+        </button>
+
         {/* Document dropdown */}
         {isOwner && (
           <div className="relative" ref={docMenuRef}>
@@ -170,7 +181,7 @@ export const WorkspaceToolbar = ({
                 <label className={`dropdown-item ${!canAct ? "opacity-30 pointer-events-none" : "cursor-pointer"}`}>
                   <Link2 style={{ width: 13, height: 13, opacity: 0.65, flexShrink: 0 }} />
                   Relink Template
-                  <input type="file" accept=".html,.htm,.docx,.pptx,.xlsx,.txt"
+                  <input type="file" accept=".html,.htm,.docx,.pptx,.xlsx,.txt,.pdf"
                     onChange={(e) => { onRelinkHtml(e); setShowDocMenu(false); }}
                     className="hidden" disabled={!canAct} />
                 </label>

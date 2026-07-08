@@ -2720,6 +2720,7 @@ export default function App() {
             isOwner={ownerId === user?.id}
             onAcceptAllChanges={handleAcceptAllChanges}
             hasTrackedChanges={segments.some(s => s.originalTargetText && s.originalTargetText !== s.target)}
+            onApplyGlossary={permission === "write" ? handleApplyGlossary : null}
           />
 
           {/* QA panel (collapsible modal) */}

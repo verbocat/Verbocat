@@ -8,6 +8,7 @@ const docxParser = require("../utils/parsers/docxParser");
 const pptxParser = require("../utils/parsers/pptxParser");
 const xlsxParser = require("../utils/parsers/xlsxParser");
 const txtParser = require("../utils/parsers/txtParser");
+const pdfParser = require("../utils/parsers/pdfParser");
 const { parseXliff, generateXliff } = require("../utils/exporters");
 
 const xliffParser = {
@@ -35,6 +36,7 @@ const getParser = (ext) => {
     case '.pptx': return pptxParser;
     case '.xlsx': return xlsxParser;
     case '.txt': return txtParser;
+    case '.pdf': return pdfParser;
     case '.xlf':
     case '.xliff':
     case '.sdlxliff': return xliffParser;
