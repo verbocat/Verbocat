@@ -1,190 +1,306 @@
 const fs = require('fs');
 const zlib = require('zlib');
-const PDFDocument = require('pdfkit');
-const axios = require('axios');
 const path = require('path');
+const axios = require('axios');
 
-// pdfjs-dist is ESM-only in v4+; use dynamic import and cache
+// ─── pdfjs-dist (ESM-only in v4+) ────────────────────────────────────────────
 let _pdfjsLib = null;
 async function getPdfjsLib() {
   if (!_pdfjsLib) {
     _pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
-    // Point to the bundled worker so it works in Node.js without a browser
-    const workerPath = path.resolve(__dirname, '../../../node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs');
-    _pdfjsLib.GlobalWorkerOptions.workerSrc = 'file:///' + workerPath.replace(/\\/g, '/');
+    const workerPath = path.resolve(
+      __dirname,
+      '../../../node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs'
+    );
+    _pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'file:///' + workerPath.replace(/\\/g, '/');
   }
   return _pdfjsLib;
 }
 
-const normalizeSegmentText = (text) => 
-  (text || "").replace(/\u00a0/g, " ").replace(/[ \t\r\f\v]+/g, " ").replace(/\n\s*/g, "\n").trim();
+// ─── pdf-lib (CJS) ───────────────────────────────────────────────────────────
+const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 
-// Custom page renderer to inject form feeds as page separators
-function renderPageWithSeparator(pageData) {
-  let render_options = {
-    normalizeWhitespace: true,
-    disableCombineTextItems: false
-  };
+// ─── Font helpers ─────────────────────────────────────────────────────────────
 
-  return pageData.getTextContent(render_options)
-    .then(function(textContent) {
-      let lastY, text = '';
-      for (let item of textContent.items) {
-        if (lastY === item.transform[5] || !lastY) {
-          text += item.str;
-        } else {
-          text += '\n' + item.str;
-        }
-        lastY = item.transform[5];
-      }
-      return text + '\f';
-    });
+/**
+ * Map a pdfjs font-name string to a pdf-lib StandardFonts value (best-effort).
+ * Falls back to Helvetica for unknown fonts.
+ */
+function pickStandardFont(fontName) {
+  const f = (fontName || '').toLowerCase();
+  const isBold = f.includes('bold');
+  const isItalic = f.includes('italic') || f.includes('oblique');
+  if (f.includes('times') || f.includes('serif')) {
+    if (isBold && isItalic) return StandardFonts.TimesRomanBoldItalic;
+    if (isBold)   return StandardFonts.TimesRomanBold;
+    if (isItalic) return StandardFonts.TimesRomanItalic;
+    return StandardFonts.TimesRoman;
+  }
+  if (f.includes('courier') || f.includes('mono')) {
+    if (isBold && isItalic) return StandardFonts.CourierBoldOblique;
+    if (isBold)   return StandardFonts.CourierBold;
+    if (isItalic) return StandardFonts.CourierOblique;
+    return StandardFonts.Courier;
+  }
+  // Helvetica / sans-serif (default)
+  if (isBold && isItalic) return StandardFonts.HelveticaBoldOblique;
+  if (isBold)   return StandardFonts.HelveticaBold;
+  if (isItalic) return StandardFonts.HelveticaOblique;
+  return StandardFonts.Helvetica;
 }
 
+/**
+ * Try to find a system TTF font that covers the Devanagari script range.
+ * Returns null if none found.
+ */
+async function findDevanagariFont() {
+  if (process.platform === 'win32') {
+    const candidates = [
+      'C:\\Windows\\Fonts\\mangal.ttf',   // Mangal – Devanagari-specific
+      'C:\\Windows\\Fonts\\Nirmala.ttf',  // Nirmala UI
+      'C:\\Windows\\Fonts\\segoeui.ttf',  // Segoe UI (broad Unicode)
+      'C:\\Windows\\Fonts\\arial.ttf',
+    ];
+    for (const c of candidates) {
+      if (fs.existsSync(c)) return c;
+    }
+  }
+
+  // Non-Windows: try to download NotoSans Devanagari
+  const fontDir = path.join(__dirname, '../../assets/fonts');
+  if (!fs.existsSync(fontDir)) fs.mkdirSync(fontDir, { recursive: true });
+
+  const fontPath = path.join(fontDir, 'NotoSans-Regular.ttf');
+  if (!fs.existsSync(fontPath)) {
+    const url =
+      'https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf';
+    try {
+      console.log('Downloading NotoSans-Regular.ttf for Devanagari export...');
+      const res = await axios.get(url, { responseType: 'arraybuffer', timeout: 15000 });
+      fs.writeFileSync(fontPath, Buffer.from(res.data));
+    } catch (e) {
+      console.error('Failed to download NotoSans:', e.message);
+      return null;
+    }
+  }
+  return fontPath;
+}
+
+// ─── IMPORT ───────────────────────────────────────────────────────────────────
+
+/**
+ * Parse a PDF file and return:
+ *  - segments[]  — one per translatable text item, with rich position data
+ *  - template    — gzipped+base64 JSON blob containing:
+ *      { pdfBytes: <base64 original PDF>, items: [ { pageIndex, id, x, y, width, height, fontSize, fontName } ] }
+ */
 const parseFile = async (filePath) => {
   const fileBuffer = fs.readFileSync(filePath);
+  const pdfBytesBase64 = fileBuffer.toString('base64');
 
-  // Load PDF using pdfjs-dist legacy build (ESM, loaded via dynamic import)
   const pdfjsLib = await getPdfjsLib();
-  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(fileBuffer), disableWorker: true });
+  const loadingTask = pdfjsLib.getDocument({
+    data: new Uint8Array(fileBuffer),
+    disableWorker: true,
+  });
   const pdfDoc = await loadingTask.promise;
   const numPages = pdfDoc.numPages;
-  const pageTexts = [];
-
-  // Extract text from each page using custom renderer
-  for (let i = 1; i <= numPages; i++) {
-    const page = await pdfDoc.getPage(i);
-    const text = await renderPageWithSeparator(page);
-    pageTexts.push(text);
-  }
-
-  // pdfjs pages already include a form feed at the end of each page's text
-  const rawText = pageTexts.join('');
-  // Split pages by form feed
-  const pages = rawText.split('\f');
-  // Remove the trailing empty page if there is one
-  if (pages.length > 0 && !pages[pages.length - 1].trim()) {
-    pages.pop();
-  }
 
   const segments = [];
+  const itemMeta = []; // positional metadata per segment id
   let segmentIndex = 0;
-  const templatePages = pages.map((pageText) => {
-    const lines = pageText.split(/\r?\n/);
-    const templateLines = lines.map(line => {
-      const source = normalizeSegmentText(line);
-      if (!source) return line;
 
-      const leading = line.match(/^\s*/)?.[0] || "";
-      const trailing = line.match(/\s*$/)?.[0] || "";
-      const segmentId = segmentIndex++;
+  for (let pageIndex = 0; pageIndex < numPages; pageIndex++) {
+    const page = await pdfDoc.getPage(pageIndex + 1);
+    const viewport = page.getViewport({ scale: 1.0 });
+    const pageHeight = viewport.height;
 
-      segments.push({ id: segmentId, source, target: "", leading, trailing });
-      return `${leading}__SEG_${segmentId}__${trailing}`;
+    const textContent = await page.getTextContent({
+      normalizeWhitespace: true,
+      disableCombineTextItems: false,
     });
-    return templateLines.join('\n');
-  });
 
-  const templateStr = templatePages.join('\f');
-  const template = zlib.gzipSync(Buffer.from(templateStr, "utf-8")).toString("base64");
+    for (const item of textContent.items) {
+      const rawText = (item.str || '').replace(/\u00a0/g, ' ').trim();
+      if (!rawText) continue;
+
+      // item.transform = [scaleX, skewX, skewY, scaleY, tx, ty]
+      // pdf-lib uses bottom-left origin; pdfjs also uses bottom-left.
+      const tx = item.transform[4];
+      const ty = item.transform[5];
+      const fontSize = Math.abs(item.transform[3]) || 12;
+      const fontName = (item.fontName || '').replace(/^g_d\d+_/, '');
+
+      const id = segmentIndex++;
+      segments.push({
+        id,
+        source: rawText,
+        target: '',
+      });
+
+      itemMeta.push({
+        id,
+        pageIndex,
+        x: tx,
+        // Convert pdfjs y (bottom-left) to pdf-lib y (also bottom-left, same coordinate system)
+        y: ty,
+        width: item.width || 0,
+        height: item.height || fontSize * 1.2,
+        fontSize,
+        fontName,
+      });
+    }
+  }
+
+  // Pack everything into a single template blob
+  const templateData = {
+    pdfBytes: pdfBytesBase64,
+    items: itemMeta,
+  };
+  const template = zlib
+    .gzipSync(Buffer.from(JSON.stringify(templateData), 'utf-8'))
+    .toString('base64');
 
   return { segments, template };
 };
 
-const ensureFontInstalled = async (targetLang) => {
-  const isHindi = (targetLang || "").toLowerCase().startsWith('hi');
+// ─── EXPORT ───────────────────────────────────────────────────────────────────
 
-  // On Windows, prefer built-in system fonts — they work reliably with pdfkit/fontkit
-  if (process.platform === 'win32') {
-    // Segoe UI has broad Unicode coverage including Devanagari and works with fontkit
-    const segoeui = 'C:\\Windows\\Fonts\\segoeui.ttf';
-    if (fs.existsSync(segoeui)) return segoeui;
-    // Arial as general fallback
-    const arial = 'C:\\Windows\\Fonts\\arial.ttf';
-    if (fs.existsSync(arial)) return arial;
-  }
-
-  // Non-Windows: try to download NotoSans (Latin variant, simpler tables, no fontkit crash)
-  const fontDir = path.join(__dirname, '../../assets/fonts');
-  if (!fs.existsSync(fontDir)) {
-    fs.mkdirSync(fontDir, { recursive: true });
-  }
-
-  const fontName = 'NotoSans-Regular.ttf';
-  const fontPath = path.join(fontDir, fontName);
-
-  if (!fs.existsSync(fontPath)) {
-    console.log(`Downloading ${fontName} for PDF export...`);
-    const url = 'https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf';
-    try {
-      const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 15000 });
-      fs.writeFileSync(fontPath, Buffer.from(response.data));
-      console.log(`Successfully downloaded ${fontName}`);
-    } catch (err) {
-      console.error(`Failed to download ${fontName}:`, err.message);
-      return null;
-    }
-  }
-
-  return fontPath;
-};
-
+/**
+ * Rebuild the PDF by:
+ *  1. Loading the original PDF bytes stored in the template
+ *  2. For each translated segment, covering the original text with a white rectangle
+ *  3. Drawing the translated text at the exact same position & font size
+ */
 const exportFile = async (templateBase64, segments) => {
-  let templateStr = "";
+  // ── Unpack template ──────────────────────────────────────────────────────
+  let templateData;
   try {
-    const buffer = Buffer.from(templateBase64, "base64");
-    templateStr = zlib.gunzipSync(buffer).toString("utf-8");
-  } catch (err) {
-    templateStr = templateBase64;
+    const buf = Buffer.from(templateBase64, 'base64');
+    templateData = JSON.parse(zlib.gunzipSync(buf).toString('utf-8'));
+  } catch (e) {
+    throw new Error('PDF template is corrupted or in old format. Please re-upload the file.');
   }
 
+  const { pdfBytes: pdfBytesBase64, items: itemMeta } = templateData;
+  if (!pdfBytesBase64 || !itemMeta) {
+    throw new Error('PDF template missing original bytes. Please re-upload the file.');
+  }
+
+  // ── Build segment map ────────────────────────────────────────────────────
   const segmentMap = new Map();
-  segments.forEach((segment) => {
-    segmentMap.set(segment.id, segment.target || segment.source);
-  });
+  for (const seg of segments) {
+    segmentMap.set(Number(seg.id), seg.target || seg.source || '');
+  }
 
-  const resultStr = templateStr.replace(/__SEG_(\d+)__/g, (match, idStr) => {
-    const id = parseInt(idStr, 10);
-    if (segmentMap.has(id)) return segmentMap.get(id);
-    return match;
-  });
+  // ── Detect Devanagari ────────────────────────────────────────────────────
+  let needsDevanagari = false;
+  for (const seg of segments) {
+    const t = seg.target || seg.source || '';
+    if (/[\u0900-\u097F]/.test(t)) { needsDevanagari = true; break; }
+  }
 
-  const exportedPages = resultStr.split('\f');
+  // ── Load original PDF ────────────────────────────────────────────────────
+  const originalBytes = Buffer.from(pdfBytesBase64, 'base64');
+  const pdfDoc = await PDFDocument.load(originalBytes, { ignoreEncryption: true });
+  const pages = pdfDoc.getPages();
 
-  // Detect script language based on translation targets
-  let hasDevanagari = false;
-  for (const segment of segments) {
-    const textToCheck = segment.target || segment.source || "";
-    if (/[\u0900-\u097F]/.test(textToCheck)) {
-      hasDevanagari = true;
-      break;
+  // ── Prepare fonts ────────────────────────────────────────────────────────
+  // Pre-embed one instance of every StandardFont variant we might need
+  const standardFontCache = new Map();
+  const getStdFont = async (fontEnumValue) => {
+    if (!standardFontCache.has(fontEnumValue)) {
+      standardFontCache.set(fontEnumValue, await pdfDoc.embedFont(fontEnumValue));
+    }
+    return standardFontCache.get(fontEnumValue);
+  };
+
+  // Devanagari custom font (embedded once if needed)
+  let devanagariFont = null;
+  if (needsDevanagari) {
+    const devFontPath = await findDevanagariFont();
+    if (devFontPath) {
+      try {
+        const fontBytes = fs.readFileSync(devFontPath);
+        devanagariFont = await pdfDoc.embedFont(fontBytes);
+      } catch (e) {
+        console.error('Could not embed Devanagari font:', e.message);
+      }
     }
   }
 
-  const targetLangType = hasDevanagari ? 'hi' : 'en';
-  const fontPath = await ensureFontInstalled(targetLangType);
+  // ── Overlay each text item ───────────────────────────────────────────────
+  for (const meta of itemMeta) {
+    const { id, pageIndex, x, y, width, height, fontSize, fontName } = meta;
 
-  const doc = new PDFDocument({ margin: 50 });
-  const chunks = [];
-  doc.on('data', chunk => chunks.push(chunk));
+    if (pageIndex >= pages.length) continue;
+    const page = pages[pageIndex];
+    const translatedText = segmentMap.get(id);
+    if (translatedText === undefined) continue;
 
-  return new Promise((resolve, reject) => {
-    doc.on('end', () => resolve(Buffer.concat(chunks)));
-    doc.on('error', err => reject(err));
+    const isDevanagari = /[\u0900-\u097F]/.test(translatedText);
 
-    if (fontPath) {
-      doc.font(fontPath);
-    }
-
-    exportedPages.forEach((pageText, idx) => {
-      if (idx > 0) {
-        doc.addPage();
-      }
-      doc.text(pageText);
+    // 1. Erase original text with a white filled rectangle
+    //    Give a small horizontal padding so partially-overlapping glyphs are covered.
+    const eraseWidth = Math.max(width, fontSize * translatedText.length * 0.5) + 4;
+    const eraseHeight = height + 2;
+    page.drawRectangle({
+      x: x - 2,
+      y: y - 2,
+      width: eraseWidth,
+      height: eraseHeight,
+      color: rgb(1, 1, 1),
+      opacity: 1,
+      borderWidth: 0,
     });
 
-    doc.end();
-  });
+    // 2. Draw translated text at original position
+    let font;
+    if (isDevanagari && devanagariFont) {
+      font = devanagariFont;
+    } else {
+      const stdFontKey = pickStandardFont(fontName);
+      font = await getStdFont(stdFontKey);
+    }
+
+    // Clamp font size to a sane minimum
+    const drawSize = Math.max(fontSize, 6);
+
+    try {
+      page.drawText(translatedText, {
+        x,
+        y,
+        size: drawSize,
+        font,
+        color: rgb(0, 0, 0),
+        maxWidth: eraseWidth,
+        lineBreak: false,
+      });
+    } catch (drawErr) {
+      // If the font doesn't support some character, fall back to Helvetica
+      console.warn(`Draw failed for segment ${id} (${translatedText.slice(0, 20)}):`, drawErr.message);
+      const fallback = await getStdFont(StandardFonts.Helvetica);
+      try {
+        page.drawText(translatedText, {
+          x,
+          y,
+          size: drawSize,
+          font: fallback,
+          color: rgb(0, 0, 0),
+          maxWidth: eraseWidth,
+          lineBreak: false,
+        });
+      } catch (e2) {
+        // Last resort: skip this segment
+        console.error(`Skipping segment ${id}:`, e2.message);
+      }
+    }
+  }
+
+  // ── Serialise & return ───────────────────────────────────────────────────
+  const resultBytes = await pdfDoc.save();
+  return Buffer.from(resultBytes);
 };
 
 module.exports = { parseFile, exportFile };
