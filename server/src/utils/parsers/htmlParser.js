@@ -188,6 +188,7 @@ const parseFile = async (filePath) => {
   const templateData = {
     html: htmlString,
     tagMap: Array.from(tagMapGlobal.entries()),
+    segmentTags: segments.map(seg => ({ id: seg.id, leading: seg.leading, trailing: seg.trailing }))
   };
   const template = zlib
     .gzipSync(Buffer.from(JSON.stringify(templateData), "utf-8"))
@@ -199,6 +200,7 @@ const parseFile = async (filePath) => {
 const exportFile = async (templateBase64, segments) => {
   let html = "";
   let tagMapGlobal = new Map();
+  let segmentTagsMap = new Map();
 
   try {
     const buffer = Buffer.from(templateBase64, "base64");
@@ -207,6 +209,7 @@ const exportFile = async (templateBase64, segments) => {
       const templateData = JSON.parse(unzipped);
       html = templateData.html;
       tagMapGlobal = new Map(templateData.tagMap || []);
+      segmentTagsMap = new Map((templateData.segmentTags || []).map(t => [t.id, t]));
     } catch (e) {
       html = unzipped;
     }
@@ -216,8 +219,11 @@ const exportFile = async (templateBase64, segments) => {
 
   const segmentMap = new Map();
   segments.forEach((segment) => {
+    const savedTags = segmentTagsMap.get(segment.id) || {};
+    const leading = savedTags.leading || segment.leading || "";
+    const trailing = savedTags.trailing || segment.trailing || "";
     // If the target is empty, fallback to source
-    const targetText = (segment.leading || "") + (segment.target || segment.source) + (segment.trailing || "");
+    const targetText = leading + (segment.target || segment.source) + trailing;
     // Restore the tags using the global tag map
     const restoredText = restorePlaceholders(targetText, tagMapGlobal);
     segmentMap.set(segment.id, restoredText);

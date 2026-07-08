@@ -10,6 +10,39 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+const fetchAllSegments = async (documentId, select = "*") => {
+  let allSegments = [];
+  let page = 0;
+  const pageSize = 1000;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("document_segments")
+      .select(select)
+      .eq("document_id", documentId)
+      .order("segment_index", { ascending: true })
+      .range(page * pageSize, (page + 1) * pageSize - 1);
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data || data.length === 0) {
+      break;
+    }
+
+    allSegments = allSegments.concat(data);
+    if (data.length < pageSize) {
+      break;
+    }
+
+    page++;
+  }
+
+  return allSegments;
+};
+
 module.exports = {
-  supabase
+  supabase,
+  fetchAllSegments
 };

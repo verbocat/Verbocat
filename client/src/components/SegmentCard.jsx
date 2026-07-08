@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Copy, Check, ArrowRight, AlertTriangle, Lock, Sparkles, Award, UploadCloud, Trash2, Image, MessageSquare } from "lucide-react";
+import { Copy, Check, ArrowRight, AlertTriangle, Lock, Sparkles, Award, UploadCloud, Trash2, Image, MessageSquare, X } from "lucide-react";
 
 const removeTags = (text) => {
   if (typeof text !== "string") return text;
@@ -791,428 +791,521 @@ export const SegmentCard = ({
       </article>
 
       {showContext && (
-        <div className="seg-context-panel" style={{
-          padding: "16px 20px 20px 20px",
-          borderTop: "1px dashed var(--border-subtle)",
-          background: "var(--bg-surface)",
+        <div style={{
           display: "flex",
-          flexDirection: "column",
-          gap: 14
+          justifyContent: "center",
+          width: "100%",
+          background: "transparent",
+          borderTop: "1px solid var(--border-subtle)",
+          padding: "12px 16px"
         }}>
-          {/* Header & Tabs */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <Sparkles style={{ width: 13, height: 13, color: "var(--accent)" }} />
-              <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-primary)" }}>
-                Segment-Wise Context Engine
-              </span>
-            </div>
-            
-            {/* Tabs */}
-            <div className="seg-control" style={{ display: "flex", gap: 2, padding: 2, height: "auto" }}>
-              <button
-                type="button"
-                onClick={() => setActiveTab("screenshot")}
-                className={`seg-control-btn ${activeTab === "screenshot" ? "active" : ""}`}
-                style={{ fontSize: 10, padding: "4px 10px", height: "auto" }}
-              >
-                <Image style={{ width: 10, height: 10, marginRight: 4, display: "inline-block", verticalAlign: "middle" }} />
-                Screenshot
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab("jira")}
-                className={`seg-control-btn ${activeTab === "jira" ? "active" : ""}`}
-                style={{ fontSize: 10, padding: "4px 10px", height: "auto" }}
-              >
-                <MessageSquare style={{ width: 10, height: 10, marginRight: 4, display: "inline-block", verticalAlign: "middle" }} />
-                Jira Story
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab("description")}
-                className={`seg-control-btn ${activeTab === "description" ? "active" : ""}`}
-                style={{ fontSize: 10, padding: "4px 10px", height: "auto" }}
-              >
-                Description
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab("mqm")}
-                className={`seg-control-btn ${activeTab === "mqm" ? "active" : ""}`}
-                style={{ fontSize: 10, padding: "4px 10px", height: "auto" }}
-              >
-                <Award style={{ width: 10, height: 10, marginRight: 4, display: "inline-block", verticalAlign: "middle" }} />
-                MQM Quality ({segment.mqmAccuracyScore !== undefined && segment.mqmAccuracyScore !== null ? `${segment.mqmAccuracyScore}%` : "N/A"})
-              </button>
-            </div>
-          </div>
-
-          {/* Tab Content */}
-          <div style={{ minHeight: 90 }}>
-            {activeTab === "screenshot" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
-                  Upload a screenshot showing where this segment is placed in the UI. The AI will inspect the image layout on-the-fly and discard it.
-                </span>
-                
-                {screenshotPreview ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(255,255,255,0.01)", border: "1px solid var(--border-subtle)", borderRadius: 8, padding: 8 }}>
-                    <img
-                      src={screenshotPreview}
-                      alt="Segment placement visual context"
-                      style={{ height: 60, width: "auto", borderRadius: 4, objectFit: "contain", border: "1px solid var(--border-medium)" }}
-                    />
-                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-primary)" }}>{screenshotFile?.name}</span>
-                      <span style={{ fontSize: 9, color: "var(--emerald)", fontWeight: 700 }}>READY TO TRANSLATE (EPHEMERAL)</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={clearScreenshot}
-                      className="seg-btn"
-                      style={{ padding: 6, color: "var(--text-rose)" }}
-                      title="Clear screenshot"
-                    >
-                      <Trash2 style={{ width: 12, height: 12 }} />
-                    </button>
-                  </div>
-                ) : (
-                  <div
-                    onDragOver={handleDragOver}
-                    onDrop={handleDrop}
-                    style={{
-                      border: "1px dashed var(--border-medium)",
-                      borderRadius: 8,
-                      padding: "16px 20px",
-                      textAlign: "center",
-                      cursor: "pointer",
-                      background: "rgba(255,255,255,0.003)",
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      gap: 6
-                    }}
-                    onClick={() => document.getElementById(`screenshot-input-${segment.id}`).click()}
-                  >
-                    <UploadCloud style={{ width: 18, height: 18, color: "var(--text-muted)" }} />
-                    <span style={{ fontSize: 11, color: "var(--text-primary)" }}>
-                      Drag & drop a screenshot here, <span style={{ color: "var(--accent)", textDecoration: "underline" }}>browse files</span>, or press <kbd style={{ background: "var(--bg-tertiary)", padding: "2px 4px", borderRadius: 4, fontStyle: "normal", border: "1px solid var(--border-medium)" }}>Ctrl + V</kbd> to paste
-                    </span>
-                    <span style={{ fontSize: 8, color: "var(--text-muted)" }}>Supports PNG, JPG, WebP</span>
-                    <input
-                      id={`screenshot-input-${segment.id}`}
-                      type="file"
-                      accept="image/*"
-                      onChange={handleScreenshotChange}
-                      style={{ display: "none" }}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === "jira" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
-                  Paste a Jira story or specification block to supply functional context for this segment.
-                </span>
-                <textarea
-                  value={jiraText}
-                  onChange={(e) => setJiraText(e.target.value)}
-                  placeholder="e.g. As a user, I want to click 'Home' to return to the landing page..."
-                  style={{
-                    width: "100%",
-                    minHeight: 70,
-                    fontSize: 11.5,
-                    fontFamily: "var(--font-mono)",
-                    background: "rgba(0,0,0,0.15)",
-                    border: "1px solid var(--border-medium)",
-                    borderRadius: 6,
-                    padding: "8px 10px",
-                    color: "#fff",
-                    outline: "none",
-                    resize: "vertical"
-                  }}
-                />
-              </div>
-            )}
-
-            {activeTab === "description" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
-                  Write custom translation instructions or term usage descriptions for this segment.
-                </span>
-                <textarea
-                  value={descText}
-                  onChange={(e) => setDescText(e.target.value)}
-                  placeholder="e.g. This is a navigation menu link, keep it short and professional..."
-                  style={{
-                    width: "100%",
-                    minHeight: 70,
-                    fontSize: 11.5,
-                    background: "rgba(0,0,0,0.15)",
-                    border: "1px solid var(--border-medium)",
-                    borderRadius: 6,
-                    padding: "8px 10px",
-                    color: "#fff",
-                    outline: "none",
-                    resize: "vertical"
-                  }}
-                />
-              </div>
-            )}
-
-            {activeTab === "mqm" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {!segment.target ? (
-                  <div style={{ padding: "12px 14px", borderRadius: 8, background: "rgba(255,255,255,0.02)", border: "1px dashed var(--border-medium)", textAlign: "center" }}>
-                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                      Translate this segment first to perform an MQM Quality Audit.
-                    </span>
-                  </div>
-                ) : segment.mqmAccuracyScore === undefined || segment.mqmAccuracyScore === null ? (
-                  <div style={{ padding: "12px 14px", borderRadius: 8, background: "rgba(255,255,255,0.02)", border: "1px dashed var(--border-medium)", textAlign: "center" }}>
-                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                      No MQM Audit score is available yet. Try re-translating this segment with context to trigger the audit.
-                    </span>
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    {/* Penalty Points & Status */}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(0,0,0,0.15)", border: "1px solid var(--border-subtle)", borderRadius: 8, padding: "8px 12px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-primary)" }}>
-                          {isEscalatingVerifying ? "MQM Verification:" : "MQM Penalty Score:"}
-                        </span>
-                        <span style={{
-                          fontSize: 13, fontWeight: 800, fontFamily: "'IBM Plex Mono', monospace",
-                          color: isEscalatingVerifying ? "#818cf8" : (penaltyPoints === 0 ? "var(--emerald)" : penaltyPoints <= 4 ? "var(--text-amber)" : penaltyPoints <= 24 ? "var(--text-orange)" : "var(--text-rose)")
-                        }}>
-                          {isEscalatingVerifying ? "Verifying..." : `${penaltyPoints} pts`}
-                        </span>
-                      </div>
-                      {!isEscalatingVerifying && (
-                        <span style={{
-                          fontSize: 9, fontWeight: 700,
-                          color: penaltyPoints === 0 ? "var(--emerald)" : penaltyPoints <= 4 ? "var(--text-amber)" : penaltyPoints <= 24 ? "var(--text-orange)" : "var(--text-rose)",
-                          background: penaltyPoints === 0 ? "rgba(16,185,129,0.12)" : penaltyPoints <= 4 ? "rgba(251,191,36,0.12)" : penaltyPoints <= 24 ? "rgba(249,115,22,0.12)" : "rgba(239,68,68,0.12)",
-                          border: penaltyPoints === 0 ? "1px solid rgba(16,185,129,0.3)" : penaltyPoints <= 4 ? "1px solid rgba(251,191,36,0.3)" : penaltyPoints <= 24 ? "1px solid rgba(249,115,22,0.3)" : "1px solid rgba(239,68,68,0.3)",
-                          borderRadius: "4px",
-                          padding: "2px 6px"
-                        }}>
-                          {penaltyPoints === 0 ? "Excellent" : penaltyPoints <= 4 ? "Minor Issues" : penaltyPoints <= 24 ? "Major Issues" : "Critical Issues"}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* AI Advisor Clarifications and Suggestions */}
-                    {parsedMqmReport?.improvementSuggestion && (
-                      <div style={{
-                        background: "rgba(59,130,246,0.05)",
-                        border: "1px solid rgba(59,130,246,0.2)",
-                        borderRadius: 8,
-                        padding: "10px 12px",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 8
-                      }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <Sparkles style={{ width: 12, height: 12, color: "var(--accent)" }} />
-                          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                            AI Quality Suggestion to reach 90%+
-                          </span>
-                        </div>
-                        <p style={{ fontSize: 11.5, color: "var(--text-primary)", margin: 0, fontStyle: "italic", whiteSpace: "pre-wrap" }}>
-                          {removeTags(parsedMqmReport.improvementSuggestion)}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => handleAutoApplyMqmSuggestion(parsedMqmReport.improvementSuggestion)}
-                          className="ab ab-export"
-                          style={{
-                            alignSelf: "flex-start",
-                            height: 24,
-                            padding: "0 10px",
-                            fontSize: 10,
-                            fontWeight: 700,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 4,
-                            marginTop: 2
-                          }}
-                        >
-                          Auto-Apply Prompt & Re-translate
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Clarifying Questions */}
-                    {parsedMqmReport?.clarifyingQuestions?.length > 0 && (
-                      <div style={{
-                        background: "rgba(245,158,11,0.03)",
-                        border: "1px solid rgba(245,158,11,0.15)",
-                        borderRadius: 8,
-                        padding: "10px 12px",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 6
-                      }}>
-                        <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-amber)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                          🤔 Questions to Clarify Meaning
-                        </span>
-                        <ul style={{ margin: 0, paddingLeft: 16, fontSize: 11, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 4 }}>
-                          {parsedMqmReport.clarifyingQuestions.map((q, qidx) => (
-                            <li key={qidx}>{q}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {/* Errors List */}
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)" }}>
-                        ISSUES DETECTED BY MQM AUDIT:
-                      </span>
-                      {(!parsedMqmReport?.errors || parsedMqmReport.errors.length === 0) ? (
-                        <div style={{ padding: "8px 12px", borderRadius: 6, background: "rgba(16,185,129,0.05)", border: "1px solid rgba(16,185,129,0.15)" }}>
-                          <span style={{ fontSize: 11, color: "var(--emerald)", fontWeight: 600 }}>
-                            ✓ Perfect quality! No errors found.
-                          </span>
-                        </div>
-                      ) : (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 150, overflowY: "auto" }}>
-                          {parsedMqmReport.errors.map((err, errIdx) => (
-                            <div key={errIdx} style={{
-                              padding: "8px 10px",
-                              borderRadius: 6,
-                              background: err.severity === "Critical" ? "rgba(239,68,68,0.05)" : "rgba(245,158,11,0.05)",
-                              border: err.severity === "Critical" ? "1px solid rgba(239,68,68,0.2)" : "1px solid rgba(245,158,11,0.2)",
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: 2
-                            }}>
-                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                <span style={{ fontSize: 10.5, fontWeight: 700, color: err.severity === "Critical" ? "var(--text-rose)" : "var(--text-amber)" }}>
-                                  [{err.severity}] {err.category}
-                                </span>
-                              </div>
-                              <span style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.4 }}>
-                                {removeTags(err.explanation)}
-                              </span>
-                              {(err.snippet || err.correction) && (
-                                <div style={{
-                                  marginTop: 6,
-                                  borderRadius: 6,
-                                  border: "1px solid var(--border-subtle)",
-                                  background: "rgba(0,0,0,0.25)",
-                                  overflow: "hidden",
-                                  fontFamily: "var(--font-mono)",
-                                  fontSize: "9.5px",
-                                  lineHeight: 1.4
-                                }}>
-                                  {err.snippet && (
-                                    <div style={{
-                                      display: "flex",
-                                      alignItems: "center",
-                                      gap: 6,
-                                      background: "rgba(239,68,68,0.04)",
-                                      padding: "5px 8px",
-                                      borderBottom: err.correction ? "1px solid var(--border-subtle)" : "none",
-                                      color: "var(--text-rose)",
-                                      textDecoration: "line-through"
-                                    }}>
-                                      <span style={{ fontWeight: "bold", opacity: 0.7 }}>- Replace:</span>
-                                      <span>"{removeTags(err.snippet)}"</span>
-                                    </div>
-                                  )}
-                                  {err.correction && (
-                                    <div style={{
-                                      display: "flex",
-                                      alignItems: "center",
-                                      gap: 6,
-                                      background: "rgba(16,185,129,0.04)",
-                                      padding: "5px 8px",
-                                      color: "var(--text-emerald)",
-                                      fontWeight: 600
-                                    }}>
-                                      <span style={{ fontWeight: "bold", opacity: 0.7 }}>+ With:</span>
-                                      <span>"{removeTags(err.correction)}"</span>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Action Footer */}
-          <div style={{
+          <div className="seg-context-panel" style={{
+            width: "100%",
+            maxWidth: 580,
+            background: "transparent",
+            border: "1px solid var(--border-subtle)",
+            borderRadius: 12,
+            padding: "14px 18px",
             display: "flex",
-            alignItems: "center",
-            justifyContent: "flex-end",
-            gap: 10,
-            borderTop: "1px solid var(--border-subtle)",
-            paddingTop: 12
+            flexDirection: "column",
+            gap: 12,
+            boxShadow: "0 8px 30px rgba(0, 0, 0, 0.25)",
+            backdropFilter: "blur(4px)"
           }}>
-            <button
-              type="button"
-              onClick={handleSaveTextContext}
-              disabled={readOnly}
-              className="ab ab-export"
-              style={{
-                height: 28,
-                padding: "0 12px",
-                fontSize: 10,
-                borderRadius: "var(--radius-sm)",
-                background: "transparent",
-                border: "1px solid var(--border-medium)",
-                color: "var(--text-primary)"
-              }}
-            >
-              Save Text Context
-            </button>
-            <button
-              type="button"
-              onClick={handleReTranslate}
-              disabled={readOnly || translatingLocal}
-              className="ab"
-              style={{
-                height: 28,
-                padding: "0 14px",
-                fontSize: 10,
-                borderRadius: "var(--radius-sm)",
-                background: "linear-gradient(135deg, var(--accent) 0%, #4f46e5 100%)",
-                border: "none",
-                color: "#fff",
-                display: "flex",
-                alignItems: "center",
-                gap: 5,
-                boxShadow: "0 4px 12px rgba(91,106,240,0.2)"
-              }}
-            >
-              {translatingLocal ? (
-                <>
-                  <svg className="animate-spin h-3.5 w-3.5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  <span>Translating...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles style={{ width: 11, height: 11 }} />
-                  <span>Re-Translate Segment</span>
-                </>
+            {/* Header & Tabs */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, width: "100%", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 20,
+                  height: 20,
+                  borderRadius: 5,
+                  background: "rgba(99, 102, 241, 0.12)",
+                  border: "1px solid rgba(99, 102, 241, 0.2)"
+                }}>
+                  <Sparkles style={{ width: 10, height: 10, color: "var(--accent)" }} />
+                </div>
+                <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-primary)" }}>
+                  Segment Context
+                </span>
+              </div>
+              
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                {/* Tabs */}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("screenshot")}
+                    style={{
+                      fontSize: 9.5,
+                      fontWeight: 600,
+                      padding: "4px 2px",
+                      background: "transparent",
+                      border: "none",
+                      borderBottom: activeTab === "screenshot" ? "2px solid var(--accent)" : "2px solid transparent",
+                      color: activeTab === "screenshot" ? "var(--text-primary)" : "var(--text-muted)",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      transition: "all 0.15s ease"
+                    }}
+                  >
+                    <Image style={{ width: 10, height: 10, color: activeTab === "screenshot" ? "var(--accent)" : "var(--text-muted)" }} />
+                    <span>Screenshot</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("jira")}
+                    style={{
+                      fontSize: 9.5,
+                      fontWeight: 600,
+                      padding: "4px 2px",
+                      background: "transparent",
+                      border: "none",
+                      borderBottom: activeTab === "jira" ? "2px solid var(--accent)" : "2px solid transparent",
+                      color: activeTab === "jira" ? "var(--text-primary)" : "var(--text-muted)",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      transition: "all 0.15s ease"
+                    }}
+                  >
+                    <MessageSquare style={{ width: 10, height: 10, color: activeTab === "jira" ? "var(--accent)" : "var(--text-muted)" }} />
+                    <span>Jira</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("description")}
+                    style={{
+                      fontSize: 9.5,
+                      fontWeight: 600,
+                      padding: "4px 2px",
+                      background: "transparent",
+                      border: "none",
+                      borderBottom: activeTab === "description" ? "2px solid var(--accent)" : "2px solid transparent",
+                      color: activeTab === "description" ? "var(--text-primary)" : "var(--text-muted)",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      transition: "all 0.15s ease"
+                    }}
+                  >
+                    <span>Description</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("mqm")}
+                    style={{
+                      fontSize: 9.5,
+                      fontWeight: 600,
+                      padding: "4px 2px",
+                      background: "transparent",
+                      border: "none",
+                      borderBottom: activeTab === "mqm" ? "2px solid var(--accent)" : "2px solid transparent",
+                      color: activeTab === "mqm" ? "var(--text-primary)" : "var(--text-muted)",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      transition: "all 0.15s ease"
+                    }}
+                  >
+                    <Award style={{ width: 10, height: 10, color: activeTab === "mqm" ? "var(--accent)" : "var(--text-muted)" }} />
+                    <span>Quality ({segment.mqmAccuracyScore !== undefined && segment.mqmAccuracyScore !== null ? `${segment.mqmAccuracyScore}%` : "N/A"})</span>
+                  </button>
+                </div>
+
+                {/* Close Button [X] */}
+                <button 
+                  type="button" 
+                  onClick={() => setShowContext(false)} 
+                  title="Close Context" 
+                  className="seg-btn"
+                  style={{
+                    padding: 4,
+                    borderRadius: "var(--radius-sm)",
+                    border: "1px solid var(--border-subtle)",
+                    background: "transparent",
+                    color: "var(--text-muted)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                    height: 22,
+                    width: 22
+                  }}
+                >
+                  <X style={{ width: 10, height: 10 }} />
+                </button>
+              </div>
+            </div>
+
+            {/* Tab Content */}
+            <div style={{ minHeight: 90 }}>
+              {activeTab === "screenshot" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                    Upload a screenshot showing where this segment is placed in the UI. The AI will inspect the image layout on-the-fly and discard it.
+                  </span>
+                  
+                  {screenshotPreview ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(255,255,255,0.01)", border: "1px solid var(--border-subtle)", borderRadius: 8, padding: 8 }}>
+                      <img
+                        src={screenshotPreview}
+                        alt="Segment placement visual context"
+                        style={{ height: 60, width: "auto", borderRadius: 4, objectFit: "contain", border: "1px solid var(--border-medium)" }}
+                      />
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-primary)" }}>{screenshotFile?.name}</span>
+                        <span style={{ fontSize: 9, color: "var(--emerald)", fontWeight: 700 }}>READY TO TRANSLATE (EPHEMERAL)</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={clearScreenshot}
+                        className="seg-btn"
+                        style={{ padding: 6, color: "var(--text-rose)" }}
+                        title="Clear screenshot"
+                      >
+                        <Trash2 style={{ width: 12, height: 12 }} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      onDragOver={handleDragOver}
+                      onDrop={handleDrop}
+                      style={{
+                        border: "1px dashed var(--border-medium)",
+                        borderRadius: 8,
+                        padding: "10px 14px",
+                        textAlign: "center",
+                        cursor: "pointer",
+                        background: "rgba(255,255,255,0.003)",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        gap: 4
+                      }}
+                      onClick={() => document.getElementById(`screenshot-input-${segment.id}`).click()}
+                    >
+                      <UploadCloud style={{ width: 16, height: 16, color: "var(--text-muted)" }} />
+                      <span style={{ fontSize: 10, color: "var(--text-primary)" }}>
+                        Drag & drop screenshot, <span style={{ color: "var(--accent)", textDecoration: "underline" }}>browse</span>, or press <kbd style={{ background: "var(--bg-input)", padding: "1px 3px", borderRadius: 3, fontStyle: "normal", border: "1px solid var(--border-medium)", fontSize: 8.5 }}>Ctrl + V</kbd> to paste
+                      </span>
+                      <span style={{ fontSize: 7.5, color: "var(--text-muted)" }}>Supports PNG, JPG, WebP</span>
+                      <input
+                        id={`screenshot-input-${segment.id}`}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleScreenshotChange}
+                        style={{ display: "none" }}
+                      />
+                    </div>
+                  )}
+                </div>
               )}
-            </button>
+
+              {activeTab === "jira" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  <textarea
+                    value={jiraText}
+                    onChange={(e) => setJiraText(e.target.value)}
+                    placeholder="Paste a Jira story or functional spec..."
+                    style={{
+                      width: "100%",
+                      minHeight: 80,
+                      fontSize: 11,
+                      fontFamily: "var(--font-mono)",
+                      background: "var(--bg-input)",
+                      border: "1px solid var(--border-subtle)",
+                      borderRadius: 8,
+                      padding: "8px 12px",
+                      color: "var(--text-primary)",
+                      outline: "none",
+                      resize: "none"
+                    }}
+                  />
+                </div>
+              )}
+
+              {activeTab === "description" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  <textarea
+                    value={descText}
+                    onChange={(e) => setDescText(e.target.value)}
+                    placeholder="Write custom instructions or term details..."
+                    style={{
+                      width: "100%",
+                      minHeight: 80,
+                      fontSize: 11,
+                      background: "var(--bg-input)",
+                      border: "1px solid var(--border-subtle)",
+                      borderRadius: 8,
+                      padding: "8px 12px",
+                      color: "var(--text-primary)",
+                      outline: "none",
+                      resize: "none"
+                    }}
+                  />
+                </div>
+              )}
+
+              {activeTab === "mqm" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {!segment.target ? (
+                    <div style={{ padding: "12px 14px", borderRadius: 8, background: "rgba(255,255,255,0.02)", border: "1px dashed var(--border-medium)", textAlign: "center" }}>
+                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                        Translate this segment first to perform an MQM Quality Audit.
+                      </span>
+                    </div>
+                  ) : segment.mqmAccuracyScore === undefined || segment.mqmAccuracyScore === null ? (
+                    <div style={{ padding: "12px 14px", borderRadius: 8, background: "rgba(255,255,255,0.02)", border: "1px dashed var(--border-medium)", textAlign: "center" }}>
+                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                        No MQM Audit score is available yet. Try re-translating this segment with context to trigger the audit.
+                      </span>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {/* Penalty Points & Status */}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(0,0,0,0.15)", border: "1px solid var(--border-subtle)", borderRadius: 8, padding: "8px 12px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-primary)" }}>
+                            {isEscalatingVerifying ? "MQM Verification:" : "MQM Penalty Score:"}
+                          </span>
+                          <span style={{
+                            fontSize: 13, fontWeight: 800, fontFamily: "'IBM Plex Mono', monospace",
+                            color: isEscalatingVerifying ? "#818cf8" : (penaltyPoints === 0 ? "var(--emerald)" : penaltyPoints <= 4 ? "var(--text-amber)" : penaltyPoints <= 24 ? "var(--text-orange)" : "var(--text-rose)")
+                          }}>
+                            {isEscalatingVerifying ? "Verifying..." : `${penaltyPoints} pts`}
+                          </span>
+                        </div>
+                        {!isEscalatingVerifying && (
+                          <span style={{
+                            fontSize: 9, fontWeight: 700,
+                            color: penaltyPoints === 0 ? "var(--emerald)" : penaltyPoints <= 4 ? "var(--text-amber)" : penaltyPoints <= 24 ? "var(--text-orange)" : "var(--text-rose)",
+                            background: penaltyPoints === 0 ? "rgba(16,185,129,0.12)" : penaltyPoints <= 4 ? "rgba(251,191,36,0.12)" : penaltyPoints <= 24 ? "rgba(249,115,22,0.12)" : "rgba(239,68,68,0.12)",
+                            border: penaltyPoints === 0 ? "1px solid rgba(16,185,129,0.3)" : penaltyPoints <= 4 ? "1px solid rgba(251,191,36,0.3)" : penaltyPoints <= 24 ? "1px solid rgba(249,115,22,0.3)" : "1px solid rgba(239,68,68,0.3)",
+                            borderRadius: "4px",
+                            padding: "2px 6px"
+                          }}>
+                            {penaltyPoints === 0 ? "Excellent" : penaltyPoints <= 4 ? "Minor Issues" : penaltyPoints <= 24 ? "Major Issues" : "Critical Issues"}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* AI Advisor Clarifications and Suggestions */}
+                      {parsedMqmReport?.improvementSuggestion && (
+                        <div style={{
+                          background: "rgba(59,130,246,0.05)",
+                          border: "1px solid rgba(59,130,246,0.2)",
+                          borderRadius: 8,
+                          padding: "10px 12px",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 8
+                        }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <Sparkles style={{ width: 12, height: 12, color: "var(--accent)" }} />
+                            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                              AI Quality Suggestion to reach 90%+
+                            </span>
+                          </div>
+                          <p style={{ fontSize: 11.5, color: "var(--text-primary)", margin: 0, fontStyle: "italic", whiteSpace: "pre-wrap" }}>
+                            {removeTags(parsedMqmReport.improvementSuggestion)}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => handleAutoApplyMqmSuggestion(parsedMqmReport.improvementSuggestion)}
+                            className="ab ab-export"
+                            style={{
+                              alignSelf: "flex-start",
+                              height: 24,
+                              padding: "0 10px",
+                              fontSize: 10,
+                              fontWeight: 700,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 4,
+                              marginTop: 2
+                            }}
+                          >
+                            Auto-Apply Prompt & Re-translate
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Clarifying Questions */}
+                      {parsedMqmReport?.clarifyingQuestions?.length > 0 && (
+                        <div style={{
+                          background: "rgba(245,158,11,0.03)",
+                          border: "1px solid rgba(245,158,11,0.15)",
+                          borderRadius: 8,
+                          padding: "10px 12px",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 6
+                        }}>
+                          <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-amber)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                            🤔 Questions to Clarify Meaning
+                          </span>
+                          <ul style={{ margin: 0, paddingLeft: 16, fontSize: 11, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 4 }}>
+                            {parsedMqmReport.clarifyingQuestions.map((q, qidx) => (
+                              <li key={qidx}>{q}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Errors List */}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)" }}>
+                          ISSUES DETECTED BY MQM AUDIT:
+                        </span>
+                        {(!parsedMqmReport?.errors || parsedMqmReport.errors.length === 0) ? (
+                          <div style={{ padding: "8px 12px", borderRadius: 6, background: "rgba(16,185,129,0.05)", border: "1px solid rgba(16,185,129,0.15)" }}>
+                            <span style={{ fontSize: 11, color: "var(--emerald)", fontWeight: 600 }}>
+                              ✓ Perfect quality! No errors found.
+                            </span>
+                          </div>
+                        ) : (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 120, overflowY: "auto" }}>
+                            {parsedMqmReport.errors.map((err, errIdx) => (
+                              <div key={errIdx} style={{
+                                padding: "8px 10px",
+                                borderRadius: 6,
+                                background: err.severity === "Critical" ? "rgba(239,68,68,0.05)" : "rgba(245,158,11,0.05)",
+                                border: err.severity === "Critical" ? "1px solid rgba(239,68,68,0.2)" : "1px solid rgba(245,158,11,0.2)",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 2
+                              }}>
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                  <span style={{ fontSize: 10.5, fontWeight: 700, color: err.severity === "Critical" ? "var(--text-rose)" : "var(--text-amber)" }}>
+                                    [{err.severity}] {err.category}
+                                  </span>
+                                </div>
+                                <span style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.4 }}>
+                                  {removeTags(err.explanation)}
+                                </span>
+                                {(err.snippet || err.correction) && (
+                                  <div style={{
+                                    marginTop: 6,
+                                    borderRadius: 6,
+                                    border: "1px solid var(--border-subtle)",
+                                    background: "rgba(0,0,0,0.25)",
+                                    overflow: "hidden",
+                                    fontFamily: "var(--font-mono)",
+                                    fontSize: "9.5px",
+                                    lineHeight: 1.4
+                                  }}>
+                                    {err.snippet && (
+                                      <div style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 6,
+                                        background: "rgba(239,68,68,0.04)",
+                                        padding: "5px 8px",
+                                        borderBottom: err.correction ? "1px solid var(--border-subtle)" : "none",
+                                        color: "var(--text-rose)",
+                                        textDecoration: "line-through"
+                                      }}>
+                                        <span style={{ fontWeight: "bold", opacity: 0.7 }}>- Replace:</span>
+                                        <span>"{removeTags(err.snippet)}"</span>
+                                      </div>
+                                    )}
+                                    {err.correction && (
+                                      <div style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 6,
+                                        background: "rgba(16,185,129,0.04)",
+                                        padding: "5px 8px",
+                                        color: "var(--text-emerald)",
+                                        fontWeight: 600
+                                      }}>
+                                        <span style={{ fontWeight: "bold", opacity: 0.7 }}>+ With:</span>
+                                        <span>"{removeTags(err.correction)}"</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Action Footer */}
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              gap: 8,
+              borderTop: "1px solid var(--border-subtle)",
+              paddingTop: 10
+            }}>
+              <button
+                type="button"
+                onClick={handleSaveTextContext}
+                disabled={readOnly}
+                className="ab ab-export"
+                style={{
+                  height: 25,
+                  padding: "0 10px",
+                  fontSize: 9.5,
+                  borderRadius: "var(--radius-sm)",
+                  background: "transparent",
+                  border: "1px solid var(--border-medium)",
+                  color: "var(--text-primary)"
+                }}
+              >
+                Save Context
+              </button>
+              <button
+                type="button"
+                onClick={handleReTranslate}
+                disabled={readOnly || translatingLocal}
+                className="ab"
+                style={{
+                  height: 25,
+                  padding: "0 12px",
+                  fontSize: 9.5,
+                  borderRadius: "var(--radius-sm)",
+                  background: "linear-gradient(135deg, var(--accent) 0%, #4f46e5 100%)",
+                  border: "none",
+                  color: "#fff",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                  boxShadow: "0 2px 6px rgba(91,106,240,0.15)"
+                }}
+              >
+                {translatingLocal ? (
+                  <>
+                    <svg className="animate-spin h-3.5 w-3.5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Translating...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles style={{ width: 11, height: 11 }} />
+                    <span>Re-Translate Segment</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

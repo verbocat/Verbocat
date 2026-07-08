@@ -42,7 +42,24 @@ export const GlossaryModal = ({
 
   const [isEditing, setIsEditing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [newRowIndex, setNewRowIndex] = useState(null);
   const fileInputRef = useRef(null);
+
+  const handleAddRow = () => {
+    onAddRow();
+    setNewRowIndex(glossary.length);
+  };
+
+  const handleBlur = (event) => {
+    const relatedTarget = event.relatedTarget;
+    if (
+      !relatedTarget ||
+      typeof relatedTarget.closest !== "function" ||
+      relatedTarget.closest(".glossary-row") !== event.currentTarget.closest(".glossary-row")
+    ) {
+      setNewRowIndex(null);
+    }
+  };
 
   useEffect(() => {
     if (!show) {
@@ -273,7 +290,7 @@ export const GlossaryModal = ({
                   )}
 
                   <button
-                    onClick={onAddRow}
+                    onClick={handleAddRow}
                     className="rounded-xl bg-gradient-to-r from-sky-400 to-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:from-sky-300 hover:to-slate-200"
                   >
                     Add Field
@@ -308,7 +325,7 @@ export const GlossaryModal = ({
                       <div
                         key={`${glossaryKey}-${index}`}
                         onClick={(event) => onToggleRow(index, event)}
-                        className={`grid grid-cols-[64px_1fr_1fr] border-t border-white/10 ${
+                        className={`glossary-row grid grid-cols-[64px_1fr_1fr] border-t border-white/10 ${
                           selected
                             ? darkMode
                               ? "bg-sky-400/10"
@@ -324,9 +341,16 @@ export const GlossaryModal = ({
 
                         <input
                           value={item.source}
-                          disabled={!isEditing}
+                          disabled={!isEditing && newRowIndex !== index}
                           onClick={(event) => event.stopPropagation()}
                           onPaste={onPasteGlossary}
+                          onBlur={handleBlur}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              setNewRowIndex(null);
+                              e.target.blur();
+                            }
+                          }}
                           onChange={(event) =>
                             onUpdateGlossary(index, "source", event.target.value)
                           }
@@ -336,8 +360,15 @@ export const GlossaryModal = ({
 
                         <input
                           value={item.target}
-                          disabled={!isEditing}
+                          disabled={!isEditing && newRowIndex !== index}
                           onClick={(event) => event.stopPropagation()}
+                          onBlur={handleBlur}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              setNewRowIndex(null);
+                              e.target.blur();
+                            }
+                          }}
                           onChange={(event) =>
                             onUpdateGlossary(index, "target", event.target.value)
                           }

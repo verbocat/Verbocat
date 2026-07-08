@@ -4,7 +4,7 @@ const fs = require("fs");
 const { processUploadedFile, exportHtml } = require("../services/fileService");
 const { translateSegments } = require("../services/translationService");
 const { getProviderStatus } = require("../services/translationProviders");
-const { supabase } = require("../config/supabase");
+const { supabase, fetchAllSegments } = require("../config/supabase");
 const { checkAuth, checkTranslateAccess } = require("../utils/authMiddleware");
 const {
   generateXliff,
@@ -452,13 +452,11 @@ apiRouter.get("/documents/:id", checkAuth, async (request, response) => {
     if (!doc) return;
 
     // Fetch segments
-    const { data: segments, error: segError } = await supabase
-      .from("document_segments")
-      .select("*")
-      .eq("document_id", doc.id)
-      .order("segment_index", { ascending: true });
-
-    if (segError) {
+    let segments;
+    try {
+      segments = await fetchAllSegments(doc.id);
+    } catch (segError) {
+      console.error("Failed to load document segments:", segError);
       return response.status(500).json({ error: "Failed to load document segments." });
     }
 
@@ -514,6 +512,36 @@ apiRouter.get("/documents/:id", checkAuth, async (request, response) => {
   } catch (error) {
     console.error(error);
     response.status(500).json({ error: "Internal server error." });
+  }
+});
+
+// Delete Document / Project
+apiRouter.delete("/documents/:id", checkAuth, async (request, response) => {
+  try {
+    const doc = await verifyDocumentAccess(request, response, "write");
+    if (!doc) return;
+
+    // Check if the current user is the owner (or staff/admin)
+    const isStaff = ["admin", "verbolabs_staff"].includes(request.profile.role);
+    if (!isStaff && doc.owner_id !== request.user.id) {
+      return response.status(403).json({ error: "Only the project owner can delete this project." });
+    }
+
+    // Delete document (this will ON DELETE CASCADE delete segments, access, requests etc.)
+    const { error: deleteError } = await supabase
+      .from("documents")
+      .delete()
+      .eq("id", doc.id);
+
+    if (deleteError) {
+      console.error("Failed to delete document:", deleteError);
+      return response.status(500).json({ error: "Failed to delete project." });
+    }
+
+    response.json({ message: "Project deleted successfully." });
+  } catch (err) {
+    console.error("Error in delete document:", err);
+    response.status(500).json({ error: "Server error." });
   }
 });
 
@@ -574,10 +602,12 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
     // Find all duplicate segment indices and their source/target texts in the document
     let matchingSegs = [{ segment_index: segmentIndex, source_text: sourceText, target_text: dbSegment.target_text, original_target_text: dbSegment.original_target_text, tracked_by: dbSegment.tracked_by }];
     if (sourceText && autoPropagate !== false) {
-      const { data: allSegs } = await supabase
-        .from("document_segments")
-        .select("segment_index, source_text, target_text, original_target_text, tracked_by")
-        .eq("document_id", doc.id);
+      let allSegs;
+      try {
+        allSegs = await fetchAllSegments(doc.id, "segment_index, source_text, target_text, original_target_text, tracked_by");
+      } catch (err) {
+        console.error("Failed to fetch all segments for propagation:", err);
+      }
       
       const cleanedSource = cleanString(sourceText);
       if (allSegs && allSegs.length > 0) {
@@ -868,12 +898,11 @@ apiRouter.post("/documents/:id/audit/estimate", checkAuth, async (request, respo
     const doc = await verifyDocumentAccess(request, response, "write");
     if (!doc) return;
 
-    const { data: segments, error: fetchErr } = await supabase
-      .from("document_segments")
-      .select("source_text")
-      .eq("document_id", documentId);
-
-    if (fetchErr || !segments) {
+    let segments;
+    try {
+      segments = await fetchAllSegments(documentId, "source_text");
+    } catch (fetchErr) {
+      console.error("Failed to fetch document segments:", fetchErr);
       return response.status(500).json({ error: "Failed to fetch document segments." });
     }
 

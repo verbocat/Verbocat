@@ -9,7 +9,14 @@ export const useGlossaryManager = ({
   defaultSourceLang,
   defaultTargetLang
 }) => {
-  const [glossaryMap, setGlossaryMap] = useState({});
+  const [glossaryMap, setGlossaryMap] = useState(() => {
+    const saved = localStorage.getItem("centroid_glossary_map");
+    try {
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
   const [glossarySourceLang, setGlossarySourceLang] = useState(defaultSourceLang);
   const [glossaryTargetLang, setGlossaryTargetLang] = useState(defaultTargetLang);
   const [selectedGlossaryRows, setSelectedGlossaryRows] = useState([]);
@@ -19,6 +26,10 @@ export const useGlossaryManager = ({
 
   const glossaryKey = `${glossarySourceLang}-${glossaryTargetLang}`;
   const glossary = glossaryMap[glossaryKey] || [];
+
+  useEffect(() => {
+    localStorage.setItem("centroid_glossary_map", JSON.stringify(glossaryMap));
+  }, [glossaryMap]);
 
   const languageNameMap = useMemo(
     () => Object.fromEntries(LANGUAGES.map((language) => [language.code, language.name])),

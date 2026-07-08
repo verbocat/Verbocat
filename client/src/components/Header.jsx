@@ -21,7 +21,7 @@ export const Header = ({
   currentProvider, darkMode, onLoadProject, onOpenGlossary, onToggleDarkMode,
   qaIssuesCount, segmentsCount, progress, theme, onLock, isSidebar = false,
   fileName, fileExtension, sourceLanguage, onSourceLanguageChange,
-  targetLanguage, onTargetLanguageChange, stats, onCloseProject, onSaveProject,
+  targetLanguage, onTargetLanguageChange, stats, onDeleteProject, onSaveProject,
   onRelinkHtml, onImportXliff, onOpenContext, onOpenSettings,
   userRole, onOpenAdmin, creditsAllowed, creditsConsumed, onLogout, onUpload,
   collaborators, onOpenShare, onTeleport

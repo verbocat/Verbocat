@@ -36,18 +36,37 @@ const parseFile = async (filePath) => {
   }
 
   const modifiedZipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
-  const template = modifiedZipBuffer.toString('base64');
+  const templateData = {
+    zipBase64: modifiedZipBuffer.toString('base64'),
+    segmentTags: segments.map(seg => ({ id: seg.id, leading: seg.leading, trailing: seg.trailing }))
+  };
+  const template = Buffer.from(JSON.stringify(templateData)).toString('base64');
   return { segments, template };
 };
 
 const exportFile = async (templateBase64, segments) => {
-  const zipBuffer = Buffer.from(templateBase64, 'base64');
+  let zipBase64 = "";
+  let segmentTagsMap = new Map();
+
+  try {
+    const templateData = JSON.parse(Buffer.from(templateBase64, 'base64').toString('utf-8'));
+    zipBase64 = templateData.zipBase64;
+    segmentTagsMap = new Map((templateData.segmentTags || []).map(t => [t.id, t]));
+  } catch (e) {
+    // Fallback for old templates
+    zipBase64 = templateBase64;
+  }
+
+  const zipBuffer = Buffer.from(zipBase64, 'base64');
   const zip = await JSZip.loadAsync(zipBuffer);
 
   if (zip.file('xl/sharedStrings.xml')) {
     const segmentMap = new Map();
     segments.forEach((segment) => {
-      const replacement = escapeXml(segment.leading || "") + escapeXml(segment.target) + escapeXml(segment.trailing || "");
+      const savedTags = segmentTagsMap.get(segment.id) || {};
+      const leading = savedTags.leading || segment.leading || "";
+      const trailing = savedTags.trailing || segment.trailing || "";
+      const replacement = escapeXml(leading) + escapeXml(segment.target) + escapeXml(trailing);
       segmentMap.set(segment.id, replacement);
     });
 

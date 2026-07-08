@@ -63,6 +63,7 @@ const parseFile = async (filePath) => {
   const templateData = {
     zipBase64: modifiedZipBuffer.toString('base64'),
     tagMap: Array.from(tagMapGlobal.entries()),
+    segmentTags: segments.map(seg => ({ id: seg.id, leading: seg.leading, trailing: seg.trailing }))
   };
   
   // We stringify and encode to base64, but no gzip needed since zip is already compressed, 
@@ -75,11 +76,13 @@ const parseFile = async (filePath) => {
 const exportFile = async (templateBase64, segments) => {
   let zipBase64 = "";
   let tagMapGlobal = new Map();
+  let segmentTagsMap = new Map();
 
   try {
     const templateData = JSON.parse(Buffer.from(templateBase64, 'base64').toString('utf-8'));
     zipBase64 = templateData.zipBase64;
     tagMapGlobal = new Map(templateData.tagMap || []);
+    segmentTagsMap = new Map((templateData.segmentTags || []).map(t => [t.id, t]));
   } catch (e) {
     // Fallback for old templates
     zipBase64 = templateBase64;
@@ -91,7 +94,10 @@ const exportFile = async (templateBase64, segments) => {
 
   const segmentMap = new Map();
   segments.forEach((segment) => {
-    const targetText = (segment.leading || "") + (segment.target || segment.source) + (segment.trailing || "");
+    const savedTags = segmentTagsMap.get(segment.id) || {};
+    const leading = savedTags.leading || segment.leading || "";
+    const trailing = savedTags.trailing || segment.trailing || "";
+    const targetText = leading + (segment.target || segment.source) + trailing;
     const restoredText = restorePlaceholders(targetText, tagMapGlobal);
     segmentMap.set(segment.id, restoredText);
   });

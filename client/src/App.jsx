@@ -26,6 +26,7 @@ import {
   importTmx,
   exportGlobalTm,
   fetchDocument,
+  deleteDocument,
   updateSegment,
   fetchRequestStatus,
   requestAccess,
@@ -71,10 +72,21 @@ export default function App() {
   const [progress, setProgress] = useState(0);
   const [sourceLanguage, setSourceLanguage] = useState("en");
   const [targetLanguage, setTargetLanguage] = useState("hi");
-  const [darkMode, setDarkMode] = useState(true);
-  const [editorFontSize, setEditorFontSize] = useState("medium");
-  const [autocompleteEnabled, setAutocompleteEnabled] = useState(true);
-  const [autoPropagateEnabled, setAutoPropagateEnabled] = useState(true);
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem("centroid_dark_mode");
+    return saved !== null ? saved === "true" : true;
+  });
+  const [editorFontSize, setEditorFontSize] = useState(() => {
+    return localStorage.getItem("centroid_editor_font_size") || "medium";
+  });
+  const [autocompleteEnabled, setAutocompleteEnabled] = useState(() => {
+    const saved = localStorage.getItem("centroid_autocomplete_enabled");
+    return saved !== null ? saved === "true" : true;
+  });
+  const [autoPropagateEnabled, setAutoPropagateEnabled] = useState(() => {
+    const saved = localStorage.getItem("centroid_autopropagate_enabled");
+    return saved !== null ? saved === "true" : true;
+  });
   const [searchQuery, setSearchQuery] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [toast, setToast] = useState(null);
@@ -123,6 +135,23 @@ export default function App() {
     );
     document.documentElement.classList.add(`font-${editorFontSize.replace(" ", "-")}`);
   }, [editorFontSize]);
+
+  // Persist settings to localStorage
+  useEffect(() => {
+    localStorage.setItem("centroid_dark_mode", String(darkMode));
+  }, [darkMode]);
+
+  useEffect(() => {
+    localStorage.setItem("centroid_editor_font_size", editorFontSize);
+  }, [editorFontSize]);
+
+  useEffect(() => {
+    localStorage.setItem("centroid_autocomplete_enabled", String(autocompleteEnabled));
+  }, [autocompleteEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem("centroid_autopropagate_enabled", String(autoPropagateEnabled));
+  }, [autoPropagateEnabled]);
 
   useEffect(() => {
     if (isAuth) {
@@ -544,8 +573,8 @@ export default function App() {
   } = glossaryManager;
 
   const translationGlossary = useMemo(
-    () => glossaryMap[`en-${targetLanguage}`] || [],
-    [glossaryMap, targetLanguage]
+    () => glossaryMap[`${sourceLanguage}-${targetLanguage}`] || [],
+    [glossaryMap, sourceLanguage, targetLanguage]
   );
 
   const stats = useMemo(() => {
@@ -2348,16 +2377,35 @@ export default function App() {
     showToast("Copied to clipboard!");
   };
 
-  const closeProject = () => {
-    setSegments([]);
-    setHistory([]);
-    setFuture([]);
-    setFileId(null);
-    setCurrentProvider("");
-    setProgress(0);
-    setIsTranslating(false);
-    setSearchQuery("");
-    showToast("File closed");
+  const deleteProject = async () => {
+    if (!documentId) return;
+    const confirmDelete = window.confirm(
+      "Are you sure you want to delete the project? This action is permanent and will delete the entire project with all segments and access permissions."
+    );
+    if (!confirmDelete) return;
+
+    try {
+      await deleteDocument(documentId);
+      showToast("Project deleted successfully");
+
+      // Reset state
+      setSegments([]);
+      setHistory([]);
+      setFuture([]);
+      setFileId(null);
+      setCurrentProvider("");
+      setProgress(0);
+      setIsTranslating(false);
+      setSearchQuery("");
+
+      // Redirect to home page
+      const newUrl = `${window.location.origin}/`;
+      window.history.pushState({ path: newUrl }, "", newUrl);
+      setDocumentId(null);
+    } catch (err) {
+      console.error("Delete project error:", err);
+      showToast(err.response?.data?.error || "Failed to delete project.", "error");
+    }
   };
 
   const goToSegment = (id) => {
@@ -2609,7 +2657,7 @@ export default function App() {
         targetLanguage={targetLanguage}
         onTargetLanguageChange={handleTargetLanguageChange}
         stats={stats}
-        onCloseProject={closeProject}
+        onDeleteProject={deleteProject}
         onSaveProject={saveProject}
         onRelinkHtml={handleRelinkHtml}
         onImportXliff={handleImportXliff}
@@ -2639,7 +2687,7 @@ export default function App() {
         <>
           {/* Zone 2: Action bar */}
           <WorkspaceToolbar
-            onCloseProject={closeProject}
+            onDeleteProject={deleteProject}
             onExport={() => setShowExportModal(true)}
             onLoadProject={loadProject}
             onSaveProject={saveProject}

@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 
 export const WorkspaceToolbar = ({
-  onCloseProject, onExport, onLoadProject, onSaveProject,
+  onDeleteProject, onExport, onLoadProject, onSaveProject,
   onRelinkHtml, onImportXliff, onTranslate, onToggleQa,
   isTranslating, qaIssuesCount, searchQuery, segmentsCount,
   setSearchQuery, stats, sourceLanguage, onSourceLanguageChange,
@@ -179,13 +179,7 @@ export const WorkspaceToolbar = ({
           </div>
         )}
 
-        {/* Close File */}
-        {isOwner && canAct && (
-          <button onClick={onCloseProject} className="ab ab-close-file" title="Close File">
-            <Trash2 style={{ width: 12, height: 12, flexShrink: 0 }} />
-            <span>Close File</span>
-          </button>
-        )}
+
 
         {/* ── Stats strip — restored ── */}
         {canAct && stats && (
@@ -213,6 +207,31 @@ export const WorkspaceToolbar = ({
 
         {/* Push Export to the right */}
         <div style={{ flex: 1 }} />
+
+        {/* Delete Project (Owner Only) */}
+        {isOwner && canAct && (
+          <button 
+            onClick={onDeleteProject} 
+            disabled={!canAct} 
+            className="ab ab-delete-project" 
+            title="Delete Project"
+            style={{
+              background: "rgba(244,63,94,0.08)",
+              border: "1px solid rgba(244,63,94,0.2)",
+              color: "var(--text-rose)",
+              marginRight: 8
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.background = "rgba(244,63,94,0.15)";
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.background = "rgba(244,63,94,0.08)";
+            }}
+          >
+            <Trash2 style={{ width: 12, height: 12, flexShrink: 0 }} />
+            <span>Delete Project</span>
+          </button>
+        )}
 
         {/* Export — premium CTA */}
         <button onClick={onExport} disabled={!canAct} className="ab ab-export">

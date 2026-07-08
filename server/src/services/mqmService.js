@@ -2,7 +2,7 @@ const axios = require("axios");
 const crypto = require("crypto");
 const pLimitModule = require("p-limit");
 const pLimit = pLimitModule.default || pLimitModule;
-const { supabase } = require("../config/supabase");
+const { supabase, fetchAllSegments } = require("../config/supabase");
 const { AsyncLocalStorage } = require("async_hooks");
 const auditContextStorage = new AsyncLocalStorage();
 
@@ -1998,13 +1998,15 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null, userI
       throw new Error("Document not found: " + documentId);
     }
 
-    const { data: segments, error: fetchErr } = await supabase
-      .from("document_segments")
-      .select("*")
-      .eq("document_id", documentId)
-      .order("segment_index", { ascending: true });
+    let segments;
+    try {
+      segments = await fetchAllSegments(documentId);
+    } catch (fetchErr) {
+      console.error("Failed to fetch all segments for audit job:", fetchErr);
+      throw new Error("Failed to load document segments for auditing.");
+    }
 
-    if (fetchErr || !segments || segments.length === 0) {
+    if (!segments || segments.length === 0) {
       throw new Error("No segments found to audit.");
     }
 
