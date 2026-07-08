@@ -12,18 +12,15 @@ authRouter.post("/register", async (request, response) => {
       return response.status(400).json({ error: "Email and password are required" });
     }
 
-    // Call Supabase signup (triggers verification email by default)
-    const redirectTo = `${request.headers.origin || "http://localhost:5173"}/`;
-    const { data, error } = await supabase.auth.signUp({
+    // Call Supabase admin createUser to auto-verify email and avoid verification delays
+    const { data, error } = await supabase.auth.admin.createUser({
       email,
       password,
-      options: {
-        emailRedirectTo: redirectTo
-      }
+      email_confirm: true
     });
 
     if (error) {
-      console.error("Supabase Signup Error:");
+      console.error("Supabase Admin Create User Error:");
       console.error(JSON.stringify(error, null, 2));
       return response.status(400).json({
         error: error.message,
@@ -33,7 +30,7 @@ authRouter.post("/register", async (request, response) => {
     }
 
     response.json({
-      message: "Registration successful! Please check your email inbox to verify your account.",
+      message: "Registration successful! Your account is automatically verified and ready for login.",
       user: data.user
     });
   } catch (error) {

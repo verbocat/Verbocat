@@ -1,3 +1,4 @@
+require('regenerator-runtime/runtime');
 const fs = require('fs');
 const zlib = require('zlib');
 const path = require('path');
@@ -404,22 +405,90 @@ const parseFile = async (filePath) => {
       disableCombineTextItems: false,
     });
 
+    const pageItems = [];
     for (const item of textContent.items) {
-      const rawText = (item.str || '').replace(/\u00a0/g, ' ').trim();
-      if (!rawText) continue;
+      const rawText = (item.str || '').replace(/\u00a0/g, ' ');
+      if (!rawText.trim()) continue;
 
       const tx       = item.transform[4];
       const ty       = item.transform[5];
       const fontSize = Math.abs(item.transform[3]) || 12;
       const fontName = (item.fontName || '').replace(/^g_d\d+_/, '');
 
-      const id = segmentIndex++;
-      segments.push({ id, source: rawText, target: '' });
-      itemMeta.push({
-        id, pageIndex,
-        x: tx, y: ty,
+      pageItems.push({
+        text: rawText,
+        x: tx,
+        y: ty,
         width:  item.width  || 0,
         height: item.height || fontSize * 1.2,
+        fontSize,
+        fontName,
+      });
+    }
+
+    // Sort page items: top-to-bottom, left-to-right
+    pageItems.sort((a, b) => {
+      if (Math.abs(a.y - b.y) <= 4) {
+        return a.x - b.x;
+      }
+      return b.y - a.y;
+    });
+
+    // Group items into lines
+    const lines = [];
+    for (const item of pageItems) {
+      if (lines.length === 0) {
+        lines.push([item]);
+      } else {
+        const lastLine = lines[lines.length - 1];
+        const representative = lastLine[0];
+        const prevItem = lastLine[lastLine.length - 1];
+
+        const gap = item.x - (prevItem.x + prevItem.width);
+        const maxGap = Math.max(representative.fontSize * 5, 50);
+
+        if (Math.abs(item.y - representative.y) <= 4 && gap < maxGap) {
+          lastLine.push(item);
+        } else {
+          lines.push([item]);
+        }
+      }
+    }
+
+    // Process grouped lines
+    for (const lineItems of lines) {
+      let mergedText = "";
+      for (let i = 0; i < lineItems.length; i++) {
+        const item = lineItems[i];
+        if (i === 0) {
+          mergedText = item.text;
+        } else {
+          const prev = lineItems[i - 1];
+          const hasSpace = prev.text.endsWith(" ") || item.text.startsWith(" ");
+          const needsSpace = !hasSpace && (item.x - (prev.x + prev.width) > 1);
+          mergedText += (needsSpace ? " " : "") + item.text;
+        }
+      }
+      mergedText = mergedText.trim();
+      if (!mergedText) continue;
+
+      const firstItem = lineItems[0];
+      const lastItem = lineItems[lineItems.length - 1];
+
+      const x = firstItem.x;
+      const y = firstItem.y;
+      const calculatedWidth = (lastItem.x + lastItem.width) - firstItem.x;
+      const width = calculatedWidth > 0 ? calculatedWidth : Math.max(...lineItems.map(li => li.width));
+      const height = Math.max(...lineItems.map(li => li.height));
+      const fontSize = Math.max(...lineItems.map(li => li.fontSize));
+      const fontName = firstItem.fontName;
+
+      const id = segmentIndex++;
+      segments.push({ id, source: mergedText, target: '' });
+      itemMeta.push({
+        id, pageIndex,
+        x, y,
+        width, height,
         fontSize, fontName,
       });
     }
@@ -432,6 +501,37 @@ const parseFile = async (filePath) => {
 
   return { segments, template };
 };
+
+function splitIntoScriptRuns(text, unicodeFont) {
+  if (!unicodeFont) {
+    return [{ text, isUnicode: false }];
+  }
+
+  const runs = [];
+  let currentRun = "";
+  let currentIsUnicode = null;
+
+  for (const char of text) {
+    const isUnicode = char.codePointAt(0) > 127;
+
+    if (currentIsUnicode === null) {
+      currentIsUnicode = isUnicode;
+      currentRun = char;
+    } else if (currentIsUnicode === isUnicode) {
+      currentRun += char;
+    } else {
+      runs.push({ text: currentRun, isUnicode: currentIsUnicode });
+      currentIsUnicode = isUnicode;
+      currentRun = char;
+    }
+  }
+
+  if (currentRun) {
+    runs.push({ text: currentRun, isUnicode: currentIsUnicode });
+  }
+
+  return runs;
+}
 
 // ─── EXPORT ───────────────────────────────────────────────────────────────────
 
@@ -542,26 +642,49 @@ const exportFile = async (templateBase64, segments, targetLang = 'hi') => {
       borderWidth: 0,
     });
 
-    // 2. Draw translated text at the same position
-    try {
-      page.drawText(text, {
-        x, y,
-        size: drawSize,
-        font,
-        color: rgb(0, 0, 0),
-        maxWidth: eraseW,
-        lineBreak: false,
-      });
-    } catch (err) {
-      // If chosen font fails, try the other type
-      const fallback = (hasNonAscii && unicodeFont)
-        ? await getStdFont(StandardFonts.Helvetica)
-        : unicodeFont;
+    // 2. Draw translated text at the same position, splitting into script runs
+    let currentX = x;
+    const runs = splitIntoScriptRuns(text, unicodeFont);
 
-      if (fallback) {
-        try {
-          page.drawText(text, { x, y, size: drawSize, font: fallback, color: rgb(0, 0, 0) });
-        } catch (_) { /* skip unrenderable segment */ }
+    for (const run of runs) {
+      const runFont = run.isUnicode
+        ? unicodeFont
+        : await getStdFont(pickStandardFont(fontName));
+
+      try {
+        page.drawText(run.text, {
+          x: currentX,
+          y,
+          size: drawSize,
+          font: runFont,
+          color: rgb(0, 0, 0),
+          lineBreak: false,
+        });
+      } catch (err) {
+        // Fallback if drawing fails
+        const fallback = run.isUnicode
+          ? await getStdFont(StandardFonts.Helvetica)
+          : unicodeFont;
+
+        if (fallback) {
+          try {
+            page.drawText(run.text, {
+              x: currentX,
+              y,
+              size: drawSize,
+              font: fallback,
+              color: rgb(0, 0, 0),
+            });
+          } catch (_) {}
+        }
+      }
+
+      // Advance currentX by width of run
+      try {
+        const runWidth = runFont.widthOfTextAtSize(run.text, drawSize);
+        currentX += runWidth;
+      } catch (_) {
+        currentX += drawSize * run.text.length * (run.isUnicode ? charWidth : 0.55);
       }
     }
   }

@@ -70,18 +70,49 @@ adminRouter.delete("/users/:id", checkRole(["admin"]), async (request, response)
   try {
     const { id } = request.params;
 
+    // Prevent admins from deleting themselves
+    if (request.profile && request.profile.id === id) {
+      return response.status(400).json({ error: "You cannot delete your own admin account." });
+    }
+
     // Delete user from Supabase Auth using service_role authority
     const { error: authDeleteError } = await supabase.auth.admin.deleteUser(id);
     
-    if (authDeleteError) {
+    // If the error is 404 (user not found in Auth), we still proceed to clean up any database profile
+    const isUserNotFound = authDeleteError && (
+      authDeleteError.status === 404 || 
+      authDeleteError.message?.toLowerCase().includes("not found")
+    );
+
+    if (authDeleteError && !isUserNotFound) {
       console.error("Supabase Admin Auth Delete Error:", authDeleteError);
-      throw authDeleteError;
+      return response.status(400).json({
+        error: authDeleteError.message || "Failed to delete auth user",
+        details: authDeleteError
+      });
+    }
+
+    // Explicitly delete from profiles to ensure complete cleanup
+    // (in case DB cascade triggers didn't fire or there are orphaned profiles)
+    const { error: profileDeleteError } = await supabase
+      .from("profiles")
+      .delete()
+      .eq("id", id);
+
+    if (profileDeleteError) {
+      console.error("Profile Delete Error:", profileDeleteError);
+      return response.status(400).json({
+        error: profileDeleteError.message || "Failed to delete user profile from database"
+      });
     }
 
     response.json({ message: "User account deleted successfully" });
   } catch (error) {
     console.error("Admin Delete User Error:", error);
-    response.status(500).json({ error: "Failed to delete user account" });
+    response.status(500).json({ 
+      error: "Failed to delete user account",
+      details: error.message || error
+    });
   }
 });
 
