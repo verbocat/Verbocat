@@ -446,6 +446,58 @@ apiRouter.get("/users/search", checkAuth, async (request, response) => {
   }
 });
 
+// Helper to detect document extension from either its stored name or html_files template content
+async function detectFileExtension(fileId, docName) {
+  if (docName) {
+    const extIndex = docName.lastIndexOf(".");
+    if (extIndex !== -1) {
+      const ext = docName.substring(extIndex).toLowerCase();
+      if ([".pdf", ".docx", ".xlsx", ".pptx", ".html", ".htm", ".txt", ".xlf", ".xliff"].includes(ext)) {
+        return ext;
+      }
+    }
+  }
+
+  if (!fileId) return ".html";
+
+  try {
+    const { data, error } = await supabase
+      .from("html_files")
+      .select("content")
+      .eq("id", fileId)
+      .single();
+
+    if (error || !data || !data.content) {
+      return ".html";
+    }
+
+    // Try parsing as combined PDF data
+    try {
+      const rawJson = Buffer.from(data.content, 'base64').toString('utf-8');
+      const combinedData = JSON.parse(rawJson);
+      if (combinedData && combinedData.originalPdfBytes && combinedData.docxTemplate) {
+        return ".pdf";
+      }
+    } catch (_) {}
+
+    // Try parsing as gzip PDF template
+    try {
+      const zlib = require('zlib');
+      const buf = Buffer.from(data.content, 'base64');
+      let rawJson;
+      try { rawJson = zlib.gunzipSync(buf).toString('utf-8'); } catch (_) { rawJson = data.content; }
+      const templateData = JSON.parse(rawJson);
+      if (templateData && templateData.pdfBytes && templateData.items) {
+        return ".pdf";
+      }
+    } catch (_) {}
+  } catch (err) {
+    console.error("Error detecting file extension:", err);
+  }
+
+  return ".html";
+}
+
 // 1. Fetch document metadata and segments
 apiRouter.get("/documents/:id", checkAuth, async (request, response) => {
   try {
@@ -498,6 +550,8 @@ apiRouter.get("/documents/:id", checkAuth, async (request, response) => {
       trackedBy: seg.tracked_by || null
     }));
 
+    const fileExtension = await detectFileExtension(doc.file_id, doc.name);
+
     response.json({
       documentId: doc.id,
       name: doc.name,
@@ -508,7 +562,8 @@ apiRouter.get("/documents/:id", checkAuth, async (request, response) => {
       permission: userPermission,
       trackChangesEnabled: doc.track_changes_enabled || false,
       publicAccess: doc.public_access || "none",
-      segments: formattedSegments
+      segments: formattedSegments,
+      fileExtension
     });
   } catch (error) {
     console.error(error);

@@ -62,13 +62,13 @@ export const ExportModal = ({
 
           {/* Translated Document */}
           <ExportOption
-            title={`Translated Document ${fileExtension || ""}`}
-            desc="Export the final translated file with original layout preserved."
+            title={fileExtension?.toLowerCase() === ".pdf" ? "Translated PDF Document (.pdf)" : `Translated Document ${fileExtension || ""}`}
+            desc={fileExtension?.toLowerCase() === ".pdf" ? "Export the final translated PDF file with original layout preserved." : "Export the final translated file with original layout preserved."}
             accentColor="var(--text-primary)"
             onAction={() => { onExportDocument(fileExtension); onClose(); }}
           >
             <Download style={{ width: 12, height: 12 }} />
-            Download
+            {fileExtension?.toLowerCase() === ".pdf" ? "Download PDF" : "Download"}
           </ExportOption>
 
           {/* High-fidelity Word Document for PDF uploads */}
@@ -89,8 +89,8 @@ export const ExportModal = ({
 
           {/* Source Document */}
           <ExportOption
-            title={`Source Document ${fileExtension || ""}`}
-            desc="Export the original source file with formatting preserved."
+            title={fileExtension?.toLowerCase() === ".pdf" ? "Source PDF Document (.pdf)" : `Source Document ${fileExtension || ""}`}
+            desc={fileExtension?.toLowerCase() === ".pdf" ? "Export the original source PDF file." : "Export the original source file with formatting preserved."}
             accentColor="var(--text-muted)"
             btnBg="rgba(148,163,184,0.1)"
             btnBorder="rgba(148,163,184,0.3)"
@@ -98,7 +98,7 @@ export const ExportModal = ({
             onAction={() => { onExportSourceDocument(fileExtension); onClose(); }}
           >
             <Download style={{ width: 12, height: 12 }} />
-            Download
+            {fileExtension?.toLowerCase() === ".pdf" ? "Download Source PDF" : "Download"}
           </ExportOption>
 
           {/* XLIFF */}

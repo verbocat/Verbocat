@@ -142,7 +142,7 @@ const processUploadedFile = async (file) => {
             type: 'pdf', // Keep type as 'pdf'
             fileId,
             segments,
-            originalName: file.originalname.replace(ext, "")
+            originalName: file.originalname
           };
         }
       } catch (err) {
@@ -159,7 +159,7 @@ const processUploadedFile = async (file) => {
           type: 'pdf',
           fileId,
           segments,
-          originalName: file.originalname.replace(ext, "")
+          originalName: file.originalname
         };
       }
     }
@@ -182,7 +182,7 @@ const processUploadedFile = async (file) => {
       type: finalType,
       fileId,
       segments,
-      originalName: file.originalname.replace(ext, "")
+      originalName: file.originalname
     };
   } finally {
     try {

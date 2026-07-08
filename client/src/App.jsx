@@ -195,11 +195,13 @@ export default function App() {
     try {
       const doc = await fetchDocument(documentId);
       setSegments(doc.segments);
-      setFileName(doc.name);
-      // Extract and set the file extension dynamically from the document name
+      // Extract and set the file extension dynamically from the document name or server metadata
       const extIndex = doc.name.lastIndexOf(".");
-      const ext = extIndex !== -1 ? doc.name.substring(extIndex) : ".html";
+      const ext = doc.fileExtension || (extIndex !== -1 ? doc.name.substring(extIndex) : ".html");
       setFileExtension(ext);
+      // Clean/strip extension from the display fileName
+      const cleanName = doc.name.replace(/\.[^/.]+$/, "");
+      setFileName(cleanName);
       setFileId(doc.fileId);
       setSourceLanguage(doc.sourceLang === "pt" ? "pt-BR" : doc.sourceLang);
       setTargetLanguage(doc.targetLang === "pt" ? "pt-BR" : doc.targetLang);
@@ -915,11 +917,11 @@ export default function App() {
       
       if (isAutoRelink) {
         setFileExtension(".html");
-        setFileName(data.originalName || file.name.replace(/\.[^/.]+$/, ""));
+        setFileName((data.originalName || file.name).replace(/\.[^/.]+$/, ""));
         showToast(`Auto-Relinked successfully! Mapped ${mappedCount} segments.`);
       } else {
-        setFileExtension(`.${data.type}` || ".html");
-        setFileName(data.originalName || file.name.replace(/\.[^/.]+$/, ""));
+        setFileExtension((data.type ? `.${data.type}` : null) || ".html");
+        setFileName((data.originalName || file.name).replace(/\.[^/.]+$/, ""));
         setCurrentProvider("");
         setShowQaPanel(false);
         showToast(`File uploaded: ${file.name}`);
@@ -1744,7 +1746,7 @@ export default function App() {
       const project = JSON.parse(text);
       setFileId(project.fileId || null);
       setFileExtension(project.fileExtension || ".html");
-      setFileName(project.fileName || file.name.replace(".json", ""));
+      setFileName((project.fileName || file.name.replace(".json", "")).replace(/\.[^/.]+$/, ""));
       setSegments(project.segments || []);
       setHistory([]);
       setFuture([]);
