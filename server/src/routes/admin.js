@@ -1,5 +1,5 @@
 const express = require("express");
-const { supabase } = require("../config/supabase");
+const { supabase, supabaseAdmin } = require("../config/supabase");
 const { checkAuth, checkRole } = require("../utils/authMiddleware");
 
 const adminRouter = express.Router();
@@ -76,7 +76,7 @@ adminRouter.delete("/users/:id", checkRole(["admin"]), async (request, response)
     }
 
     // Delete user from Supabase Auth using service_role authority
-    const { error: authDeleteError } = await supabase.auth.admin.deleteUser(id);
+    const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(id);
     
     // If the error is 404 (user not found in Auth), we still proceed to clean up any database profile
     const isUserNotFound = authDeleteError && (

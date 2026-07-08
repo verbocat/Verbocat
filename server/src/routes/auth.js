@@ -1,5 +1,5 @@
 const express = require("express");
-const { supabase } = require("../config/supabase");
+const { supabase, supabaseAdmin } = require("../config/supabase");
 const { checkAuth } = require("../utils/authMiddleware");
 
 const authRouter = express.Router();
@@ -13,7 +13,7 @@ authRouter.post("/register", async (request, response) => {
     }
 
     // Call Supabase admin createUser to auto-verify email and avoid verification delays
-    const { data, error } = await supabase.auth.admin.createUser({
+    const { data, error } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
       email_confirm: true
