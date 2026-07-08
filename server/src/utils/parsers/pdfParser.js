@@ -93,74 +93,92 @@ async function findUnicodeTTF() {
   // ── Windows: use built-in system fonts ────────────────────────────────────
   if (process.platform === 'win32') {
     const candidates = [
-      'C:\\Windows\\Fonts\\mangal.ttf',     // Devanagari-specific (best choice)
-      'C:\\Windows\\Fonts\\Nirmala.ttf',    // Nirmala UI – broad Indic coverage
+      'C:\\Windows\\Fonts\\mangal.ttf',      // Devanagari-specific (best)
+      'C:\\Windows\\Fonts\\Nirmala.ttf',     // Nirmala UI – broad Indic
       'C:\\Windows\\Fonts\\NirmalaS.ttf',
-      'C:\\Windows\\Fonts\\segoeui.ttf',    // Segoe UI – broad Unicode
+      'C:\\Windows\\Fonts\\segoeui.ttf',     // Segoe UI – broad Unicode
       'C:\\Windows\\Fonts\\arial.ttf',
-      'C:\\Windows\\Fonts\\times.ttf',
     ];
     for (const c of candidates) {
-      if (fs.existsSync(c)) return c;
-    }
-  }
-
-  // ── Linux / cloud: check system font dirs first ────────────────────────────
-  if (process.platform !== 'win32') {
-    const sysCandidates = [
-      '/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf',
-      '/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf',
-      '/usr/share/fonts/noto/NotoSans-Regular.ttf',
-      '/usr/share/fonts/truetype/freefont/FreeSans.ttf',
-      '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-    ];
-    for (const c of sysCandidates) {
       if (fs.existsSync(c)) {
-        console.log(`PDF export: using system font ${c}`);
+        console.log(`PDF export: using Windows font ${path.basename(c)}`);
         return c;
       }
     }
   }
 
-  // ── Download NotoSans as a fallback (cached after first run) ──────────────
-  // Try two writable locations: assets/fonts (project dir) and /tmp
-  const fontName = 'NotoSans-Regular.ttf';
+  // ── Linux / cloud: check system font dirs (Devanagari-capable first) ──────
+  if (process.platform !== 'win32') {
+    const sysCandidates = [
+      // Devanagari-specific Noto fonts
+      '/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf',
+      '/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf',
+      '/usr/share/fonts/opentype/noto/NotoSansDevanagari-Regular.otf',
+      // Combined Noto (may or may not have Devanagari depending on distro)
+      '/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf',
+      '/usr/share/fonts/noto/NotoSans-Regular.ttf',
+      // Generic Unicode fallbacks
+      '/usr/share/fonts/truetype/freefont/FreeSans.ttf',
+      '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+    ];
+    for (const c of sysCandidates) {
+      if (fs.existsSync(c)) {
+        console.log(`PDF export: using system font ${path.basename(c)}`);
+        return c;
+      }
+    }
+  }
+
+  // ── Download NotoSansDevanagari as fallback (covers Devanagari + Latin) ───
+  // NotoSansDevanagari-Regular supports both Devanagari and Latin scripts.
+  // NotoSans-Regular is Latin-ONLY and will show boxes for Devanagari.
+  const fontName = 'NotoSansDevanagari-Regular.ttf';
   const fontDirs = [
     path.join(__dirname, '../../assets/fonts'),
     path.join(require('os').tmpdir(), 'matecat-fonts'),
+  ];
+
+  // Only TTF URLs — WOFF/WOFF2 cannot be embedded by fontkit
+  const downloadUrls = [
+    'https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf',
+    'https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf',
   ];
 
   for (const fontDir of fontDirs) {
     try {
       if (!fs.existsSync(fontDir)) fs.mkdirSync(fontDir, { recursive: true });
       const fontPath = path.join(fontDir, fontName);
-      if (fs.existsSync(fontPath)) return fontPath;
 
-      // CDN URLs in priority order
-      const urls = [
-        'https://fonts.gstatic.com/s/notosans/v36/o-0mIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjcz6L1SoM-jCpoiyD9A99d41P6zHtY.woff',
-        'https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf',
-        'https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf',
-      ];
+      // Already downloaded from a previous run
+      if (fs.existsSync(fontPath)) {
+        console.log(`PDF export: using cached font ${fontName}`);
+        return fontPath;
+      }
 
-      for (const url of urls) {
+      for (const url of downloadUrls) {
         try {
-          console.log(`Downloading ${fontName} from ${url.slice(0, 60)}…`);
-          const res = await axios.get(url, { responseType: 'arraybuffer', timeout: 25000 });
+          console.log(`Downloading ${fontName}…`);
+          const res = await axios.get(url, { responseType: 'arraybuffer', timeout: 30000 });
+          // Sanity check: a valid TTF starts with bytes 0x00010000 or 'true' or 'OTTO'
+          const magic = Buffer.from(res.data).slice(0, 4).toString('hex');
+          const validTTF = ['00010000', '74727565', '4f54544f'].includes(magic);
+          if (!validTTF) {
+            console.warn(`  Skipping — downloaded data is not a TTF (magic: ${magic})`);
+            continue;
+          }
           fs.writeFileSync(fontPath, Buffer.from(res.data));
           console.log(`✅ Downloaded ${fontName} (${res.data.byteLength} bytes)`);
           return fontPath;
         } catch (dlErr) {
-          console.warn(`  Download attempt failed: ${dlErr.message}`);
+          console.warn(`  Download failed from ${url.slice(0, 60)}: ${dlErr.message}`);
         }
       }
     } catch (dirErr) {
-      // This font dir isn't writable — try next
       console.warn(`Font dir ${fontDir} not writable: ${dirErr.message}`);
     }
   }
 
-  console.error('Could not obtain any Unicode TTF font for PDF export.');
+  console.error('Could not obtain a Devanagari-capable TTF font for PDF export.');
   return null;
 }
 
