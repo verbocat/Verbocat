@@ -82,79 +82,299 @@ function pickStandardFont(fontName) {
   return StandardFonts.Helvetica;
 }
 
-/**
- * Load the Unicode TTF font bytes.
- *
- * Priority order:
- *   1. Bundled font (always present in repo — fastest, no I/O surprises)
- *   2. OS system fonts (Windows only, for local dev)
- *   3. Download as last resort (Linux environments without the bundled file)
- *
- * Returns a Buffer of TTF bytes, or null on complete failure.
- */
-async function loadUnicodeFontBytes() {
-  // 1. Bundled font — always try this first
-  if (fs.existsSync(BUNDLED_FONT_PATH)) {
-    console.log('PDF export: using bundled NotoSansDevanagari');
-    return fs.readFileSync(BUNDLED_FONT_PATH);
+const FONT_MAP = {
+  // Devanagari (Hindi, Marathi)
+  'hi': {
+    name: 'NotoSansDevanagari-Regular.ttf',
+    system: [
+      'C:\\Windows\\Fonts\\Nirmala.ttf',
+      'C:\\Windows\\Fonts\\mangal.ttf',
+      '/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf',
+      '/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf'
+    ],
+    urls: [
+      'https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf',
+      'https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf'
+    ]
+  },
+  'mr': {
+    name: 'NotoSansDevanagari-Regular.ttf',
+    system: [
+      'C:\\Windows\\Fonts\\Nirmala.ttf',
+      'C:\\Windows\\Fonts\\mangal.ttf',
+      '/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf',
+      '/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf'
+    ],
+    urls: [
+      'https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf',
+      'https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf'
+    ]
+  },
+  // Bengali
+  'bn': {
+    name: 'NotoSansBengali-Regular.ttf',
+    system: [
+      'C:\\Windows\\Fonts\\Nirmala.ttf',
+      'C:\\Windows\\Fonts\\vrinda.ttf',
+      'C:\\Windows\\Fonts\\shonar.ttf',
+      '/usr/share/fonts/truetype/noto/NotoSansBengali-Regular.ttf'
+    ],
+    urls: [
+      'https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansBengali/NotoSansBengali-Regular.ttf',
+      'https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSansBengali/NotoSansBengali-Regular.ttf'
+    ]
+  },
+  // Tamil
+  'ta': {
+    name: 'NotoSansTamil-Regular.ttf',
+    system: [
+      'C:\\Windows\\Fonts\\Nirmala.ttf',
+      'C:\\Windows\\Fonts\\latha.ttf',
+      '/usr/share/fonts/truetype/noto/NotoSansTamil-Regular.ttf'
+    ],
+    urls: [
+      'https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansTamil/NotoSansTamil-Regular.ttf',
+      'https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSansTamil/NotoSansTamil-Regular.ttf'
+    ]
+  },
+  // Telugu
+  'te': {
+    name: 'NotoSansTelugu-Regular.ttf',
+    system: [
+      'C:\\Windows\\Fonts\\Nirmala.ttf',
+      'C:\\Windows\\Fonts\\gautami.ttf',
+      '/usr/share/fonts/truetype/noto/NotoSansTelugu-Regular.ttf'
+    ],
+    urls: [
+      'https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansTelugu/NotoSansTelugu-Regular.ttf',
+      'https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSansTelugu/NotoSansTelugu-Regular.ttf'
+    ]
+  },
+  // Gujarati
+  'gu': {
+    name: 'NotoSansGujarati-Regular.ttf',
+    system: [
+      'C:\\Windows\\Fonts\\Nirmala.ttf',
+      'C:\\Windows\\Fonts\\shruti.ttf',
+      '/usr/share/fonts/truetype/noto/NotoSansGujarati-Regular.ttf'
+    ],
+    urls: [
+      'https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansGujarati/NotoSansGujarati-Regular.ttf',
+      'https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSansGujarati/NotoSansGujarati-Regular.ttf'
+    ]
+  },
+  // Punjabi / Gurmukhi
+  'pa': {
+    name: 'NotoSansGurmukhi-Regular.ttf',
+    system: [
+      'C:\\Windows\\Fonts\\Nirmala.ttf',
+      'C:\\Windows\\Fonts\\raavi.ttf',
+      '/usr/share/fonts/truetype/noto/NotoSansGurmukhi-Regular.ttf'
+    ],
+    urls: [
+      'https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansGurmukhi/NotoSansGurmukhi-Regular.ttf',
+      'https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSansGurmukhi/NotoSansGurmukhi-Regular.ttf'
+    ]
+  },
+  // Kannada
+  'kn': {
+    name: 'NotoSansKannada-Regular.ttf',
+    system: [
+      'C:\\Windows\\Fonts\\Nirmala.ttf',
+      'C:\\Windows\\Fonts\\tunga.ttf',
+      '/usr/share/fonts/truetype/noto/NotoSansKannada-Regular.ttf'
+    ],
+    urls: [
+      'https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansKannada/NotoSansKannada-Regular.ttf',
+      'https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSansKannada/NotoSansKannada-Regular.ttf'
+    ]
+  },
+  // Malayalam
+  'ml': {
+    name: 'NotoSansMalayalam-Regular.ttf',
+    system: [
+      'C:\\Windows\\Fonts\\Nirmala.ttf',
+      'C:\\Windows\\Fonts\\kartika.ttf',
+      '/usr/share/fonts/truetype/noto/NotoSansMalayalam-Regular.ttf'
+    ],
+    urls: [
+      'https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansMalayalam/NotoSansMalayalam-Regular.ttf',
+      'https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSansMalayalam/NotoSansMalayalam-Regular.ttf'
+    ]
+  },
+  // Arabic & Urdu
+  'ar': {
+    name: 'NotoSansArabic-Regular.ttf',
+    system: [
+      'C:\\Windows\\Fonts\\tahoma.ttf',
+      'C:\\Windows\\Fonts\\arial.ttf',
+      '/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf'
+    ],
+    urls: [
+      'https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansArabic/NotoSansArabic-Regular.ttf',
+      'https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSansArabic/NotoSansArabic-Regular.ttf'
+    ]
+  },
+  'ur': {
+    name: 'NotoSansArabic-Regular.ttf',
+    system: [
+      'C:\\Windows\\Fonts\\tahoma.ttf',
+      'C:\\Windows\\Fonts\\arial.ttf',
+      '/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf'
+    ],
+    urls: [
+      'https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansArabic/NotoSansArabic-Regular.ttf',
+      'https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSansArabic/NotoSansArabic-Regular.ttf'
+    ]
+  },
+  // Cyrillic (Russian)
+  'ru': {
+    name: 'NotoSans-Regular.ttf',
+    system: [
+      'C:\\Windows\\Fonts\\arial.ttf',
+      'C:\\Windows\\Fonts\\segoeui.ttf',
+      '/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf'
+    ],
+    urls: [
+      'https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf',
+      'https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf'
+    ]
+  },
+  // Thai
+  'th': {
+    name: 'NotoSansThai-Regular.ttf',
+    system: [
+      'C:\\Windows\\Fonts\\leelawad.ttf',
+      'C:\\Windows\\Fonts\\cordia.ttf',
+      '/usr/share/fonts/truetype/noto/NotoSansThai-Regular.ttf'
+    ],
+    urls: [
+      'https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansThai/NotoSansThai-Regular.ttf',
+      'https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSansThai/NotoSansThai-Regular.ttf'
+    ]
+  },
+  // Chinese (Simplified)
+  'zh-cn': {
+    name: 'NotoSansSC-Regular.otf',
+    system: [
+      'C:\\Windows\\Fonts\\msyh.ttc',
+      'C:\\Windows\\Fonts\\msyh.ttf',
+      'C:\\Windows\\Fonts\\simsun.ttc',
+      'C:\\Windows\\Fonts\\simsun.ttf'
+    ],
+    urls: [
+      'https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf'
+    ]
+  },
+  // Japanese
+  'ja': {
+    name: 'NotoSansJP-Regular.otf',
+    system: [
+      'C:\\Windows\\Fonts\\meiryo.ttc',
+      'C:\\Windows\\Fonts\\msgothic.ttc',
+      'C:\\Windows\\Fonts\\msmincho.ttc'
+    ],
+    urls: [
+      'https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf'
+    ]
+  },
+  // Korean
+  'ko': {
+    name: 'NotoSansKR-Regular.otf',
+    system: [
+      'C:\\Windows\\Fonts\\malgun.ttf',
+      'C:\\Windows\\Fonts\\batang.ttc'
+    ],
+    urls: [
+      'https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/Korean/NotoSansCJKkr-Regular.otf'
+    ]
+  },
+  // Standard NotoSans for Latin-based / other languages
+  'default': {
+    name: 'NotoSans-Regular.ttf',
+    system: [
+      'C:\\Windows\\Fonts\\segoeui.ttf',
+      'C:\\Windows\\Fonts\\arial.ttf',
+      '/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf',
+      '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+    ],
+    urls: [
+      'https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf',
+      'https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf'
+    ]
   }
+};
 
-  // 2. OS system fonts (Windows dev machine)
-  const systemCandidates = [
-    'C:\\Windows\\Fonts\\mangal.ttf',
-    'C:\\Windows\\Fonts\\Nirmala.ttf',
-    'C:\\Windows\\Fonts\\NirmalaS.ttf',
-    'C:\\Windows\\Fonts\\segoeui.ttf',
-    // Linux system paths
-    '/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf',
-    '/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf',
-    '/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf',
-    '/usr/share/fonts/truetype/freefont/FreeSans.ttf',
-    '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-  ];
-  for (const p of systemCandidates) {
-    if (fs.existsSync(p)) {
-      console.log(`PDF export: using system font ${path.basename(p)}`);
-      return fs.readFileSync(p);
+/**
+ * Load the Unicode TTF/OTF font bytes dynamically based on target language.
+ *
+ * Returns a Buffer of TTF/OTF bytes, or null on complete failure.
+ */
+async function loadUnicodeFontBytes(targetLang = 'hi', forceDownload = false) {
+  const cleanLang = String(targetLang || "").toLowerCase();
+  const langPrefix = cleanLang.split('-')[0];
+  const fontConfig = FONT_MAP[cleanLang] || FONT_MAP[langPrefix] || FONT_MAP['default'];
+
+  // If forceDownload is false, try local options first
+  if (!forceDownload) {
+    // 1. Try bundled assets folder first
+    const bundledPath = path.join(__dirname, '../../assets/fonts/', fontConfig.name);
+    if (fs.existsSync(bundledPath)) {
+      console.log(`PDF export: using bundled font ${fontConfig.name}`);
+      return fs.readFileSync(bundledPath);
+    }
+
+    // 2. Try OS system fonts
+    if (fontConfig.system) {
+      for (const p of fontConfig.system) {
+        if (fs.existsSync(p)) {
+          console.log(`PDF export: using system font ${path.basename(p)}`);
+          return fs.readFileSync(p);
+        }
+      }
     }
   }
 
-  // 3. Download (last resort — only if bundled font somehow missing)
+  // 3. Try cache directory
   const cacheDir  = path.join(require('os').tmpdir(), 'matecat-fonts');
-  const cachePath = path.join(cacheDir, 'NotoSansDevanagari-Regular.ttf');
+  const cachePath = path.join(cacheDir, fontConfig.name);
   if (fs.existsSync(cachePath)) {
-    console.log('PDF export: using cached NotoSansDevanagari');
+    console.log(`PDF export: using cached font ${fontConfig.name}`);
     return fs.readFileSync(cachePath);
   }
 
-  const downloadUrls = [
-    'https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf',
-    'https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf',
-  ];
-
-  for (const url of downloadUrls) {
-    try {
-      console.log(`PDF export: downloading NotoSansDevanagari from ${url.slice(0, 70)}…`);
-      const res = await axios.get(url, { responseType: 'arraybuffer', timeout: 30000 });
-      const buf = Buffer.from(res.data);
-      // Validate TTF magic bytes (00010000 = TrueType, 74727565 = 'true', 4f54544f = 'OTTO')
-      const magic = buf.slice(0, 4).toString('hex');
-      if (!['00010000', '74727565', '4f54544f'].includes(magic)) {
-        console.warn(`  Invalid TTF magic (${magic}), skipping`);
-        continue;
-      }
+  // 4. Try downloading
+  if (fontConfig.urls) {
+    for (const url of fontConfig.urls) {
       try {
-        if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
-        fs.writeFileSync(cachePath, buf);
-      } catch (_) { /* cache write failed — not fatal */ }
-      console.log(`PDF export: downloaded NotoSansDevanagari (${buf.length} bytes)`);
-      return buf;
-    } catch (e) {
-      console.warn(`  Download failed: ${e.message}`);
+        console.log(`PDF export: downloading ${fontConfig.name} from ${url.slice(0, 70)}…`);
+        const res = await axios.get(url, { responseType: 'arraybuffer', timeout: 30000 });
+        const buf = Buffer.from(res.data);
+        const magic = buf.slice(0, 4).toString('hex');
+        // TTF: 00010000, 74727565 (true); OTF: 4f54544f (OTTO); TTC: 74746366 (ttcf)
+        if (!['00010000', '74727565', '4f54544f', '74746366'].includes(magic)) {
+          console.warn(`  Invalid font magic (${magic}), skipping`);
+          continue;
+        }
+        try {
+          if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
+          fs.writeFileSync(cachePath, buf);
+        } catch (_) {}
+        console.log(`PDF export: downloaded ${fontConfig.name} (${buf.length} bytes)`);
+        return buf;
+      } catch (e) {
+        console.warn(`  Download failed: ${e.message}`);
+      }
     }
   }
 
-  console.error('PDF export: could not obtain a Unicode TTF font — non-Latin text may not render');
+  // 5. Final fallback to bundled font if any other font load failed
+  if (fs.existsSync(BUNDLED_FONT_PATH)) {
+    console.log('PDF export: fallback to bundled NotoSansDevanagari');
+    return fs.readFileSync(BUNDLED_FONT_PATH);
+  }
+
+  console.error(`PDF export: could not obtain font for language ${targetLang}`);
   return null;
 }
 
@@ -215,7 +435,7 @@ const parseFile = async (filePath) => {
 
 // ─── EXPORT ───────────────────────────────────────────────────────────────────
 
-const exportFile = async (templateBase64, segments) => {
+const exportFile = async (templateBase64, segments, targetLang = 'hi') => {
   // Unpack template
   let templateData;
   try {
@@ -243,15 +463,24 @@ const exportFile = async (templateBase64, segments) => {
 
   const pages = pdfDoc.getPages();
 
-  // Embed the Unicode font (NotoSansDevanagari — covers Devanagari + Latin)
+  // Embed the Unicode font based on target language
   let unicodeFont = null;
-  const fontBytes = await loadUnicodeFontBytes();
+  let fontBytes = await loadUnicodeFontBytes(targetLang, false);
   if (fontBytes) {
     try {
       unicodeFont = await pdfDoc.embedFont(fontBytes);
-      console.log('PDF export: Unicode font embedded successfully');
+      console.log(`PDF export: Unicode font for ${targetLang} embedded successfully`);
     } catch (e) {
-      console.error('PDF export: font embed failed —', e.message);
+      console.warn(`PDF export: Initial font embed failed for ${targetLang}, trying download fallback...`, e.message);
+      fontBytes = await loadUnicodeFontBytes(targetLang, true);
+      if (fontBytes) {
+        try {
+          unicodeFont = await pdfDoc.embedFont(fontBytes);
+          console.log(`PDF export: Downloaded fallback font for ${targetLang} embedded successfully`);
+        } catch (downloadErr) {
+          console.error(`PDF export: Downloaded fallback font embed failed as well for ${targetLang}:`, downloadErr.message);
+        }
+      }
     }
   }
 
@@ -280,15 +509,27 @@ const exportFile = async (templateBase64, segments) => {
     const drawSize = Math.max(fontSize, 6);
 
     // Choose font:
-    //  - unicodeFont (NotoSansDevanagari) for ANY non-ASCII character
+    //  - unicodeFont for ANY non-ASCII character
     //  - standard WinAnsi font only for pure ASCII
     const hasNonAscii = /[^\x20-\x7E]/.test(text);
     const font = (hasNonAscii && unicodeFont)
       ? unicodeFont
       : await getStdFont(pickStandardFont(fontName));
 
-    // Estimate erase width — NotoSansDevanagari glyphs are wider than Latin
-    const charWidth   = hasNonAscii ? 0.65 : 0.55;
+    // Estimate erase width — CJK, Indic, Arabic, Latin have different widths
+    let charWidth = 0.55;
+    if (hasNonAscii) {
+      const cleanLang = String(targetLang || "").toLowerCase();
+      const isCJK = /^(zh|ja|ko)/.test(cleanLang);
+      const isIndic = /^(hi|mr|bn|ta|te|gu|pa|kn|ml)/.test(cleanLang);
+      if (isCJK) {
+        charWidth = 1.1;
+      } else if (isIndic) {
+        charWidth = 0.7;
+      } else {
+        charWidth = 0.65;
+      }
+    }
     const eraseW      = Math.max(width, drawSize * text.length * charWidth) + 8;
     const eraseH      = height + 4;
 

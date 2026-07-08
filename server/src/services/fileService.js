@@ -100,7 +100,7 @@ const processUploadedFile = async (file) => {
   }
 };
 
-const exportHtml = async (fileId, segments, ext = '.html') => {
+const exportHtml = async (fileId, segments, ext = '.html', targetLang = 'hi') => {
   if (!fileId) {
     const error = new Error("Cannot export: No file ID found.");
     error.status = 400;
@@ -151,7 +151,7 @@ const exportHtml = async (fileId, segments, ext = '.html') => {
     ? segments.map(seg => ({ ...seg, id: Number(seg.id) - 1 }))
     : segments.map(seg => ({ ...seg, id: Number(seg.id) }));
 
-  const buffer = await parser.exportFile(data.content, normalizedSegments);
+  const buffer = await parser.exportFile(data.content, normalizedSegments, targetLang);
   return buffer;
 };
 

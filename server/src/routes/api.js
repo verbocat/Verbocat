@@ -218,7 +218,7 @@ apiRouter.post("/export", async (request, response) => {
       return response.send(Buffer.from(tmxContent, "utf-8"));
     }
 
-    const buffer = await exportHtml(fileId, exportSegments, ext);
+    const buffer = await exportHtml(fileId, exportSegments, ext, targetLang);
 
     response.setHeader(
       "Content-Disposition",
