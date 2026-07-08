@@ -1,6 +1,11 @@
 import React, { useState } from "react";
 import { AlertOctagon, AlertTriangle, CheckCircle2, ArrowRight, ShieldAlert, Award } from "lucide-react";
 
+const removeTags = (text) => {
+  if (typeof text !== "string") return text;
+  return text.replace(/<\/?[a-zA-Z0-9_-]+[^>]*>/g, "");
+};
+
 export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, onGoToSegment, onClose }) => {
   const [activeFilter, setActiveFilter] = useState("all");
 
@@ -262,19 +267,19 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
                   </div>
 
                   <p className="text-sm font-medium text-zinc-100 mb-2 leading-relaxed">
-                    {isMqm ? item.explanation : item.issue}
+                    {isMqm ? removeTags(item.explanation) : item.issue}
                   </p>
 
                   {/* Context Snippet */}
                   <div className="flex flex-col gap-1 bg-black/20 rounded-lg p-2.5 border border-white/5">
                     <div className="text-[10px] font-bold text-zinc-500 uppercase">Source Text</div>
-                    <div className="text-xs text-zinc-400 italic line-clamp-1">{item.source}</div>
+                    <div className="text-xs text-zinc-400 italic line-clamp-1">{removeTags(item.source)}</div>
                     
                     {item.target && (
                       <>
                         <div className="text-[10px] font-bold text-zinc-500 uppercase mt-1">Translation</div>
                         <div className="text-xs text-zinc-300 font-semibold line-clamp-2">
-                          {item.target}
+                          {removeTags(item.target)}
                         </div>
                       </>
                     )}
@@ -284,13 +289,13 @@ export const QAPanel = ({ qaIssuesList = [], segments = [], showQaPanel, theme, 
                         {item.snippet && (
                           <div className="flex items-center gap-2 bg-rose-500/5 hover:bg-rose-500/10 px-3 py-1.5 border-b border-white/5 text-rose-300/90 transition">
                             <span className="text-rose-500 font-bold select-none">- Replace:</span>
-                            <span className="line-through flex-1">"{item.snippet}"</span>
+                            <span className="line-through flex-1">"{removeTags(item.snippet)}"</span>
                           </div>
                         )}
                         {item.correction && (
                           <div className="flex items-center gap-2 bg-emerald-500/5 hover:bg-emerald-500/10 px-3 py-1.5 text-emerald-300/90 transition">
                             <span className="text-emerald-500 font-bold select-none">+ With:</span>
-                            <span className="flex-1 font-semibold">"{item.correction}"</span>
+                            <span className="flex-1 font-semibold">"{removeTags(item.correction)}"</span>
                           </div>
                         )}
                       </div>

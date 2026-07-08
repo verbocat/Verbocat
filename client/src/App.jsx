@@ -1082,7 +1082,7 @@ export default function App() {
         for (let ri = 0; ri < stillUntranslated.length; ri += RETRY_BATCH) {
           const retryBatch = stillUntranslated.slice(ri, ri + RETRY_BATCH);
           try {
-            const retryData = await translateBatch(retryBatch, targetLanguage, sourceLanguage, { ...contextSettings, glossary: translationGlossary }, documentId);
+            const retryData = await translateBatch(retryBatch, targetLanguage, sourceLanguage, { ...contextSettings, glossary: translationGlossary, isRetry: true }, documentId);
             const retryResults = retryData.results || [];
             setSegments((previous) => {
               const newSegments = [...previous];

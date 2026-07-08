@@ -28,7 +28,7 @@ const stripVisibleTags = (text) =>
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const MAX_TEXT_LENGTH = parseInt(process.env.MAX_TRANSLATION_TEXT_LENGTH, 10) || 5000;
+const MAX_TEXT_LENGTH = parseInt(process.env.MAX_TRANSLATION_TEXT_LENGTH, 10) || 15000;
 
 const validateLang = (lang) => {
   if (!lang || typeof lang !== "string") return false;
@@ -304,7 +304,18 @@ ${styleInstructions}
 - Translate common business/banking terms professionally (e.g. translate 'Earn ... interest' as 'ब्याज प्राप्त करें' in formal Hindi, or 'ब्याज मिलेगा' in informal Hindi).
 - Maintain consistent terminology for recurring terms.`;
 
-  return baseInstructions;
+  let retryInstructions = "";
+  if (contextSettings?.isRetry) {
+    retryInstructions = `
+    
+- CRITICAL RETRY WARNING (FAILED PREVIOUS ATTEMPT):
+  * This is a retry of a previous translation attempt that failed or was rejected due to quality check or script purity violations.
+  * Common failures: leaving words untranslated/identical to source, or letting English/Latin characters leak into the target translation script.
+  * You MUST translate the text fully. Under no circumstances should you echo the source text verbatim or copy entire English phrases.
+  * Ensure the output is strictly in the target language script (${targetName}) and vocabulary. Do NOT leave any Latin/English words in the translation, except for uppercase acronyms (e.g. GST, PAN, RBI) and section identifiers. Everything else must be translated or transliterated to ${targetName} script.`;
+  }
+
+  return baseInstructions + "\n" + targetSpecificRules + "\n" + retryInstructions;
 };
 
 const translateWithOpenAI = async (protectedTexts, target, source = DEFAULT_SOURCE_LANG, contextSettings = null) => {
@@ -578,6 +589,16 @@ const translateChunk = async (texts, target, source = DEFAULT_SOURCE_LANG, provi
         translated = null; // force fallback to source text
       }
 
+      // Check if translation is identical to source (and not legitimately identical)
+      if (translated && currentProvider !== "Fallback") {
+        const cleanSrc = normalizeTranslatedText(text).toLowerCase();
+        const cleanTrans = normalizeTranslatedText(translated).toLowerCase();
+        if (cleanSrc === cleanTrans && !isLegitimatelyIdentical(text)) {
+          console.warn(`[Translation Identical Check Failed] Provider ${currentProvider} returned source text verbatim for segment: "${text}"`);
+          translated = null; // force fallback to retry
+        }
+      }
+
       if (!translated || translated.trim() === "" || currentProvider === "Fallback") {
         translated = text;
         currentProvider = "Fallback";
@@ -625,7 +646,7 @@ const translateChunk = async (texts, target, source = DEFAULT_SOURCE_LANG, provi
       const microTags = microTexts.map(t => protectTags(t).tags);
 
       try {
-        const retryData = await translateWithProviders(microTexts, microProtected, target, providerState, source, contextSettings);
+        const retryData = await translateWithProviders(microTexts, microProtected, target, providerState, source, { ...contextSettings, isRetry: true });
         if (retryData && retryData.translatedArray) {
           for (let mj = 0; mj < microIndices.length; mj++) {
             const idx = microIndices[mj];

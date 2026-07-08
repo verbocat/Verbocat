@@ -1,6 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import { Copy, Check, ArrowRight, AlertTriangle, Lock, Sparkles, Award, UploadCloud, Trash2, Image, MessageSquare } from "lucide-react";
 
+const removeTags = (text) => {
+  if (typeof text !== "string") return text;
+  return text.replace(/<\/?[a-zA-Z0-9_-]+[^>]*>/g, "");
+};
+
 /* ── LCS Word Diff Utility for Track Changes review ───────────────── */
 const computeWordDiff = (oldStr, newStr) => {
   const tokenize = (str) => {
@@ -1019,7 +1024,7 @@ export const SegmentCard = ({
                           </span>
                         </div>
                         <p style={{ fontSize: 11.5, color: "var(--text-primary)", margin: 0, fontStyle: "italic", whiteSpace: "pre-wrap" }}>
-                          {parsedMqmReport.improvementSuggestion}
+                          {removeTags(parsedMqmReport.improvementSuggestion)}
                         </p>
                         <button
                           type="button"
@@ -1093,7 +1098,7 @@ export const SegmentCard = ({
                                 </span>
                               </div>
                               <span style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.4 }}>
-                                {err.explanation}
+                                {removeTags(err.explanation)}
                               </span>
                               {(err.snippet || err.correction) && (
                                 <div style={{
@@ -1118,7 +1123,7 @@ export const SegmentCard = ({
                                       textDecoration: "line-through"
                                     }}>
                                       <span style={{ fontWeight: "bold", opacity: 0.7 }}>- Replace:</span>
-                                      <span>"{err.snippet}"</span>
+                                      <span>"{removeTags(err.snippet)}"</span>
                                     </div>
                                   )}
                                   {err.correction && (
@@ -1132,7 +1137,7 @@ export const SegmentCard = ({
                                       fontWeight: 600
                                     }}>
                                       <span style={{ fontWeight: "bold", opacity: 0.7 }}>+ With:</span>
-                                      <span>"{err.correction}"</span>
+                                      <span>"{removeTags(err.correction)}"</span>
                                     </div>
                                   )}
                                 </div>

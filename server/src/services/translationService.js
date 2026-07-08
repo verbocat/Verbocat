@@ -158,8 +158,19 @@ const isSafeTmTranslation = (source, target, targetLang) => {
   return true;
 };
 
+const splitIntoSentences = (text) => {
+  if (!text) return [];
+  const parts = text.match(/[^.!?।]+[.!?।]*\s*/g) || [text];
+  return parts.filter(p => p.trim().length > 0);
+};
+
 const isPersistableProvider = (provider) =>
-  provider && provider !== "Fallback" && provider !== "Cached Fallback";
+  provider && 
+  provider !== "Fallback" && 
+  provider !== "Cached Fallback" && 
+  provider !== "TooLong" && 
+  !provider.startsWith("Fallback") && 
+  !provider.startsWith("TooLong");
 
 const translateSegments = async (segments, target, sourceLang, contextSettings, userId) => {
   const providerState = createProviderState();
@@ -283,12 +294,11 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
     }
     const cleanSource = normalizeText(source).toLowerCase();
     const cleanTarget = normalizeText(entry.target_text).toLowerCase();
-    // If translation is identical to source and it shouldn't be, mark for retry
-    if (
-      cleanSource === cleanTarget &&
-      !isLegitimatelyIdentical(source) &&
-      (!entry.provider || entry.provider === "Fallback" || entry.provider.includes("Retry"))
-    ) {
+    // If translation is identical to source and it shouldn't be, OR if it is empty/invalid/TooLong, mark for retry
+    const isUntranslated = cleanSource === cleanTarget && !isLegitimatelyIdentical(source);
+    const isEmptyOrTooLong = !entry.target_text || entry.target_text.trim() === "" || entry.provider === "TooLong" || entry.provider === "Fallback";
+    
+    if (isUntranslated || isEmptyOrTooLong) {
       stillUntranslated.push(source);
     }
   }
@@ -303,7 +313,7 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
           type: "translation",
           estimatedTokens,
           userId,
-          execute: () => translateChunk([source], target, actualSourceLang, providerState, contextSettings)
+          execute: () => translateChunk([source], target, actualSourceLang, providerState, { ...contextSettings, isRetry: true })
         });
         if (retryResult && retryResult[0]) {
           const retried = retryResult[0];
@@ -327,6 +337,46 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
                 target_lang: target,
                 provider: retried.provider + " (Final Retry)"
               });
+            }
+          } else {
+            // It failed retry. Let's split it into sentences and translate them!
+            const sentences = splitIntoSentences(source);
+            if (sentences.length > 1) {
+              console.log(`[Sentence Split Fallback] Segment failed direct retry. Splitting into ${sentences.length} sentences: "${source.substring(0, 60)}..."`);
+              const translatedSentences = [];
+              for (const sentence of sentences) {
+                if (sentence.trim() === "") {
+                  translatedSentences.push(sentence);
+                  continue;
+                }
+                const sentenceResult = await translateChunk([sentence], target, actualSourceLang, providerState, { ...contextSettings, isRetry: true });
+                if (sentenceResult && sentenceResult[0]) {
+                  const sRetried = sentenceResult[0];
+                  const sProcessed = postProcessTranslation(sentence, sRetried.translated, target);
+                  const sCleaned = ensureEnglishNumerals(sProcessed);
+                  translatedSentences.push(sCleaned);
+                } else {
+                  translatedSentences.push(sentence);
+                }
+              }
+              const joinedTranslation = translatedSentences.join("");
+              const joinedClean = normalizeText(joinedTranslation).toLowerCase();
+              if (joinedClean !== srcClean) {
+                tmMap[source] = {
+                  source_text: source,
+                  target_text: joinedTranslation,
+                  provider: "OpenAI (Sentence-Split Fallback)"
+                };
+                
+                await supabase.from("translation_memory").insert({
+                  source_text: source,
+                  target_text: joinedTranslation,
+                  source_lang: actualSourceLang,
+                  target_lang: target,
+                  provider: "OpenAI (Sentence-Split Fallback)"
+                });
+                console.log(`[Sentence Split Fallback] Successfully translated split segment!`);
+              }
             }
           }
         }
