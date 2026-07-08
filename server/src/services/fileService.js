@@ -119,7 +119,26 @@ const exportHtml = async (fileId, segments, ext = '.html') => {
     throw error;
   }
 
-  const parser = getParser(ext);
+  let parser = getParser(ext);
+
+  // ── Smart template-type detection ─────────────────────────────────────────
+  // If the stored template is a PDF template (contains pdfBytes), always use
+  // pdfParser regardless of what ext the client sent. This protects against
+  // stale state (e.g. project loaded from a .json file with wrong extension).
+  try {
+    const zlib = require('zlib');
+    const buf = Buffer.from(data.content, 'base64');
+    let rawJson;
+    try { rawJson = zlib.gunzipSync(buf).toString('utf-8'); } catch (_) { rawJson = data.content; }
+    const templateData = JSON.parse(rawJson);
+    if (templateData && templateData.pdfBytes && templateData.items) {
+      // It's definitely a PDF template
+      const pdfParser = require('../utils/parsers/pdfParser');
+      parser = pdfParser;
+    }
+  } catch (_) { /* not JSON or not a PDF template — keep parser as-is */ }
+  // ──────────────────────────────────────────────────────────────────────────
+
   if (!parser) {
     const error = new Error(`Unsupported export type: ${ext}`);
     error.status = 400;

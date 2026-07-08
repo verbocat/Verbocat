@@ -207,9 +207,15 @@ const exportFile = async (templateBase64, segments) => {
     const unzipped = zlib.gunzipSync(buffer).toString("utf-8");
     try {
       const templateData = JSON.parse(unzipped);
-      html = templateData.html;
-      tagMapGlobal = new Map(templateData.tagMap || []);
-      segmentTagsMap = new Map((templateData.segmentTags || []).map(t => [t.id, t]));
+      // Guard: if this JSON doesn't contain an 'html' key it's a non-HTML template
+      // (e.g. a PDF template routed here by mistake) — treat the raw string as HTML.
+      if (templateData.html !== undefined) {
+        html = templateData.html;
+        tagMapGlobal = new Map(templateData.tagMap || []);
+        segmentTagsMap = new Map((templateData.segmentTags || []).map(t => [t.id, t]));
+      } else {
+        html = unzipped;
+      }
     } catch (e) {
       html = unzipped;
     }
