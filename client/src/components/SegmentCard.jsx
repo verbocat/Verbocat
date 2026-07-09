@@ -549,9 +549,23 @@ export const SegmentCard = ({
                 ...((readOnly || segment.verified || lockInfo)
                   ? { opacity: 0.55, cursor: lockInfo ? "not-allowed" : readOnly ? "default" : "text", pointerEvents: lockInfo ? "none" : "auto" }
                   : {}),
-                paddingRight: (segment.mqmAccuracyScore !== undefined || (parsedMqmReport && parsedMqmReport.errors && parsedMqmReport.errors.length > 0)) ? "105px" : undefined
+                paddingRight: (segment.mqmAccuracyScore !== undefined || (parsedMqmReport && parsedMqmReport.errors && parsedMqmReport.errors.length > 0)) ? "140px" : "36px"
               }}
             />
+
+            {/* Target Copy button */}
+            <button
+              className="seg-src-copy"
+              onClick={() => onCopy(segment.target || "")}
+              title="Copy translation"
+              style={{
+                top: "7px",
+                right: "7px",
+                zIndex: 6
+              }}
+            >
+              <Copy style={{ width: 9, height: 9 }} />
+            </button>
 
             {/* Absolute Badges Container */}
             {(segment.target && (
@@ -559,7 +573,7 @@ export const SegmentCard = ({
                 style={{
                   position: "absolute",
                   top: "50%",
-                  right: "8px",
+                  right: "34px",
                   transform: "translateY(-50%)",
                   display: "flex",
                   alignItems: "center",
@@ -654,18 +668,46 @@ export const SegmentCard = ({
             )}
           </div>
 
-          {!readOnly && !segment.verified && (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 4 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 6 }}>
+            {!segment.verified && !readOnly ? (
               <span className="seg-hint">Ctrl+Enter to verify and advance</span>
+            ) : (
+              <div />
+            )}
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {/* AI Segment Context button */}
               <button
-                onClick={onVerifyAndNext}
-                className="seg-verify-next-btn"
-                title="Verify segment and move to next"
+                onClick={() => setShowContext(!showContext)}
+                title="Smart Segment Context"
+                className={`seg-btn-new ${showContext ? "active" : ""}`}
+                style={{ position: "relative" }}
               >
-                Verify & Next
+                <Sparkles style={{
+                  width: 12,
+                  height: 12,
+                  color: (segment.contextJira || segment.contextDescription) ? "var(--text-amber)" : "inherit"
+                }} />
+                {(segment.contextJira || segment.contextDescription) && (
+                  <span style={{
+                    position: "absolute", top: 3, right: 3,
+                    width: 4, height: 4, borderRadius: "50%",
+                    background: "var(--text-amber)"
+                  }} />
+                )}
+              </button>
+
+              {/* Verify Tick button */}
+              <button
+                onClick={segment.verified ? onToggleVerify : onVerifyAndNext}
+                disabled={readOnly || !!lockInfo}
+                title={segment.verified ? "Unverify segment" : "Verify & Next"}
+                className={`seg-btn-new ${segment.verified ? "active-verified" : ""}`}
+                style={readOnly || lockInfo ? { opacity: 0.35, pointerEvents: "none" } : {}}
+              >
+                <Check style={{ width: 13, height: 13 }} />
               </button>
             </div>
-          )}
+          </div>
 
 
           {segment.originalTargetText && segment.originalTargetText !== segment.target && (
@@ -753,40 +795,7 @@ export const SegmentCard = ({
 
         </div>
 
-        {/* Col 5: Actions */}
-        <div className="seg-actions">
-          <button
-            onClick={() => setShowContext(!showContext)}
-            title="Smart Segment Context"
-            className={`seg-btn ${showContext ? "active" : ""}`}
-            style={{ position: "relative" }}
-          >
-            <Sparkles style={{
-              width: 11,
-              height: 11,
-              color: (segment.contextJira || segment.contextDescription) ? "var(--text-amber)" : "inherit"
-            }} />
-            {(segment.contextJira || segment.contextDescription) && (
-              <span style={{
-                position: "absolute", top: 1, right: 1,
-                width: 4, height: 4, borderRadius: "50%",
-                background: "var(--text-amber)"
-              }} />
-            )}
-          </button>
-          <button
-            onClick={onToggleVerify}
-            disabled={readOnly || !!lockInfo}
-            title={segment.verified ? "Unverify" : "Verify"}
-            className={`seg-btn ${segment.verified ? "active" : ""}`}
-            style={readOnly || lockInfo ? { opacity: 0.35, pointerEvents: "none" } : {}}
-          >
-            <Check style={{ width: 12, height: 12 }} />
-          </button>
-          <button onClick={() => onCopy(segment.target || "")} title="Copy translation" className="seg-btn">
-            <Copy style={{ width: 11, height: 11 }} />
-          </button>
-        </div>
+
 
       </article>
 

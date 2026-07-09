@@ -2772,7 +2772,6 @@ export default function App() {
               <div className="seg-header-cell">Source</div>
               <div className="seg-header-cell" style={{ justifyContent: "center" }}>→</div>
               <div className="seg-header-cell">Translation</div>
-              <div className="seg-header-cell" style={{ borderRight: "none", justifyContent: "center" }}>Act.</div>
             </div>
 
             {/* Translation progress toast */}
