@@ -36,7 +36,7 @@ function ensurePdf2DocxInstalled() {
     console.log("pdf2docx is not installed on system. Attempting auto-installation...");
     try {
       const pythonCmd = getPythonCommand();
-      execSync(`"${pythonCmd}" -m pip install pdf2docx`, { stdio: 'ignore' });
+      execSync(`"${pythonCmd}" -m pip install pdf2docx --break-system-packages`, { stdio: 'ignore' });
       console.log("pdf2docx installed successfully!");
     } catch (installErr) {
       console.error("Failed to auto-install pdf2docx via pip:", installErr.message);

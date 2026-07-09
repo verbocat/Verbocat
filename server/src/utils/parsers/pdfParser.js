@@ -40,7 +40,7 @@ function ensureDependenciesInstalled() {
     } catch (_) {
       console.log(`pdf_pipeline: ${pipNames[i]} is not installed. Attempting auto-installation...`);
       try {
-        execSync(`"${pythonCmd}" -m pip install ${pipNames[i]}`, { stdio: 'inherit' });
+        execSync(`"${pythonCmd}" -m pip install ${pipNames[i]} --break-system-packages`, { stdio: 'inherit' });
         console.log(`pdf_pipeline: ${pipNames[i]} installed successfully!`);
       } catch (err) {
         console.error(`pdf_pipeline: Failed to install ${pipNames[i]}:`, err.message);
