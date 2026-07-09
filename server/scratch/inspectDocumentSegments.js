@@ -2,18 +2,23 @@ const { supabase } = require("../src/config/supabase");
 
 async function inspectTable() {
   try {
-    console.log("Fetching one row from document_segments...");
+    const documentId = "55618ec9-cd85-46c5-830b-cc1945221374";
+    console.log(`Fetching segments for document ${documentId}...`);
     const { data, error } = await supabase
       .from("document_segments")
       .select("*")
-      .limit(1);
+      .eq("document_id", documentId)
+      .order("segment_index", { ascending: true });
 
     if (error) {
-      console.error("Error fetching segment:", error);
+      console.error("Error fetching segments:", error);
       return;
     }
 
-    console.log("Segment table structure sample:", data);
+    console.log(`Found ${data.length} segments:`);
+    for (const seg of data) {
+      console.log(`[${seg.segment_index}] Source: "${seg.source_text}" | Target: "${seg.target_text}" | Status: ${seg.status}`);
+    }
   } catch (err) {
     console.error(err);
   }

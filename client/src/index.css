@@ -1487,7 +1487,7 @@ code, .font-mono { font-family: "IBM Plex Mono", monospace; }
   position: fixed;
   top: 20px;
   right: 20px;
-  z-index: 1000;
+  z-index: 100000;
   min-width: 320px;
   max-width: 450px;
   background: rgba(19, 21, 31, 0.85); /* var(--bg-surface) with transparency */

@@ -11,12 +11,24 @@ adminRouter.use(checkRole(["admin"]));
 // 1. List All Registered Users
 adminRouter.get("/users", async (request, response) => {
   try {
-    const { data: users, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .order("email", { ascending: true });
+    const [profilesResult, authUsersResult] = await Promise.all([
+      supabase.from("profiles").select("*").order("email", { ascending: true }),
+      supabaseAdmin.auth.admin.listUsers()
+    ]);
 
-    if (error) throw error;
+    if (profilesResult.error) throw profilesResult.error;
+    if (authUsersResult.error) throw authUsersResult.error;
+
+    const authUsersMap = new Map(authUsersResult.data.users.map(u => [u.id, u]));
+
+    const users = profilesResult.data.map(p => {
+      const authUser = authUsersMap.get(p.id);
+      return {
+        ...p,
+        email_confirmed: authUser ? !!(authUser.email_confirmed_at || authUser.confirmed_at) : false
+      };
+    });
+
     response.json({ users });
   } catch (error) {
     console.error("Admin List Users Error:", error);
@@ -28,7 +40,7 @@ adminRouter.get("/users", async (request, response) => {
 adminRouter.put("/users/:id", async (request, response) => {
   try {
     const { id } = request.params;
-    const { role, credits_allowed, has_translate_access, status } = request.body;
+    const { role, credits_allowed, has_translate_access, status, email_confirmed } = request.body;
     const currentUserRole = request.profile.role;
 
     // Fetch original user profile details
@@ -41,8 +53,6 @@ adminRouter.put("/users/:id", async (request, response) => {
     if (fetchError || !targetUser) {
       return response.status(404).json({ error: "User account not found" });
     }
-
-    // Only Administrators can access this route now, so no manager checks are needed
 
     // Prepare update parameters
     const updateData = {};
@@ -57,6 +67,16 @@ adminRouter.put("/users/:id", async (request, response) => {
       .eq("id", id);
 
     if (updateError) throw updateError;
+
+    // Manually verify user in Supabase Auth if requested
+    if (email_confirmed === true) {
+      const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(id, {
+        email_confirm: true
+      });
+      if (authError) {
+        console.error("Failed to manually verify user auth:", authError);
+      }
+    }
 
     response.json({ message: "User account updated successfully" });
   } catch (error) {

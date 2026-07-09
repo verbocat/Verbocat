@@ -14,18 +14,30 @@ const extractPlaceholders = (element, $, tagMap, tagCounter) => {
 
         const clone = $(child).clone();
         clone.empty();
-        const outer = $.html(clone); // e.g. <b class="x"></b>
-        const openingTag = outer.replace(/<\/[^>]+>$/, ""); // <b class="x">
+        const outer = $.html(clone); // e.g. <w:rPr/>
         
-        const isVoid = ["br", "img", "input", "hr", "meta", "link", "wbr", "col"].includes(child.name.toLowerCase());
-        const closingTag = isVoid ? "" : `</${child.name}>`;
+        const isOriginalEmpty = !child.children || child.children.length === 0;
+        let openingTag = outer;
+        let closingTag = "";
+
+        if (isOriginalEmpty) {
+          openingTag = outer;
+          closingTag = "";
+        } else {
+          if (outer.endsWith("/>")) {
+            openingTag = outer.slice(0, -2) + ">";
+          } else {
+            openingTag = outer.replace(/<\/[^>]+>$/, "");
+          }
+          closingTag = `</${child.name}>`;
+        }
 
         tagMap.set(`<${id}>`, openingTag);
         tagMap.set(`</${id}>`, closingTag);
 
         str += `<${id}>`;
         str += extractPlaceholders(child, $, tagMap, tagCounter);
-        if (!isVoid) {
+        if (closingTag !== "") {
           str += `</${id}>`;
         }
       } else if (child.type === "comment") {

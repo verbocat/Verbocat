@@ -25,6 +25,7 @@ export const AdminDashboard = ({ onClose, theme }) => {
   const [editStatus, setEditStatus] = useState("active");
   const [editCreditsAllowed, setEditCreditsAllowed] = useState(50000);
   const [editTranslateAccess, setEditTranslateAccess] = useState(true);
+  const [editEmailConfirmed, setEditEmailConfirmed] = useState(false);
   const [submittingEdit, setSubmittingEdit] = useState(false);
 
   useEffect(() => {
@@ -104,6 +105,7 @@ export const AdminDashboard = ({ onClose, theme }) => {
     setEditStatus(user.status);
     setEditCreditsAllowed(user.credits_allowed);
     setEditTranslateAccess(user.has_translate_access);
+    setEditEmailConfirmed(!!user.email_confirmed);
   };
 
   const handleSaveEdit = async (e) => {
@@ -116,7 +118,8 @@ export const AdminDashboard = ({ onClose, theme }) => {
         role: editRole,
         status: editStatus,
         credits_allowed: Number(editCreditsAllowed),
-        has_translate_access: editTranslateAccess
+        has_translate_access: editTranslateAccess,
+        email_confirmed: editEmailConfirmed
       };
       
       await updateAdminUser(editingUser.id, payload);
@@ -338,6 +341,15 @@ export const AdminDashboard = ({ onClose, theme }) => {
                         <td className="px-6 py-4 font-semibold text-slate-100">
                           <div className="flex items-center gap-2">
                             <span>{user.email}</span>
+                            {user.email_confirmed ? (
+                              <span className="px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/25" title="Email Confirmed/Verified">
+                                Verified
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase bg-amber-500/10 text-amber-400 border border-amber-500/25" title="Email Not Confirmed/Verified">
+                                Unverified
+                              </span>
+                            )}
                             {isCurrentUser && (
                               <span className="px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase bg-indigo-500/15 text-indigo-400 border border-indigo-500/25">
                                 You
@@ -570,6 +582,21 @@ export const AdminDashboard = ({ onClose, theme }) => {
                 />
                 <label htmlFor="translate-access" className="text-xs font-bold text-slate-300 select-none cursor-pointer">
                   Authorize "Pre-Translate" Button Actions
+                </label>
+              </div>
+
+              {/* Email Confirmed / Verified Option */}
+              <div className="flex items-center gap-3 pt-1">
+                <input
+                  type="checkbox"
+                  id="email-confirmed"
+                  checked={editEmailConfirmed}
+                  onChange={(e) => setEditEmailConfirmed(e.target.checked)}
+                  disabled={editingUser.email_confirmed}
+                  className="h-4 w-4 rounded border-white/10 bg-black/40 text-indigo-600 focus:ring-indigo-500/20 outline-none cursor-pointer disabled:opacity-50"
+                />
+                <label htmlFor="email-confirmed" className="text-xs font-bold text-slate-300 select-none cursor-pointer">
+                  Manually Verify User (Email Confirmed)
                 </label>
               </div>
 

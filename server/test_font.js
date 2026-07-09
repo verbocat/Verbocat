@@ -1,3 +1,4 @@
+require('regenerator-runtime/runtime');
 const { PDFDocument, rgb } = require('pdf-lib');
 const fontkit = require('@pdf-lib/fontkit');
 const fs = require('fs');
@@ -21,10 +22,10 @@ const path = require('path');
   const devanagariLines = [
     'पुनरावलोकन',
     'व्यक्तिगत माहिती',
-    'दिव्यांशी दाशोरा',
-    'शिक्षण — अर्हता',
+    'माहिती -> मािहती (reordered)',
+    'दिव्यांशी -> िदव्यांशी (reordered)',
+    'शिक्षण -> िशक्षण (reordered)',
     'राजस्थान शिक्षक पात्रता',
-    'Hello + हिंदी Mixed Text',
   ];
   devanagariLines.forEach((t, i) => {
     page.drawText(t, { x: 50, y: 780 - i * 50, size: 18, font, color: rgb(0, 0, 0) });
