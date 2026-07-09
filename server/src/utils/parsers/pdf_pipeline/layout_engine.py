@@ -128,8 +128,21 @@ class LayoutEngine:
         if alignment == "justify":
             alignment = "justify"
             
+        # Resolve line height factor from target font metrics (essential for Indic script baseline spacing)
+        line_height_factor = 1.25
+        if font_files_to_load:
+            try:
+                import fitz
+                font = fitz.Font(fontfile=font_files_to_load[0])
+                metrics_lh = font.ascender - font.descender
+                if metrics_lh > 0:
+                    # Give it a 15% spacing buffer to prevent overlapping matras
+                    line_height_factor = max(1.25, metrics_lh * 1.15)
+            except Exception as e:
+                print("Error calculating font line height metrics:", e)
+
         full_html = f"""{style_header}
-<div style="text-align: {alignment}; line-height: 1.25; margin: 0; padding: 0;">
+<div style="text-align: {alignment}; line-height: {line_height_factor}; margin: 0; padding: 0;">
   {html_body}
 </div>
 """
