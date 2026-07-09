@@ -18,6 +18,8 @@ export const AdminDashboard = ({ onClose, theme }) => {
   const [activeTab, setActiveTab] = useState("users"); // 'users' or 'logs'
   const [userSearch, setUserSearch] = useState("");
   const [logSearch, setLogSearch] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   
   // Edit Modal State
   const [editingUser, setEditingUser] = useState(null);
@@ -151,11 +153,70 @@ export const AdminDashboard = ({ onClose, theme }) => {
     u.status.toLowerCase().includes(userSearch.toLowerCase())
   );
 
-  const filteredLogs = logs.filter(l => 
-    l.email.toLowerCase().includes(logSearch.toLowerCase()) ||
-    (l.file_name && l.file_name.toLowerCase().includes(logSearch.toLowerCase())) ||
-    l.action.toLowerCase().includes(logSearch.toLowerCase())
-  );
+  const filteredLogs = logs.filter(l => {
+    const matchesSearch = l.email.toLowerCase().includes(logSearch.toLowerCase()) ||
+      (l.file_name && l.file_name.toLowerCase().includes(logSearch.toLowerCase())) ||
+      l.action.toLowerCase().includes(logSearch.toLowerCase());
+      
+    if (!matchesSearch) return false;
+    
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      const logDate = new Date(l.created_at);
+      if (logDate < start) return false;
+    }
+    
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      const logDate = new Date(l.created_at);
+      if (logDate > end) return false;
+    }
+    
+    return true;
+  });
+
+  const handleExportExcel = () => {
+    if (filteredLogs.length === 0) {
+      showToast("No log entries found to export", true);
+      return;
+    }
+
+    const headers = ["Timestamp", "User Account", "Operation", "Resource Target (File)", "Words Deducted"];
+    const rows = filteredLogs.map(log => [
+      new Date(log.created_at).toLocaleString(),
+      log.email,
+      log.action.replace("-", " "),
+      log.file_name || "N/A",
+      log.word_count
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(row => row.map(val => {
+        const stringVal = String(val);
+        if (stringVal.includes(",") || stringVal.includes('"') || stringVal.includes("\n")) {
+          return `"${stringVal.replace(/"/g, '""')}"`;
+        }
+        return stringVal;
+      }).join(","))
+    ].join("\n");
+
+    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    
+    const startStr = startDate ? `_from_${startDate}` : "";
+    const endStr = endDate ? `_to_${endDate}` : "";
+    link.setAttribute("href", url);
+    link.setAttribute("download", `credit_logs_audit${startStr}${endStr}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast("Audit logs exported successfully!");
+  };
 
   const isAdmin = currentUser?.role === "admin";
 
@@ -273,28 +334,81 @@ export const AdminDashboard = ({ onClose, theme }) => {
             </button>
           </div>
 
-          {/* Search Fields */}
-          <div className="relative w-full sm:max-w-xs">
-            <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            </span>
-            {activeTab === "users" ? (
-              <input
-                type="text"
-                value={userSearch}
-                onChange={(e) => setUserSearch(e.target.value)}
-                placeholder="Search email, role, status..."
-                className="w-full pl-9 rounded-xl border border-white/10 bg-black/30 py-2.5 text-xs text-slate-200 placeholder:text-slate-600 outline-none focus:border-indigo-500/50 focus:bg-black/50 transition-all"
-              />
-            ) : (
-              <input
-                type="text"
-                value={logSearch}
-                onChange={(e) => setLogSearch(e.target.value)}
-                placeholder="Search email, action, file name..."
-                className="w-full pl-9 rounded-xl border border-white/10 bg-black/30 py-2.5 text-xs text-slate-200 placeholder:text-slate-600 outline-none focus:border-indigo-500/50 focus:bg-black/50 transition-all"
-              />
+          {/* Controls Container */}
+          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+            {activeTab === "logs" && (
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Date From */}
+                <div className="flex items-center gap-1.5 bg-black/30 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-slate-400">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">From</span>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="bg-transparent border-none outline-none text-slate-200 cursor-pointer [color-scheme:dark]"
+                  />
+                </div>
+
+                {/* Date To */}
+                <div className="flex items-center gap-1.5 bg-black/30 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-slate-400">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">To</span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="bg-transparent border-none outline-none text-slate-200 cursor-pointer [color-scheme:dark]"
+                  />
+                </div>
+
+                {/* Clear Date Filter */}
+                {(startDate || endDate) && (
+                  <button
+                    onClick={() => { setStartDate(""); setEndDate(""); }}
+                    className="rounded-xl bg-white/5 hover:bg-white/10 px-3 py-2 text-xs font-bold transition-all border border-white/5 cursor-pointer text-slate-400 hover:text-white"
+                    title="Clear date filter"
+                  >
+                    Clear
+                  </button>
+                )}
+
+                {/* Export Button */}
+                <button
+                  onClick={handleExportExcel}
+                  className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 px-4 py-2.5 text-xs font-black tracking-wide text-white shadow-md shadow-emerald-500/10 transition-all border border-emerald-500/20 cursor-pointer"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  Export Excel
+                </button>
+              </div>
             )}
+
+            {/* Search Input */}
+            <div className="relative w-full sm:max-w-xs">
+              <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              </span>
+              {activeTab === "users" ? (
+                <input
+                  type="text"
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  placeholder="Search email, role, status..."
+                  className="w-full pl-9 rounded-xl border border-white/10 bg-black/30 py-2.5 text-xs text-slate-200 placeholder:text-slate-600 outline-none focus:border-indigo-500/50 focus:bg-black/50 transition-all"
+                />
+              ) : (
+                <input
+                  type="text"
+                  value={logSearch}
+                  onChange={(e) => setLogSearch(e.target.value)}
+                  placeholder="Search email, action, file name..."
+                  className="w-full pl-9 rounded-xl border border-white/10 bg-black/30 py-2.5 text-xs text-slate-200 placeholder:text-slate-600 outline-none focus:border-indigo-500/50 focus:bg-black/50 transition-all"
+                />
+              )}
+            </div>
           </div>
         </div>
 
