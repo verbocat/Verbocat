@@ -66,9 +66,6 @@ export const Header = ({
               </div>
             </>
           )}
-          {progress !== undefined && (
-            <span className="topbar-progress">{progress}% done</span>
-          )}
         </div>
       ) : (
         <div style={{ flex: 1 }} />

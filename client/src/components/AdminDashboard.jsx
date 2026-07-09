@@ -177,6 +177,8 @@ export const AdminDashboard = ({ onClose, theme }) => {
     return true;
   });
 
+  const sumFilteredWords = filteredLogs.reduce((sum, log) => sum + (log.word_count || 0), 0);
+
   const handleExportExcel = () => {
     if (filteredLogs.length === 0) {
       showToast("No log entries found to export", true);
@@ -201,9 +203,19 @@ export const AdminDashboard = ({ onClose, theme }) => {
         }
         return stringVal;
       }).join(","))
-    ].join("\n");
+    ];
 
-    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: "text/csv;charset=utf-8;" });
+    // Add sum row at the end of the Excel sheet
+    const sumRow = ["", "", "", "Total Words Deducted:", sumFilteredWords];
+    csvContent.push(sumRow.map(val => {
+      const stringVal = String(val);
+      if (stringVal.includes(",") || stringVal.includes('"') || stringVal.includes("\n")) {
+        return `"${stringVal.replace(/"/g, '""')}"`;
+      }
+      return stringVal;
+    }).join(","));
+
+    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent.join("\n")], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     
@@ -335,46 +347,52 @@ export const AdminDashboard = ({ onClose, theme }) => {
           </div>
 
           {/* Controls Container */}
-          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto justify-end">
             {activeTab === "logs" && (
-              <div className="flex flex-wrap items-center gap-2">
-                {/* Date From */}
-                <div className="flex items-center gap-1.5 bg-black/30 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-slate-400">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">From</span>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="bg-transparent border-none outline-none text-slate-200 cursor-pointer [color-scheme:dark]"
-                  />
-                </div>
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Date Inputs Group */}
+                <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-xl p-1 shadow-inner">
+                  {/* From Date */}
+                  <div className="flex items-center gap-1 px-2.5 py-1 text-xs">
+                    <span className="text-[9px] font-black uppercase tracking-wider text-slate-500 select-none">From</span>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="bg-transparent border-none outline-none text-slate-200 cursor-pointer [color-scheme:dark] text-xs font-semibold focus:ring-0 w-28"
+                    />
+                  </div>
+                  
+                  {/* Separator */}
+                  <div className="h-4 w-px bg-white/10" />
 
-                {/* Date To */}
-                <div className="flex items-center gap-1.5 bg-black/30 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-slate-400">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">To</span>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="bg-transparent border-none outline-none text-slate-200 cursor-pointer [color-scheme:dark]"
-                  />
+                  {/* To Date */}
+                  <div className="flex items-center gap-1 px-2.5 py-1 text-xs">
+                    <span className="text-[9px] font-black uppercase tracking-wider text-slate-500 select-none">To</span>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="bg-transparent border-none outline-none text-slate-200 cursor-pointer [color-scheme:dark] text-xs font-semibold focus:ring-0 w-28"
+                    />
+                  </div>
                 </div>
 
                 {/* Clear Date Filter */}
                 {(startDate || endDate) && (
                   <button
                     onClick={() => { setStartDate(""); setEndDate(""); }}
-                    className="rounded-xl bg-white/5 hover:bg-white/10 px-3 py-2 text-xs font-bold transition-all border border-white/5 cursor-pointer text-slate-400 hover:text-white"
+                    className="rounded-xl bg-rose-600/10 hover:bg-rose-600/20 border border-rose-500/25 text-rose-400 px-3 py-2 text-xs font-bold transition-all cursor-pointer"
                     title="Clear date filter"
                   >
-                    Clear
+                    Clear Dates
                   </button>
                 )}
 
                 {/* Export Button */}
                 <button
                   onClick={handleExportExcel}
-                  className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 px-4 py-2.5 text-xs font-black tracking-wide text-white shadow-md shadow-emerald-500/10 transition-all border border-emerald-500/20 cursor-pointer"
+                  className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 px-4 py-2.5 text-xs font-black tracking-wide text-white shadow-lg shadow-emerald-500/10 transition-all border border-emerald-500/20 cursor-pointer"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -387,7 +405,7 @@ export const AdminDashboard = ({ onClose, theme }) => {
             )}
 
             {/* Search Input */}
-            <div className="relative w-full sm:max-w-xs">
+            <div className="relative w-full sm:w-60">
               <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               </span>
@@ -608,6 +626,18 @@ export const AdminDashboard = ({ onClose, theme }) => {
                   })
                 )}
               </tbody>
+              {filteredLogs.length > 0 && (
+                <tfoot className="border-t border-white/10 bg-slate-950/20 text-xs text-slate-200 font-bold font-mono">
+                  <tr>
+                    <td colSpan="4" className="px-6 py-4 text-right font-sans font-black uppercase tracking-wider text-slate-400 select-none">
+                      Total Words Deducted:
+                    </td>
+                    <td className="px-6 py-4 text-right font-bold text-indigo-400">
+                      -{sumFilteredWords.toLocaleString()}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         )}

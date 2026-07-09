@@ -187,28 +187,7 @@ export const WorkspaceToolbar = ({
 
 
         {/* ── Stats strip — restored ── */}
-        {canAct && stats && (
-          <div className="stats-strip">
-            <div className="stat-item">
-              <span className="stat-label">Words</span>
-              <span className="stat-value">{stats.words.toLocaleString()}</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-label">Unique</span>
-              <span className="stat-value">{stats.uniqueWords.toLocaleString()}</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-label">Dup.</span>
-              <span className="stat-value">{stats.duplicateWords.toLocaleString()}</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-label">Done</span>
-              <span className="stat-value" style={{ color: "var(--text-emerald)" }}>
-                {stats.progress}%
-              </span>
-            </div>
-          </div>
-        )}
+
 
         {/* Push Export to the right */}
         <div style={{ flex: 1 }} />

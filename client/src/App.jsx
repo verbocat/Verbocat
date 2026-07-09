@@ -3040,6 +3040,28 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* ── Footer bar ── */}
+      {segments.length > 0 && stats && (
+        <footer className="workspace-footer">
+          <div className="footer-stat-item">
+            <span className="footer-stat-label">Words</span>
+            <span className="footer-stat-value">{stats.words.toLocaleString()}</span>
+          </div>
+          <div className="footer-stat-item">
+            <span className="footer-stat-label">Unique</span>
+            <span className="footer-stat-value">{stats.uniqueWords.toLocaleString()}</span>
+          </div>
+          <div className="footer-stat-item">
+            <span className="footer-stat-label">Dup.</span>
+            <span className="footer-stat-value">{stats.duplicateWords.toLocaleString()}</span>
+          </div>
+          <div className="footer-stat-item">
+            <span className="footer-stat-label">Done</span>
+            <span className="footer-stat-value progress-value">{stats.progress}%</span>
+          </div>
+        </footer>
+      )}
     </div>
   );
 }
