@@ -13,7 +13,7 @@ export const WorkspaceToolbar = ({
   setSearchQuery, stats, sourceLanguage, onSourceLanguageChange,
   targetLanguage, onTargetLanguageChange, fileName, theme,
   canTranslate = true, fileExtension, filterStatus, setFilterStatus, onUpload,
-  onOpenContext, onRunQc, isAuditing,
+  onRunQc, isAuditing,
   trackChangesEnabled, onToggleTrackChanges, isOwner,
   onAcceptAllChanges, hasTrackedChanges, onApplyGlossary
 }) => {
@@ -127,12 +127,6 @@ export const WorkspaceToolbar = ({
             <span>Accept All Changes</span>
           </button>
         )}
-
-        {/* Context */}
-        <button onClick={onOpenContext} disabled={!canAct} className="ab ab-context">
-          <Sliders style={{ width: 12, height: 12, flexShrink: 0 }} />
-          <span>Context</span>
-        </button>
 
         {/* Apply Glossary */}
         <button

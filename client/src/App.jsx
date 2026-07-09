@@ -2722,7 +2722,6 @@ export default function App() {
             filterStatus={filterStatus}
             setFilterStatus={setFilterStatus}
             onUpload={handleUpload}
-            onOpenContext={() => setShowContextPanel(true)}
             trackChangesEnabled={trackChangesEnabled}
             onToggleTrackChanges={handleToggleTrackChanges}
             isOwner={ownerId === user?.id}
