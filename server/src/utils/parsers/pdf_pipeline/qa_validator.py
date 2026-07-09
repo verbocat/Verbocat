@@ -34,10 +34,9 @@ class QaValidator:
                     "message": f"Segment {seg_id} is identical to source text"
                 })
                 
-            # 2. Tag preservation check
-            # Find all span tags in source
-            source_tags = re.findall(r'<span\s+id="(\d+)">', source)
-            target_tags = re.findall(r'<span\s+id="(\d+)">', target)
+            # Find all placeholder tags in source
+            source_tags = re.findall(r'<(\d+)>', source)
+            target_tags = re.findall(r'<(\d+)>', target)
             
             missing_tags = set(source_tags) - set(target_tags)
             if missing_tags:

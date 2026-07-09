@@ -74,7 +74,7 @@ def run_verification():
         
         # Verify style tagging
         # In Paragraph 2, the word "bold word" should be wrapped in style tags
-        assert "<span id=" in p2_text, "Style tagging failed: no style spans found"
+        assert "<1>" in p2_text, "Style tagging failed: no style spans found"
         print("Style tags detected successfully in Paragraph 2!")
         
         print("\nVerification PASSED: ParagraphBuilder correctly reconstructs multi-columns, reading order, and style tags!")

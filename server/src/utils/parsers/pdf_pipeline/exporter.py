@@ -40,8 +40,10 @@ class PDFExporter:
             target_text = seg.get("target", "") or seg.get("source", "")
             segment_map[seg_id] = target_text
 
+        flat_idx = 0
         for page_idx, page_model in enumerate(document.pages):
             if page_idx >= len(doc):
+                flat_idx += len(page_model.paragraphs)
                 continue
                 
             page = doc[page_idx]
@@ -49,16 +51,13 @@ class PDFExporter:
             # Skip page if classified as "Preserve" or Scanned without OCR
             if page_model.classification == "Preserve":
                 print(f"Exporter: Skipping page {page_idx} (Preserve strategy)")
+                flat_idx += len(page_model.paragraphs)
                 continue
 
             # Step 1: Safe Redaction (Delete original text streams completely)
-            # Gather all bboxes of paragraphs to redact on this page
-            redacted_boxes = []
             for para in page_model.paragraphs:
-                # Add redact annotation on paragraph bounding boxes
                 bbox = para.bbox
                 page.add_redact_annot(fitz.Rect(bbox), fill=None)
-                redacted_boxes.append(bbox)
                 
             # Run apply_redactions to clean the page's text stream
             page.apply_redactions(images=0)  # Keep original images/vectors intact!
@@ -67,7 +66,10 @@ class PDFExporter:
             rendered_elements = []
             
             for para in page_model.paragraphs:
-                translated_text = segment_map.get(para.paragraph_id, "")
+                translated_text = segment_map.get(para.paragraph_id)
+                if not translated_text:
+                    translated_text = segment_map.get(str(flat_idx))
+                    
                 if not translated_text:
                     # Fallback to reconstructing tagged text if segment not in map
                     from .paragraph_builder import ParagraphBuilder
@@ -85,6 +87,7 @@ class PDFExporter:
                         "bbox": layout_result["bbox"],
                         "scale": layout_result["scale"]
                     })
+                flat_idx += 1
 
             # Step 3: Layout Validation Engine Check
             validation_result = LayoutValidator.validate_page_layout(page_model, rendered_elements)

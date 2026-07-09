@@ -116,52 +116,22 @@ const processUploadedFile = async (file) => {
   }
 
   try {
-    // Option C: If a PDF is uploaded, convert it to DOCX, parse it, and pack templates
+    // For PDF files, parse directly using the new high-fidelity pdfParser pipeline
     if (ext === '.pdf') {
-      const docxPath = file.path + '.docx';
-      try {
-        await convertPdfToDocx(file.path, docxPath);
-        if (fs.existsSync(docxPath)) {
-          const { segments, template: docxTemplate } = await docxParser.parseFile(docxPath);
-          const pdfBytesBase64 = fs.readFileSync(file.path).toString('base64');
-          
-          const combinedTemplateData = {
-            originalPdfBytes: pdfBytesBase64,
-            docxTemplate: docxTemplate
-          };
-          const template = Buffer.from(JSON.stringify(combinedTemplateData)).toString('base64');
-          
-          const fileId = uuidv4();
-          const { error: insertError } = await supabase
-            .from("html_files")
-            .insert([{ id: fileId, content: template }]);
+      const { segments, template: pdfTemplate } = await pdfParser.parseFile(file.path);
+      const fileId = uuidv4();
+      const { error: insertError } = await supabase
+        .from("html_files")
+        .insert([{ id: fileId, content: pdfTemplate }]);
 
-          if (insertError) throw insertError;
+      if (insertError) throw insertError;
 
-          return {
-            type: 'pdf', // Keep type as 'pdf'
-            fileId,
-            segments,
-            originalName: file.originalname
-          };
-        }
-      } catch (err) {
-        console.error("PDF-to-DOCX conversion failed, falling back to direct PDF overlay:", err.message);
-        const { segments, template: pdfTemplate } = await pdfParser.parseFile(file.path);
-        const fileId = uuidv4();
-        const { error: insertError } = await supabase
-          .from("html_files")
-          .insert([{ id: fileId, content: pdfTemplate }]);
-
-        if (insertError) throw insertError;
-
-        return {
-          type: 'pdf',
-          fileId,
-          segments,
-          originalName: file.originalname
-        };
-      }
+      return {
+        type: 'pdf',
+        fileId,
+        segments,
+        originalName: file.originalname
+      };
     }
 
     // Default parser path for non-PDFs

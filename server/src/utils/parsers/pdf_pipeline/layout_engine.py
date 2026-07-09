@@ -99,29 +99,29 @@ class LayoutEngine:
         style_header += "</style>\n"
 
         # Parse the tagged text sequentially
-        # Pattern to extract <span id="X">text</span> and plain text between
-        tokens = re.split(r'(<span\s+id="\d+">.*?</span>)', translated_text)
+        # Pattern to split by tags like <1>, </1>
+        tokens = re.split(r'(</?\d+>)', translated_text)
         html_body = ""
         
         for token in tokens:
             if not token:
                 continue
-            match = re.match(r'<span\s+id="(\d+)">([\s\S]*?)</span>', token)
-            if match:
-                span_id = match.group(1)
-                inner_text = match.group(2)
-                # Map to correct font styling
-                style_info = mapped_fonts.get(span_id, mapped_fonts[base_style_key])
-                weight = "bold" if style_info["bold"] else "normal"
-                style_attr = "italic" if style_info["italic"] else "normal"
+            tag_match = re.match(r'^<(/?\d+)>$', token)
+            if tag_match:
+                tag_content = tag_match.group(1)
+                is_closing = tag_content.startswith("/")
+                span_id = tag_content.replace("/", "")
                 
-                html_body += f'<span style="font-family: \'{style_info["family"]}\'; font-size: {style_info["size"]}pt; color: {style_info["color_hex"]}; font-weight: {weight}; font-style: {style_attr};">{inner_text}</span>'
+                if is_closing:
+                    html_body += '</span>'
+                else:
+                    style_info = mapped_fonts.get(span_id, mapped_fonts[base_style_key])
+                    weight = "bold" if style_info["bold"] else "normal"
+                    style_attr = "italic" if style_info["italic"] else "normal"
+                    html_body += f'<span style="font-family: \'{style_info["family"]}\'; font-size: {style_info["size"]}pt; color: {style_info["color_hex"]}; font-weight: {weight}; font-style: {style_attr};">'
             else:
-                # Plain text token (no tag)
-                style_info = mapped_fonts[base_style_key]
-                weight = "bold" if style_info["bold"] else "normal"
-                style_attr = "italic" if style_info["italic"] else "normal"
-                html_body += f'<span style="font-family: \'{style_info["family"]}\'; font-size: {style_info["size"]}pt; color: {style_info["color_hex"]}; font-weight: {weight}; font-style: {style_attr};">{token}</span>'
+                # Plain text
+                html_body += token
 
         # Set alignment CSS class
         alignment = paragraph.alignment

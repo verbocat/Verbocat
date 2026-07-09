@@ -220,7 +220,7 @@ class ParagraphBuilder:
                 
                 txt = span.text
                 if differs:
-                    paragraph_text += f'<span id="{span_idx}">{txt}</span>'
+                    paragraph_text += f'<{span_idx}>{txt}</{span_idx}>'
                 else:
                     paragraph_text += txt
                 span_idx += 1
