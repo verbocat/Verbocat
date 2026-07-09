@@ -75,7 +75,8 @@ apiRouter.post("/upload", checkAuth, upload.single("file"), async (request, resp
     });
   } catch (error) {
     console.log(error);
-    response.status(error.status || 500).json({
+    const statusCode = (error.status >= 100 && error.status < 1000) ? error.status : 500;
+    response.status(statusCode).json({
       error: error.message || "Server error"
     });
   }
@@ -237,7 +238,8 @@ apiRouter.post("/export", async (request, response) => {
     response.send(buffer);
   } catch (error) {
     console.log(error);
-    response.status(error.status || 500).json({
+    const statusCode = (error.status >= 100 && error.status < 1000) ? error.status : 500;
+    response.status(statusCode).json({
       error: error.message || "Export failed"
     });
   }

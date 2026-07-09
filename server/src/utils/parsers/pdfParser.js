@@ -29,7 +29,28 @@ const getPythonEnv = () => {
   };
 };
 
+function ensureDependenciesInstalled() {
+  const pythonCmd = getPythonCommand();
+  const deps = ['fitz', 'uharfbuzz', 'fontTools', 'reportlab', 'PIL', 'requests'];
+  const pipNames = ['pymupdf', 'uharfbuzz', 'fonttools', 'reportlab', 'pillow', 'requests'];
+  
+  for (let i = 0; i < deps.length; i++) {
+    try {
+      execSync(`"${pythonCmd}" -c "import ${deps[i]}"`, { stdio: 'ignore' });
+    } catch (_) {
+      console.log(`pdf_pipeline: ${pipNames[i]} is not installed. Attempting auto-installation...`);
+      try {
+        execSync(`"${pythonCmd}" -m pip install ${pipNames[i]}`, { stdio: 'inherit' });
+        console.log(`pdf_pipeline: ${pipNames[i]} installed successfully!`);
+      } catch (err) {
+        console.error(`pdf_pipeline: Failed to install ${pipNames[i]}:`, err.message);
+      }
+    }
+  }
+}
+
 const parseFile = async (filePath) => {
+  ensureDependenciesInstalled();
   const pythonCmd = getPythonCommand();
   const tempJsonPath = path.join(os.tmpdir(), `matecat_parse_${uuidv4()}.json`);
   const env = getPythonEnv();
@@ -62,6 +83,7 @@ const parseFile = async (filePath) => {
 };
 
 const exportFile = async (templateBase64, segments, targetLang = 'hi') => {
+  ensureDependenciesInstalled();
   const pythonCmd = getPythonCommand();
   const tempTemplatePath = path.join(os.tmpdir(), `matecat_tpl_${uuidv4()}.txt`);
   const tempSegmentsPath = path.join(os.tmpdir(), `matecat_seg_${uuidv4()}.json`);
