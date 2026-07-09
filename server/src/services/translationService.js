@@ -401,7 +401,18 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
     };
   }));
 
-  return { results };
+  let actualAiWordCount = 0;
+  uniqueMissingSources.forEach(src => {
+    const clean = String(src || "")
+      .replace(/<[^>]+>/g, "")
+      .replace(/__TAG_\d+__/g, "")
+      .trim();
+    if (clean) {
+      actualAiWordCount += clean.split(/\s+/).filter(w => w.length > 0).length;
+    }
+  });
+
+  return { results, wordCount: actualAiWordCount };
 };
 
 const translateSegmentWithContext = async ({

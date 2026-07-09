@@ -18,6 +18,16 @@ const upload = multer({
   dest: "uploads/"
 });
 
+const countWords = (text) => {
+  if (!text) return 0;
+  const clean = String(text)
+    .replace(/<[^>]+>/g, "")
+    .replace(/__TAG_\d+__/g, "")
+    .trim();
+  if (!clean) return 0;
+  return clean.split(/\s+/).filter(w => w.length > 0).length;
+};
+
 apiRouter.get("/", (request, response) => {
   response.json({
     message: "Server Running"
@@ -85,14 +95,14 @@ apiRouter.post("/upload", checkAuth, upload.single("file"), async (request, resp
 apiRouter.post("/translate-batch", checkAuth, checkTranslateAccess, async (request, response) => {
   try {
     const { segments, target, source, contextSettings, fileName, documentId } = request.body;
-    const result = await translateSegments(segments, target, source, contextSettings, request.user.id);
+    const { results, wordCount } = await translateSegments(segments, target, source, contextSettings, request.user.id);
     
     // Save translations to document_segments in DB if documentId is provided
-    if (documentId && result.results && result.results.length > 0) {
+    if (documentId && results && results.length > 0) {
       const { getIo } = require("../services/socket");
       const io = getIo();
 
-      const updatePromises = result.results.map(async (item) => {
+      const updatePromises = results.map(async (item) => {
         const segmentIndex = item.id - 1; // client IDs are 1-indexed
 
         const { isLegitimatelyIdentical } = require("../services/translationProviders");
@@ -144,7 +154,6 @@ apiRouter.post("/translate-batch", checkAuth, checkTranslateAccess, async (reque
     }
 
     // Log credit consumption and update database profiles
-    const wordCount = request.wordCount || 0;
     if (wordCount > 0) {
       const email = request.profile.email;
       const userId = request.profile.id;
@@ -166,7 +175,7 @@ apiRouter.post("/translate-batch", checkAuth, checkTranslateAccess, async (reque
         .eq("id", userId);
     }
 
-    response.json(result);
+    response.json({ results });
   } catch (error) {
     console.log(error);
     response.status(500).json({
@@ -861,6 +870,15 @@ apiRouter.post(
         return response.status(404).json({ error: "Segment not found." });
       }
 
+      const wordCount = countWords(segment.source_text);
+      if (request.profile.role !== "admin") {
+        if (request.profile.credits_consumed + wordCount > request.profile.credits_allowed) {
+          return response.status(403).json({
+            error: `Credit limit exceeded. Reached ${request.profile.credits_consumed}/${request.profile.credits_allowed} words allowance. Contact admin.`
+          });
+        }
+      }
+
       const { data: siblingSegments } = await supabase
         .from("document_segments")
         .select("segment_index, source_text, target_text")
@@ -906,6 +924,23 @@ apiRouter.post(
       if (updateError) {
         console.error("Segment context update error:", updateError);
         return response.status(500).json({ error: "Failed to save translated segment." });
+      }
+
+      // Log credit consumption and update database profiles
+      if (wordCount > 0) {
+        await supabase.from("credit_logs").insert({
+          user_id: request.profile.id,
+          email: request.profile.email,
+          action: "translate-context",
+          word_count: wordCount,
+          file_name: doc.name || "document"
+        });
+
+        const newConsumed = request.profile.credits_consumed + wordCount;
+        await supabase
+          .from("profiles")
+          .update({ credits_consumed: newConsumed })
+          .eq("id", request.profile.id);
       }
 
       // Broadcast update via Socket.io
@@ -1017,6 +1052,34 @@ apiRouter.post("/documents/:id/audit/start", checkAuth, async (request, response
       return response.status(400).json({ error: "An audit is already running for this document." });
     }
 
+    // Fetch segments to count words
+    let segments;
+    try {
+      segments = await fetchAllSegments(documentId, "source_text");
+    } catch (fetchErr) {
+      console.error("Failed to fetch document segments for audit check:", fetchErr);
+      return response.status(500).json({ error: "Failed to fetch document segments for credit check." });
+    }
+
+    if (!segments || segments.length === 0) {
+      return response.status(400).json({ error: "No segments found in this document to audit." });
+    }
+
+    // Count total words in these segments
+    let wordCount = 0;
+    segments.forEach(seg => {
+      wordCount += countWords(seg.source_text);
+    });
+
+    // Check credit limits
+    if (request.profile.role !== "admin") {
+      if (request.profile.credits_consumed + wordCount > request.profile.credits_allowed) {
+        return response.status(403).json({
+          error: `Credit limit exceeded. Reached ${request.profile.credits_consumed}/${request.profile.credits_allowed} words allowance. Contact admin.`
+        });
+      }
+    }
+
     // Insert pending job record
     const { data: job, error: jobErr } = await supabase
       .from("audit_jobs")
@@ -1033,6 +1096,23 @@ apiRouter.post("/documents/:id/audit/start", checkAuth, async (request, response
         return response.status(500).json({ error: "Database table 'audit_jobs' is missing. Please run the SQL migration script (server/src/config/migration.sql) in your Supabase SQL Editor to create it." });
       }
       return response.status(500).json({ error: "Failed to initiate audit job." });
+    }
+
+    // Log credit consumption and update database profiles
+    if (wordCount > 0) {
+      await supabase.from("credit_logs").insert({
+        user_id: request.profile.id,
+        email: request.profile.email,
+        action: "qc-audit",
+        word_count: wordCount,
+        file_name: doc.name || "document"
+      });
+
+      const newConsumed = request.profile.credits_consumed + wordCount;
+      await supabase
+        .from("profiles")
+        .update({ credits_consumed: newConsumed })
+        .eq("id", request.profile.id);
     }
 
     response.json({
