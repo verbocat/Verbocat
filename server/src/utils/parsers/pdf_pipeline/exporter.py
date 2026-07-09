@@ -1,5 +1,6 @@
 import base64
 import fitz
+import re
 from typing import List, Dict, Any
 from .document_model import Document
 from .layout_engine import LayoutEngine
@@ -11,15 +12,95 @@ class PDFExporter:
         self.layout_engine = layout_engine
         self.renderer = renderer
 
+    def _reflow_paragraphs(self, paragraphs: List[Any], segment_map: Dict[str, str],
+                           para_flat_indices: Dict[str, int], target_lang: str,
+                           page_scale_multiplier: float) -> Dict[str, Dict[str, Any]]:
+        # Sort paragraphs by original top coordinate
+        sorted_paras = sorted(paragraphs, key=lambda p: p.bbox[1])
+        
+        results = {}
+        shift_bottoms = {}  # para_id -> shift_bottom
+        
+        for para in sorted_paras:
+            flat_idx = para_flat_indices.get(para.paragraph_id)
+            translated_text = segment_map.get(para.paragraph_id)
+            if not translated_text and flat_idx is not None:
+                translated_text = segment_map.get(str(flat_idx))
+            if not translated_text:
+                from .paragraph_builder import ParagraphBuilder
+                translated_text = ParagraphBuilder.generate_tagged_text(para)
+                
+            is_fixed = self.layout_engine.is_fixed_region(para)
+            original_bbox = para.bbox
+            original_width = original_bbox[2] - original_bbox[0]
+            original_height = original_bbox[3] - original_bbox[1]
+            
+            # Compute shift_top based on overlapping paragraphs above
+            shift_top = 0.0
+            if not is_fixed:
+                overlapping_shifts = []
+                for other_para in sorted_paras:
+                    if other_para.paragraph_id == para.paragraph_id:
+                        continue
+                    # Check if other_para was originally above para
+                    if other_para.bbox[3] - 2.0 <= original_bbox[1]:
+                        # Check horizontal overlap with epsilon tolerance
+                        overlap_x = min(other_para.bbox[2], original_bbox[2]) - max(other_para.bbox[0], original_bbox[0])
+                        if overlap_x > 2.0:
+                            other_shift_bottom = shift_bottoms.get(other_para.paragraph_id, 0.0)
+                            overlapping_shifts.append(other_shift_bottom)
+                if overlapping_shifts:
+                    shift_top = max(overlapping_shifts)
+            
+            shifted_bbox = [
+                original_bbox[0],
+                original_bbox[1] + shift_top,
+                original_bbox[2],
+                original_bbox[3] + shift_top
+            ]
+            
+            # Temporarily set para bbox for adapt_layout
+            temp_bbox = para.bbox
+            para.bbox = shifted_bbox
+            
+            layout_result = self.layout_engine.adapt_layout(para, translated_text, target_lang)
+            
+            # Apply attempts page multiplier scaling
+            if page_scale_multiplier < 1.0:
+                layout_result["scale"] *= page_scale_multiplier
+                layout_result["height_needed"] *= page_scale_multiplier
+                
+            para.bbox = temp_bbox
+            
+            height_needed = layout_result["height_needed"]
+            growth = max(0.0, height_needed - original_height)
+            
+            if not is_fixed:
+                # Update bottom coordinate of shifted box
+                shifted_bbox[3] = shifted_bbox[1] + height_needed
+                shift_bottom = shift_top + growth
+            else:
+                shift_bottom = 0.0  # Fixed blocks don't push anything
+                
+            shift_bottoms[para.paragraph_id] = shift_bottom
+            
+            results[para.paragraph_id] = {
+                "layout_result": layout_result,
+                "shifted_bbox": shifted_bbox
+            }
+            
+        return results
+
     def export_pdf(self, template_data: Dict[str, Any], segments: List[Dict[str, Any]], 
                    target_lang: str) -> bytes:
         """
         Orchestrates safe redaction-overlay hybrid rendering:
         1. Loads original PDF bytes in memory.
-        2. Groups paragraphs into flow columns and computes Y-reflow layout pass.
-        3. Applies transparent text redactions on original coordinates (fill=None).
-        4. Overlays translated text blocks at their reflowed/shifted coordinates.
-        5. Validates layout and returns final PDF bytes.
+        2. Computes Y-reflow layout pass using a Directed Acyclic Graph (DAG) flow solver.
+        3. Runs an iterative validation solver to reduce page-wide scale factors if overlaps are detected.
+        4. Applies transparent text redactions on original coordinates (fill=None).
+        5. Overlays translated text blocks at their reflowed/shifted coordinates.
+        6. Validates layout and returns final PDF bytes.
         """
         pdf_bytes_b64 = template_data.get("pdfBytes", "")
         doc_dict = template_data.get("document_model", {})
@@ -45,9 +126,22 @@ class PDFExporter:
         para_flat_indices = {}
         idx_counter = 0
         for p_idx, p_model in enumerate(document.pages):
+            # 1. Standard paragraphs
             for para in p_model.paragraphs:
-                para_flat_indices[para.paragraph_id] = idx_counter
-                idx_counter += 1
+                from .paragraph_builder import ParagraphBuilder
+                paragraph_text = ParagraphBuilder.generate_tagged_text(para).strip()
+                if paragraph_text:
+                    para_flat_indices[para.paragraph_id] = idx_counter
+                    idx_counter += 1
+            # 2. Table cell paragraphs
+            for table in p_model.tables:
+                for cell in table.cells:
+                    for para in cell.paragraphs:
+                        from .paragraph_builder import ParagraphBuilder
+                        paragraph_text = ParagraphBuilder.generate_tagged_text(para).strip()
+                        if paragraph_text:
+                            para_flat_indices[para.paragraph_id] = idx_counter
+                            idx_counter += 1
 
         for page_idx, page_model in enumerate(document.pages):
             if page_idx >= len(doc):
@@ -60,85 +154,92 @@ class PDFExporter:
                 print(f"Exporter: Skipping page {page_idx} (Preserve strategy)")
                 continue
 
-            # ─── LAYOUT PASS (PRE-REFLOW CALCULATION) ──────────────────────
-            # Group paragraphs on the page by columns based on horizontal projections
-            columns = []
-            # Sort paragraphs vertically top-to-bottom first
-            sorted_paras = sorted(page_model.paragraphs, key=lambda p: p.bbox[1])
-            
-            for para in sorted_paras:
-                placed = False
-                for col in columns:
-                    col_x1 = min(p.bbox[0] for p in col)
-                    col_x2 = max(p.bbox[2] for p in col)
-                    
-                    overlap = max(0, min(col_x2, para.bbox[2]) - max(col_x1, para.bbox[0]))
-                    min_w = min(col_x2 - col_x1, para.bbox[2] - para.bbox[0])
-                    
-                    if min_w > 0 and (overlap / min_w) > 0.4:
-                        col.append(para)
-                        placed = True
-                        break
-                if not placed:
-                    columns.append([para])
-
-            # Compute reflowed bounding boxes sequentially for each column
+            # ─── ITERATIVE VALIDATION SOLVER LOOP ─────────────────────────
+            # Adjusts page scale factors if text overlaps or overflows are detected.
+            page_scale_multiplier = 1.0
             page_layout_results = {}
-            for col in columns:
-                col.sort(key=lambda p: p.bbox[1])
-                y_shift = 0.0
+            validation_result = {"is_valid": True, "issues": []}
+
+            for attempt in range(3):
+                page_layout_results = {}
                 
-                for para in col:
-                    flat_idx = para_flat_indices[para.paragraph_id]
-                    translated_text = segment_map.get(para.paragraph_id)
-                    if not translated_text:
-                        translated_text = segment_map.get(str(flat_idx))
-                        
-                    if not translated_text:
-                        from .paragraph_builder import ParagraphBuilder
-                        translated_text = ParagraphBuilder.generate_tagged_text(para)
+                # Reflow standard page paragraphs using the DAG algorithm
+                std_results = self._reflow_paragraphs(
+                    page_model.paragraphs, segment_map, para_flat_indices, target_lang, page_scale_multiplier
+                )
+                page_layout_results.update(std_results)
+                
+                # Reflow table cell paragraphs inside each table cell independently
+                for table in page_model.tables:
+                    for cell in table.cells:
+                        cell_results = self._reflow_paragraphs(
+                            cell.paragraphs, segment_map, para_flat_indices, target_lang, page_scale_multiplier
+                        )
+                        page_layout_results.update(cell_results)
 
-                    is_fixed = self.layout_engine.is_fixed_region(para)
-                    original_bbox = para.bbox
-                    original_height = original_bbox[3] - original_bbox[1]
-                    
-                    # Compute shifted bounding box
-                    if not is_fixed:
-                        shifted_bbox = [
-                            original_bbox[0], 
-                            original_bbox[1] + y_shift, 
-                            original_bbox[2], 
-                            original_bbox[3] + y_shift
-                        ]
-                    else:
-                        shifted_bbox = list(original_bbox)
+                # Validate mock layout configuration
+                rendered_elements = []
+                for p_id, l_data in page_layout_results.items():
+                    l_res = l_data["layout_result"]
+                    orig_h = 0.0
+                    orig_para = None
+                    for p in page_model.paragraphs:
+                        if p.paragraph_id == p_id:
+                            orig_para = p
+                            break
+                    if not orig_para:
+                        for table in page_model.tables:
+                            for cell in table.cells:
+                                for p in cell.paragraphs:
+                                    if p.paragraph_id == p_id:
+                                        orig_para = p
+                                        break
+                                if orig_para:
+                                    break
+                            if orig_para:
+                                break
+                    if orig_para:
+                        orig_h = orig_para.bbox[3] - orig_para.bbox[1]
                         
-                    # Adapt layout (computes wraps & height needed under shifted bbox)
-                    temp_bbox = para.bbox
-                    para.bbox = shifted_bbox
-                    layout_result = self.layout_engine.adapt_layout(para, translated_text, target_lang)
-                    para.bbox = temp_bbox
-                    
-                    height_needed = layout_result["height_needed"]
-                    if not is_fixed:
-                        if height_needed > original_height:
-                            growth = height_needed - original_height
-                            y_shift += growth
-                            # Update bottom coordinate of shifted box
-                            shifted_bbox[3] = shifted_bbox[1] + height_needed + 4
+                    # Extract line height factor using regex from HTML
+                    lh_factor = 1.2
+                    lh_match = re.search(r'line-height:\s*([0-9.]+)', l_res.get("html", ""))
+                    if lh_match:
+                        lh_factor = float(lh_match.group(1))
 
-                    page_layout_results[para.paragraph_id] = {
-                        "layout_result": layout_result,
-                        "shifted_bbox": shifted_bbox
-                    }
+                    rendered_elements.append({
+                        "paragraph_id": p_id,
+                        "bbox": l_data["shifted_bbox"],
+                        "scale": l_res["scale"],
+                        "status": l_res.get("status", "Fits"),
+                        "original_height": orig_h,
+                        "height_needed": l_res.get("height_needed", orig_h),
+                        "line_height_factor": lh_factor
+                    })
+                    
+                validation_result = LayoutValidator.validate_page_layout(page_model, rendered_elements, target_lang)
+                
+                if validation_result["is_valid"]:
+                    break
+                else:
+                    # Scale down layout font scale by 10% and retry solver
+                    page_scale_multiplier -= 0.10
+                    print(f"Exporter: Overlap/degradation detected on page {page_idx}. Retrying with scale factor {round(page_scale_multiplier, 2)}...")
 
             # ─── STEP 1: SAFE REDACTION ON ORIGINAL COORDINATES ────────────
+            # Redact standard paragraphs
             for para in page_model.paragraphs:
                 page.add_redact_annot(fitz.Rect(para.bbox), fill=None)
+            # Redact table cell paragraphs
+            for table in page_model.tables:
+                for cell in table.cells:
+                    for para in cell.paragraphs:
+                        page.add_redact_annot(fitz.Rect(para.bbox), fill=None)
+                        
             page.apply_redactions(images=0)
 
             # ─── STEP 2: OVERLAY REFLOWED TRANSLATED TEXTS ────────────────
-            rendered_elements = []
+            # Overlay standard paragraphs
             for para in page_model.paragraphs:
                 layout_data = page_layout_results.get(para.paragraph_id)
                 if not layout_data:
@@ -150,16 +251,22 @@ class PDFExporter:
                 # Render using reflowed bounding box coordinates
                 layout_result["bbox"] = shifted_bbox
                 success = self.renderer.render_paragraph(page, para, layout_result, target_lang)
-                
-                if success:
-                    rendered_elements.append({
-                        "paragraph_id": para.paragraph_id,
-                        "bbox": shifted_bbox,
-                        "scale": layout_result["scale"]
-                    })
 
-            # ─── STEP 3: LAYOUT VALIDATION CHECK ──────────────────────────
-            validation_result = LayoutValidator.validate_page_layout(page_model, rendered_elements)
+            # Overlay table cell paragraphs
+            for table in page_model.tables:
+                for cell in table.cells:
+                    for para in cell.paragraphs:
+                        layout_data = page_layout_results.get(para.paragraph_id)
+                        if not layout_data:
+                            continue
+                            
+                        layout_result = layout_data["layout_result"]
+                        shifted_bbox = layout_data["shifted_bbox"]
+                        
+                        layout_result["bbox"] = shifted_bbox
+                        success = self.renderer.render_paragraph(page, para, layout_result, target_lang)
+
+            # Log layout warnings if the final iteration still degraded
             if not validation_result["is_valid"]:
                 print(f"Layout Validator Warning on page {page_idx}:")
                 for issue in validation_result["issues"]:

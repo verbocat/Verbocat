@@ -20,15 +20,26 @@ def run_parse(input_file: str, output_file: str = None, compress: bool = False):
     segments = []
     seg_idx = 0
     for page in doc_model.pages:
+        # 1. Standard page paragraphs
         for p in page.paragraphs:
             paragraph_text = ParagraphBuilder.generate_tagged_text(p).strip()
-            
             if paragraph_text:
                 segments.append({
-                    "id": p.paragraph_id,  # Stable UUID/geometry-hash
+                    "id": p.paragraph_id,
                     "source": paragraph_text,
                     "target": ""
                 })
+        # 2. Table cell paragraphs
+        for table in page.tables:
+            for cell in table.cells:
+                for p in cell.paragraphs:
+                    paragraph_text = ParagraphBuilder.generate_tagged_text(p).strip()
+                    if paragraph_text:
+                        segments.append({
+                            "id": p.paragraph_id,
+                            "source": paragraph_text,
+                            "target": ""
+                        })
                 
     # Template structure holding the original base64 bytes and layout details
     with open(input_file, "rb") as f:

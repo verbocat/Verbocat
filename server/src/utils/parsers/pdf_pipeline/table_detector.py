@@ -56,40 +56,25 @@ class TableDetector:
                         cell_bbox[1] - 2 <= block_center_y <= cell_bbox[3] + 2):
                         cell_blocks_data.append((b_idx, block))
                 
-                cell_text = ""
-                cell_paragraphs = []
-                
-                # Sort blocks inside cell vertically, then horizontally
-                cell_blocks_data.sort(key=lambda item: (item[1]["bbox"][1], item[1]["bbox"][0]))
-                
+                # Mark all blocks inside cell as consumed
                 for b_idx, block in cell_blocks_data:
                     consumed_block_indices.add(b_idx)
                     
-                    # Reconstruct a simple paragraph representation for the cell
-                    # (We will implement full paragraph construction in Phase 2, but we stub it here)
-                    lines_text = []
-                    for line in block.get("lines", []):
-                        line_text = "".join(span.get("text", "") for span in line.get("spans", []))
-                        lines_text.append(line_text)
-                    block_text = "\n".join(lines_text).strip()
-                    
-                    if block_text:
-                        if cell_text:
-                            cell_text += "\n\n" + block_text
-                        else:
-                            cell_text = block_text
-                            
+                cell_blocks = [item[1] for item in cell_blocks_data]
+                from .paragraph_builder import ParagraphBuilder
+                cell_paragraphs = ParagraphBuilder.rebuild_paragraphs(cell_blocks, page.rect.width, page.rect.height, page_idx)
+                
+                cell_text = "\n\n".join(ParagraphBuilder.generate_tagged_text(p) for p in cell_paragraphs)
+                
                 col_span = 1
                 row_span = 1
-                # In modern PyMuPDF, cells might have extra properties if it's an advanced object
-                # but we can fallback safely to 1.
                 
                 cells_list.append(TableCell(
                     bbox=cell_bbox,
                     text=cell_text,
                     col_span=col_span,
                     row_span=row_span,
-                    paragraphs=[] # Will be linked with actual paragraph objects in Phase 2
+                    paragraphs=cell_paragraphs
                 ))
             
             detected_tables.append(Table(

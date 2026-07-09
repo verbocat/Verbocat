@@ -56,7 +56,7 @@ class LayoutEngine:
         font_files_to_load = []
         
         for idx, span in enumerate(flat_spans):
-            mapped_path = self.font_manager.get_font_path(target_lang, span.font)
+            mapped_path = self.font_manager.get_font_path(target_lang, span.font, bold=span.bold)
             mapped_fonts[str(idx)] = {
                 "path": mapped_path,
                 "family": f"Font_{idx}",
@@ -68,20 +68,31 @@ class LayoutEngine:
             font_files_to_load.append(mapped_path)
 
         # Base / majority style for plain text parts that don't have span tags
-        base_style_key = "0"
-        if not mapped_fonts:
-            # Fallback if no spans
-            default_path = self.font_manager.get_font_path(target_lang)
-            mapped_fonts["default"] = {
-                "path": default_path,
-                "family": "Font_Default",
-                "size": 11.0 * font_scale,
-                "color_hex": "#000000",
-                "bold": False,
-                "italic": False
-            }
-            font_files_to_load.append(default_path)
-            base_style_key = "default"
+        majority_font = "Helvetica"
+        majority_size = 11.0
+        majority_color = 0
+        majority_bold = False
+        majority_italic = False
+        
+        if flat_spans:
+            style_counts = {}
+            for s in flat_spans:
+                style_key = (s.font, s.size, s.color, s.bold, s.italic)
+                style_counts[style_key] = style_counts.get(style_key, 0) + len(s.text)
+            maj = max(style_counts, key=style_counts.get)
+            majority_font, majority_size, majority_color, majority_bold, majority_italic = maj
+
+        base_style_path = self.font_manager.get_font_path(target_lang, majority_font, bold=majority_bold)
+        base_style_key = "default"
+        mapped_fonts[base_style_key] = {
+            "path": base_style_path,
+            "family": "Font_Base",
+            "size": majority_size * font_scale,
+            "color_hex": f"#{majority_color:06x}" if majority_color else "#000000",
+            "bold": majority_bold,
+            "italic": majority_italic
+        }
+        font_files_to_load.append(base_style_path)
 
         # Construct CSS `@font-face` blocks
         style_header = "<style>\n"
@@ -106,6 +117,8 @@ class LayoutEngine:
         for token in tokens:
             if not token:
                 continue
+            tag_match = re.match(r'^<(/?\d+>)', token)
+            # Wait, let's make sure it handles both <id> and </id>
             tag_match = re.match(r'^<(/?\d+)>$', token)
             if tag_match:
                 tag_content = tag_match.group(1)
@@ -136,13 +149,21 @@ class LayoutEngine:
                 font = fitz.Font(fontfile=font_files_to_load[0])
                 metrics_lh = font.ascender - font.descender
                 if metrics_lh > 0:
-                    # Give it a 15% spacing buffer to prevent overlapping matras
-                    line_height_factor = max(1.25, metrics_lh * 1.15)
+                    clean_lang = str(target_lang or "").lower().split("-")[0]
+                    if clean_lang in ["hi", "mr", "bn", "ta", "te", "gu", "pa", "kn", "ml"]:
+                        # Indic scripts need extra space to prevent overlapping matras (vowels)
+                        line_height_factor = max(1.45, metrics_lh * 1.20)
+                    else:
+                        line_height_factor = max(1.25, metrics_lh * 1.15)
             except Exception as e:
                 print("Error calculating font line height metrics:", e)
 
+        base_style_info = mapped_fonts[base_style_key]
+        base_weight = "bold" if base_style_info["bold"] else "normal"
+        base_italic = "italic" if base_style_info["italic"] else "normal"
+
         full_html = f"""{style_header}
-<div style="text-align: {alignment}; line-height: {line_height_factor}; margin: 0; padding: 0;">
+<div style="font-family: '{base_style_info["family"]}'; font-size: {base_style_info["size"]}pt; color: {base_style_info["color_hex"]}; font-weight: {base_weight}; font-style: {base_italic}; text-align: {alignment}; line-height: {line_height_factor}; margin: 0; padding: 0;">
   {html_body}
 </div>
 """
@@ -151,17 +172,40 @@ class LayoutEngine:
     def adapt_layout(self, paragraph: Paragraph, translated_text: str, target_lang: str) -> Dict[str, Any]:
         """
         Executes the Adaptation Hierarchy rules to layout the text:
-        1. Wrap text.
-        2. Expand bounding box if permitted (flowable).
-        3. Reduce font size within limits (min 70% of original, or 5pt).
-        4. Move to next page (if Reconstruction mode).
-        5. Warn.
+        1. For Flowable regions: keep font_scale = 1.0, wrap text, and expand height if needed.
+        2. For Fixed regions: try to fit within original height by scaling font down (min 0.70).
         """
         is_fixed = self.is_fixed_region(paragraph)
         bbox = list(paragraph.bbox)
         original_width = bbox[2] - bbox[0]
         original_height = bbox[3] - bbox[1]
         
+        # 1. Flowable regions: prefer scale = 1.0 and expand height if needed
+        if not is_fixed:
+            html, fonts = self.parse_translation_to_html(translated_text, paragraph, target_lang, 1.0)
+            import fitz
+            try:
+                archive_dir = os.path.dirname(fonts[0]) if fonts else None
+                archive = fitz.Archive(archive_dir) if archive_dir else None
+                story = fitz.Story(html, archive=archive)
+                status, rect_used = story.place(fitz.Rect(0, 0, original_width, 9999))
+                height_needed = rect_used[3] - rect_used[1]
+            except Exception as e:
+                print("LayoutEngine warning during placement testing for flowable:", e)
+                height_needed = original_height
+            
+            status_str = "Fits" if height_needed <= original_height else "Expanded"
+            expanded_bbox = [bbox[0], bbox[1], bbox[2], bbox[1] + max(height_needed, original_height)]
+            return {
+                "html": html,
+                "fonts": fonts,
+                "scale": 1.0,
+                "bbox": expanded_bbox,
+                "status": status_str,
+                "height_needed": height_needed
+            }
+            
+        # 2. Fixed regions: scale down font to fit original height
         font_scale = 1.0
         min_scale = 0.70
         step = 0.05
@@ -170,23 +214,17 @@ class LayoutEngine:
         best_fonts = []
         best_height_needed = original_height
         
-        # Adaptation Loop
         while font_scale >= min_scale:
             html, fonts = self.parse_translation_to_html(translated_text, paragraph, target_lang, font_scale)
-            
-            # Use PyMuPDF Story internally to test fitment
             import fitz
             try:
                 archive_dir = os.path.dirname(fonts[0]) if fonts else None
                 archive = fitz.Archive(archive_dir) if archive_dir else None
                 story = fitz.Story(html, archive=archive)
-                # Ensure the font dir is registered
-                # (Will be passed as archive in renderer.py)
                 status, rect_used = story.place(fitz.Rect(0, 0, original_width, 9999))
                 height_needed = rect_used[3] - rect_used[1]
                 
                 if height_needed <= original_height:
-                    # Fits perfectly!
                     return {
                         "html": html,
                         "fonts": fonts,
@@ -196,31 +234,15 @@ class LayoutEngine:
                         "height_needed": height_needed
                     }
                 
-                # Save the scale results that were closest to fitting
                 if font_scale == 1.0 or height_needed < best_height_needed:
                     best_html = html
                     best_fonts = fonts
                     best_height_needed = height_needed
-                    
             except Exception as e:
-                print("LayoutEngine warning during placement testing:", e)
+                print("LayoutEngine warning during placement testing for fixed:", e)
                 
             font_scale -= step
-
-        # Rule 2: If flowable and didn't fit, expand bounding box downward
-        if not is_fixed:
-            # Expand box to best height needed
-            expanded_bbox = [bbox[0], bbox[1], bbox[2], bbox[1] + best_height_needed + 4]
-            return {
-                "html": best_html,
-                "fonts": best_fonts,
-                "scale": min_scale,
-                "bbox": expanded_bbox,
-                "status": "Expanded",
-                "height_needed": best_height_needed
-            }
             
-        # If fixed, we must clamp to the original bounding box but return the best scaled font
         return {
             "html": best_html,
             "fonts": best_fonts,

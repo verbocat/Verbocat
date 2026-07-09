@@ -3,19 +3,21 @@ from .document_model import Page, Paragraph
 
 class LayoutValidator:
     @staticmethod
-    def validate_page_layout(page: Page, rendered_elements: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def validate_page_layout(page: Page, rendered_elements: List[Dict[str, Any]], target_lang: str = "hi") -> Dict[str, Any]:
         """
         Validates the geometric rendering layout of a page.
         Checks for:
         - Overlapping text regions
         - Text placed outside page boundaries
         - Excessive font scaling (under 70%)
+        - Clipped text in fixed paragraphs
+        - Insufficient line spacing (leading) for Indic languages
         """
         issues = []
         page_width = page.width
         page_height = page.height
         
-        # 1. Page boundary checks
+        # 1. Page boundary, scaling, clipping, and line spacing checks
         for elem in rendered_elements:
             bbox = elem.get("bbox", [0, 0, 0, 0])
             para_id = elem.get("paragraph_id", "unknown")
@@ -36,6 +38,28 @@ class LayoutValidator:
                     "id": para_id,
                     "message": f"Text font size scaled down excessively: {round(scale*100, 1)}%"
                 })
+
+            # Check for clipped text
+            status = elem.get("status", "Fits")
+            orig_h = elem.get("original_height", 0.0)
+            needed_h = elem.get("height_needed", 0.0)
+            if status == "OverflowWarning" or (needed_h > orig_h + 2.0 and orig_h > 0 and status == "OverflowWarning"):
+                issues.append({
+                    "type": "clipped_text",
+                    "id": para_id,
+                    "message": f"Text paragraph is clipped: original height {round(orig_h, 1)}pt, needed height {round(needed_h, 1)}pt"
+                })
+
+            # Check for insufficient line spacing
+            lh_factor = elem.get("line_height_factor", 1.2)
+            clean_lang = str(target_lang or "").lower().split("-")[0]
+            if clean_lang in ["hi", "mr", "bn", "ta", "te", "gu", "pa", "kn", "ml"]:
+                if lh_factor < 1.4:
+                    issues.append({
+                        "type": "insufficient_line_spacing",
+                        "id": para_id,
+                        "message": f"Insufficient line spacing ({lh_factor}) for Indic script in paragraph {para_id} (minimum recommended: 1.4)"
+                    })
 
         # 2. Overlap detection among rendered elements
         for i in range(len(rendered_elements)):

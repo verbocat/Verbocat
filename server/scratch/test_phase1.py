@@ -59,7 +59,7 @@ def run_verification():
         assert len(p1.paragraphs) >= 2, "Expected at least 2 paragraphs"
         print("P1 Para 1 text:", "".join(span.text for line in p1.paragraphs[0].lines for span in line.spans))
         print("P1 Para 1 ID:", p1.paragraphs[0].paragraph_id)
-        assert p1.paragraphs[0].paragraph_id.startswith("paragraph_0_"), "Paragraph ID is not stable/geometry-derived"
+        assert p1.paragraphs[0].paragraph_id.startswith("para-"), "Paragraph ID is not stable/geometry-derived"
         
         # 3. Page 2 Validation (Table Detection)
         p2 = doc_model.pages[1]

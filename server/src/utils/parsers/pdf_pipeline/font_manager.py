@@ -94,14 +94,14 @@ class FontManager:
     def __init__(self, font_dir: str = None):
         # We target the server's assets/fonts directory as our pre-shipped cache
         self.font_dir = font_dir if font_dir is not None else os.path.join(
-            os.path.dirname(__file__), "..", "..", "assets", "fonts"
+            os.path.dirname(__file__), "..", "..", "..", "assets", "fonts"
         )
         self.cache_dir = os.path.join(tempfile.gettempdir(), "matecat-fonts")
         
         # In-memory fonts buffer cache to prevent redundant disk I/O
         self._font_buffer_cache = {}
 
-    def get_font_path(self, target_lang: str, original_font_name: str = None) -> str:
+    def get_font_path(self, target_lang: str, original_font_name: str = None, bold: bool = False) -> str:
         """
         Maps unsupported fonts to compatible Unicode fonts, preferring:
         1. Original embedded/installed font (represented by original_font_name if valid).
@@ -112,42 +112,82 @@ class FontManager:
         clean_lang = str(target_lang or "").lower().split("-")[0]
         config = self.FONT_MAP.get(clean_lang, self.FONT_MAP["default"])
         
+        # Determine the name, url and system paths for bold vs regular
+        font_name = config["name"]
+        font_url = config["url"]
+        system_paths = config.get("system", [])
+        
+        if bold:
+            # Dynamically derive the bold names and URLs for Noto/Standard fonts
+            if "-Regular" in font_name:
+                font_name = font_name.replace("-Regular", "-Bold")
+            elif "Regular" in font_name:
+                font_name = font_name.replace("Regular", "Bold")
+                
+            if "-Regular" in font_url:
+                font_url = font_url.replace("-Regular", "-Bold")
+            elif "Regular" in font_url:
+                font_url = font_url.replace("Regular", "Bold")
+                
+            # Derive system bold files
+            bold_system_paths = []
+            for sys_path in system_paths:
+                base, ext = os.path.splitext(sys_path)
+                base_lower = base.lower()
+                if "nirmala" in base_lower:
+                    bold_system_paths.append(base + "b" + ext)
+                elif "arial" in base_lower:
+                    bold_system_paths.append(base + "bd" + ext)
+                elif "tahoma" in base_lower:
+                    bold_system_paths.append(base + "bd" + ext)
+                elif "msyh" in base_lower:
+                    bold_system_paths.append(base + "bd" + ext)
+                elif "segoeui" in base_lower:
+                    bold_system_paths.append(os.path.join(os.path.dirname(sys_path), "segoeuib.ttf"))
+                else:
+                    bold_system_paths.append(sys_path)
+            system_paths = bold_system_paths + system_paths # Prefer bold but fallback to regular
+
         # Standard fonts that already support Latin/some characters (Arial, Calibri, Times)
         is_latin = clean_lang in ["en", "es", "fr", "de", "it", "pt"]
         if is_latin and original_font_name:
             # Prefer system fonts for Latin
-            std_font_path = self._find_system_font(original_font_name)
+            std_font_path = self._find_system_font(original_font_name, bold)
             if std_font_path:
                 return std_font_path
 
         # Check pre-shipped bundled Noto fonts folder first
-        shipped_path = os.path.join(self.font_dir, config["name"])
+        shipped_path = os.path.join(self.font_dir, font_name)
         if os.path.exists(shipped_path):
             return shipped_path
 
         # Try mapping to known system font files
-        for sys_path in config.get("system", []):
+        for sys_path in system_paths:
             if os.path.exists(sys_path):
                 return sys_path
                 
         # Try finding the font in the temp cache directory
-        cache_path = os.path.join(self.cache_dir, config["name"])
+        cache_path = os.path.join(self.cache_dir, font_name)
         if os.path.exists(cache_path):
             return cache_path
 
         # Fallback to downloading
-        downloaded_path = self._download_font(config["name"], config["url"])
+        downloaded_path = self._download_font(font_name, font_url)
         if downloaded_path:
             return downloaded_path
 
         # Ultimate fallback: Noto Sans Devanagari (we know we always ship this)
-        ultimate_fallback = os.path.join(self.font_dir, "NotoSansDevanagari-Regular.ttf")
+        fallback_name = "NotoSansDevanagari-Bold.ttf" if bold else "NotoSansDevanagari-Regular.ttf"
+        ultimate_fallback = os.path.join(self.font_dir, fallback_name)
         if os.path.exists(ultimate_fallback):
             return ultimate_fallback
+        ultimate_fallback_reg = os.path.join(self.font_dir, "NotoSansDevanagari-Regular.ttf")
+        if os.path.exists(ultimate_fallback_reg):
+            return ultimate_fallback_reg
 
         raise FileNotFoundError(f"Could not resolve font for lang: {target_lang}")
 
-    def _find_system_font(self, font_name: str) -> Optional[str]:
+    def _find_system_font(self, font_name: str, bold: bool = False) -> Optional[str]:
         # Simple lookup helper for standard system fonts
         f = font_name.lower()
         sys_fonts_dir = "C:\\Windows\\Fonts"
@@ -155,12 +195,18 @@ class FontManager:
             return None
 
         if "arial" in f:
-            return os.path.join(sys_fonts_dir, "arial.ttf")
+            return os.path.join(sys_fonts_dir, "arialbd.ttf" if bold else "arial.ttf")
         if "calibri" in f:
+            if bold:
+                return os.path.join(sys_fonts_dir, "calibrib.ttf")
             return os.path.join(sys_fonts_dir, "calibri.ttf")
         if "times" in f:
+            if bold:
+                return os.path.join(sys_fonts_dir, "timesbd.ttf")
             return os.path.join(sys_fonts_dir, "times.ttf")
         if "courier" in f:
+            if bold:
+                return os.path.join(sys_fonts_dir, "courbd.ttf")
             return os.path.join(sys_fonts_dir, "cour.ttf")
         return None
 

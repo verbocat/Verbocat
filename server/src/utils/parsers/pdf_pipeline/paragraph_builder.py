@@ -6,6 +6,30 @@ from .document_model import Paragraph, Line, Span, Character
 
 class ParagraphBuilder:
     @staticmethod
+    def sanitise_text(text: str) -> str:
+        if not text:
+            return ""
+        substitutions = {
+            0xF0B7: '\u2022',
+            0xF076: '\u2022',
+            0xF0FC: '\u2713',
+            0xF0D8: '\u25B6',
+            0xF0DE: '\u25BA',
+            0xF028: '(',
+            0xF029: ')',
+        }
+        out = ""
+        for ch in text:
+            cp = ord(ch)
+            if cp in substitutions:
+                out += substitutions[cp]
+            elif 0xE000 <= cp <= 0xF8FF:
+                out += " "
+            else:
+                out += ch
+        return out
+
+    @staticmethod
     def rebuild_paragraphs(page_blocks: List[Dict[str, Any]], page_width: float, 
                            page_height: float, page_idx: int) -> List[Paragraph]:
         """
@@ -79,7 +103,7 @@ class ParagraphBuilder:
                     if "chars" in span:
                         for ch in span["chars"]:
                             chars_list.append(Character(
-                                text=ch.get("c", ""),
+                                text=ParagraphBuilder.sanitise_text(ch.get("c", "")),
                                 bbox=list(ch.get("bbox", [0, 0, 0, 0])),
                                 origin=list(ch.get("origin", [0, 0]))
                             ))
@@ -94,7 +118,7 @@ class ParagraphBuilder:
                         underline=False,
                         bbox=span_bbox,
                         origin=origin,
-                        text=span.get("text", ""),
+                        text=ParagraphBuilder.sanitise_text(span.get("text", "")),
                         chars=chars_list
                     )
                     spans_list.append(span_obj)
