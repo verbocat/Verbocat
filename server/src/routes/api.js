@@ -1009,7 +1009,7 @@ apiRouter.post("/documents/:id/auto-detect-context", checkAuth, async (request, 
     });
 
     // Fallback if not enough segments of >= 10 words
-    if (pool.length < 10) {
+    if (pool.length < 20) {
       pool = allSegments.filter(seg => {
         return countWords(seg.source_text) >= 1;
       });
@@ -1018,9 +1018,9 @@ apiRouter.post("/documents/:id/auto-detect-context", checkAuth, async (request, 
       pool = allSegments;
     }
 
-    // Select 10 random segments from the filtered pool
+    // Select 20 random segments from the filtered pool
     const shuffled = [...pool].sort(() => 0.5 - Math.random());
-    const selectedSamples = shuffled.slice(0, 10);
+    const selectedSamples = shuffled.slice(0, 20);
 
     // Combine source text and calculate word count
     const combinedText = selectedSamples.map(s => s.source_text).join("\n");
@@ -1050,32 +1050,41 @@ apiRouter.post("/documents/:id/auto-detect-context", checkAuth, async (request, 
     const FORMALITIES = ["Very Formal", "Formal", "Neutral", "Informal", "Very Informal"];
     const STRICTNESS = ["Flexible", "Balanced", "Strict"];
 
-    const prompt = `Analyze the following document sample text and classify it into standard translation context settings.
+    const prompt = `Analyze the following document sample text, reason about its vocabulary, style, structure, and intent, and classify it into standard translation context settings.
 
 Sample Text:
 """
 ${combinedText}
 """
 
-You MUST output ONLY a JSON object containing the following keys with one of their listed allowed values:
+Guidelines for classification:
+- Domain: Look for industry-specific terminology. Legal (contracts, NDAs, rights), Banking/Financial (loans, interest, credit, payments), Medical/Pharmaceutical (clinical, anatomical, drugs), Software/IT (UI strings, code variables, user guides, databases), Marketing (ads, persuasive calls, social media).
+- Content Type: UI Strings (short labels, buttons, settings), Contract (agreements, NDAs, legally binding clauses), Landing/Product Page (e-commerce listings, marketing page intros), Help Center/User Guide/Documentation (troubleshooting steps, structural instructions).
+- Target Audience: Developers/Administrators (APIs, command lines, system config), Patients/Caregivers (medical reports, clinical trials), Consumers (everyday buying, customer apps), Enterprise Buyers (corporate contracts, agreements).
+- Purpose: SEO (webpages optimizing for search engines), Comply (regulatory filings, legal terms), Generate Leads/Drive Purchases (persuasive product highlights), Inform/Educate (tutorials, guides).
+- Tone: Formal (polite, official, authoritative), Precise (exact definitions, technical descriptions), Persuasive (marketing focus, sales calls), Friendly/Casual (colloquial phrasing).
+- Formality: "Very Formal" or "Formal" (Legal contracts, official bank agreements), "Neutral" (Standard manuals, user guides), "Informal" or "Very Informal" (Friendly chats, colloquial apps).
+
+You MUST output ONLY a JSON object containing the following keys:
 {
-  "domain": (one of: ${JSON.stringify(DOMAINS)}),
-  "contentType": (one of: ${JSON.stringify(CONTENT_TYPES)}),
-  "audience": (one of: ${JSON.stringify(AUDIENCES)}),
-  "purpose": (one of: ${JSON.stringify(PURPOSES)}),
-  "tone": (one of: ${JSON.stringify(TONES)}),
-  "formality": (one of: ${JSON.stringify(FORMALITIES)}),
-  "terminologyStrictness": (one of: ${JSON.stringify(STRICTNESS)})
+  "reasoning": "A 1-2 sentence analysis of the document content style, industry, and structure",
+  "domain": (select the best matching option from: ${JSON.stringify(DOMAINS)}),
+  "contentType": (select the best matching option from: ${JSON.stringify(CONTENT_TYPES)}),
+  "audience": (select the best matching option from: ${JSON.stringify(AUDIENCES)}),
+  "purpose": (select the best matching option from: ${JSON.stringify(PURPOSES)}),
+  "tone": (select the best matching option from: ${JSON.stringify(TONES)}),
+  "formality": (select the best matching option from: ${JSON.stringify(FORMALITIES)}),
+  "terminologyStrictness": (select the best matching option from: ${JSON.stringify(STRICTNESS)})
 }
 
-Provide ONLY the valid JSON, with no markdown code blocks, explanations, or leading/trailing text. Ensure high accuracy and strict adherence to the allowed values list.`;
+Provide ONLY the raw JSON object, with no markdown formatting, explanations, or backticks. Ensure strict adherence to the allowed values list.`;
 
     const openAiResponse = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
         model: "gpt-4o-mini",
         messages: [
-          { role: "system", content: "You are a translation context detection system. You output strictly raw JSON matching the requested schema." },
+          { role: "system", content: "You are a translation context detection system. You analyze the text carefully, think step-by-step to fill the reasoning field, and then output strictly raw JSON matching the requested schema." },
           { role: "user", content: prompt }
         ],
         temperature: 0.1,
