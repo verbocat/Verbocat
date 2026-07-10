@@ -316,11 +316,15 @@ ${styleInstructions}
 
   let retryInstructions = "";
   if (contextSettings?.isRetry) {
+    let specificInfo = "";
+    if (contextSettings.failedTranslation) {
+      specificInfo = `
+  * The previous translation attempt returned: "${contextSettings.failedTranslation}"
+  * The previous attempt was rejected because: ${contextSettings.failureReason || "Quality check failure"}`;
+    }
     retryInstructions = `
-    
 - CRITICAL RETRY WARNING (FAILED PREVIOUS ATTEMPT):
-  * This is a retry of a previous translation attempt that failed or was rejected due to quality check or script purity violations.
-  * Common failures: leaving words untranslated/identical to source, or letting English/Latin characters leak into the target translation script.
+  * This is a retry of a previous translation attempt that failed or was rejected due to quality check or script purity violations.${specificInfo}
   * You MUST translate the text fully. Under no circumstances should you echo the source text verbatim or copy entire English phrases.
   * Ensure the output is strictly in the target language script (${targetName}) and vocabulary. Do NOT leave any Latin/English words in the translation, except for uppercase acronyms (e.g. GST, PAN, RBI) and section identifiers. Everything else must be translated or transliterated to ${targetName} script.`;
   }
@@ -345,6 +349,13 @@ const translateWithOpenAI = async (protectedTexts, target, source = DEFAULT_SOUR
   let userContext = "";
   if (contextSettings) {
     userContext = `\n\nREMINDER: Tone is ${contextSettings.tone || "General"} and Formality is ${contextSettings.formality || "Neutral"}. YOU MUST ADAPT YOUR VOCABULARY STRICTLY TO THIS STYLE!`;
+    if (contextSettings.isRetry) {
+      let specificInfo = "";
+      if (contextSettings.failedTranslation) {
+        specificInfo = `\n- The previous translation attempt was: "${contextSettings.failedTranslation}"\n- The previous attempt failed because: ${contextSettings.failureReason || "Quality check failure"}`;
+      }
+      userContext += `\n\nCRITICAL RETRY WARNING: A previous translation attempt for this segment was rejected due to translation quality or script purity violations.${specificInfo}\nYou MUST translate the text fully. Under no circumstances should you echo the source text verbatim or copy entire English phrases. Ensure the output is strictly in the target language script (${targetName}) and vocabulary. Do NOT leave any Latin/English words in the translation, except for uppercase acronyms (e.g. GST, PAN, RBI) and section identifiers. Everything else must be translated or transliterated to ${targetName} script.`;
+    }
   }
 
   const payload = {
@@ -648,10 +659,13 @@ const translateChunk = async (texts, target, source = DEFAULT_SOURCE_LANG, provi
 
       let translated = translatedArray[j];
       let currentProvider = provider;
+      let originalTranslation = translated;
+      let failureReason = null;
 
       // Validate script purity to prevent foreign scripts/Urdu leakage
       if (translated && !isScriptValidForLanguage(translated, target, text)) {
         console.warn(`[Translation Validation Failed] Unsafe script detected in translation for target "${target}": "${translated}"`);
+        failureReason = "Unsafe script/character leakage detected in target language script.";
         translated = null; // force fallback to source text
       }
 
@@ -661,6 +675,7 @@ const translateChunk = async (texts, target, source = DEFAULT_SOURCE_LANG, provi
         const cleanTrans = normalizeTranslatedText(translated).toLowerCase();
         if (cleanSrc === cleanTrans && !isLegitimatelyIdentical(text)) {
           console.warn(`[Translation Identical Check Failed] Provider ${currentProvider} returned source text verbatim for segment: "${text}"`);
+          failureReason = "The translation is identical to the English source text (untranslated).";
           translated = null; // force fallback to retry
         }
       }
@@ -668,6 +683,9 @@ const translateChunk = async (texts, target, source = DEFAULT_SOURCE_LANG, provi
       if (!translated || translated.trim() === "" || currentProvider === "Fallback") {
         translated = text;
         currentProvider = "Fallback";
+        if (!failureReason && (!translatedArray[j] || translatedArray[j].trim() === "")) {
+          failureReason = "The translation returned by the provider was empty or null.";
+        }
         setLimitedCache(failedCache, key, { createdAt: Date.now() }, FAILED_CACHE_LIMIT);
       }
 
@@ -677,7 +695,13 @@ const translateChunk = async (texts, target, source = DEFAULT_SOURCE_LANG, provi
         setLimitedCache(successCache, key, { translated: finalTranslation, provider: currentProvider }, SUCCESS_CACHE_LIMIT);
       }
 
-      results[originalIndex] = { source: text, translated: finalTranslation, provider: currentProvider };
+      results[originalIndex] = { 
+        source: text, 
+        translated: finalTranslation, 
+        provider: currentProvider,
+        originalTranslation: originalTranslation ? restoreProtectedTags(originalTranslation, tags) : null,
+        failureReason
+      };
     }
   }
 

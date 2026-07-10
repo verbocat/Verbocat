@@ -264,6 +264,8 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
   const adaptiveChunks = buildAdaptiveChunks(uniqueMissingSources);
   console.log(`[Translation] Splitting ${uniqueMissingSources.length} segments into ${adaptiveChunks.length} adaptive chunks`);
 
+  const failedAttemptsMap = new Map();
+
   for (const chunkSources of adaptiveChunks) {
     const chunkChars = chunkSources.reduce((sum, text) => sum + String(text || "").length, 0);
     const estimatedTokens = 1000 + Math.round(chunkChars / 4) * 2;
@@ -287,6 +289,13 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
         target_text: translatedText,
         provider: translated.provider
       };
+
+      if (translated.failureReason) {
+        failedAttemptsMap.set(source, {
+          translation: translated.originalTranslation,
+          reason: translated.failureReason
+        });
+      }
 
       if (isPersistableProvider(translated.provider)) {
         insertRows.push({
@@ -332,15 +341,20 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
 
   if (stillUntranslated.length > 0) {
     console.log(`[Translation Final Sweep] Retrying ${stillUntranslated.length} still-untranslated segments individually...`);
-    // Retry one-by-one for maximum reliability
     for (const source of stillUntranslated) {
       try {
         const estimatedTokens = 1000 + Math.round(String(source || "").length / 4) * 2;
+        const failedAttempt = failedAttemptsMap.get(source) || {};
         const retryResult = await enqueue({
           type: "translation",
           estimatedTokens,
           userId,
-          execute: () => translateChunk([source], target, actualSourceLang, providerState, { ...contextSettings, isRetry: true })
+          execute: () => translateChunk([source], target, actualSourceLang, providerState, { 
+            ...contextSettings, 
+            isRetry: true,
+            failedTranslation: failedAttempt.translation,
+            failureReason: failedAttempt.reason
+          })
         });
         if (retryResult && retryResult[0]) {
           const retried = retryResult[0];
@@ -367,6 +381,10 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
             }
           } else {
             // It failed retry. Let's split it into sentences and translate them!
+            const sentenceFailedAttempt = {
+              translation: retried.originalTranslation || retried.translated,
+              reason: retried.failureReason || "The translation was identical to English source text."
+            };
             const sentences = splitIntoSentences(source);
             if (sentences.length > 1) {
               console.log(`[Sentence Split Fallback] Segment failed direct retry. Splitting into ${sentences.length} sentences: "${source.substring(0, 60)}..."`);
@@ -376,7 +394,12 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
                   translatedSentences.push(sentence);
                   continue;
                 }
-                const sentenceResult = await translateChunk([sentence], target, actualSourceLang, providerState, { ...contextSettings, isRetry: true });
+                const sentenceResult = await translateChunk([sentence], target, actualSourceLang, providerState, { 
+                  ...contextSettings, 
+                  isRetry: true,
+                  failedTranslation: sentenceFailedAttempt.translation,
+                  failureReason: sentenceFailedAttempt.reason
+                });
                 if (sentenceResult && sentenceResult[0]) {
                   const sRetried = sentenceResult[0];
                   const sProcessed = postProcessTranslation(sentence, sRetried.translated, target);
