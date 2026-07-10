@@ -2872,11 +2872,6 @@ export default function App() {
                   </div>
                 )}
 
-                <div className="segment-table-header">
-                  <div className="segment-header-cell source-col">Source Text ({sourceLanguage.toUpperCase()})</div>
-                  <div className="segment-header-cell target-col">Target Text ({targetLanguage.toUpperCase()})</div>
-                </div>
-
                 <Virtuoso
                   ref={virtuosoRef}
                   style={{ flex: 1 }}
