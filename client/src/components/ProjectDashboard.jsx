@@ -1,18 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Folder, User, Calendar, Trash2, Search, Filter, Globe, BookOpen, Settings, ChevronRight } from "lucide-react";
 import { fetchProjects, createProject, deleteProject } from "../services/api";
-
-const LANGUAGES = [
-  { code: "hi", name: "Hindi" },
-  { code: "fr", name: "French" },
-  { code: "de", name: "German" },
-  { code: "ja", name: "Japanese" },
-  { code: "es", name: "Spanish" },
-  { code: "ar", name: "Arabic" },
-  { code: "pt-BR", name: "Portuguese (Brazil)" },
-  { code: "zh", name: "Chinese" },
-  { code: "it", name: "Italian" }
-];
+import { LANGUAGES } from "../constants/languages";
 
 export default function ProjectDashboard({ onOpenProject, showToast, theme }) {
   const [projects, setProjects] = useState([]);
@@ -27,6 +16,7 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme }) {
   const [description, setDescription] = useState("");
   const [sourceLang, setSourceLang] = useState("en");
   const [selectedLangs, setSelectedLangs] = useState([]);
+  const [showLangDropdown, setShowLangDropdown] = useState(false);
 
   useEffect(() => {
     loadProjects();
@@ -104,7 +94,7 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme }) {
   });
 
   return (
-    <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] p-8">
+    <div className="h-screen overflow-y-auto bg-[var(--bg-base)] text-[var(--text-primary)] p-8">
       {/* Dashboard Header */}
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
@@ -300,12 +290,11 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme }) {
                     onChange={(e) => setSourceLang(e.target.value)}
                     className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-all"
                   >
-                    <option value="en">English (US)</option>
-                    <option value="es">Spanish</option>
-                    <option value="fr">French</option>
-                    <option value="de">German</option>
-                    <option value="hi">Hindi</option>
-                    <option value="ja">Japanese</option>
+                    {LANGUAGES.map(lang => (
+                      <option key={lang.code} value={lang.code}>
+                        {lang.flag} {lang.name} ({lang.code.toUpperCase()})
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -324,25 +313,62 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme }) {
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">
+                <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
                   Target Language(s)
                 </label>
-                <div className="grid grid-cols-3 gap-2 bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl p-3.5 max-h-40 overflow-y-auto">
-                  {LANGUAGES.map((lang) => (
-                    <label 
-                      key={lang.code} 
-                      className="flex items-center gap-2 text-xs text-[var(--text-secondary)] hover:text-white cursor-pointer select-none py-1"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedLangs.includes(lang.code)}
-                        onChange={() => toggleLanguage(lang.code)}
-                        className="rounded border-[var(--border-subtle)] text-[var(--accent)] focus:ring-0"
-                      />
-                      {lang.name}
-                    </label>
-                  ))}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowLangDropdown(!showLangDropdown)}
+                    className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] flex justify-between items-center focus:outline-none focus:border-[var(--accent)] transition-all cursor-pointer"
+                  >
+                    <span className="truncate">
+                      {selectedLangs.length === 0 
+                        ? "Select target languages..." 
+                        : `${selectedLangs.length} language(s) selected`}
+                    </span>
+                    <span className="text-[var(--text-muted)] text-[10px]">▼</span>
+                  </button>
+
+                  {showLangDropdown && (
+                    <div className="absolute left-0 right-0 mt-1.5 bg-[var(--bg-surface)] border border-[var(--border-medium)] rounded-xl shadow-2xl z-50 max-h-52 overflow-y-auto p-2.5 animate-[fadeIn_0.1s_ease-out]">
+                      {LANGUAGES.map((lang) => (
+                        <label 
+                          key={lang.code} 
+                          className="flex items-center gap-2.5 text-xs text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-hover)] cursor-pointer select-none px-2.5 py-2 rounded-lg"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedLangs.includes(lang.code)}
+                            onChange={() => toggleLanguage(lang.code)}
+                            className="rounded border-[var(--border-subtle)] text-[var(--accent)] focus:ring-0"
+                          />
+                          <span>{lang.flag} {lang.name} ({lang.code.toUpperCase()})</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
                 </div>
+
+                {selectedLangs.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2.5 max-h-24 overflow-y-auto p-2 border border-[var(--border-subtle)]/50 rounded-xl bg-black/10">
+                    {selectedLangs.map(code => {
+                      const lang = LANGUAGES.find(l => l.code === code);
+                      return (
+                        <span key={code} className="inline-flex items-center gap-1 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                          {lang?.flag} {lang?.name}
+                          <button
+                            type="button"
+                            onClick={() => toggleLanguage(code)}
+                            className="hover:text-rose-400 font-bold ml-1 cursor-pointer"
+                          >
+                            &times;
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-[var(--border-subtle)]">

@@ -2290,8 +2290,7 @@ apiRouter.post("/projects/:projectId/upload", checkAuth, upload.single("file"), 
     // Process file extraction
     const result = await processUploadedFile(request.file);
     const documentId = result.fileId;
-    const fileStats = fs.statSync(request.file.path || `uploads/${request.file.filename}`);
-    const fileSize = fileStats.size;
+    const fileSize = request.file.size || 0;
 
     // Calculate word count
     let wordCount = 0;

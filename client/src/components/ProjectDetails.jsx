@@ -8,18 +8,7 @@ import {
   fetchProjectDetails, uploadFileToProject, updateProjectLanguages, 
   controlJobQueue, downloadJobFile, downloadLanguageZip, downloadProjectZip, fetchProjectAnalytics 
 } from "../services/api";
-
-const AVAILABLE_LANGUAGES = [
-  { code: "hi", name: "Hindi" },
-  { code: "fr", name: "French" },
-  { code: "de", name: "German" },
-  { code: "ja", name: "Japanese" },
-  { code: "es", name: "Spanish" },
-  { code: "ar", name: "Arabic" },
-  { code: "pt-BR", name: "Portuguese (Brazil)" },
-  { code: "zh", name: "Chinese" },
-  { code: "it", name: "Italian" }
-];
+import { LANGUAGES } from "../constants/languages";
 
 export default function ProjectDetails({ projectId, onBack, onOpenEditor, showToast, theme, token }) {
   const [project, setProject] = useState(null);
@@ -85,19 +74,21 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
   };
 
   const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const filesList = Array.from(e.target.files);
+    if (filesList.length === 0) return;
 
     setIsUploading(true);
-    showToast("Processing file segments...");
+    showToast(`Processing ${filesList.length} file(s)...`);
     try {
-      await uploadFileToProject(projectId, file);
-      showToast("File uploaded and segments parsed successfully!");
+      for (const file of filesList) {
+        await uploadFileToProject(projectId, file);
+      }
+      showToast("All files uploaded and segments parsed successfully!");
       loadProjectDetails();
       loadAnalytics();
     } catch (err) {
       console.error(err);
-      showToast(err.response?.data?.error || "Failed to upload file.", "error");
+      showToast(err.response?.data?.error || "Failed to upload one or more files.", "error");
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -184,7 +175,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
   };
 
   const getLanguageName = (code) => {
-    const found = AVAILABLE_LANGUAGES.find(l => l.code === code);
+    const found = LANGUAGES.find(l => l.code === code);
     return found ? found.name : code.toUpperCase();
   };
 
@@ -198,7 +189,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
   }
 
   return (
-    <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] p-8">
+    <div className="h-screen overflow-y-auto bg-[var(--bg-base)] text-[var(--text-primary)] p-8">
       {/* Back Header */}
       <div className="max-w-7xl mx-auto mb-6">
         <button
@@ -249,6 +240,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
           
           <input
             type="file"
+            multiple
             ref={fileInputRef}
             onChange={handleFileUpload}
             style={{ display: "none" }}
@@ -274,7 +266,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
 
       {/* Analytics widgets */}
       {analytics && (
-        <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] p-4 rounded-2xl flex flex-col justify-between">
             <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] tracking-wider">Total Word Count</span>
             <div className="flex items-baseline gap-2 mt-2">
@@ -294,13 +286,6 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
             <div className="flex items-baseline gap-2 mt-2">
               <span className="text-xl font-bold">{analytics.completedJobs} / {analytics.totalJobs}</span>
               <span className="text-[10px] text-[var(--text-muted)]">({analytics.totalJobs > 0 ? Math.round((analytics.completedJobs / analytics.totalJobs) * 100) : 0}%)</span>
-            </div>
-          </div>
-          <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] p-4 rounded-2xl flex flex-col justify-between">
-            <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] tracking-wider">Estimated Savings</span>
-            <div className="flex items-baseline gap-2 mt-2">
-              <span className="text-xl font-bold text-indigo-400">{analytics.estimatedSavings}</span>
-              <span className="text-[10px] text-[var(--text-muted)]">via TM match</span>
             </div>
           </div>
         </div>
@@ -512,10 +497,10 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
               </p>
 
               <div className="grid grid-cols-2 gap-2.5 bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl p-4 max-h-56 overflow-y-auto">
-                {AVAILABLE_LANGUAGES.map((lang) => (
+                {LANGUAGES.map((lang) => (
                   <label 
                     key={lang.code} 
-                    className="flex items-center gap-2 text-xs text-[var(--text-secondary)] hover:text-white cursor-pointer select-none py-1.5"
+                    className="flex items-center gap-2.5 text-xs text-[var(--text-secondary)] hover:text-white cursor-pointer select-none py-1.5"
                   >
                     <input
                       type="checkbox"
@@ -527,7 +512,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                       }}
                       className="rounded border-[var(--border-subtle)] text-[var(--accent)] focus:ring-0"
                     />
-                    {lang.name}
+                    <span>{lang.flag} {lang.name} ({lang.code.toUpperCase()})</span>
                   </label>
                 ))}
               </div>
