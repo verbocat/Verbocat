@@ -375,6 +375,51 @@ function handleDatabaseError(error, response, fallbackMsg) {
   return false;
 }
 
+// Helper to log project activity
+async function logProjectActivity(projectId, eventType, details, userName) {
+  try {
+    const { error } = await supabase
+      .from("project_activities")
+      .insert({
+        project_id: projectId,
+        event_type: eventType,
+        details: details || {},
+        user_name: userName || "System"
+      });
+    
+    if (error) {
+      // Fallback: append to project settings JSONB
+      if (error.code === 'PGRST205' || error.message.includes("project_activities") || error.message.includes("does not exist")) {
+        const { data: project } = await supabase
+          .from("projects")
+          .select("settings")
+          .eq("id", projectId)
+          .single();
+        if (project) {
+          const currentSettings = project.settings || {};
+          const activities = currentSettings.activities || [];
+          activities.unshift({
+            id: Math.random().toString(36).substr(2, 9),
+            project_id: projectId,
+            event_type: eventType,
+            details: details || {},
+            user_name: userName || "System",
+            created_at: new Date().toISOString()
+          });
+          await supabase
+            .from("projects")
+            .update({ settings: { ...currentSettings, activities } })
+            .eq("id", projectId);
+        }
+      } else {
+        console.error("Failed to log activity:", error);
+      }
+    }
+  } catch (err) {
+    console.error("Error logging project activity:", err);
+  }
+}
+
 // Helper helper to check document access permission
 async function verifyDocumentAccess(request, response, requiredPermission = "read") {
   const documentId = request.params.id;
@@ -610,6 +655,123 @@ apiRouter.delete("/documents/:id", checkAuth, async (request, response) => {
     response.json({ message: "Project deleted successfully." });
   } catch (err) {
     console.error("Error in delete document:", err);
+    response.status(500).json({ error: "Server error." });
+  }
+});
+
+// Rename Document
+apiRouter.put("/documents/:id/rename", checkAuth, async (request, response) => {
+  try {
+    const { id } = request.params;
+    const { name } = request.body;
+    if (!name) return response.status(400).json({ error: "Name is required" });
+
+    const doc = await verifyDocumentAccess(request, response, "write");
+    if (!doc) return;
+
+    const { error: updateError } = await supabase
+      .from("documents")
+      .update({ name, updated_at: new Date().toISOString() })
+      .eq("id", id);
+
+    if (updateError) {
+      return response.status(500).json({ error: updateError.message });
+    }
+
+    if (doc.project_id) {
+      await logProjectActivity(doc.project_id, "context_updated", {
+        action: "document_renamed",
+        oldName: doc.name,
+        newName: name
+      }, request.user.email);
+    }
+
+    response.json({ success: true, name });
+  } catch (err) {
+    console.error("Error in rename document:", err);
+    response.status(500).json({ error: "Server error." });
+  }
+});
+
+// Duplicate Document
+apiRouter.post("/documents/:id/duplicate", checkAuth, async (request, response) => {
+  try {
+    const { id } = request.params;
+    const doc = await verifyDocumentAccess(request, response, "write");
+    if (!doc) return;
+
+    const { v4: uuidv4 } = require("uuid");
+    const newDocId = uuidv4 ? uuidv4() : Math.random().toString(36).substr(2, 9);
+    const extIndex = doc.name.lastIndexOf(".");
+    const baseName = extIndex !== -1 ? doc.name.substring(0, extIndex) : doc.name;
+    const ext = extIndex !== -1 ? doc.name.substring(extIndex) : "";
+    const newDocName = `${baseName} (Copy)${ext}`;
+
+    // 1. Insert new document record
+    const { error: docError } = await supabase
+      .from("documents")
+      .insert({
+        id: newDocId,
+        name: newDocName,
+        owner_id: request.user.id,
+        file_id: doc.file_id,
+        source_lang: doc.source_lang,
+        project_id: doc.project_id,
+        word_count: doc.word_count,
+        file_size: doc.file_size,
+        status: doc.status
+      });
+
+    if (docError) {
+      return response.status(500).json({ error: docError.message });
+    }
+
+    // 2. Fetch all segments of the original document
+    const segments = await fetchAllSegments(id, "*", null); // all target languages and templates
+    if (segments && segments.length > 0) {
+      const segmentInserts = segments.map(seg => ({
+        document_id: newDocId,
+        target_lang: seg.target_lang,
+        segment_index: seg.segment_index,
+        source_text: seg.source_text,
+        target_text: seg.target_text,
+        status: seg.status,
+        context_jira: seg.context_jira,
+        context_description: seg.context_description
+      }));
+      await supabase.from("document_segments").insert(segmentInserts);
+    }
+
+    // 3. Fetch and duplicate translation jobs
+    const { data: jobs } = await supabase
+      .from("translation_jobs")
+      .select("*")
+      .eq("document_id", id);
+
+    if (jobs && jobs.length > 0) {
+      const jobInserts = jobs.map(job => ({
+        project_id: job.project_id,
+        document_id: newDocId,
+        target_lang: job.target_lang,
+        status: job.status,
+        progress: job.progress,
+        word_count: job.word_count,
+        error_message: job.error_message
+      }));
+      await supabase.from("translation_jobs").insert(jobInserts);
+    }
+
+    if (doc.project_id) {
+      await logProjectActivity(doc.project_id, "file_uploaded", {
+        fileName: newDocName,
+        action: "document_duplicated",
+        originalName: doc.name
+      }, request.user.email);
+    }
+
+    response.json({ success: true, newDocId, newDocName });
+  } catch (err) {
+    console.error("Error in duplicate document:", err);
     response.status(500).json({ error: "Server error." });
   }
 });
@@ -2270,6 +2432,139 @@ apiRouter.delete("/projects/:projectId", checkAuth, async (request, response) =>
   }
 });
 
+// 4a. Update Project Details & Settings
+apiRouter.put("/projects/:projectId", checkAuth, async (request, response) => {
+  try {
+    const { projectId } = request.params;
+    const { name, client, status, description, sourceLanguage, targetLanguages, settings } = request.body;
+
+    // Check project ownership
+    const { data: existingProject, error: checkErr } = await supabase
+      .from("projects")
+      .select("*")
+      .eq("id", projectId)
+      .eq("owner_id", request.user.id)
+      .single();
+
+    if (checkErr || !existingProject) {
+      return response.status(404).json({ error: "Project not found or unauthorized." });
+    }
+
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (client !== undefined) updateData.client = client;
+    if (status !== undefined) updateData.status = status;
+    if (description !== undefined) updateData.description = description;
+    if (sourceLanguage !== undefined) updateData.source_lang = sourceLanguage;
+    if (targetLanguages !== undefined) updateData.target_languages = targetLanguages;
+    if (settings !== undefined) {
+      updateData.settings = { ...existingProject.settings, ...settings };
+    }
+    updateData.updated_at = new Date().toISOString();
+
+    // Check what changed to log appropriate activities
+    if (settings !== undefined || name !== undefined || client !== undefined || status !== undefined) {
+      const oldSettings = existingProject.settings || {};
+      const newSettings = settings || {};
+      
+      const promptChanged = newSettings.translationPrompt !== oldSettings.translationPrompt ||
+                            newSettings.aiModel !== oldSettings.aiModel ||
+                            newSettings.autoSave !== oldSettings.autoSave ||
+                            newSettings.notifications !== oldSettings.notifications;
+      
+      const glossaryChanged = JSON.stringify(newSettings.glossary || []) !== JSON.stringify(oldSettings.glossary || []) ||
+                              JSON.stringify(newSettings.glossaryMap || {}) !== JSON.stringify(oldSettings.glossaryMap || {});
+      
+      if (promptChanged) {
+        await logProjectActivity(projectId, "context_updated", {
+          aiModel: newSettings.aiModel || oldSettings.aiModel,
+          autoSave: newSettings.autoSave !== undefined ? newSettings.autoSave : oldSettings.autoSave,
+          notifications: newSettings.notifications !== undefined ? newSettings.notifications : oldSettings.notifications
+        }, request.user.email);
+      }
+      
+      if (glossaryChanged) {
+        await logProjectActivity(projectId, "glossary_modified", {
+          glossarySize: (newSettings.glossary || []).length || Object.keys(newSettings.glossaryMap || {}).length
+        }, request.user.email);
+      }
+    }
+
+    const { data: updatedProject, error: updateErr } = await supabase
+      .from("projects")
+      .update(updateData)
+      .eq("id", projectId)
+      .select()
+      .single();
+
+    if (updateErr) {
+      // Graceful fallback for status column missing
+      if (updateErr.code === '42703' && status !== undefined) {
+        const fallbackSettings = { ...existingProject.settings, ...settings, status };
+        delete updateData.status;
+        updateData.settings = fallbackSettings;
+        const { data: updatedFallback, error: fallbackErr } = await supabase
+          .from("projects")
+          .update(updateData)
+          .eq("id", projectId)
+          .select()
+          .single();
+        
+        if (fallbackErr) {
+          return response.status(500).json({ error: fallbackErr.message });
+        }
+        return response.json(updatedFallback);
+      }
+      return response.status(500).json({ error: updateErr.message });
+    }
+
+    response.json(updatedProject);
+  } catch (err) {
+    console.error(err);
+    response.status(500).json({ error: "Failed to update project details." });
+  }
+});
+
+// 4b. Get Project Activity Timeline
+apiRouter.get("/projects/:projectId/activities", checkAuth, async (request, response) => {
+  try {
+    const { projectId } = request.params;
+
+    // Check project ownership
+    const { data: project, error: projErr } = await supabase
+      .from("projects")
+      .select("id, settings")
+      .eq("id", projectId)
+      .eq("owner_id", request.user.id)
+      .single();
+
+    if (projErr || !project) {
+      return response.status(404).json({ error: "Project not found or unauthorized." });
+    }
+
+    // Try fetching from project_activities table
+    const { data: activities, error: actErr } = await supabase
+      .from("project_activities")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: false });
+
+    if (actErr) {
+      // Fallback to project settings activities array if database table is missing
+      if (actErr.code === 'PGRST205' || actErr.message.includes("project_activities") || actErr.message.includes("does not exist")) {
+        const settingsActivities = project.settings?.activities || [];
+        return response.json(settingsActivities);
+      }
+      return response.status(500).json({ error: actErr.message });
+    }
+
+    response.json(activities || []);
+  } catch (err) {
+    console.error(err);
+    response.status(500).json({ error: "Failed to fetch project activities." });
+  }
+});
+
 // 5. Upload File to a Project
 apiRouter.post("/projects/:projectId/upload", checkAuth, upload.single("file"), async (request, response) => {
   try {
@@ -2370,6 +2665,12 @@ apiRouter.post("/projects/:projectId/upload", checkAuth, upload.single("file"), 
         await supabase.from("document_segments").insert(targetSegments);
       }
     }
+
+    await logProjectActivity(projectId, "file_uploaded", {
+      fileName: result.originalName || "Untitled Document",
+      wordCount,
+      fileSize
+    }, request.user.email);
 
     response.json({
       type: result.type,
@@ -2723,7 +3024,7 @@ apiRouter.post("/jobs/:jobId/:action", checkAuth, async (request, response) => {
 
     const { data: job, error: fetchErr } = await supabase
       .from("translation_jobs")
-      .select("id, status, document_id, progress")
+      .select("id, status, document_id, progress, project_id, target_lang, documents(name)")
       .eq("id", jobId)
       .single();
 
@@ -2747,6 +3048,14 @@ apiRouter.post("/jobs/:jobId/:action", checkAuth, async (request, response) => {
       .eq("id", jobId);
 
     broadcastJobStatus(jobId, job.document_id, newStatus, job.progress);
+
+    if (newStatus === "pending") {
+      await logProjectActivity(job.project_id, "translation_started", {
+        jobId,
+        fileName: job.documents?.name || "Document",
+        targetLang: job.target_lang
+      }, request.user.email);
+    }
 
     response.json({ success: true, status: newStatus });
   } catch (err) {
@@ -2784,6 +3093,12 @@ apiRouter.get("/jobs/:jobId/download", checkAuth, async (request, response) => {
     const ext = extIndex !== -1 ? doc.name.substring(extIndex) : ".html";
 
     const buffer = await exportHtml(doc.file_id, segmentsList, ext, job.target_lang);
+
+    await logProjectActivity(job.project_id, "file_downloaded", {
+      fileName: `${doc.name.replace(/\.[^/.]+$/, "")}_${job.target_lang}${ext}`,
+      documentId: job.document_id,
+      targetLang: job.target_lang
+    }, request.user.email);
 
     response.setHeader("Content-Disposition", `attachment; filename="${doc.name.replace(/\.[^/.]+$/, "")}_${job.target_lang}${ext}"`);
     response.setHeader("Content-Type", "application/octet-stream");
@@ -2828,6 +3143,12 @@ apiRouter.get("/projects/:projectId/download/lang/:lang", checkAuth, async (requ
     }
 
     const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
+
+    await logProjectActivity(projectId, "file_downloaded", {
+      packageName: `project_${projectId}_${lang}.zip`,
+      language: lang
+    }, request.user.email);
+
     response.setHeader("Content-Disposition", `attachment; filename="project_${projectId}_${lang}.zip"`);
     response.setHeader("Content-Type", "application/zip");
     response.send(zipBuffer);
@@ -2872,6 +3193,12 @@ apiRouter.get("/projects/:projectId/download/all", checkAuth, async (request, re
     }
 
     const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
+
+    await logProjectActivity(projectId, "file_downloaded", {
+      packageName: `project_${projectId}_all.zip`,
+      allLanguages: true
+    }, request.user.email);
+
     response.setHeader("Content-Disposition", `attachment; filename="project_${projectId}_all.zip"`);
     response.setHeader("Content-Type", "application/zip");
     response.send(zipBuffer);

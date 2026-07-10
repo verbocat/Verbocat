@@ -2,6 +2,41 @@ const { supabase, fetchAllSegments } = require("../config/supabase");
 const { translateSegments } = require("./translationService");
 const { getIo } = require("./socket");
 
+async function logJobQueueActivity(projectId, eventType, details, userName = "AI Translator") {
+  try {
+    const { error } = await supabase
+      .from("project_activities")
+      .insert({
+        project_id: projectId,
+        event_type: eventType,
+        details: details || {},
+        user_name: userName
+      });
+    if (error) {
+      // Fallback: append to project settings JSONB
+      if (error.code === 'PGRST205' || error.message.includes("project_activities") || error.message.includes("does not exist")) {
+        const { data: project } = await supabase.from("projects").select("settings").eq("id", projectId).single();
+        if (project) {
+          const currentSettings = project.settings || {};
+          const activities = currentSettings.activities || [];
+          activities.unshift({
+            id: Math.random().toString(36).substr(2, 9),
+            project_id: projectId,
+            event_type: eventType,
+            details: details || {},
+            user_name: userName,
+            created_at: new Date().toISOString()
+          });
+          await supabase.from("projects").update({ settings: { ...currentSettings, activities } }).eq("id", projectId);
+        }
+      }
+    }
+  } catch (e) {
+    console.error("Failed to log activity in queue worker:", e);
+  }
+}
+
+
 let workerInterval = null;
 let isProcessing = false;
 
@@ -253,6 +288,26 @@ async function updateJobStatus(jobId, status, extraFields = {}) {
   if (error) {
     console.error(`[JobQueue] Failed to update job status for ${jobId}:`, error);
     return;
+  }
+
+  if (status === "completed" && data) {
+    try {
+      let docName = "Document";
+      const { data: doc } = await supabase
+        .from("documents")
+        .select("name")
+        .eq("id", data.document_id)
+        .single();
+      if (doc) docName = doc.name;
+
+      await logJobQueueActivity(data.project_id, "translation_completed", {
+        jobId,
+        fileName: docName,
+        targetLang: data.target_lang
+      });
+    } catch (logErr) {
+      console.error("[JobQueue] Error logging translation completion:", logErr);
+    }
   }
 
   broadcastJobStatus(jobId, data.document_id, status, data.progress, data.error_message);

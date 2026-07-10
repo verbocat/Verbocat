@@ -447,6 +447,26 @@ export const translateJobSegmentContextByPath = async (documentId, lang, segment
   return response.data;
 };
 
+export const updateProjectDetails = async (projectId, updatedData) => {
+  const response = await api.put(`/api/projects/${projectId}`, updatedData);
+  return response.data;
+};
+
+export const fetchProjectActivities = async (projectId) => {
+  const response = await api.get(`/api/projects/${projectId}/activities`);
+  return response.data;
+};
+
+export const renameDocument = async (documentId, name) => {
+  const response = await api.put(`/api/documents/${documentId}/rename`, { name });
+  return response.data;
+};
+
+export const duplicateDocument = async (documentId) => {
+  const response = await api.post(`/api/documents/${documentId}/duplicate`);
+  return response.data;
+};
+
 
 
 
