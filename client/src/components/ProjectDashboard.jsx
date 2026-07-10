@@ -16,7 +16,7 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme }) {
   const [description, setDescription] = useState("");
   const [sourceLang, setSourceLang] = useState("en");
   const [selectedLangs, setSelectedLangs] = useState([]);
-  const [showLangDropdown, setShowLangDropdown] = useState(false);
+  const [langSearch, setLangSearch] = useState("");
 
   useEffect(() => {
     loadProjects();
@@ -241,137 +241,152 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme }) {
 
       {/* Create Project Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-medium)] rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl animate-[fadeIn_0.15s_ease-out]">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-[var(--bg-surface)] border border-[var(--border-medium)] rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl animate-[fadeIn_0.15s_ease-out]">
             <div className="p-6 border-b border-[var(--border-subtle)] flex justify-between items-center bg-[var(--bg-panel)]">
-              <h2 className="text-sm font-bold text-[var(--text-primary)]">Create Localization Project</h2>
+              <div>
+                <h2 className="text-sm font-bold text-[var(--text-primary)]">Create Localization Project</h2>
+                <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">Initialize a collaborative space for document translations</p>
+              </div>
               <button 
                 onClick={() => setShowCreateModal(false)}
-                className="text-[var(--text-secondary)] hover:text-white cursor-pointer"
+                className="text-[var(--text-secondary)] hover:text-white cursor-pointer text-xl font-bold"
               >
                 &times;
               </button>
             </div>
             
-            <form onSubmit={handleCreateProject} className="p-6 space-y-4">
-              <div>
-                <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
-                  Project Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Mobile Application v2"
-                  value={projName}
-                  onChange={(e) => setProjName(e.target.value)}
-                  className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-all"
-                />
-              </div>
+            <form onSubmit={handleCreateProject}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6">
+                
+                {/* Left Column: Metadata */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
+                      Project Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Mobile Application v2"
+                      value={projName}
+                      onChange={(e) => setProjName(e.target.value)}
+                      className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-all"
+                    />
+                  </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
-                    Client Name (Optional)
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
+                        Client Name (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. VerboLabs"
+                        value={clientName}
+                        onChange={(e) => setClientName(e.target.value)}
+                        className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
+                        Source Language
+                      </label>
+                      <select
+                        value={sourceLang}
+                        onChange={(e) => setSourceLang(e.target.value)}
+                        className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-all"
+                      >
+                        {LANGUAGES.map(lang => (
+                          <option key={lang.code} value={lang.code}>
+                            {lang.flag} {lang.name} ({lang.code.toUpperCase()})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
+                      Description
+                    </label>
+                    <textarea
+                      placeholder="Describe the scope, terminology rules, or client specifics..."
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      rows={5}
+                      className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-all resize-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Right Column: Searchable Target Languages Panel */}
+                <div className="flex flex-col h-full min-h-[300px]">
+                  <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
+                    Target Language(s) ({selectedLangs.length} selected)
                   </label>
+                  
                   <input
                     type="text"
-                    placeholder="e.g. VerboLabs"
-                    value={clientName}
-                    onChange={(e) => setClientName(e.target.value)}
-                    className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-all"
+                    placeholder="Search languages..."
+                    value={langSearch}
+                    onChange={(e) => setLangSearch(e.target.value)}
+                    className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] mb-3 focus:outline-none focus:border-[var(--accent)] transition-all"
                   />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
-                    Source Language
-                  </label>
-                  <select
-                    value={sourceLang}
-                    onChange={(e) => setSourceLang(e.target.value)}
-                    className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-all"
-                  >
-                    {LANGUAGES.map(lang => (
-                      <option key={lang.code} value={lang.code}>
-                        {lang.flag} {lang.name} ({lang.code.toUpperCase()})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
-                  Description
-                </label>
-                <textarea
-                  placeholder="Describe the scope, terminology rules, or client specifics..."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={3}
-                  className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-all resize-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
-                  Target Language(s)
-                </label>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setShowLangDropdown(!showLangDropdown)}
-                    className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] flex justify-between items-center focus:outline-none focus:border-[var(--accent)] transition-all cursor-pointer"
-                  >
-                    <span className="truncate">
-                      {selectedLangs.length === 0 
-                        ? "Select target languages..." 
-                        : `${selectedLangs.length} language(s) selected`}
-                    </span>
-                    <span className="text-[var(--text-muted)] text-[10px]">▼</span>
-                  </button>
-
-                  {showLangDropdown && (
-                    <div className="absolute left-0 right-0 mt-1.5 bg-[var(--bg-surface)] border border-[var(--border-medium)] rounded-xl shadow-2xl z-50 max-h-52 overflow-y-auto p-2.5 animate-[fadeIn_0.1s_ease-out]">
-                      {LANGUAGES.map((lang) => (
-                        <label 
-                          key={lang.code} 
-                          className="flex items-center gap-2.5 text-xs text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-hover)] cursor-pointer select-none px-2.5 py-2 rounded-lg"
+                  
+                  <div className="flex-1 min-h-0 bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl p-3 overflow-y-auto grid grid-cols-2 gap-2 max-h-56">
+                    {LANGUAGES.filter(lang => 
+                      lang.name.toLowerCase().includes(langSearch.toLowerCase()) || 
+                      lang.code.toLowerCase().includes(langSearch.toLowerCase())
+                    ).map((lang) => {
+                      const isSelected = selectedLangs.includes(lang.code);
+                      return (
+                        <button
+                          key={lang.code}
+                          type="button"
+                          onClick={() => toggleLanguage(lang.code)}
+                          className={`flex items-center justify-between text-xs p-2.5 rounded-lg border transition-all cursor-pointer ${
+                            isSelected 
+                              ? "bg-indigo-500/20 border-indigo-500 text-indigo-300 font-semibold" 
+                              : "bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-white hover:border-zinc-700"
+                          }`}
                         >
-                          <input
-                            type="checkbox"
-                            checked={selectedLangs.includes(lang.code)}
-                            onChange={() => toggleLanguage(lang.code)}
-                            className="rounded border-[var(--border-subtle)] text-[var(--accent)] focus:ring-0"
-                          />
-                          <span>{lang.flag} {lang.name} ({lang.code.toUpperCase()})</span>
-                        </label>
-                      ))}
+                          <span className="flex items-center gap-2 truncate">
+                            <span className="text-base flex-shrink-0">{lang.flag}</span>
+                            <span className="truncate">{lang.name}</span>
+                          </span>
+                          {isSelected && <span className="text-[10px] text-indigo-400 font-bold">✓</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Selected Languages Pills List */}
+                  {selectedLangs.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-3 max-h-20 overflow-y-auto p-2 border border-[var(--border-subtle)]/50 rounded-xl bg-black/15">
+                      {selectedLangs.map(code => {
+                        const lang = LANGUAGES.find(l => l.code === code);
+                        return (
+                          <span key={code} className="inline-flex items-center gap-1 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                            {lang?.flag} {lang?.name}
+                            <button
+                              type="button"
+                              onClick={() => toggleLanguage(code)}
+                              className="hover:text-rose-400 font-bold ml-1 cursor-pointer"
+                            >
+                              &times;
+                            </button>
+                          </span>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
 
-                {selectedLangs.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-2.5 max-h-24 overflow-y-auto p-2 border border-[var(--border-subtle)]/50 rounded-xl bg-black/10">
-                    {selectedLangs.map(code => {
-                      const lang = LANGUAGES.find(l => l.code === code);
-                      return (
-                        <span key={code} className="inline-flex items-center gap-1 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[10px] font-bold px-2 py-0.5 rounded-md">
-                          {lang?.flag} {lang?.name}
-                          <button
-                            type="button"
-                            onClick={() => toggleLanguage(code)}
-                            className="hover:text-rose-400 font-bold ml-1 cursor-pointer"
-                          >
-                            &times;
-                          </button>
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-[var(--border-subtle)]">
+              {/* Modal Footer */}
+              <div className="flex justify-end gap-3 p-6 border-t border-[var(--border-subtle)] bg-[var(--bg-panel)]">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}

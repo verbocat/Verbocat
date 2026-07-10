@@ -2877,35 +2877,34 @@ export default function App() {
                   <div className="segment-header-cell target-col">Target Text ({targetLanguage.toUpperCase()})</div>
                 </div>
 
-                <div className="segments-list-container">
-                  <Virtuoso
-                    ref={virtuosoRef}
-                    data={filteredSegments}
-                    computeItemKey={(index, item) => item.id}
-                    itemContent={(index, item) => (
-                      <SegmentCard
-                        key={item.id}
-                        segment={item}
-                        active={activeSegment === item.id}
-                        isLocked={cellLocks.has(item.id - 1)}
-                        lockedBy={cellLocks.get(item.id - 1)}
-                        fontSize={editorFontSize}
-                        darkMode={darkMode}
-                        autocompleteEnabled={autocompleteEnabled}
-                        onFocus={() => handleFocusSegment(item.id)}
-                        onBlur={() => handleBlurSegment(item.id)}
-                        onUpdate={(value) => handleUpdateSegment(item.id, value)}
-                        onToggleVerify={() => toggleVerify(item.id)}
-                        onVerifyAndNext={() => verifyAndNextSegment(item.id)}
-                        onTranslateContext={(options) => handleTranslateSegmentWithContext(item.id, options)}
-                        permission={permission}
-                        theme={theme}
-                        onAcceptChange={() => handleAcceptChange(item.id)}
-                        onRejectChange={() => handleRejectChange(item.id)}
-                      />
-                    )}
-                  />
-                </div>
+                <Virtuoso
+                  ref={virtuosoRef}
+                  style={{ flex: 1 }}
+                  data={filteredSegments}
+                  computeItemKey={(index, item) => item.id}
+                  itemContent={(index, item) => (
+                    <SegmentCard
+                      key={item.id}
+                      segment={item}
+                      active={activeSegment === item.id}
+                      isLocked={cellLocks.has(item.id - 1)}
+                      lockedBy={cellLocks.get(item.id - 1)}
+                      fontSize={editorFontSize}
+                      darkMode={darkMode}
+                      autocompleteEnabled={autocompleteEnabled}
+                      onFocus={() => handleFocusSegment(item.id)}
+                      onBlur={() => handleBlurSegment(item.id)}
+                      onUpdate={(value) => handleUpdateSegment(item.id, value)}
+                      onToggleVerify={() => toggleVerify(item.id)}
+                      onVerifyAndNext={() => verifyAndNextSegment(item.id)}
+                      onTranslateContext={(options) => handleTranslateSegmentWithContext(item.id, options)}
+                      permission={permission}
+                      theme={theme}
+                      onAcceptChange={() => handleAcceptChange(item.id)}
+                      onRejectChange={() => handleRejectChange(item.id)}
+                    />
+                  )}
+                />
               </div>
             </>
           )}
