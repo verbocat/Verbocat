@@ -99,7 +99,24 @@ const postProcessTranslation = (source, target, targetLang) => {
 
 const hasVisibleMarkup = (text) => /<\/?[a-z][^>]*>/i.test(text || "");
 
-const digitString = (text) => String(text || "").replace(/\D/g, "");
+const hasDigitMismatch = (text1, text2) => {
+  const extractNumbers = (text) => 
+    (String(text || "").match(/\d+/g) || [])
+      .map(s => s.replace(/^0+(?=\d)/, ""))
+      .sort();
+  const nums1 = extractNumbers(text1);
+  const nums2 = extractNumbers(text2);
+  if (nums1.length !== nums2.length) return true;
+  return !nums1.every((val, i) => val === nums2[i]);
+};
+
+const getSortedNumbersString = (text) => {
+  const extractNumbers = (text) => 
+    (String(text || "").match(/\d+/g) || [])
+      .map(s => s.replace(/^0+(?=\d)/, ""))
+      .sort();
+  return JSON.stringify(extractNumbers(text));
+};
 
 const isSafeTmTranslation = (source, target, targetLang) => {
   const normalizedSource = normalizeText(source);
@@ -130,7 +147,7 @@ const isSafeTmTranslation = (source, target, targetLang) => {
     return false;
   }
 
-  if (digitString(normalizedSource) !== digitString(normalizedTarget)) {
+  if (hasDigitMismatch(normalizedSource, normalizedTarget)) {
     return false;
   }
 
@@ -142,8 +159,8 @@ const isSafeTmTranslation = (source, target, targetLang) => {
   }
 
   // Ensure English alphanumeric list pointers and section numbers are preserved
-  const sourcePointers = normalizedSource.match(/\b\d+(?:\([a-zA-Z0-9]+\))+\.?|\b\d+\./g) || [];
-  const targetPointers = normalizedTarget.match(/\b\d+(?:\([a-zA-Z0-9]+\))+\.?|\b\d+\./g) || [];
+  const sourcePointers = normalizedSource.match(/\b\d+(?:\([a-zA-Z0-9]+\))+\.?|\b\d{1,2}\./g) || [];
+  const targetPointers = normalizedTarget.match(/\b\d+(?:\([a-zA-Z0-9]+\))+\.?|\b\d{1,2}\./g) || [];
   if (sourcePointers.length !== targetPointers.length) {
     return false;
   }
@@ -428,8 +445,8 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
           reason = "The translation contains raw tag placeholders (__TAG_).";
         } else if (hasVisibleMarkup(targetText) && !hasVisibleMarkup(segment.source)) {
           reason = "The translation has visible markup that was not present in the source segment.";
-        } else if (digitString(segment.source) !== digitString(targetText)) {
-          reason = `Mismatch in numeric digits between source ("${digitString(segment.source)}") and translation ("${digitString(targetText)}").`;
+        } else if (hasDigitMismatch(segment.source, targetText)) {
+          reason = `Mismatch in numeric digits between source ("${getSortedNumbersString(segment.source)}") and translation ("${getSortedNumbersString(targetText)}").`;
         } else {
           reason = "The translation failed quality safety checks (e.g. mismatch in list pointers, contact prefixes, or extreme length ratio).";
         }
@@ -539,8 +556,8 @@ const translateSegmentWithContext = async ({
         reason = "The translation contains raw tag placeholders (__TAG_).";
       } else if (hasVisibleMarkup(cleanedTranslation) && !hasVisibleMarkup(sourceText)) {
         reason = "The translation has visible markup that was not present in the source segment.";
-      } else if (digitString(sourceText) !== digitString(cleanedTranslation)) {
-        reason = `Mismatch in numeric digits between source ("${digitString(sourceText)}") and translation ("${digitString(cleanedTranslation)}").`;
+      } else if (hasDigitMismatch(sourceText, cleanedTranslation)) {
+        reason = `Mismatch in numeric digits between source ("${getSortedNumbersString(sourceText)}") and translation ("${getSortedNumbersString(cleanedTranslation)}").`;
       } else {
         reason = "The translation failed quality safety checks (e.g. mismatch in list pointers, contact prefixes, or extreme length ratio).";
       }
