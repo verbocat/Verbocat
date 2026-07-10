@@ -23,16 +23,24 @@ const supabaseAdmin = createClient(
   }
 );
 
-const fetchAllSegments = async (documentId, select = "*") => {
+const fetchAllSegments = async (documentId, select = "*", targetLang = null) => {
   let allSegments = [];
   let page = 0;
   const pageSize = 1000;
 
   while (true) {
-    const { data, error } = await supabase
+    let query = supabase
       .from("document_segments")
       .select(select)
-      .eq("document_id", documentId)
+      .eq("document_id", documentId);
+
+    if (targetLang === "source") {
+      query = query.is("target_lang", null);
+    } else if (targetLang) {
+      query = query.eq("target_lang", targetLang);
+    }
+
+    const { data, error } = await query
       .order("segment_index", { ascending: true })
       .range(page * pageSize, (page + 1) * pageSize - 1);
 

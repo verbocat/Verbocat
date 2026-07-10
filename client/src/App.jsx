@@ -27,12 +27,12 @@ import {
   exportGlobalTm,
   fetchDocument,
   deleteDocument,
-  updateSegment,
+  updateSegment as apiUpdateSegment,
   fetchRequestStatus,
   requestAccess,
   fetchAccessRequests,
   respondToAccessRequest,
-  translateSegmentWithContext,
+  translateSegmentWithContext as apiTranslateSegmentWithContext,
   auditDocument,
   getAuditEstimate,
   startAudit,
@@ -42,7 +42,10 @@ import {
   toggleTrackChanges,
   acceptTrackedChange,
   rejectTrackedChange,
-  acceptAllTrackedChanges
+  acceptAllTrackedChanges,
+  fetchJobSegmentsByPath,
+  updateJobSegmentByPath,
+  translateJobSegmentContextByPath
 } from "./services/api.js";
 import { ExportModal } from "./components/ExportModal.jsx";
 import { ShareModal } from "./components/ShareModal.jsx";
@@ -50,6 +53,9 @@ import { io } from "socket.io-client";
 import { applyGlossaryTerms } from "./utils/glossary.js";
 import { getTheme } from "./utils/theme.js";
 import { Globe } from "lucide-react";
+import ProjectDashboard from "./components/ProjectDashboard.jsx";
+import ProjectDetails from "./components/ProjectDetails.jsx";
+
 
 export default function App() {
   const virtuosoRef = useRef(null);
@@ -99,10 +105,76 @@ export default function App() {
   const [collaborators, setCollaborators] = useState([]);
   const [cellLocks, setCellLocks] = useState(new Map());
   const [showShareModal, setShowShareModal] = useState(false);
-  const [documentId, setDocumentId] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get("doc") || null;
-  });
+  const parseUrlRoute = () => {
+    const path = window.location.pathname;
+    const jobMatch = path.match(/^\/project\/([^\/]+)\/file\/([^\/]+)\/lang\/([^\/]+)/);
+    if (jobMatch) {
+      return {
+        screen: "editor",
+        projectId: jobMatch[1],
+        fileId: jobMatch[2],
+        targetLang: jobMatch[3]
+      };
+    }
+
+    const projectMatch = path.match(/^\/project\/([^\/]+)/);
+    if (projectMatch) {
+      return {
+        screen: "project",
+        projectId: projectMatch[1]
+      };
+    }
+
+    return {
+      screen: "dashboard"
+    };
+  };
+
+  const [currentRoute, setCurrentRoute] = useState(() => parseUrlRoute());
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentRoute(parseUrlRoute());
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  const navigateTo = (path) => {
+    window.history.pushState(null, "", path);
+    setCurrentRoute(parseUrlRoute());
+  };
+
+  // Wrapped overrides for segment operations
+  const updateSegment = async (...args) => {
+    if (currentRoute.screen === "editor") {
+      const [docId, index, text, status, jira, desc, prop] = args;
+      return await updateJobSegmentByPath(docId, targetLanguage, index, text, status, jira, desc, prop);
+    } else {
+      return await apiUpdateSegment(...args);
+    }
+  };
+
+  const translateSegmentWithContext = async (...args) => {
+    if (currentRoute.screen === "editor") {
+      const [docId, index, params] = args;
+      return await translateJobSegmentContextByPath(docId, targetLanguage, index, params);
+    } else {
+      return await apiTranslateSegmentWithContext(...args);
+    }
+  };
+
+  const [documentId, setDocumentId] = useState(null);
+
+  useEffect(() => {
+    if (currentRoute.screen === "editor") {
+      setDocumentId(currentRoute.fileId);
+      setTargetLanguage(currentRoute.targetLang);
+    } else {
+      setDocumentId(null);
+    }
+  }, [currentRoute]);
+
   const [permission, setPermission] = useState("write");
   const [ownerId, setOwnerId] = useState(null);
   const [trackChangesEnabled, setTrackChangesEnabled] = useState(false);
@@ -193,8 +265,28 @@ export default function App() {
     setHasNoAccess(false);
     setAccessRequestMessage("");
     try {
-      const doc = await fetchDocument(documentId);
-      setSegments(doc.segments);
+      let doc;
+      if (currentRoute.screen === "editor" && currentRoute.targetLang) {
+        const jobData = await fetchJobSegmentsByPath(documentId, currentRoute.targetLang);
+        doc = {
+          id: jobData.documentId,
+          name: jobData.fileName,
+          fileId: jobData.fileId,
+          sourceLang: jobData.sourceLang,
+          targetLang: jobData.targetLang,
+          permission: jobData.permission,
+          ownerId: jobData.ownerId,
+          trackChangesEnabled: jobData.trackChangesEnabled,
+          segments: jobData.segments
+        };
+        if (jobData.contextSettings) {
+          setContextSettings(jobData.contextSettings);
+        }
+      } else {
+        doc = await fetchDocument(documentId);
+      }
+
+      setSegments(doc.segments || []);
       // Extract and set the file extension dynamically from the document name or server metadata
       const extIndex = doc.name.lastIndexOf(".");
       const ext = doc.fileExtension || (extIndex !== -1 ? doc.name.substring(extIndex) : ".html");
@@ -208,7 +300,7 @@ export default function App() {
       setPermission(doc.permission || "write");
       setOwnerId(doc.ownerId);
       setTrackChangesEnabled(doc.trackChangesEnabled || false);
-      showToast(`Loaded collaborative document: ${doc.name}`);
+      showToast(`Loaded document: ${doc.name}`);
 
       // Fetch pending requests if the user is owner or staff
       const isOwnerOrStaff = doc.ownerId === userRef.current?.id || ["admin", "verbolabs_staff"].includes(userRef.current?.role);
@@ -2538,7 +2630,7 @@ export default function App() {
           </div>
           {accessRequestMessage && (
             <div className="text-[11px] text-[var(--text-emerald)] bg-[var(--emerald-glow)] border border-[var(--emerald-glow)] rounded-xl p-2.5 font-bold">
-              {accessRequestMessage}
+          {accessRequestMessage}
             </div>
           )}
         </div>
@@ -2554,279 +2646,460 @@ export default function App() {
       <LoadingOverlay isUploading={isUploading} theme={theme} />
       <Toast toast={toast} />
 
-      <GlossaryModal
-        darkMode={darkMode}
-        glossary={glossary}
-        glossaryKey={glossaryKey}
-        glossaryLanguagePairs={glossaryLanguagePairs}
-        glossarySourceLang={glossarySourceLang}
-        glossaryTargetLang={glossaryTargetLang}
-        languages={LANGUAGES}
-        onAddRow={addGlossaryRow}
-        onClearCurrentGlossary={clearCurrentGlossary}
-        onClearSelection={clearGlossarySelection}
-        onClose={() => setShowGlossary(false)}
-        onDeleteLanguagePair={deleteLanguagePairGlossary}
-        onDeleteSelected={deleteSelectedGlossaryRows}
-        onPasteGlossary={pasteGlossary}
-        onApplyGlossary={handleApplyGlossary}
-        onSelectAll={selectAllGlossaryRows}
-        onSelectPair={(source, target) => {
-          setGlossarySourceLang(source);
-          setGlossaryTargetLang(target);
-        }}
-        onToggleRow={toggleGlossaryRow}
-        onUpdateGlossary={updateGlossary}
-        selectedGlossaryRows={selectedGlossaryRows}
-        setGlossarySourceLang={setGlossarySourceLang}
-        setGlossaryTargetLang={setGlossaryTargetLang}
-        setGlossary={glossaryManager.setGlossary}
-        show={showGlossary}
-        canApplyGlossary={segments.length > 0}
-        theme={theme}
-        onImportTmx={handleImportTmx}
-      />
-
-      <ExportModal
-        show={showExportModal}
-        onClose={() => setShowExportModal(false)}
-        onExportDocument={handleExportDocument}
-        onExportSourceDocument={handleExportSourceDocument}
-        onExportXliff={handleExportXliff}
-        onExportTmx={handleExportTmx}
-        onExportGlobalTmx={handleExportGlobalTmx}
-        onExportLinguistTable={handleExportLinguistTable}
-        onRelinkHtml={handleRelinkHtml}
-        fileExtension={fileExtension}
-        theme={theme}
-        sourceLanguage={sourceLanguage}
-        targetLanguage={targetLanguage}
-      />
-
-      <ContextSettingsModal
-        show={showContextPanel}
-        onClose={() => setShowContextPanel(false)}
-        contextSettings={contextSettings}
-        setContextSettings={setContextSettings}
-        theme={theme}
-        documentId={documentId}
-      />
-
-      <SearchReplaceModal
-        show={showSearchReplace}
-        onClose={() => setShowSearchReplace(false)}
-        onReplaceAll={handleReplaceAll}
-        theme={theme}
-      />
-
-      <SettingsModal
-        show={showSettingsModal}
-        onClose={() => setShowSettingsModal(false)}
-        darkMode={darkMode}
-        editorFontSize={editorFontSize}
-        autocompleteEnabled={autocompleteEnabled}
-        autoPropagateEnabled={autoPropagateEnabled}
-        onApplySettings={({ darkMode, editorFontSize, autocompleteEnabled, autoPropagateEnabled }) => {
-          setDarkMode(darkMode);
-          setEditorFontSize(editorFontSize);
-          setAutocompleteEnabled(autocompleteEnabled);
-          setAutoPropagateEnabled(autoPropagateEnabled);
-        }}
-        onLogout={logout}
-        userRole={user ? user.role : ""}
-        userEmail={user ? user.email : ""}
-        theme={theme}
-      />
-
-      {showAdminDashboard && (
-        <AdminDashboard
-          onClose={() => {
-            setShowAdminDashboard(false);
-            fetchProfile();
-          }}
+      {currentRoute.screen === "dashboard" && (
+        <ProjectDashboard
+          onOpenProject={(projId) => navigateTo(`/project/${projId}`)}
+          showToast={showToast}
           theme={theme}
         />
       )}
 
-      {/* ── Zone 1: Topbar (always visible) ── */}
-      <Header
-        currentProvider={currentProvider}
-        darkMode={darkMode}
-        onOpenGlossary={() => setShowGlossary(true)}
-        onLoadProject={loadProject}
-        onToggleDarkMode={() => setDarkMode((value) => !value)}
-        qaIssuesCount={qaIssuesList.length}
-        segmentsCount={segments.length}
-        progress={stats.progress}
-        theme={theme}
-        fileName={fileName}
-        fileExtension={fileExtension}
-        sourceLanguage={sourceLanguage}
-        onSourceLanguageChange={handleSourceLanguageChange}
-        targetLanguage={targetLanguage}
-        onTargetLanguageChange={handleTargetLanguageChange}
-        stats={stats}
-        onDeleteProject={deleteProject}
-        onSaveProject={saveProject}
-        onRelinkHtml={handleRelinkHtml}
-        onImportXliff={handleImportXliff}
-        onOpenContext={() => setShowContextPanel(true)}
-        userRole={user ? user.role : ""}
-        creditsAllowed={user ? user.creditsAllowed : 50000}
-        creditsConsumed={user ? user.creditsConsumed : 0}
-        onLogout={logout}
-        onOpenAdmin={() => setShowAdminDashboard(true)}
-        onUpload={handleUpload}
-        onOpenSettings={() => setShowSettingsModal(true)}
-        collaborators={collaborators}
-        onOpenShare={ownerId && (ownerId === user?.id || ["admin", "verbolabs_staff"].includes(user?.role)) ? () => setShowShareModal(true) : null}
-        onTeleport={handleTeleport}
-      />
-
-      {/* ── Zone 2+3: Action bar + Editor (or empty state) ── */}
-      {segments.length === 0 ? (
-        <EmptyWorkspace
-          darkMode={darkMode}
-          onLoadProject={loadProject}
-          onOpenGlossary={() => setShowGlossary(true)}
-          onUpload={handleUpload}
+      {currentRoute.screen === "project" && (
+        <ProjectDetails
+          projectId={currentRoute.projectId}
+          onBack={() => navigateTo("/")}
+          onOpenEditor={(jobId, docId, lang) => {
+            navigateTo(`/project/${currentRoute.projectId}/file/${docId}/lang/${lang}`);
+          }}
+          showToast={showToast}
           theme={theme}
+          token={token}
         />
-      ) : (
+      )}
+
+      {currentRoute.screen === "editor" && (
         <>
-          {/* Zone 2: Action bar */}
-          <WorkspaceToolbar
-            onDeleteProject={deleteProject}
-            onExport={() => setShowExportModal(true)}
+          <GlossaryModal
+            darkMode={darkMode}
+            glossary={glossary}
+            glossaryKey={glossaryKey}
+            glossaryLanguagePairs={glossaryLanguagePairs}
+            glossarySourceLang={glossarySourceLang}
+            glossaryTargetLang={glossaryTargetLang}
+            languages={LANGUAGES}
+            onAddRow={addGlossaryRow}
+            onClearCurrentGlossary={clearCurrentGlossary}
+            onClearSelection={clearGlossarySelection}
+            onClose={() => setShowGlossary(false)}
+            onDeleteLanguagePair={deleteLanguagePairGlossary}
+            onDeleteSelected={deleteSelectedGlossaryRows}
+            onPasteGlossary={pasteGlossary}
+            onApplyGlossary={handleApplyGlossary}
+            onSelectAll={selectAllGlossaryRows}
+            onSelectPair={(source, target) => {
+              setGlossarySourceLang(source);
+              setGlossaryTargetLang(target);
+            }}
+            onToggleRow={toggleGlossaryRow}
+            onUpdateGlossary={updateGlossary}
+            selectedGlossaryRows={selectedGlossaryRows}
+            setGlossarySourceLang={setGlossarySourceLang}
+            setGlossaryTargetLang={setGlossaryTargetLang}
+            setGlossary={glossaryManager.setGlossary}
+            show={showGlossary}
+            canApplyGlossary={segments.length > 0}
+            theme={theme}
+            onImportTmx={handleImportTmx}
+          />
+
+          <ExportModal
+            show={showExportModal}
+            onClose={() => setShowExportModal(false)}
+            onExportDocument={handleExportDocument}
+            onExportSourceDocument={handleExportSourceDocument}
+            onExportXliff={handleExportXliff}
+            onExportTmx={handleExportTmx}
+            onExportGlobalTmx={handleExportGlobalTmx}
+            onExportLinguistTable={handleExportLinguistTable}
+            onRelinkHtml={handleRelinkHtml}
+            fileExtension={fileExtension}
+            theme={theme}
+            sourceLanguage={sourceLanguage}
+            targetLanguage={targetLanguage}
+          />
+
+          <ContextSettingsModal
+            show={showContextPanel}
+            onClose={() => setShowContextPanel(false)}
+            contextSettings={contextSettings}
+            setContextSettings={setContextSettings}
+            theme={theme}
+            documentId={documentId}
+          />
+
+          <SearchReplaceModal
+            show={showSearchReplace}
+            onClose={() => setShowSearchReplace(false)}
+            onReplaceAll={handleReplaceAll}
+            theme={theme}
+          />
+
+          <SettingsModal
+            show={showSettingsModal}
+            onClose={() => setShowSettingsModal(false)}
+            darkMode={darkMode}
+            editorFontSize={editorFontSize}
+            autocompleteEnabled={autocompleteEnabled}
+            autoPropagateEnabled={autoPropagateEnabled}
+            onApplySettings={({ darkMode, editorFontSize, autocompleteEnabled, autoPropagateEnabled }) => {
+              setDarkMode(darkMode);
+              setEditorFontSize(editorFontSize);
+              setAutocompleteEnabled(autocompleteEnabled);
+              setAutoPropagateEnabled(autoPropagateEnabled);
+            }}
+            onLogout={logout}
+            userRole={user ? user.role : ""}
+            userEmail={user ? user.email : ""}
+            theme={theme}
+          />
+
+          {showAdminDashboard && (
+            <AdminDashboard
+              onClose={() => {
+                setShowAdminDashboard(false);
+                fetchProfile();
+              }}
+              theme={theme}
+            />
+          )}
+
+          {/* ── Zone 1: Topbar (always visible) ── */}
+          <Header
+            currentProvider={currentProvider}
+            darkMode={darkMode}
+            onOpenGlossary={() => setShowGlossary(true)}
             onLoadProject={loadProject}
-            onSaveProject={saveProject}
-            onRelinkHtml={permission === "write" ? handleRelinkHtml : null}
-            onImportXliff={permission === "write" ? handleImportXliff : null}
-            onTranslate={permission === "write" ? handleTranslateSegments : null}
-            onToggleQa={() => setShowQaPanel((value) => !value)}
-            onRunQc={permission === "write" ? handleRunQc : null}
-            isTranslating={isTranslating}
-            isAuditing={isAuditing}
+            onToggleDarkMode={() => setDarkMode((value) => !value)}
             qaIssuesCount={qaIssuesList.length}
             segmentsCount={segments.length}
-            searchQuery={searchQuery}
+            progress={stats.progress}
+            theme={theme}
+            fileName={fileName}
             fileExtension={fileExtension}
-            setSearchQuery={setSearchQuery}
-            stats={stats}
             sourceLanguage={sourceLanguage}
             onSourceLanguageChange={handleSourceLanguageChange}
             targetLanguage={targetLanguage}
             onTargetLanguageChange={handleTargetLanguageChange}
-            fileName={fileName}
-            theme={theme}
-            canTranslate={permission === "write" && user ? (user.hasTranslateAccess && user.status === "active") : false}
-            filterStatus={filterStatus}
-            setFilterStatus={setFilterStatus}
+            stats={stats}
+            onDeleteProject={deleteProject}
+            onSaveProject={saveProject}
+            onRelinkHtml={handleRelinkHtml}
+            onImportXliff={handleImportXliff}
+            onOpenContext={() => setShowContextPanel(true)}
+            userRole={user ? user.role : ""}
+            creditsAllowed={user ? user.creditsAllowed : 50000}
+            creditsConsumed={user ? user.creditsConsumed : 0}
+            onLogout={logout}
+            onOpenAdmin={() => setShowAdminDashboard(true)}
             onUpload={handleUpload}
-            trackChangesEnabled={trackChangesEnabled}
-            onToggleTrackChanges={handleToggleTrackChanges}
-            isOwner={ownerId === user?.id}
-            onAcceptAllChanges={handleAcceptAllChanges}
-            hasTrackedChanges={segments.some(s => s.originalTargetText && s.originalTargetText !== s.target)}
-            onApplyGlossary={permission === "write" ? handleApplyGlossary : null}
+            onOpenSettings={() => setShowSettingsModal(true)}
+            collaborators={collaborators}
+            onOpenShare={ownerId && (ownerId === user?.id || ["admin", "verbolabs_staff"].includes(user?.role)) ? () => setShowShareModal(true) : null}
+            onTeleport={handleTeleport}
           />
 
-          {/* QA panel (collapsible modal) */}
-          <QAPanel
-            qaIssuesList={qaIssuesList}
-            segments={segments}
-            showQaPanel={showQaPanel}
-            theme={theme}
-            onGoToSegment={goToSegment}
-            onClose={() => setShowQaPanel(false)}
-          />
+          {/* ── Zone 2+3: Action bar + Editor (or empty state) ── */}
+          {segments.length === 0 ? (
+            <EmptyWorkspace
+              darkMode={darkMode}
+              onLoadProject={loadProject}
+              onOpenGlossary={() => setShowGlossary(true)}
+              onUpload={handleUpload}
+              theme={theme}
+            />
+          ) : (
+            <>
+              {/* Zone 2: Action bar */}
+              <WorkspaceToolbar
+                onDeleteProject={deleteProject}
+                onExport={() => setShowExportModal(true)}
+                onLoadProject={loadProject}
+                onSaveProject={saveProject}
+                onRelinkHtml={permission === "write" ? handleRelinkHtml : null}
+                onImportXliff={permission === "write" ? handleImportXliff : null}
+                onTranslate={permission === "write" ? handleTranslateSegments : null}
+                onToggleQa={() => setShowQaPanel((value) => !value)}
+                onRunQc={permission === "write" ? handleRunQc : null}
+                isTranslating={isTranslating}
+                isAuditing={isAuditing}
+                qaIssuesCount={qaIssuesList.length}
+                segmentsCount={segments.length}
+                searchQuery={searchQuery}
+                fileExtension={fileExtension}
+                setSearchQuery={setSearchQuery}
+                stats={stats}
+                sourceLanguage={sourceLanguage}
+                onSourceLanguageChange={handleSourceLanguageChange}
+                targetLanguage={targetLanguage}
+                onTargetLanguageChange={handleTargetLanguageChange}
+                fileName={fileName}
+                theme={theme}
+                canTranslate={permission === "write" && user ? (user.hasTranslateAccess && user.status === "active") : false}
+                filterStatus={filterStatus}
+                setFilterStatus={setFilterStatus}
+                onUpload={handleUpload}
+                trackChangesEnabled={trackChangesEnabled}
+                onToggleTrackChanges={handleToggleTrackChanges}
+                isOwner={ownerId === user?.id}
+                onAcceptAllChanges={handleAcceptAllChanges}
+                hasTrackedChanges={segments.some(s => s.originalTargetText && s.originalTargetText !== s.target)}
+                onApplyGlossary={permission === "write" ? handleApplyGlossary : null}
+              />
 
-          {/* Zone 3: Segment editor */}
-          <div className="segment-table">
+              {/* QA panel (collapsible modal) */}
+              <QAPanel
+                qaIssuesList={qaIssuesList}
+                segments={segments}
+                showQaPanel={showQaPanel}
+                theme={theme}
+                onGoToSegment={goToSegment}
+                onClose={() => setShowQaPanel(false)}
+              />
 
-            {permission === "read" && (
-              <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl px-4 py-3 text-xs font-bold mb-3 shadow-lg mx-1 select-none">
-                <div className="flex items-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 flex-shrink-0">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                  <span>Read-Only Mode: You are viewing this workspace in read-only mode.</span>
+              {/* Zone 3: Segment editor */}
+              <div className="segment-table">
+
+                {permission === "read" && (
+                  <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl px-4 py-3 text-xs font-bold mb-3 shadow-lg mx-1 select-none">
+                    <div className="flex items-center gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 flex-shrink-0">
+                        <path d="M2 12a10 10 0 1 0 20 0 10 10 0 1 0-20 0Z" />
+                        <line x1="12" x2="12" y1="8" y2="12" />
+                        <line x1="12" x2="12.01" y1="16" y2="16" />
+                      </svg>
+                      Read-Only Workspace
+                    </div>
+                  </div>
+                )}
+
+                <div className="segment-table-header">
+                  <div className="segment-header-cell source-col">Source Text ({sourceLanguage.toUpperCase()})</div>
+                  <div className="segment-header-cell target-col">Target Text ({targetLanguage.toUpperCase()})</div>
                 </div>
+
+                <div className="segments-list-container">
+                  <Virtuoso
+                    ref={virtuosoRef}
+                    data={filteredSegments}
+                    computeItemKey={(index, item) => item.id}
+                    itemContent={(index, item) => (
+                      <SegmentCard
+                        key={item.id}
+                        segment={item}
+                        active={activeSegment === item.id}
+                        isLocked={cellLocks.has(item.id - 1)}
+                        lockedBy={cellLocks.get(item.id - 1)}
+                        fontSize={editorFontSize}
+                        darkMode={darkMode}
+                        autocompleteEnabled={autocompleteEnabled}
+                        onFocus={() => handleFocusSegment(item.id)}
+                        onBlur={() => handleBlurSegment(item.id)}
+                        onUpdate={(value) => handleUpdateSegment(item.id, value)}
+                        onToggleVerify={() => toggleVerify(item.id)}
+                        onVerifyAndNext={() => verifyAndNextSegment(item.id)}
+                        onTranslateContext={(options) => handleTranslateSegmentWithContext(item.id, options)}
+                        permission={permission}
+                        theme={theme}
+                        onAcceptChange={() => handleAcceptChange(item.id)}
+                        onRejectChange={() => handleRejectChange(item.id)}
+                      />
+                    )}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ── QC Audit Pre-Flight Check overlay ── */}
+          {showEstimateModal && (
+            <div style={{
+              position: "fixed", inset: 0, zIndex: 200,
+              background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+              display: "flex", alignItems: "center", justifyContent: "center"
+            }}>
+              <div style={{
+                background: "var(--bg-surface)", border: "1px solid var(--border-medium)",
+                borderRadius: 18, padding: 24, width: 440,
+                boxShadow: "0 20px 50px rgba(0,0,0,0.6)",
+                textAlign: "left"
+              }}>
+                <h3 style={{ fontSize: 16, fontWeight: 800, color: "#fff", margin: 0 }}>
+                  QC Audit Pre-Flight Check
+                </h3>
+                
+                {isEstimating || !estimateData ? (
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, padding: "20px 0" }}>
+                    <div className="animate-spin" style={{ width: 24, height: 24, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.1)", borderTopColor: "var(--accent)" }} />
+                    <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Calculating estimate...</span>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                    <p style={{ fontSize: 12.5, color: "var(--text-secondary)", margin: 0, lineHeight: 1.5 }}>
+                      We will perform a deterministically scored MQM analysis using <strong>gpt-4o-mini</strong> with strict schemas, sliding window context, and self-check verification passes to eliminate noise.
+                    </p>
+                    
+                    <div style={{
+                      display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10,
+                      background: "rgba(0,0,0,0.15)", border: "1px solid var(--border-subtle)",
+                      borderRadius: 10, padding: 12
+                    }}>
+                      <div style={{ display: "flex", flexDirection: "column" }}>
+                        <span style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase" }}>Total Segments</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{estimateData.segmentCount}</span>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column" }}>
+                        <span style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase" }}>Total Words</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{estimateData.totalWordCount}</span>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 10 }}>
+                      <button
+                        type="button"
+                        onClick={() => setShowEstimateModal(false)}
+                        style={{
+                          height: 36, padding: "0 16px", borderRadius: 8,
+                          background: "transparent", border: "1px solid var(--border-medium)",
+                          color: "var(--text-secondary)", fontSize: 12, fontWeight: 700,
+                          cursor: "pointer", transition: "all 0.2s"
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleConfirmStartAudit}
+                        style={{
+                          height: 36, padding: "0 16px", borderRadius: 8,
+                          background: "var(--accent)", border: "1px solid var(--accent)",
+                          color: "#fff", fontSize: 12, fontWeight: 700,
+                          cursor: "pointer", transition: "all 0.2s",
+                          boxShadow: "0 4px 12px var(--accent-glow)"
+                        }}
+                      >
+                        Confirm & Start Audit
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── Active Background Audit Progress Bar Overlay ── */}
+          {activeJob && ["pending", "in_progress"].includes(activeJob.status) && (
+            <div style={{
+              position: "fixed", bottom: 24, left: 24, zIndex: 199,
+              background: "var(--bg-surface)", border: "1px solid var(--border-medium)",
+              borderRadius: 14, padding: "14px 18px", width: 340,
+              boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
+              display: "flex", flexDirection: "column", gap: 8,
+              textAlign: "left", transition: "all 0.3s ease"
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>
+                  {activeJob.status === "pending" && activeJob.queuePosition > 0
+                    ? `QC Audit Queued (Pos #${activeJob.queuePosition})`
+                    : "QC Audit in Progress..."}
+                </span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)" }}>
+                  {activeJob.completed_segments}/{activeJob.total_segments}
+                </span>
+              </div>
+
+              {/* Progress bar */}
+              <div style={{ width: "100%", height: 6, background: "rgba(255,255,255,0.05)", borderRadius: 3, overflow: "hidden" }}>
+                <div style={{
+                  width: `${(activeJob.completed_segments / (activeJob.total_segments || 1)) * 100}%`,
+                  height: "100%", background: "var(--accent)", borderRadius: 3,
+                  transition: "width 0.4s ease"
+                }} />
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+                <span style={{ fontSize: 10, color: "var(--text-rose)", fontWeight: 600 }}>
+                  {activeJob.failed_segments > 0 ? `${activeJob.failed_segments} failed` : ""}
+                </span>
                 <button
-                  onClick={handleRequestEditAccess}
-                  disabled={hasPendingAccessRequest}
-                  className={`rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-wider border cursor-pointer transition-all shadow-md ${
-                    hasPendingAccessRequest
-                      ? "bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed"
-                      : "bg-amber-500 text-slate-950 border-amber-400 hover:bg-amber-400"
-                  }`}
+                  type="button"
+                  onClick={handleCancelAudit}
+                  style={{
+                    background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)",
+                    color: "#f87171", fontSize: 9.5, fontWeight: 700,
+                    borderRadius: 6, padding: "3px 8px", cursor: "pointer",
+                    transition: "all 0.2s"
+                  }}
                 >
-                  {hasPendingAccessRequest ? "Request Pending" : "Request Edit Access"}
+                  Cancel Audit
                 </button>
               </div>
-            )}
-
-            {/* Column headers */}
-            <div className="seg-header">
-              <div className="seg-header-cell">#</div>
-              <div className="seg-header-cell">Source</div>
-              <div className="seg-header-cell" style={{ justifyContent: "center" }}>→</div>
-              <div className="seg-header-cell">Translation</div>
             </div>
+          )}
 
-            {/* Translation progress toast */}
-            {isTranslating && (
-              <div className="progress-toast">
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--sky)" }}>
-                    {translationQueuePosition > 0 ? `Queued (Position #${translationQueuePosition})` : "Translating"}
-                  </span>
-                  <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "var(--text-primary)" }}>
-                    {progress}%
-                  </span>
-                </div>
-                <div className="progress-track">
-                  <div className="progress-fill" style={{ width: `${progress}%` }} />
-                </div>
+          {/* ── Failed Background Audit Alert ── */}
+          {activeJob && activeJob.status === "failed" && (
+            <div style={{
+              position: "fixed", bottom: 24, left: 24, zIndex: 199,
+              background: "var(--bg-surface)", border: "1px solid rgba(239,68,68,0.3)",
+              borderRadius: 14, padding: "14px 18px", width: 340,
+              boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
+              display: "flex", flexDirection: "column", gap: 10,
+              textAlign: "left", transition: "all 0.3s ease",
+              backdropFilter: "blur(8px)"
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 11.5, fontWeight: 800, color: "#f87171" }}>
+                  QC Audit Failed
+                </span>
+                <button 
+                  onClick={() => setActiveJob(null)}
+                  style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: 14, fontWeight: "bold" }}
+                >
+                  ×
+                </button>
               </div>
-            )}
+              <p style={{ fontSize: 11, color: "var(--text-secondary)", margin: 0, lineHeight: 1.4 }}>
+                {activeJob.error_message || "An unexpected error occurred during execution."}
+              </p>
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  onClick={() => {
+                    setActiveJob(null);
+                    handleRunQc();
+                  }}
+                  style={{
+                    background: "rgba(255,255,255,0.08)", border: "1px solid var(--border-medium)",
+                    color: "#fff", fontSize: 9.5, fontWeight: 700,
+                    borderRadius: 6, padding: "4px 10px", cursor: "pointer"
+                  }}
+                >
+                  Retry Audit
+                </button>
+              </div>
+            </div>
+          )}
 
-            <Virtuoso
-              ref={virtuosoRef}
-              style={{ flex: 1 }}
-              data={filteredSegments}
-              itemContent={(index, segment) => (
-                <SegmentCard
-                  key={segment.id}
-                  darkMode={darkMode}
-                  index={index}
-                  segment={segment}
-                  theme={theme}
-                  translationGlossary={translationGlossary}
-                  onCopy={copyToClipboard}
-                  onUpdateTranslation={updateTranslation}
-                  onToggleVerify={() => toggleVerify(segment.id)}
-                  onVerifyAndNext={() => verifyAndNextSegment(segment.id)}
-                  lockInfo={
-                    cellLocks.has(segment.id - 1) && cellLocks.get(segment.id - 1).userId !== user?.id
-                      ? cellLocks.get(segment.id - 1)
-                      : null
-                  }
-                  onFocusSegment={handleFocusSegment}
-                  onBlurSegment={handleBlurSegment}
-                  readOnly={permission === "read"}
-                  onSaveContext={saveSegmentContext}
-                  onTranslateWithContext={handleTranslateSegmentWithContext}
-                  onTyping={handleSegmentTyping}
-                  isOwner={ownerId === user?.id}
-                  onAcceptChange={handleAcceptChange}
-                  onRejectChange={handleRejectChange}
-                  autocompleteEnabled={autocompleteEnabled}
-                />
-              )}
-            />
-          </div>
+          {/* ── Footer bar ── */}
+          {segments.length > 0 && stats && (
+            <footer className="workspace-footer">
+              <div className="footer-stat-item">
+                <span className="footer-stat-label">Words</span>
+                <span className="footer-stat-value">{stats.words.toLocaleString()}</span>
+              </div>
+              <div className="footer-stat-item">
+                <span className="footer-stat-label">Unique</span>
+                <span className="footer-stat-value">{stats.uniqueWords.toLocaleString()}</span>
+              </div>
+              <div className="footer-stat-item">
+                <span className="footer-stat-label">Dup.</span>
+                <span className="footer-stat-value">{stats.duplicateWords.toLocaleString()}</span>
+              </div>
+              <div className="footer-stat-item">
+                <span className="footer-stat-label">Done</span>
+                <span className="footer-stat-value progress-value">{stats.progress}%</span>
+              </div>
+            </footer>
+          )}
         </>
       )}
 
@@ -2868,200 +3141,6 @@ export default function App() {
             </button>
           </div>
         </div>
-      )}
-
-      {/* ── Pre-flight Estimate Modal ── */}
-      {showEstimateModal && (
-        <div style={{
-          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-          background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          zIndex: 1000, padding: 20
-        }}>
-          <div style={{
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border-medium)",
-            borderRadius: 16, width: "100%", maxWidth: 450,
-            padding: 24, boxShadow: "0 20px 40px rgba(0,0,0,0.6)",
-            display: "flex", flexDirection: "column", gap: 16,
-            textAlign: "left"
-          }}>
-            <h3 style={{ fontSize: 16, fontWeight: 800, color: "#fff", margin: 0 }}>
-              QC Audit Pre-Flight Check
-            </h3>
-            
-            {isEstimating || !estimateData ? (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, padding: "20px 0" }}>
-                <div className="animate-spin" style={{ width: 24, height: 24, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.1)", borderTopColor: "var(--accent)" }} />
-                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Calculating estimate...</span>
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                <p style={{ fontSize: 12.5, color: "var(--text-secondary)", margin: 0, lineHeight: 1.5 }}>
-                  We will perform a deterministically scored MQM analysis using <strong>gpt-4o-mini</strong> with strict schemas, sliding window context, and self-check verification passes to eliminate noise.
-                </p>
-                
-                <div style={{
-                  display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10,
-                  background: "rgba(0,0,0,0.15)", border: "1px solid var(--border-subtle)",
-                  borderRadius: 10, padding: 12
-                }}>
-                  <div style={{ display: "flex", flexDirection: "column" }}>
-                    <span style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase" }}>Total Segments</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{estimateData.segmentCount}</span>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column" }}>
-                    <span style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase" }}>Total Words</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{estimateData.totalWordCount}</span>
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 10 }}>
-                  <button
-                    type="button"
-                    onClick={() => setShowEstimateModal(false)}
-                    style={{
-                      height: 36, padding: "0 16px", borderRadius: 8,
-                      background: "transparent", border: "1px solid var(--border-medium)",
-                      color: "var(--text-secondary)", fontSize: 12, fontWeight: 700,
-                      cursor: "pointer", transition: "all 0.2s"
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleConfirmStartAudit}
-                    style={{
-                      height: 36, padding: "0 16px", borderRadius: 8,
-                      background: "var(--accent)", border: "1px solid var(--accent)",
-                      color: "#fff", fontSize: 12, fontWeight: 700,
-                      cursor: "pointer", transition: "all 0.2s",
-                      boxShadow: "0 4px 12px var(--accent-glow)"
-                    }}
-                  >
-                    Confirm & Start Audit
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── Active Background Audit Progress Bar Overlay ── */}
-      {activeJob && ["pending", "in_progress"].includes(activeJob.status) && (
-        <div style={{
-          position: "fixed", bottom: 24, left: 24, zIndex: 199,
-          background: "var(--bg-surface)", border: "1px solid var(--border-medium)",
-          borderRadius: 14, padding: "14px 18px", width: 340,
-          boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
-          display: "flex", flexDirection: "column", gap: 8,
-          textAlign: "left", transition: "all 0.3s ease"
-        }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>
-              {activeJob.status === "pending" && activeJob.queuePosition > 0
-                ? `QC Audit Queued (Pos #${activeJob.queuePosition})`
-                : "QC Audit in Progress..."}
-            </span>
-            <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)" }}>
-              {activeJob.completed_segments}/{activeJob.total_segments}
-            </span>
-          </div>
-
-          {/* Progress bar */}
-          <div style={{ width: "100%", height: 6, background: "rgba(255,255,255,0.05)", borderRadius: 3, overflow: "hidden" }}>
-            <div style={{
-              width: `${(activeJob.completed_segments / (activeJob.total_segments || 1)) * 100}%`,
-              height: "100%", background: "var(--accent)", borderRadius: 3,
-              transition: "width 0.4s ease"
-            }} />
-          </div>
-
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
-            <span style={{ fontSize: 10, color: "var(--text-rose)", fontWeight: 600 }}>
-              {activeJob.failed_segments > 0 ? `${activeJob.failed_segments} failed` : ""}
-            </span>
-            <button
-              type="button"
-              onClick={handleCancelAudit}
-              style={{
-                background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)",
-                color: "#f87171", fontSize: 9.5, fontWeight: 700,
-                borderRadius: 6, padding: "3px 8px", cursor: "pointer",
-                transition: "all 0.2s"
-              }}
-            >
-              Cancel Audit
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── Failed Background Audit Alert ── */}
-      {activeJob && activeJob.status === "failed" && (
-        <div style={{
-          position: "fixed", bottom: 24, left: 24, zIndex: 199,
-          background: "var(--bg-surface)", border: "1px solid rgba(239,68,68,0.3)",
-          borderRadius: 14, padding: "14px 18px", width: 340,
-          boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
-          display: "flex", flexDirection: "column", gap: 10,
-          textAlign: "left", transition: "all 0.3s ease",
-          backdropFilter: "blur(8px)"
-        }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 11.5, fontWeight: 800, color: "#f87171" }}>
-              QC Audit Failed
-            </span>
-            <button 
-              onClick={() => setActiveJob(null)}
-              style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: 14, fontWeight: "bold" }}
-            >
-              ×
-            </button>
-          </div>
-          <p style={{ fontSize: 11, color: "var(--text-secondary)", margin: 0, lineHeight: 1.4 }}>
-            {activeJob.error_message || "An unexpected error occurred during execution."}
-          </p>
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button
-              onClick={() => {
-                setActiveJob(null);
-                handleRunQc();
-              }}
-              style={{
-                background: "rgba(255,255,255,0.08)", border: "1px solid var(--border-medium)",
-                color: "#fff", fontSize: 9.5, fontWeight: 700,
-                borderRadius: 6, padding: "4px 10px", cursor: "pointer"
-              }}
-            >
-              Retry Audit
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── Footer bar ── */}
-      {segments.length > 0 && stats && (
-        <footer className="workspace-footer">
-          <div className="footer-stat-item">
-            <span className="footer-stat-label">Words</span>
-            <span className="footer-stat-value">{stats.words.toLocaleString()}</span>
-          </div>
-          <div className="footer-stat-item">
-            <span className="footer-stat-label">Unique</span>
-            <span className="footer-stat-value">{stats.uniqueWords.toLocaleString()}</span>
-          </div>
-          <div className="footer-stat-item">
-            <span className="footer-stat-label">Dup.</span>
-            <span className="footer-stat-value">{stats.duplicateWords.toLocaleString()}</span>
-          </div>
-          <div className="footer-stat-item">
-            <span className="footer-stat-label">Done</span>
-            <span className="footer-stat-value progress-value">{stats.progress}%</span>
-          </div>
-        </footer>
       )}
     </div>
   );

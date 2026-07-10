@@ -298,4 +298,155 @@ export const deleteDocument = async (documentId) => {
   return response.data;
 };
 
+// ── PROJECT-BASED TRANSLATION MANAGEMENT SYSTEM CLIENT API ────────────────
+
+export const createProject = async (name, client, description, sourceLanguage, targetLanguages, settings = {}) => {
+  const response = await api.post("/api/projects", {
+    name,
+    client,
+    description,
+    sourceLanguage,
+    targetLanguages,
+    settings
+  });
+  return response.data;
+};
+
+export const fetchProjects = async () => {
+  const response = await api.get("/api/projects");
+  return response.data;
+};
+
+export const fetchProjectDetails = async (projectId) => {
+  const response = await api.get(`/api/projects/${projectId}`);
+  return response.data;
+};
+
+export const deleteProject = async (projectId) => {
+  const response = await api.delete(`/api/projects/${projectId}`);
+  return response.data;
+};
+
+export const uploadFileToProject = async (projectId, file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await api.post(`/api/projects/${projectId}/upload`, formData);
+  return response.data;
+};
+
+export const updateProjectLanguages = async (projectId, targetLanguages) => {
+  const response = await api.post(`/api/projects/${projectId}/languages`, { targetLanguages });
+  return response.data;
+};
+
+export const fetchJobSegments = async (jobId) => {
+  const response = await api.get(`/api/jobs/${jobId}/segments`);
+  return response.data;
+};
+
+export const updateJobSegment = async (jobId, segmentIndex, targetText, status, contextJira = null, contextDescription = null, autoPropagate = true) => {
+  const response = await api.put(`/api/jobs/${jobId}/segments/${segmentIndex}`, {
+    targetText,
+    status,
+    contextJira,
+    contextDescription,
+    autoPropagate
+  });
+  return response.data;
+};
+
+export const translateJobSegmentContext = async (jobId, segmentIndex, { contextJira, contextDescription, screenshot, contextSettings }) => {
+  const formData = new FormData();
+  if (contextJira !== undefined && contextJira !== null) formData.append("contextJira", contextJira);
+  if (contextDescription !== undefined && contextDescription !== null) formData.append("contextDescription", contextDescription);
+  if (screenshot) formData.append("screenshot", screenshot);
+  if (contextSettings) formData.append("contextSettings", JSON.stringify(contextSettings));
+
+  const response = await api.post(`/api/jobs/${jobId}/segments/${segmentIndex}/translate-context`, formData, {
+    headers: {
+      "Content-Type": "multipart/form-data"
+    }
+  });
+  return response.data;
+};
+
+export const controlJobQueue = async (jobId, action) => {
+  const response = await api.post(`/api/jobs/${jobId}/${action}`);
+  return response.data;
+};
+
+export const downloadJobFile = async (jobId, fileName, targetLang, extension = ".html") => {
+  const response = await api.get(`/api/jobs/${jobId}/download`, { responseType: "blob" });
+  const blob = new Blob([response.data]);
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", `${fileName}_${targetLang}${extension}`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+export const downloadLanguageZip = async (projectId, lang) => {
+  const response = await api.get(`/api/projects/${projectId}/download/lang/${lang}`, { responseType: "blob" });
+  const blob = new Blob([response.data]);
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", `project_${projectId}_${lang}.zip`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+export const downloadProjectZip = async (projectId) => {
+  const response = await api.get(`/api/projects/${projectId}/download/all`, { responseType: "blob" });
+  const blob = new Blob([response.data]);
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", `project_${projectId}_all.zip`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+export const fetchProjectAnalytics = async (projectId) => {
+  const response = await api.get(`/api/projects/${projectId}/analytics`);
+  return response.data;
+};
+
+export const fetchJobSegmentsByPath = async (documentId, lang) => {
+  const response = await api.get(`/api/documents/${documentId}/lang/${lang}/segments`);
+  return response.data;
+};
+
+export const updateJobSegmentByPath = async (documentId, lang, segmentIndex, targetText, status, contextJira = null, contextDescription = null, autoPropagate = true) => {
+  const response = await api.put(`/api/documents/${documentId}/lang/${lang}/segments/${segmentIndex}`, {
+    targetText,
+    status,
+    contextJira,
+    contextDescription,
+    autoPropagate
+  });
+  return response.data;
+};
+
+export const translateJobSegmentContextByPath = async (documentId, lang, segmentIndex, { contextJira, contextDescription, screenshot, contextSettings }) => {
+  const formData = new FormData();
+  if (contextJira !== undefined && contextJira !== null) formData.append("contextJira", contextJira);
+  if (contextDescription !== undefined && contextDescription !== null) formData.append("contextDescription", contextDescription);
+  if (screenshot) formData.append("screenshot", screenshot);
+  if (contextSettings) formData.append("contextSettings", JSON.stringify(contextSettings));
+
+  const response = await api.post(`/api/documents/${documentId}/lang/${lang}/segments/${segmentIndex}/translate-context`, formData, {
+    headers: {
+      "Content-Type": "multipart/form-data"
+    }
+  });
+  return response.data;
+};
+
+
+
 
