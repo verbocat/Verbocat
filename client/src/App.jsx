@@ -1089,6 +1089,40 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, [segments, fileId, fileName, targetLanguage, currentProvider, glossaryMap, contextSettings, history, future]);
 
+  const isScriptValidForLanguage = (text, targetLang) => {
+    if (!text) return true;
+    const cleanLang = String(targetLang || "").toLowerCase();
+    const cleanText = String(text).replace(/__TAG_\d+__/g, "");
+
+    if (cleanLang.startsWith("hi")) {
+      // Forbid Perso-Arabic/Urdu characters
+      if (/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(cleanText)) {
+        return false;
+      }
+      // Forbid remaining Latin characters after removing acronyms
+      const textWithoutAcronyms = cleanText.replace(/\b[A-Z0-9]{1,}(?:[-/][A-Z0-9]+)*\b/g, "");
+      if (/[a-zA-Z]/.test(textWithoutAcronyms)) {
+        return false;
+      }
+    }
+
+    const isLatinBased = /^(en|es|fr|de|it|pt|nl|sv|no|da|fi|pl)/.test(cleanLang);
+    if (isLatinBased) {
+      if (/[\u0900-\u097F\u0600-\u06FF\u0400-\u04FF\u4E00-\u9FFF]/.test(cleanText)) {
+        return false;
+      }
+    }
+
+    const isArabicBased = /^(ar|ur|fa|ps|sd)/.test(cleanLang);
+    if (!isArabicBased && /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(cleanText)) {
+      if (/[\u0621-\u064A]/.test(cleanText)) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
   const handleTranslateSegments = async () => {
     if (segments.length === 0 || isTranslating) {
       return;
@@ -1101,6 +1135,11 @@ export default function App() {
       if (isJunkSegment(s.source)) return false;
       const cleanTarget = (s.target || "").replace(/<\/?\d+>/g, "").trim();
       if (cleanTarget === "") return true;
+
+      // Check for script validity
+      if (!isScriptValidForLanguage(cleanTarget, targetLanguage)) {
+        return true;
+      }
 
       // If target is identical to source, and we are translating to a different language, it's a failed fallback
       const cleanSource = s.source.replace(/<\/?\d+>/g, "").trim();
@@ -1193,7 +1232,7 @@ export default function App() {
             !isEmail &&
             !isPhone &&
             !isRomanPointer &&
-            (cleanTarget === "" || cleanSource.toLowerCase() === cleanTarget.toLowerCase())
+            (cleanTarget === "" || cleanSource.toLowerCase() === cleanTarget.toLowerCase() || !isScriptValidForLanguage(cleanTarget, targetLanguage))
           ) {
             stillUntranslated.push(seg);
           }
@@ -1246,7 +1285,7 @@ export default function App() {
     } catch (error) {
       console.error("Translation error:", error);
       setIsTranslating(false);
-      showToast(`Translation failed: ${error.message || error}`, "error");
+      showToast(`Translation failed: ${error.response?.data?.error || error.message || error}`, "error");
     }
   };
 

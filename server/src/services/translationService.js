@@ -164,6 +164,13 @@ const splitIntoSentences = (text) => {
   return parts.filter(p => p.trim().length > 0);
 };
 
+const isSafeTranslation = (source, targetText, targetLang) => {
+  if (!targetText || String(targetText).trim() === "") {
+    return false;
+  }
+  return isSafeTmTranslation(source, targetText, targetLang);
+};
+
 const isPersistableProvider = (provider) =>
   provider && 
   provider !== "Fallback" && 
@@ -192,10 +199,10 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
   const sourceToIndex = new Map();
 
   segments.forEach((segment, index) => {
-    const isTargetEmpty = !segment.target || segment.target.replace(/<\/?\d+>/g, "").trim() === "";
-    if (isTargetEmpty) {
+    const hasSafeTarget = segment.target && isSafeTranslation(segment.source, segment.target, target);
+    if (!hasSafeTarget) {
       const source = segment.source;
-      if (!tmMap[source] || !isSafeTmTranslation(source, tmMap[source].target_text, target)) {
+      if (!tmMap[source] || !isSafeTranslation(source, tmMap[source].target_text, target)) {
         if (!sourceToIndex.has(source)) {
           sourceToIndex.set(source, []);
           uniqueMissingSources.push(source);
@@ -387,9 +394,46 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
   }
 
   const results = await Promise.all(segments.map(async (segment, index) => {
-    const tmEntry = tmMap[segment.source];
-    const targetText = tmEntry ? tmEntry.target_text : "";
-    const provider = tmEntry && tmEntry.provider ? tmEntry.provider : "TM Database";
+    let targetText = "";
+    let provider = "";
+
+    // 1. Check if the segment already had a safe translation
+    if (segment.target && isSafeTranslation(segment.source, segment.target, target)) {
+      targetText = segment.target;
+      provider = "Existing Segment Target";
+    } else {
+      // 2. Check if TM has a safe translation
+      const tmEntry = tmMap[segment.source];
+      if (tmEntry && isSafeTranslation(segment.source, tmEntry.target_text, target)) {
+        targetText = tmEntry.target_text;
+        provider = tmEntry.provider || "TM Database";
+      }
+    }
+
+    // FINAL STRICT CHECK: If it is still not safe, we must raise a genuine error!
+    if (!isSafeTranslation(segment.source, targetText, target)) {
+      let reason = "Unknown reason";
+      if (!targetText || targetText.trim() === "") {
+        reason = "The translation is empty or null.";
+      } else if (normalizeText(segment.source).toLowerCase() === normalizeText(targetText).toLowerCase() && !isLegitimatelyIdentical(segment.source)) {
+        reason = `The translated text is identical to the source text: "${targetText}", which is not legitimately identical.`;
+      } else {
+        const { isScriptValidForLanguage } = require("./translationProviders");
+        if (target && !isScriptValidForLanguage(targetText, target)) {
+          reason = `The translation failed script validation / purity checks for target language "${target}" (detected foreign script or character leakage).`;
+        } else if (/__TAG_/i.test(targetText)) {
+          reason = "The translation contains raw tag placeholders (__TAG_).";
+        } else if (hasVisibleMarkup(targetText) && !hasVisibleMarkup(segment.source)) {
+          reason = "The translation has visible markup that was not present in the source segment.";
+        } else if (digitString(segment.source) !== digitString(targetText)) {
+          reason = `Mismatch in numeric digits between source ("${digitString(segment.source)}") and translation ("${digitString(targetText)}").`;
+        } else {
+          reason = "The translation failed quality safety checks (e.g. mismatch in list pointers, contact prefixes, or extreme length ratio).";
+        }
+      }
+
+      throw new Error(`[Translation Integrity Error] Segment index ${index} (Source: "${segment.source.substring(0, 100)}") failed translation validation checks. Reason: ${reason} (Final Target Text: "${targetText || ''}")`);
+    }
 
     return {
       id: segment.id,
@@ -476,6 +520,29 @@ const translateSegmentWithContext = async ({
     mqmAccuracyScore = mqmReport?.accuracyScore !== undefined ? mqmReport.accuracyScore : 100;
   } catch (err) {
     console.error("Failed to run MQM on re-translated segment:", err);
+  }
+
+  if (!isSafeTranslation(sourceText, cleanedTranslation, targetLang)) {
+    let reason = "Unknown reason";
+    if (!cleanedTranslation || cleanedTranslation.trim() === "") {
+      reason = "The translation is empty or null.";
+    } else if (normalizeText(sourceText).toLowerCase() === normalizeText(cleanedTranslation).toLowerCase() && !isLegitimatelyIdentical(sourceText)) {
+      reason = `The translated text is identical to the source text: "${cleanedTranslation}", which is not legitimately identical.`;
+    } else {
+      const { isScriptValidForLanguage } = require("./translationProviders");
+      if (targetLang && !isScriptValidForLanguage(cleanedTranslation, targetLang)) {
+        reason = `The translation failed script validation / purity checks for target language "${targetLang}" (detected foreign script or character leakage).`;
+      } else if (/__TAG_/i.test(cleanedTranslation)) {
+        reason = "The translation contains raw tag placeholders (__TAG_).";
+      } else if (hasVisibleMarkup(cleanedTranslation) && !hasVisibleMarkup(sourceText)) {
+        reason = "The translation has visible markup that was not present in the source segment.";
+      } else if (digitString(sourceText) !== digitString(cleanedTranslation)) {
+        reason = `Mismatch in numeric digits between source ("${digitString(sourceText)}") and translation ("${digitString(cleanedTranslation)}").`;
+      } else {
+        reason = "The translation failed quality safety checks (e.g. mismatch in list pointers, contact prefixes, or extreme length ratio).";
+      }
+    }
+    throw new Error(`[Translation Integrity Error] Segment (Source: "${sourceText.substring(0, 100)}") failed translation validation checks. Reason: ${reason} (Final Target Text: "${cleanedTranslation || ''}")`);
   }
 
   return {
