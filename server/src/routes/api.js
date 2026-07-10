@@ -157,12 +157,14 @@ apiRouter.post("/translate-batch", checkAuth, checkTranslateAccess, async (reque
     if (wordCount > 0) {
       const email = request.profile.email;
       const userId = request.profile.id;
+      const isSeo = contextSettings?.purpose === "SEO";
+      const actionName = isSeo ? "translate-batch (SEO)" : "translate-batch";
 
       // 1. Log credit entry in credit_logs
       await supabase.from("credit_logs").insert({
         user_id: userId,
         email: email,
-        action: "translate-batch",
+        action: actionName,
         word_count: wordCount,
         file_name: fileName || "document"
       });
@@ -928,10 +930,12 @@ apiRouter.post(
 
       // Log credit consumption and update database profiles
       if (wordCount > 0) {
+        const isSeo = contextSettings?.purpose === "SEO";
+        const actionName = isSeo ? "translate-context (SEO)" : "translate-context";
         await supabase.from("credit_logs").insert({
           user_id: request.profile.id,
           email: request.profile.email,
-          action: "translate-context",
+          action: actionName,
           word_count: wordCount,
           file_name: doc.name || "document"
         });
@@ -1242,10 +1246,12 @@ apiRouter.post("/documents/:id/audit/start", checkAuth, async (request, response
 
     // Log credit consumption and update database profiles
     if (wordCount > 0) {
+      const isSeo = request.body.contextSettings?.purpose === "SEO";
+      const actionName = isSeo ? "qc-audit (SEO)" : "qc-audit";
       await supabase.from("credit_logs").insert({
         user_id: request.profile.id,
         email: request.profile.email,
-        action: "qc-audit",
+        action: actionName,
         word_count: wordCount,
         file_name: doc.name || "document"
       });

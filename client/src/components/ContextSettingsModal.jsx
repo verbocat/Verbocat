@@ -258,7 +258,7 @@ export const ContextSettingsModal = ({ show, onClose, contextSettings, setContex
     if (!documentId) return;
     setIsDetecting(true);
     try {
-      const token = localStorage.getItem("token") || "";
+      const token = localStorage.getItem("centroid_token") || "";
       const response = await fetch(`/api/documents/${documentId}/auto-detect-context`, {
         method: "POST",
         headers: {
