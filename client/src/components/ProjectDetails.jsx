@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { 
   ArrowLeft, FileText, Globe, Play, Pause, XCircle, RotateCcw, 
-  Download, Upload, CheckCircle2, AlertCircle, Eye, Percent, Database, BarChart3, TrendingUp, Sparkles, Folder, Plus
+  Download, Upload, CheckCircle2, AlertCircle, Eye, Percent, Database, BarChart3, TrendingUp, Sparkles, Folder, Plus, Trash2
 } from "lucide-react";
 import io from "socket.io-client";
 import { 
   fetchProjectDetails, uploadFileToProject, updateProjectLanguages, 
-  controlJobQueue, downloadJobFile, downloadLanguageZip, downloadProjectZip, fetchProjectAnalytics 
+  controlJobQueue, downloadJobFile, downloadLanguageZip, downloadProjectZip, fetchProjectAnalytics, deleteDocument 
 } from "../services/api";
 import { LANGUAGES } from "../constants/languages";
 
@@ -20,6 +20,8 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
   const [isUploading, setIsUploading] = useState(false);
   const [showAddLangModal, setShowAddLangModal] = useState(false);
   const [selectedAddLangs, setSelectedAddLangs] = useState([]);
+  const [selectedFileId, setSelectedFileId] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(null);
   
   const fileInputRef = useRef(null);
   const socketRef = useRef(null);
@@ -78,9 +80,12 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
     if (filesList.length === 0) return;
 
     setIsUploading(true);
-    showToast(`Processing ${filesList.length} file(s)...`);
+    setUploadProgress({ current: 0, total: filesList.length });
     try {
+      let current = 0;
       for (const file of filesList) {
+        current++;
+        setUploadProgress({ current, total: filesList.length });
         await uploadFileToProject(projectId, file);
       }
       showToast("All files uploaded and segments parsed successfully!");
@@ -91,7 +96,32 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
       showToast(err.response?.data?.error || "Failed to upload one or more files.", "error");
     } finally {
       setIsUploading(false);
+      setUploadProgress(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleFileClick = (fileId) => {
+    setSelectedFileId(prev => prev === fileId ? null : fileId);
+  };
+
+  const handleDeleteFile = async (fileId, name) => {
+    if (!window.confirm(`Are you sure you want to delete file "${name}"? This deletes all associated translation jobs and segments.`)) {
+      return;
+    }
+
+    try {
+      showToast("Deleting file...");
+      await deleteDocument(fileId);
+      showToast("File deleted successfully!");
+      if (selectedFileId === fileId) {
+        setSelectedFileId(null);
+      }
+      loadProjectDetails();
+      loadAnalytics();
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to delete file", "error");
     }
   };
 
@@ -179,6 +209,10 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
     return found ? found.name : code.toUpperCase();
   };
 
+  const filteredJobs = selectedFileId 
+    ? jobs.filter(job => job.document_id === selectedFileId) 
+    : jobs;
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[var(--bg-base)] flex flex-col items-center justify-center p-6 text-white">
@@ -248,12 +282,18 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
-            className="flex items-center gap-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:bg-zinc-800 disabled:text-zinc-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl cursor-pointer shadow-md transition-all"
+            className="flex items-center gap-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:bg-zinc-800 disabled:text-zinc-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl cursor-pointer shadow-md transition-all relative overflow-hidden"
           >
-            {isUploading ? (
+            {isUploading && uploadProgress ? (
               <>
-                <div className="animate-spin rounded-full h-3.5 w-3.5 border border-white border-t-transparent"></div>
-                Processing...
+                <div 
+                  className="absolute left-0 top-0 bottom-0 bg-indigo-600 transition-all duration-300"
+                  style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
+                ></div>
+                <span className="relative z-10 flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-3.5 w-3.5 border border-white border-t-transparent"></div>
+                  Uploading ({uploadProgress.current}/{uploadProgress.total})
+                </span>
               </>
             ) : (
               <>
@@ -308,8 +348,14 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
             ) : (
               <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
                 {files.map(file => (
-                  <div key={file.id} className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] p-3 rounded-xl flex items-center justify-between gap-3 group">
-                    <div className="min-w-0">
+                  <div 
+                    key={file.id} 
+                    onClick={() => handleFileClick(file.id)}
+                    className={`bg-[var(--bg-surface)] border p-3 rounded-xl flex items-center justify-between gap-3 group transition-all cursor-pointer ${
+                      selectedFileId === file.id ? "border-indigo-500 bg-indigo-500/10" : "border-[var(--border-subtle)] hover:border-zinc-700/60"
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1">
                       <p className="text-xs font-semibold text-[var(--text-primary)] truncate" title={file.name}>
                         {file.name}
                       </p>
@@ -317,6 +363,17 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                         {file.word_count || 0} words • {Math.round(file.file_size / 1024)} KB
                       </p>
                     </div>
+                    
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteFile(file.id, file.name);
+                      }}
+                      className="text-[var(--text-muted)] hover:text-rose-400 p-1.5 rounded-lg hover:bg-[var(--bg-hover)] opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
+                      title="Delete File"
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -363,17 +420,29 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
         {/* Right Column: Translation Jobs Queue (2/3 width) */}
         <div className="lg:col-span-2">
           <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-5 shadow-lg">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-4 flex items-center gap-2">
-              <Globe size={16} className="text-indigo-400" /> Translation Jobs & Queue Manager ({jobs.length})
-            </h3>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2">
+                <Globe size={16} className="text-indigo-400" /> Translation Jobs & Queue Manager ({filteredJobs.length})
+              </h3>
+              {selectedFileId && (
+                <button
+                  onClick={() => setSelectedFileId(null)}
+                  className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded-md cursor-pointer transition-all"
+                >
+                  Clear Filter (Show All)
+                </button>
+              )}
+            </div>
 
-            {jobs.length === 0 ? (
+            {filteredJobs.length === 0 ? (
               <div className="text-center py-20 text-[var(--text-muted)] text-xs">
-                Upload a document and specify target languages to generate translation jobs.
+                {selectedFileId 
+                  ? "No translation jobs exist for the selected document." 
+                  : "Upload a document and specify target languages to generate translation jobs."}
               </div>
             ) : (
               <div className="space-y-4 max-h-[600px] overflow-y-auto pr-1">
-                {jobs.map(job => (
+                {filteredJobs.map(job => (
                   <div 
                     key={job.id} 
                     className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-zinc-700/80 p-4 rounded-xl flex flex-col md:flex-row justify-between gap-4 transition-all"

@@ -337,7 +337,7 @@ export default function App() {
     } finally {
       setIsUploading(false);
     }
-  }, [documentId, token]);
+  }, [documentId, token, currentRoute]);
 
   useEffect(() => {
     if (isAuth && token) {
