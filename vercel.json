@@ -14,27 +14,15 @@
       "dest": "https://verbocat-myhh.onrender.com/api/$1"
     },
     {
-      "handle": "filesystem"
-    },
-    {
       "src": "/assets/(.*)",
-      "dest": "/client/assets/$1"
+      "dest": "/assets/$1"
     },
     {
-      "src": "/client/assets/(.*)",
-      "dest": "/client/assets/$1"
-    },
-    {
-      "src": "/client/(.*)",
-      "dest": "/client/index.html"
+      "handle": "filesystem"
     },
     {
       "src": "/(.*)",
       "dest": "/index.html"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/client/index.html"
     }
   ]
 }

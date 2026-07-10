@@ -2885,23 +2885,30 @@ export default function App() {
                   itemContent={(index, item) => (
                     <SegmentCard
                       key={item.id}
-                      segment={item}
-                      active={activeSegment === item.id}
-                      isLocked={cellLocks.has(item.id - 1)}
-                      lockedBy={cellLocks.get(item.id - 1)}
-                      fontSize={editorFontSize}
                       darkMode={darkMode}
-                      autocompleteEnabled={autocompleteEnabled}
-                      onFocus={() => handleFocusSegment(item.id)}
-                      onBlur={() => handleBlurSegment(item.id)}
-                      onUpdate={(value) => handleUpdateSegment(item.id, value)}
+                      index={index}
+                      segment={item}
+                      theme={theme}
+                      translationGlossary={translationGlossary}
+                      onCopy={copyToClipboard}
+                      onUpdateTranslation={updateTranslation}
                       onToggleVerify={() => toggleVerify(item.id)}
                       onVerifyAndNext={() => verifyAndNextSegment(item.id)}
-                      onTranslateContext={(options) => handleTranslateSegmentWithContext(item.id, options)}
-                      permission={permission}
-                      theme={theme}
-                      onAcceptChange={() => handleAcceptChange(item.id)}
-                      onRejectChange={() => handleRejectChange(item.id)}
+                      lockInfo={
+                        cellLocks.has(item.id - 1) && cellLocks.get(item.id - 1).userId !== user?.id
+                          ? cellLocks.get(item.id - 1)
+                          : null
+                      }
+                      onFocusSegment={handleFocusSegment}
+                      onBlurSegment={handleBlurSegment}
+                      readOnly={permission === "read"}
+                      onSaveContext={saveSegmentContext}
+                      onTranslateWithContext={handleTranslateSegmentWithContext}
+                      onTyping={handleSegmentTyping}
+                      isOwner={ownerId === user?.id}
+                      onAcceptChange={handleAcceptChange}
+                      onRejectChange={handleRejectChange}
+                      autocompleteEnabled={autocompleteEnabled}
                     />
                   )}
                 />
