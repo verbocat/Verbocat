@@ -559,6 +559,18 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
     }
   };
 
+  const getLanguageMetrics = (langCode) => {
+    const langJobs = jobs.filter(j => j.target_lang === langCode);
+    const totalFilesCount = files.length;
+    const completedFilesCount = langJobs.filter(j => j.status === "completed").length;
+    const pendingFilesCount = totalFilesCount - completedFilesCount;
+    
+    const totalProgress = langJobs.reduce((sum, j) => sum + (j.progress || 0), 0);
+    const progress = langJobs.length > 0 ? Math.round(totalProgress / langJobs.length) : 0;
+    
+    return { progress, totalFiles: totalFilesCount, completedFiles: completedFilesCount, pendingFiles: pendingFilesCount };
+  };
+
   const getLanguageName = (code) => {
     const found = LANGUAGES.find(l => l.code === code);
     return found ? found.name : code.toUpperCase();
