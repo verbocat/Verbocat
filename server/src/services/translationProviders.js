@@ -491,7 +491,7 @@ const translateWithProviders = async (sourceTexts, protectedTexts, target, provi
 
 // Local definition removed — imported from tagProtection utility instead.
 
-const isScriptValidForLanguage = (text, targetLang) => {
+const isScriptValidForLanguage = (text, targetLang, sourceText = "") => {
   const cleanLang = String(targetLang || "").toLowerCase();
   
   // Strip tags/placeholders first to avoid false positives on tag characters
@@ -502,11 +502,47 @@ const isScriptValidForLanguage = (text, targetLang) => {
     if (/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(cleanText)) {
       return false;
     }
-    // Strip uppercase acronyms, abbreviations, and indices (e.g. SMA-1, KYC, A, 1) before script purity check
-    const textWithoutAcronyms = cleanText.replace(/\b[A-Z0-9]{1,}(?:[-/][A-Z0-9]+)*\b/g, "");
-    // Reject any remaining Latin/English script characters in Hindi translation
-    if (/[a-zA-Z]/.test(textWithoutAcronyms)) {
-      return false;
+
+    // Strip URLs, emails, and domains first to avoid checking their tokens
+    let textToAnalyze = cleanText.replace(/https?:\/\/[^\s]+/gi, "");
+    textToAnalyze = textToAnalyze.replace(/\bwww\.[^\s]+\b/gi, "");
+    textToAnalyze = textToAnalyze.replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, "");
+    textToAnalyze = textToAnalyze.replace(/\b[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}\b/gi, "");
+
+    const latinTokens = textToAnalyze.match(/[a-zA-Z]+/g) || [];
+    if (latinTokens.length > 0) {
+      const cleanSource = String(sourceText || "").replace(/__TAG_\d+__/g, "");
+      const sourceLatinTokens = new Set(
+        (cleanSource.match(/[a-zA-Z]+/g) || []).map(t => t.toLowerCase())
+      );
+
+      for (const token of latinTokens) {
+        const lowerToken = token.toLowerCase();
+        
+        // Allowed if it exists in the source text
+        if (sourceLatinTokens.has(lowerToken)) {
+          continue;
+        }
+
+        // Also allow common acronym/URL parts or list markers:
+        // Roman numerals commonly used as list pointers: i, ii, iii, iv, v, x
+        if (/^(i+v*|v*i+|x)$/i.test(token)) {
+          continue;
+        }
+
+        // Ordinal indicators (st, nd, rd, th)
+        if (/^(st|nd|rd|th)$/i.test(token)) {
+          continue;
+        }
+
+        // Single letter markers/identifiers
+        if (token.length === 1) {
+          continue;
+        }
+
+        // If a Latin token is found in Hindi translation that was NOT in the source and is not a list pointer/ordinal, reject it!
+        return false;
+      }
     }
   }
 
@@ -594,7 +630,7 @@ const translateChunk = async (texts, target, source = DEFAULT_SOURCE_LANG, provi
       let currentProvider = provider;
 
       // Validate script purity to prevent foreign scripts/Urdu leakage
-      if (translated && !isScriptValidForLanguage(translated, target)) {
+      if (translated && !isScriptValidForLanguage(translated, target, text)) {
         console.warn(`[Translation Validation Failed] Unsafe script detected in translation for target "${target}": "${translated}"`);
         translated = null; // force fallback to source text
       }
@@ -662,7 +698,7 @@ const translateChunk = async (texts, target, source = DEFAULT_SOURCE_LANG, provi
             const idx = microIndices[mj];
             let retryTranslated = retryData.translatedArray[mj];
 
-            if (retryTranslated && isScriptValidForLanguage(retryTranslated, target)) {
+            if (retryTranslated && isScriptValidForLanguage(retryTranslated, target, results[idx].source)) {
               const retryClean = normalizeTranslatedText(retryTranslated).toLowerCase();
               const srcClean = normalizeTranslatedText(results[idx].source).toLowerCase();
               if (retryClean !== srcClean || isLegitimatelyIdentical(results[idx].source)) {

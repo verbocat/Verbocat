@@ -116,7 +116,7 @@ const isSafeTmTranslation = (source, target, targetLang) => {
 
   // Language-independent script purity: import and use isScriptValidForLanguage
   const { isScriptValidForLanguage } = require("./translationProviders");
-  if (targetLang && typeof isScriptValidForLanguage === "function" && !isScriptValidForLanguage(normalizedTarget, targetLang)) {
+  if (targetLang && typeof isScriptValidForLanguage === "function" && !isScriptValidForLanguage(normalizedTarget, targetLang, normalizedSource)) {
     return false;
   }
 
@@ -419,7 +419,7 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
         reason = `The translated text is identical to the source text: "${targetText}", which is not legitimately identical.`;
       } else {
         const { isScriptValidForLanguage } = require("./translationProviders");
-        if (target && !isScriptValidForLanguage(targetText, target)) {
+        if (target && !isScriptValidForLanguage(targetText, target, segment.source)) {
           reason = `The translation failed script validation / purity checks for target language "${target}" (detected foreign script or character leakage).`;
         } else if (/__TAG_/i.test(targetText)) {
           reason = "The translation contains raw tag placeholders (__TAG_).";
@@ -530,7 +530,7 @@ const translateSegmentWithContext = async ({
       reason = `The translated text is identical to the source text: "${cleanedTranslation}", which is not legitimately identical.`;
     } else {
       const { isScriptValidForLanguage } = require("./translationProviders");
-      if (targetLang && !isScriptValidForLanguage(cleanedTranslation, targetLang)) {
+      if (targetLang && !isScriptValidForLanguage(cleanedTranslation, targetLang, sourceText)) {
         reason = `The translation failed script validation / purity checks for target language "${targetLang}" (detected foreign script or character leakage).`;
       } else if (/__TAG_/i.test(cleanedTranslation)) {
         reason = "The translation contains raw tag placeholders (__TAG_).";

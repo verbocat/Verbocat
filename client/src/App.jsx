@@ -1089,7 +1089,7 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, [segments, fileId, fileName, targetLanguage, currentProvider, glossaryMap, contextSettings, history, future]);
 
-  const isScriptValidForLanguage = (text, targetLang) => {
+  const isScriptValidForLanguage = (text, targetLang, sourceText = "") => {
     if (!text) return true;
     const cleanLang = String(targetLang || "").toLowerCase();
     const cleanText = String(text).replace(/__TAG_\d+__/g, "");
@@ -1099,10 +1099,47 @@ export default function App() {
       if (/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(cleanText)) {
         return false;
       }
-      // Forbid remaining Latin characters after removing acronyms
-      const textWithoutAcronyms = cleanText.replace(/\b[A-Z0-9]{1,}(?:[-/][A-Z0-9]+)*\b/g, "");
-      if (/[a-zA-Z]/.test(textWithoutAcronyms)) {
-        return false;
+
+      // Strip URLs, emails, and domains first to avoid checking their tokens
+      let textToAnalyze = cleanText.replace(/https?:\/\/[^\s]+/gi, "");
+      textToAnalyze = textToAnalyze.replace(/\bwww\.[^\s]+\b/gi, "");
+      textToAnalyze = textToAnalyze.replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, "");
+      textToAnalyze = textToAnalyze.replace(/\b[a-zA-Z0-9.-]+\.[A-zA-Z]{2,4}\b/gi, "");
+
+      const latinTokens = textToAnalyze.match(/[a-zA-Z]+/g) || [];
+      if (latinTokens.length > 0) {
+        const cleanSource = String(sourceText || "").replace(/__TAG_\d+__/g, "");
+        const sourceLatinTokens = new Set(
+          (cleanSource.match(/[a-zA-Z]+/g) || []).map(t => t.toLowerCase())
+        );
+
+        for (const token of latinTokens) {
+          const lowerToken = token.toLowerCase();
+          
+          // Allowed if it exists in the source text
+          if (sourceLatinTokens.has(lowerToken)) {
+            continue;
+          }
+
+          // Also allow common acronym/URL parts or list markers:
+          // Roman numerals commonly used as list pointers: i, ii, iii, iv, v, x
+          if (/^(i+v*|v*i+|x)$/i.test(token)) {
+            continue;
+          }
+
+          // Ordinal indicators (st, nd, rd, th)
+          if (/^(st|nd|rd|th)$/i.test(token)) {
+            continue;
+          }
+
+          // Single letter markers/identifiers
+          if (token.length === 1) {
+            continue;
+          }
+
+          // If a Latin token is found in Hindi translation that was NOT in the source and is not a list pointer/ordinal, reject it!
+          return false;
+        }
       }
     }
 
@@ -1137,7 +1174,7 @@ export default function App() {
       if (cleanTarget === "") return true;
 
       // Check for script validity
-      if (!isScriptValidForLanguage(cleanTarget, targetLanguage)) {
+      if (!isScriptValidForLanguage(cleanTarget, targetLanguage, s.source)) {
         return true;
       }
 
@@ -1232,7 +1269,7 @@ export default function App() {
             !isEmail &&
             !isPhone &&
             !isRomanPointer &&
-            (cleanTarget === "" || cleanSource.toLowerCase() === cleanTarget.toLowerCase() || !isScriptValidForLanguage(cleanTarget, targetLanguage))
+            (cleanTarget === "" || cleanSource.toLowerCase() === cleanTarget.toLowerCase() || !isScriptValidForLanguage(cleanTarget, targetLanguage, seg.source))
           ) {
             stillUntranslated.push(seg);
           }
