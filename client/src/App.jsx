@@ -2609,6 +2609,7 @@ export default function App() {
         contextSettings={contextSettings}
         setContextSettings={setContextSettings}
         theme={theme}
+        documentId={documentId}
       />
 
       <SearchReplaceModal

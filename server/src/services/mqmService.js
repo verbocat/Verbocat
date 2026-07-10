@@ -67,6 +67,15 @@ const getTargetSpecificRules = (targetLang, sourceLang, contextSettings = null) 
   const tone = contextSettings?.tone || "General";
   const formality = contextSettings?.formality || "Neutral";
   const domain = contextSettings?.domain || "General";
+  const purpose = contextSettings?.purpose || "General";
+
+  let purposeGuidelines = "";
+  if (purpose === "SEO") {
+    purposeGuidelines = `
+- SEO AUDIT ADJUSTMENT:
+  * This translation is optimized for SEO. Do NOT flag search-friendly vocabulary adaptations or natural localizations of key terms as 'terminology' or 'accuracy' errors, provided the meaning remains correct.
+`;
+  }
 
   let domainGuidelines = "";
   const lowerDomain = domain.toLowerCase();
@@ -94,6 +103,7 @@ const getTargetSpecificRules = (targetLang, sourceLang, contextSettings = null) 
 - CAPITALIZATION & ACRONYMS: Ensure standard acronyms and abbreviations (including connected versions like 'SMA-1', 'SMA-2', 'SMA-0', 'SMA/NPA') are preserved as shortforms/abbreviations (not expanded to full forms) in the target translation. If the target language script is different from Latin (e.g., Devanagari for Hindi), acronyms and abbreviations must be transliterated/abbreviated in the target script (e.g., 'एसएमए/एनपीए', 'एसएमए-1', 'आरबीआई' for Hindi), NOT kept in Latin/English script.
 - ANTI-HALLUCINATION & LEGAL PRECISION: Do NOT suggest stylistic changes that weaken legal precision, technical accuracy, or domain terminology. Do NOT flag standard list indices or numbers as errors.
 ${domainGuidelines}
+${purposeGuidelines}
 `;
 };
 

@@ -304,6 +304,16 @@ ${styleInstructions}
 - Translate common business/banking terms professionally (e.g. translate 'Earn ... interest' as 'ब्याज प्राप्त करें' in formal Hindi, or 'ब्याज मिलेगा' in informal Hindi).
 - Maintain consistent terminology for recurring terms.`;
 
+  let purposeInstructions = "";
+  if (contextSettings?.purpose === "SEO") {
+    purposeInstructions = `
+- SEO TRANSLATION OPTIMIZATION (CRITICAL):
+  * Optimize the translation for Search Engine Optimization (SEO) in the target language.
+  * Adapt key terms to match common search queries and keywords in the target language while maintaining readable, natural phrasing.
+  * Do NOT use obscure, academic, or literal translations that would reduce search relevance or search volume.
+  * Maintain all metadata, header structures, anchor text, alt tags, and structural keywords in the output translation.`;
+  }
+
   let retryInstructions = "";
   if (contextSettings?.isRetry) {
     retryInstructions = `
@@ -315,7 +325,7 @@ ${styleInstructions}
   * Ensure the output is strictly in the target language script (${targetName}) and vocabulary. Do NOT leave any Latin/English words in the translation, except for uppercase acronyms (e.g. GST, PAN, RBI) and section identifiers. Everything else must be translated or transliterated to ${targetName} script.`;
   }
 
-  return baseInstructions + "\n" + targetSpecificRules + "\n" + retryInstructions;
+  return baseInstructions + "\n" + targetSpecificRules + "\n" + purposeInstructions + "\n" + retryInstructions;
 };
 
 const translateWithOpenAI = async (protectedTexts, target, source = DEFAULT_SOURCE_LANG, contextSettings = null) => {

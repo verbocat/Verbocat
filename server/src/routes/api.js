@@ -982,6 +982,148 @@ apiRouter.post(
   }
 );
 
+apiRouter.post("/documents/:id/auto-detect-context", checkAuth, async (request, response) => {
+  const documentId = request.params.id;
+  try {
+    const doc = await verifyDocumentAccess(request, response, "write");
+    if (!doc) return;
+
+    // Fetch all segments of the document
+    const { data: allSegments, error: segFetchErr } = await supabase
+      .from("document_segments")
+      .select("source_text")
+      .eq("document_id", documentId);
+
+    if (segFetchErr || !allSegments || allSegments.length === 0) {
+      return response.status(400).json({ error: "No segments found in this document to analyze." });
+    }
+
+    // Filter segments to only keep segments with word count >= 10 (and up to 45 words)
+    let pool = allSegments.filter(seg => {
+      const words = countWords(seg.source_text);
+      return words >= 10 && words <= 45;
+    });
+
+    // Fallback if not enough segments of >= 10 words
+    if (pool.length < 10) {
+      pool = allSegments.filter(seg => {
+        return countWords(seg.source_text) >= 1;
+      });
+    }
+    if (pool.length === 0) {
+      pool = allSegments;
+    }
+
+    // Select 10 random segments from the filtered pool
+    const shuffled = [...pool].sort(() => 0.5 - Math.random());
+    const selectedSamples = shuffled.slice(0, 10);
+
+    // Combine source text and calculate word count
+    const combinedText = selectedSamples.map(s => s.source_text).join("\n");
+    const wordCount = countWords(combinedText);
+
+    // Check credit limits
+    if (request.profile.role !== "admin") {
+      if (request.profile.credits_consumed + wordCount > request.profile.credits_allowed) {
+        return response.status(403).json({
+          error: `Credit limit exceeded. Reached ${request.profile.credits_consumed}/${request.profile.credits_allowed} words allowance. Contact admin.`
+        });
+      }
+    }
+
+    // Call OpenAI to detect the context settings
+    const axios = require("axios");
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+    if (!OPENAI_API_KEY) {
+      return response.status(500).json({ error: "OpenAI API key is not configured on the server." });
+    }
+
+    const DOMAINS = ["General", "Marketing", "Legal", "Medical", "Pharmaceutical", "Financial", "Banking", "Insurance", "Technical", "Software", "IT & Cybersecurity", "E-commerce", "Automotive", "Manufacturing", "Engineering", "Telecommunications", "Gaming", "Education", "Government", "HR & Recruitment", "Travel & Tourism", "Hospitality", "Retail", "Energy & Utilities", "Real Estate", "Life Sciences", "Healthcare", "Aerospace", "Agriculture", "Media & Entertainment"];
+    const CONTENT_TYPES = ["General", "Landing Page", "Product Page", "Advertisement", "Email Campaign", "Sales Brochure", "Social Media Post", "UI Strings", "Help Center", "User Guide", "Documentation", "Release Notes", "Knowledge Base", "Contract", "NDA", "Terms of Service", "Privacy Policy", "Compliance Document", "Clinical Trial", "IFU", "Patient Information", "Medical Report", "Website", "Blog", "Article", "Presentation", "Training Material", "Internal Communication"];
+    const AUDIENCES = ["General", "Consumers", "Small Business Owners", "Enterprise Buyers", "Patients", "Caregivers", "End Users", "Developers", "Administrators"];
+    const PURPOSES = ["General", "Generate Leads", "Drive Purchases", "Build Trust", "Increase Signups", "Inform", "Educate", "Train", "Comply", "Protect Rights", "Resolve Issues", "Reduce Support Tickets", "SEO"];
+    const TONES = ["General", "Persuasive", "Professional", "Friendly", "Formal", "Precise", "Reassuring", "Clear", "Concise", "Casual", "Engaging"];
+    const FORMALITIES = ["Very Formal", "Formal", "Neutral", "Informal", "Very Informal"];
+    const STRICTNESS = ["Flexible", "Balanced", "Strict"];
+
+    const prompt = `Analyze the following document sample text and classify it into standard translation context settings.
+
+Sample Text:
+"""
+${combinedText}
+"""
+
+You MUST output ONLY a JSON object containing the following keys with one of their listed allowed values:
+{
+  "domain": (one of: ${JSON.stringify(DOMAINS)}),
+  "contentType": (one of: ${JSON.stringify(CONTENT_TYPES)}),
+  "audience": (one of: ${JSON.stringify(AUDIENCES)}),
+  "purpose": (one of: ${JSON.stringify(PURPOSES)}),
+  "tone": (one of: ${JSON.stringify(TONES)}),
+  "formality": (one of: ${JSON.stringify(FORMALITIES)}),
+  "terminologyStrictness": (one of: ${JSON.stringify(STRICTNESS)})
+}
+
+Provide ONLY the valid JSON, with no markdown code blocks, explanations, or leading/trailing text. Ensure high accuracy and strict adherence to the allowed values list.`;
+
+    const openAiResponse = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: "You are a translation context detection system. You output strictly raw JSON matching the requested schema." },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.1,
+        response_format: { type: "json_object" }
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        timeout: 30000
+      }
+    );
+
+    const content = openAiResponse.data?.choices?.[0]?.message?.content;
+    let detectedSettings;
+    try {
+      detectedSettings = JSON.parse(content);
+    } catch (parseErr) {
+      console.error("Failed to parse OpenAI auto-detect output:", content);
+      return response.status(500).json({ error: "Failed to parse context detection output." });
+    }
+
+    // Deduct credits and log
+    if (wordCount > 0) {
+      await supabase.from("credit_logs").insert({
+        user_id: request.profile.id,
+        email: request.profile.email,
+        action: "auto-detect-context",
+        word_count: wordCount,
+        file_name: doc.name || "document"
+      });
+
+      const newConsumed = request.profile.credits_consumed + wordCount;
+      await supabase
+        .from("profiles")
+        .update({ credits_consumed: newConsumed })
+        .eq("id", request.profile.id);
+    }
+
+    response.json({
+      success: true,
+      contextSettings: detectedSettings,
+      wordCount
+    });
+
+  } catch (error) {
+    console.error("Auto-detect context failed:", error);
+    response.status(500).json({ error: error.message || "Failed to auto-detect context settings." });
+  }
+});
+
 // ── Document-Wide Audit APIs ──
 
 // 1. Pre-flight Estimate
