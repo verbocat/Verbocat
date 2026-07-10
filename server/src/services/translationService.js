@@ -165,6 +165,9 @@ const splitIntoSentences = (text) => {
 };
 
 const isSafeTranslation = (source, targetText, targetLang) => {
+  if (!source || String(source).trim() === "") {
+    return true;
+  }
   if (!targetText || String(targetText).trim() === "") {
     return false;
   }
@@ -556,6 +559,7 @@ const translateSegmentWithContext = async ({
 module.exports = {
   translateSegments,
   isSafeTmTranslation,
+  isSafeTranslation,
   translateSegmentWithContext,
   ensureEnglishNumerals,
   postProcessTranslation

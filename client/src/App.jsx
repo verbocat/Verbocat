@@ -1104,41 +1104,55 @@ export default function App() {
       let textToAnalyze = cleanText.replace(/https?:\/\/[^\s]+/gi, "");
       textToAnalyze = textToAnalyze.replace(/\bwww\.[^\s]+\b/gi, "");
       textToAnalyze = textToAnalyze.replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, "");
-      textToAnalyze = textToAnalyze.replace(/\b[a-zA-Z0-9.-]+\.[A-zA-Z]{2,4}\b/gi, "");
+      textToAnalyze = textToAnalyze.replace(/\b[a-zA-Z0-9.-]+\.[A-Za-z]{2,4}\b/gi, "");
 
-      const latinTokens = textToAnalyze.match(/[a-zA-Z]+/g) || [];
+      const latinTokens = textToAnalyze.match(/[a-zA-Z0-9.-]+/g) || [];
       if (latinTokens.length > 0) {
         const cleanSource = String(sourceText || "").replace(/__TAG_\d+__/g, "");
         const sourceLatinTokens = new Set(
-          (cleanSource.match(/[a-zA-Z]+/g) || []).map(t => t.toLowerCase())
+          (cleanSource.match(/[a-zA-Z0-9.-]+/g) || []).map(t => t.toLowerCase())
         );
 
-        for (const token of latinTokens) {
+        const isAllowedLatinToken = (token) => {
           const lowerToken = token.toLowerCase();
-          
-          // Allowed if it exists in the source text
+
+          // If it exists in the source text, it is always allowed!
           if (sourceLatinTokens.has(lowerToken)) {
-            continue;
+            return true;
           }
 
-          // Also allow common acronym/URL parts or list markers:
-          // Roman numerals commonly used as list pointers: i, ii, iii, iv, v, x
-          if (/^(i+v*|v*i+|x)$/i.test(token)) {
-            continue;
+          // Allow if it contains no letters (pure digits/punctuation)
+          if (!/[a-zA-Z]/.test(token)) {
+            return true;
           }
 
-          // Ordinal indicators (st, nd, rd, th)
-          if (/^(st|nd|rd|th)$/i.test(token)) {
-            continue;
-          }
+          // Allow URLs/emails/domains
+          if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(token)) return true;
+          if (/^https?:\/\/[^\s]+$/i.test(token)) return true;
+          if (/^www\.[^\s]+$/i.test(token)) return true;
+          if (/\.[a-z]{2,4}$/i.test(token)) return true;
 
-          // Single letter markers/identifiers
-          if (token.length === 1) {
-            continue;
-          }
+          // Allow Roman numerals
+          if (/^(i+v*|v*i+|x|v)$/i.test(token)) return true;
 
-          // If a Latin token is found in Hindi translation that was NOT in the source and is not a list pointer/ordinal, reject it!
+          // Allow Ordinal indicators (st, nd, rd, th)
+          if (/^(st|nd|rd|th)$/i.test(token)) return true;
+
+          // Allow uppercase acronyms / codes (at least 50% uppercase/digits)
+          const upperCount = (token.match(/[A-Z0-9]/g) || []).length;
+          const totalAlpha = (token.match(/[a-zA-Z]/g) || []).length;
+          if (totalAlpha > 0 && upperCount / totalAlpha >= 0.5) return true;
+
+          // Allow short list indices / single letters
+          if (token.length <= 3) return true;
+
           return false;
+        };
+
+        for (const token of latinTokens) {
+          if (!isAllowedLatinToken(token)) {
+            return false;
+          }
         }
       }
     }

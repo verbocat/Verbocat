@@ -390,39 +390,45 @@ const isUsableTranslation = (source, translated) => {
  * These segments should NOT be retried.
  */
 const isLegitimatelyIdentical = (source) => {
-  const clean = String(source || "").replace(/<[^>]+>/g, "").replace(/__TAG_\d+__/g, "").trim();
+  const clean = String(source || "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/__TAG_\d+__/g, "")
+    .trim();
   if (!clean) return true;
 
   // No letters at all (just numbers, punctuation, symbols)
   if (!/\p{L}/u.test(clean)) return true;
 
-  // URLs
-  if (/^https?:\/\/[^\s]+$/i.test(clean)) return true;
+  // Split into tokens by whitespace and common punctuation (excluding dots/hyphens/slashes inside tokens)
+  const tokens = clean.split(/[\s,()\[\]{}":;!|?।]+/g).filter(t => t.trim().length > 0);
+  if (tokens.length === 0) return true;
 
-  // Pure abbreviation/acronym: all uppercase Latin letters, digits, hyphens, slashes, dots, spaces
-  // e.g. USA, KFS, AVVNL, UPS-1, SMA-1, SMA/NPA, A.B.C., Sr. No.
-  if (/^[A-Z0-9][A-Z0-9.\-\/\s]*$/i.test(clean) && clean.length <= 40 && /[A-Z]/.test(clean)) {
-    // Must have at least one uppercase letter and be mostly uppercase/digits
-    const upperCount = (clean.match(/[A-Z0-9]/g) || []).length;
-    const totalAlpha = (clean.match(/[a-zA-Z]/g) || []).length;
-    if (totalAlpha === 0 || upperCount / totalAlpha >= 0.5) return true;
-  }
+  const isTokenNonTranslatable = (token) => {
+    // 1. No letters (just digits/punctuation)
+    if (!/[a-zA-Z]/i.test(token)) return true;
+    
+    // 2. URL or email
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(token)) return true;
+    if (/^https?:\/\/[^\s]+$/i.test(token)) return true;
+    if (/^www\.[^\s]+$/i.test(token)) return true;
+    if (/\.[a-z]{2,4}$/i.test(token)) return true; // domain suffix
 
-  // List pointers: (A), (1), (i), (ii), (a), a., 1., h., b), r)., 16(a), 5.11.3.2
-  if (/^\(?[a-zA-Z0-9]+\)?\.?$/i.test(clean)) return true;
-  if (/^\d+(\.\d+)*\.?$/i.test(clean)) return true;
-  if (/^\(?[ivxlcdm]+\)\.?$/i.test(clean)) return true;
+    // 3. Roman numerals
+    if (/^(i+v*|v*i+|x|v)$/i.test(token)) return true;
 
-  // Short alphanumeric codes (e.g. "A-1", "B2", "Part C", etc.) under 10 chars
-  if (/^[A-Z0-9][A-Z0-9\s\-\/\.]*$/i.test(clean) && clean.length <= 10) return true;
+    // 4. Uppercase acronyms / codes (at least 50% uppercase/digits)
+    const upperCount = (token.match(/[A-Z0-9]/g) || []).length;
+    const totalAlpha = (token.match(/[a-zA-Z]/g) || []).length;
+    if (totalAlpha > 0 && upperCount / totalAlpha >= 0.5) return true;
 
-  // Email addresses
-  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) return true;
+    // 5. Short tokens (length <= 3) e.g. list pointers or standard abbreviations
+    if (token.length <= 3) return true;
 
-  // Phone numbers (digits, spaces, dashes, parens, plus)
-  if (/^[+]?[\d\s\-().]+$/.test(clean) && clean.replace(/\D/g, "").length >= 7) return true;
+    return false;
+  };
 
-  return false;
+  // If every single token is non-translatable, the entire segment is legitimately identical
+  return tokens.every(isTokenNonTranslatable);
 };
 
 // Other provider implementations removed — OpenAI is the sole provider.
@@ -509,39 +515,53 @@ const isScriptValidForLanguage = (text, targetLang, sourceText = "") => {
     textToAnalyze = textToAnalyze.replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, "");
     textToAnalyze = textToAnalyze.replace(/\b[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}\b/gi, "");
 
-    const latinTokens = textToAnalyze.match(/[a-zA-Z]+/g) || [];
+    const latinTokens = textToAnalyze.match(/[a-zA-Z0-9.-]+/g) || [];
     if (latinTokens.length > 0) {
       const cleanSource = String(sourceText || "").replace(/__TAG_\d+__/g, "");
       const sourceLatinTokens = new Set(
-        (cleanSource.match(/[a-zA-Z]+/g) || []).map(t => t.toLowerCase())
+        (cleanSource.match(/[a-zA-Z0-9.-]+/g) || []).map(t => t.toLowerCase())
       );
 
-      for (const token of latinTokens) {
+      const isAllowedLatinToken = (token) => {
         const lowerToken = token.toLowerCase();
-        
-        // Allowed if it exists in the source text
+
+        // If it exists in the source text, it is always allowed!
         if (sourceLatinTokens.has(lowerToken)) {
-          continue;
+          return true;
         }
 
-        // Also allow common acronym/URL parts or list markers:
-        // Roman numerals commonly used as list pointers: i, ii, iii, iv, v, x
-        if (/^(i+v*|v*i+|x)$/i.test(token)) {
-          continue;
+        // Allow if it contains no letters (pure digits/punctuation)
+        if (!/[a-zA-Z]/.test(token)) {
+          return true;
         }
 
-        // Ordinal indicators (st, nd, rd, th)
-        if (/^(st|nd|rd|th)$/i.test(token)) {
-          continue;
-        }
+        // Allow URLs/emails/domains
+        if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(token)) return true;
+        if (/^https?:\/\/[^\s]+$/i.test(token)) return true;
+        if (/^www\.[^\s]+$/i.test(token)) return true;
+        if (/\.[a-z]{2,4}$/i.test(token)) return true;
 
-        // Single letter markers/identifiers
-        if (token.length === 1) {
-          continue;
-        }
+        // Allow Roman numerals
+        if (/^(i+v*|v*i+|x|v)$/i.test(token)) return true;
 
-        // If a Latin token is found in Hindi translation that was NOT in the source and is not a list pointer/ordinal, reject it!
+        // Allow Ordinal indicators (st, nd, rd, th)
+        if (/^(st|nd|rd|th)$/i.test(token)) return true;
+
+        // Allow uppercase acronyms / codes (at least 50% uppercase/digits)
+        const upperCount = (token.match(/[A-Z0-9]/g) || []).length;
+        const totalAlpha = (token.match(/[a-zA-Z]/g) || []).length;
+        if (totalAlpha > 0 && upperCount / totalAlpha >= 0.5) return true;
+
+        // Allow short list indices / single letters
+        if (token.length <= 3) return true;
+
         return false;
+      };
+
+      for (const token of latinTokens) {
+        if (!isAllowedLatinToken(token)) {
+          return false;
+        }
       }
     }
   }
