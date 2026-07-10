@@ -400,15 +400,15 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
     let targetText = "";
     let provider = "";
 
-    // 1. Check if the segment already had a safe translation
-    if (segment.target && isSafeTranslation(segment.source, segment.target, target)) {
+    // 1. Check if the segment already has a translation
+    if (segment.target) {
       targetText = segment.target;
       provider = "Existing Segment Target";
     } else {
-      // 2. Check if TM has a safe translation
+      // 2. Check if TM has a translation
       const tmEntry = tmMap[segment.source];
-      if (tmEntry && isSafeTranslation(segment.source, tmEntry.target_text, target)) {
-        targetText = tmEntry.target_text;
+      if (tmEntry) {
+        targetText = tmEntry.target_text || "";
         provider = tmEntry.provider || "TM Database";
       }
     }
