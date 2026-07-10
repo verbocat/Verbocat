@@ -149,8 +149,8 @@ const isSafeTmTranslation = (source, target, targetLang) => {
   }
 
   // Ensure contact info prefix abbreviations (T, F, M, Tel, Mob, etc.) are kept in English
-  const hasTelPrefix = /\b[TFM]\b|\b(?:Tel|Mob|Fax|Email|Email ID)\b/i.test(normalizedSource);
-  const targetHasTelPrefix = /\b[TFM]\b|\b(?:Tel|Mob|Fax|Email|Email ID)\b/i.test(normalizedTarget);
+  const hasTelPrefix = /\b(?:Tel|Mob|Fax|Email|Email ID)\b|\b[TFM]\b\s*(?::|\+?\d)/i.test(normalizedSource);
+  const targetHasTelPrefix = /\b(?:Tel|Mob|Fax|Email|Email ID)\b|\b[TFM]\b\s*(?::|\+?\d)/i.test(normalizedTarget);
   if (hasTelPrefix && !targetHasTelPrefix) {
     return false;
   }
