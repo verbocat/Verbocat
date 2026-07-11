@@ -118,7 +118,7 @@ const getSortedNumbersString = (text) => {
   return JSON.stringify(extractNumbers(text));
 };
 
-const isSafeTmTranslation = (source, target, targetLang) => {
+const isSafeTmTranslation = (source, target, targetLang, contextSettings = null) => {
   const normalizedSource = normalizeText(source);
   const normalizedTarget = normalizeText(target);
 
@@ -158,18 +158,24 @@ const isSafeTmTranslation = (source, target, targetLang) => {
     return false;
   }
 
-  // Ensure English alphanumeric list pointers and section numbers are preserved
-  const sourcePointers = normalizedSource.match(/\b\d+(?:\([a-zA-Z0-9]+\))+\.?|\b\d{1,2}\./g) || [];
-  const targetPointers = normalizedTarget.match(/\b\d+(?:\([a-zA-Z0-9]+\))+\.?|\b\d{1,2}\./g) || [];
-  if (sourcePointers.length !== targetPointers.length) {
-    return false;
-  }
+  // PDF-specific quality/safety checks (abbreviations, section layouts, pointers)
+  const fileExt = contextSettings?.fileExtension || "";
+  const isPdf = String(fileExt).toLowerCase().includes("pdf");
 
-  // Ensure contact info prefix abbreviations (T, F, M, Tel, Mob, etc.) are kept in English
-  const hasTelPrefix = /\b(?:Tel|Mob|Fax|Email|Email ID)\b|\b[TFM]\b\s*(?::|\+?\d)/i.test(normalizedSource);
-  const targetHasTelPrefix = /\b(?:Tel|Mob|Fax|Email|Email ID)\b|\b[TFM]\b\s*(?::|\+?\d)/i.test(normalizedTarget);
-  if (hasTelPrefix && !targetHasTelPrefix) {
-    return false;
+  if (isPdf) {
+    // Ensure English alphanumeric list pointers and section numbers are preserved
+    const sourcePointers = normalizedSource.match(/\b\d+(?:\([a-zA-Z0-9]+\))+\.?|\b\d{1,2}\./g) || [];
+    const targetPointers = normalizedTarget.match(/\b\d+(?:\([a-zA-Z0-9]+\))+\.?|\b\d{1,2}\./g) || [];
+    if (sourcePointers.length !== targetPointers.length) {
+      return false;
+    }
+
+    // Ensure contact info prefix abbreviations (T, F, M, Tel, Mob, etc.) are kept in English
+    const hasTelPrefix = /\b(?:Tel|Mob|Fax|Email|Email ID)\b|\b[TFM]\b\s*(?::|\+?\d)/i.test(normalizedSource);
+    const targetHasTelPrefix = /\b(?:Tel|Mob|Fax|Email|Email ID)\b|\b[TFM]\b\s*(?::|\+?\d)/i.test(normalizedTarget);
+    if (hasTelPrefix && !targetHasTelPrefix) {
+      return false;
+    }
   }
 
   return true;
@@ -181,14 +187,14 @@ const splitIntoSentences = (text) => {
   return parts.filter(p => p.trim().length > 0);
 };
 
-const isSafeTranslation = (source, targetText, targetLang) => {
+const isSafeTranslation = (source, targetText, targetLang, contextSettings = null) => {
   if (!source || String(source).trim() === "") {
     return true;
   }
   if (!targetText || String(targetText).trim() === "") {
     return false;
   }
-  return isSafeTmTranslation(source, targetText, targetLang);
+  return isSafeTmTranslation(source, targetText, targetLang, contextSettings);
 };
 
 const isPersistableProvider = (provider) =>
@@ -219,10 +225,10 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
   const sourceToIndex = new Map();
 
   segments.forEach((segment, index) => {
-    const hasSafeTarget = segment.target && isSafeTranslation(segment.source, segment.target, target);
+    const hasSafeTarget = segment.target && isSafeTranslation(segment.source, segment.target, target, contextSettings);
     if (!hasSafeTarget) {
       const source = segment.source;
-      if (!tmMap[source] || !isSafeTranslation(source, tmMap[source].target_text, target)) {
+      if (!tmMap[source] || !isSafeTranslation(source, tmMap[source].target_text, target, contextSettings)) {
         if (!sourceToIndex.has(source)) {
           sourceToIndex.set(source, []);
           uniqueMissingSources.push(source);
@@ -454,7 +460,7 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
     }
 
     // FINAL STRICT CHECK: If it is still not safe, we must raise a genuine error!
-    if (!isSafeTranslation(segment.source, targetText, target)) {
+    if (!isSafeTranslation(segment.source, targetText, target, contextSettings)) {
       let reason = "Unknown reason";
       if (!targetText || targetText.trim() === "") {
         reason = "The translation is empty or null.";
@@ -565,7 +571,7 @@ const translateSegmentWithContext = async ({
     console.error("Failed to run MQM on re-translated segment:", err);
   }
 
-  if (!isSafeTranslation(sourceText, cleanedTranslation, targetLang)) {
+  if (!isSafeTranslation(sourceText, cleanedTranslation, targetLang, contextSettings)) {
     let reason = "Unknown reason";
     if (!cleanedTranslation || cleanedTranslation.trim() === "") {
       reason = "The translation is empty or null.";

@@ -214,7 +214,7 @@ async function runJob(job) {
         segmentsToTranslate,
         job.target_lang,
         sourceLang,
-        projectSettings,
+        { ...projectSettings, fileExtension: doc.file_extension || "" },
         doc.owner_id
       );
 

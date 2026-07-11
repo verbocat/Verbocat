@@ -95,7 +95,15 @@ apiRouter.post("/upload", checkAuth, upload.single("file"), async (request, resp
 apiRouter.post("/translate-batch", checkAuth, checkTranslateAccess, async (request, response) => {
   try {
     const { segments, target, source, contextSettings, fileName, documentId } = request.body;
-    const { results, wordCount } = await translateSegments(segments, target, source, contextSettings, request.user.id);
+    let fileExtension = "";
+    if (documentId) {
+      const { data: doc } = await supabase.from("documents").select("file_extension").eq("id", documentId).single();
+      if (doc) {
+        fileExtension = doc.file_extension || "";
+      }
+    }
+    const updatedContextSettings = { ...contextSettings, fileExtension };
+    const { results, wordCount } = await translateSegments(segments, target, source, updatedContextSettings, request.user.id);
     
     // Save translations to document_segments in DB if documentId is provided
     if (documentId && results && results.length > 0) {
