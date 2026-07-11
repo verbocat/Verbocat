@@ -2,7 +2,7 @@
   "cleanUrls": true,
   "rewrites": [
     { "source": "/api/:path*", "destination": "https://verbocat-myhh.onrender.com/api/:path*" },
-    { "source": "/((?!api|assets|favicon.ico|robots.txt).*)", "destination": "/index.html" }
+    { "source": "/:path*", "destination": "/index.html" }
   ]
 }
 
