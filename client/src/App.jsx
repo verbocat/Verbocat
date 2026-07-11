@@ -3077,6 +3077,34 @@ export default function App() {
             </div>
           )}
 
+          {/* ── Active Translation Progress Overlay ── */}
+          {isTranslating && (
+            <div style={{
+              position: "fixed", bottom: 24, left: 24, zIndex: 199,
+              background: "var(--bg-surface)", border: "1px solid var(--border-medium)",
+              borderRadius: 14, padding: "14px 18px", width: 340,
+              boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
+              display: "flex", flexDirection: "column", gap: 8,
+              textAlign: "left"
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-primary)" }}>
+                  Translating Document...
+                </span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)" }}>
+                  {progress}%
+                </span>
+              </div>
+              <div style={{ width: "100%", height: 6, background: "rgba(128, 128, 128, 0.2)", borderRadius: 3, overflow: "hidden" }}>
+                <div style={{
+                  width: `${progress}%`,
+                  height: "100%", background: "var(--accent)", borderRadius: 3,
+                  transition: "width 0.3s ease"
+                }} />
+              </div>
+            </div>
+          )}
+
           {/* ── Active Background Audit Progress Bar Overlay ── */}
           {activeJob && ["pending", "in_progress"].includes(activeJob.status) && (
             <div style={{
