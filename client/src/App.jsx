@@ -3185,8 +3185,11 @@ export default function App() {
                 <span className="footer-stat-label">Dup.</span>
                 <span className="footer-stat-value">{stats.duplicateWords.toLocaleString()}</span>
               </div>
-              <div className="footer-stat-item">
+              <div className="footer-stat-item" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <span className="footer-stat-label">Done</span>
+                <div style={{ width: "100px", height: "6px", background: "rgba(128, 128, 128, 0.2)", borderRadius: "3px", overflow: "hidden", display: "inline-block" }}>
+                  <div style={{ width: `${stats.progress}%`, height: "100%", background: "var(--accent, #3b82f6)", borderRadius: "3px", transition: "width 0.3s ease" }}></div>
+                </div>
                 <span className="footer-stat-value progress-value">{stats.progress}%</span>
               </div>
             </footer>

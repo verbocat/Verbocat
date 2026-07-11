@@ -13,5 +13,5 @@ initSocket(server);
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
   // Start background translation queue worker
-  startQueueWorker();
+  // startQueueWorker();
 });
