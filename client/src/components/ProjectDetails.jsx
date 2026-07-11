@@ -1049,7 +1049,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                     </button>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto lg:overflow-x-visible min-h-[280px]">
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="border-b border-[var(--border-subtle)] text-[10px] uppercase font-bold text-[var(--text-muted)] bg-[var(--bg-surface)] select-none">
@@ -1599,21 +1599,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                   </select>
                 </div>
 
-                {/* AI Model Configuration */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">AI Translation Model</label>
-                    <select
-                      value={editAiModel}
-                      onChange={(e) => setEditAiModel(e.target.value)}
-                      className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 transition-all"
-                    >
-                      <option value="gemini-1.5-flash">Gemini 1.5 Flash (Fast, Efficient)</option>
-                      <option value="gemini-1.5-pro">Gemini 1.5 Pro (Extremely Intelligent)</option>
-                      <option value="gemini-2.0-flash">Gemini 2.0 Flash (Next-Gen Flash)</option>
-                    </select>
-                  </div>
-                </div>
+
 
                 {/* System Translation Prompt */}
                 <div>
