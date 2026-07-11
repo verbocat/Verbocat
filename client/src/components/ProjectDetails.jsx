@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   ArrowLeft, FileText, Globe, Play, Pause, XCircle, RotateCcw, 
   Download, Upload, CheckCircle2, AlertCircle, Eye, Database, BarChart3, TrendingUp, Folder, Plus, Trash2, 
-  Settings, List, Activity, Calendar, User, Clock, ChevronDown, Check, Edit2, Copy, FileCode, CheckSquare, Square, RefreshCw
+  Settings, List, Activity, Calendar, User, Clock, ChevronDown, Check, Edit2, Copy, FileCode, CheckSquare, Square, RefreshCw, Users
 } from "lucide-react";
 import io from "socket.io-client";
 import { 
@@ -11,6 +11,7 @@ import {
   updateProjectDetails, renameDocument, duplicateDocument, deleteProject
 } from "../services/api";
 import { LANGUAGES } from "../constants/languages";
+import { ShareModal } from "./ShareModal";
 
 export default function ProjectDetails({ projectId, onBack, onOpenEditor, showToast, theme, token }) {
   const [project, setProject] = useState(null);
@@ -25,6 +26,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
   const [selectedFileId, setSelectedFileId] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(null);
   const [replacingFileId, setReplacingFileId] = useState(null);
+  const [showShareModal, setShowShareModal] = useState(false);
   
   // Navigation Tabs state: "overview", "files", "languages", "analytics", "settings"
   const [activeTab, setActiveTab] = useState("overview");
@@ -586,6 +588,14 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
             title="Export Reports"
           >
             <FileCode size={14} />
+          </button>
+
+          <button
+            onClick={() => setShowShareModal(true)}
+            className="flex items-center justify-center p-2 bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-medium)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-xl transition-all shadow-sm active:scale-[0.98] shrink-0 cursor-pointer"
+            title="Share Project"
+          >
+            <Users size={14} />
           </button>
 
           <button
@@ -1420,6 +1430,16 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
             </div>
           </div>
         </div>
+      )}
+
+      {showShareModal && (
+        <ShareModal
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          projectId={projectId}
+          docName={project?.name}
+          theme={theme}
+        />
       )}
 
     </div>

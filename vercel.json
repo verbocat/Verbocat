@@ -8,29 +8,14 @@
       }
     }
   ],
-  "routes": [
+  "rewrites": [
     {
-      "src": "/api/(.*)",
-      "dest": "https://verbocat-myhh.onrender.com/api/$1"
+      "source": "/api/:path*",
+      "destination": "https://verbocat-myhh.onrender.com/api/:path*"
     },
     {
-      "src": "/assets/(.*)",
-      "dest": "/client/assets/$1"
-    },
-    {
-      "src": "/client/assets/(.*)",
-      "dest": "/client/assets/$1"
-    },
-    {
-      "src": "/((?!api|assets|client).*)",
-      "dest": "/client/$1"
-    },
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/client/index.html"
+      "source": "/:path*",
+      "destination": "/client/index.html"
     }
   ]
 }

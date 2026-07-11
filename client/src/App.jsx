@@ -3230,6 +3230,8 @@ export default function App() {
         onClose={() => setShowShareModal(false)}
         documentId={documentId}
         docName={fileName}
+        projectId={currentRoute.screen === "editor" ? currentRoute.projectId : null}
+        targetLang={currentRoute.screen === "editor" ? currentRoute.targetLang : null}
         theme={theme}
       />
 

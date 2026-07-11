@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { X, UserPlus, Trash2, Copy, Check, Lock, Globe, Shield } from "lucide-react";
 import { fetchDocumentAccess, grantDocumentAccess, revokeDocumentAccess, searchUsers, fetchPublicAccess, updatePublicAccess } from "../services/api.js";
 
-export function ShareModal({ isOpen, onClose, documentId, docName }) {
+export function ShareModal({ isOpen, onClose, documentId, docName, projectId, targetLang }) {
   const [email, setEmail] = useState("");
   const [permission, setPermission] = useState("read");
   const [accessList, setAccessList] = useState([]);
@@ -18,7 +18,20 @@ export function ShareModal({ isOpen, onClose, documentId, docName }) {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const dropdownRef = useRef(null);
 
-  const shareUrl = `${window.location.origin}/?doc=${documentId}`;
+  const getShareUrl = () => {
+    if (projectId && documentId && targetLang) {
+      return `${window.location.origin}/project/${projectId}/file/${documentId}/lang/${targetLang}`;
+    }
+    if (projectId) {
+      return `${window.location.origin}/project/${projectId}`;
+    }
+    if (documentId) {
+      return `${window.location.origin}/?doc=${documentId}`;
+    }
+    return window.location.origin;
+  };
+
+  const shareUrl = getShareUrl();
 
   // Fetch access list when modal is opened
   useEffect(() => {
