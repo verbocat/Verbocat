@@ -139,6 +139,7 @@ apiRouter.post("/translate-batch", checkAuth, checkTranslateAccess, async (reque
           .from("document_segments")
           .update(updateFields)
           .eq("document_id", documentId)
+          .eq("target_lang", target)
           .eq("segment_index", segmentIndex);
 
         if (error) {
@@ -159,6 +160,33 @@ apiRouter.post("/translate-batch", checkAuth, checkTranslateAccess, async (reque
       });
 
       await Promise.all(updatePromises);
+
+      // Recalculate job progress and update translation_jobs in database
+      try {
+        const segmentsInDb = await fetchAllSegments(documentId, "status, target_text", target);
+        const completed = segmentsInDb.filter(s => s.target_text && s.target_text.trim() !== "").length;
+        const progress = segmentsInDb.length > 0 ? Math.round((completed / segmentsInDb.length) * 100) : 0;
+        const newStatus = progress === 100 ? "completed" : "running";
+
+        const { data: job } = await supabase
+          .from("translation_jobs")
+          .select("id")
+          .eq("document_id", documentId)
+          .eq("target_lang", target)
+          .single();
+
+        if (job) {
+          await supabase
+            .from("translation_jobs")
+            .update({ progress, status: newStatus })
+            .eq("id", job.id);
+
+          const { broadcastJobStatus } = require("../services/jobQueue");
+          broadcastJobStatus(job.id, documentId, newStatus, progress);
+        }
+      } catch (jobUpdateErr) {
+        console.error("Failed to update job stats in translate-batch:", jobUpdateErr);
+      }
     }
 
     // Log credit consumption and update database profiles
@@ -3456,12 +3484,13 @@ apiRouter.put("/documents/:documentId/lang/:lang/segments/:index", checkAuth, as
       .single();
 
     if (job) {
+      const newStatus = progress === 100 ? "completed" : "running";
       await supabase
         .from("translation_jobs")
-        .update({ progress })
+        .update({ progress, status: newStatus })
         .eq("id", job.id);
 
-      broadcastJobStatus(job.id, documentId, "running", progress);
+      broadcastJobStatus(job.id, documentId, newStatus, progress);
     }
 
     response.json({ success: true });
