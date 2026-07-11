@@ -4,8 +4,10 @@ const { supabase } = require("../config/supabase");
 let io = null;
 
 // Track active users and segment locks in memory for high-performance and auto-cleanup
-const activeUsers = new Map(); // Map<documentId, Map<socketId, userInfo>>
-const documentLocks = new Map(); // Map<documentId, Map<segmentIndex, lockInfo>>
+const activeUsers = new Map(); // Map<roomId, Map<socketId, userInfo>>
+const documentLocks = new Map(); // Map<roomId, Map<segmentIndex, lockInfo>>
+
+const getDocumentRoomId = (documentId, targetLang = null) => `${documentId}:${targetLang || "default"}`;
 
 function initSocket(server) {
   io = new Server(server, {
@@ -66,7 +68,7 @@ function initSocket(server) {
     }
 
     // Handle joining a document room
-    socket.on("join-document", async ({ documentId }) => {
+    socket.on("join-document", async ({ documentId, targetLang }) => {
       try {
         if (!documentId) return;
 
@@ -99,15 +101,19 @@ function initSocket(server) {
           return socket.emit("error", { message: "Access denied to this document" });
         }
 
+        const roomId = getDocumentRoomId(documentId, targetLang || doc.target_lang || "default");
+
         // Join socket room
-        socket.join(documentId);
+        socket.join(roomId);
         socket.currentDocId = documentId;
+        socket.currentTargetLang = targetLang || doc.target_lang || "default";
+        socket.currentRoomId = roomId;
 
         // Register in active users
-        if (!activeUsers.has(documentId)) {
-          activeUsers.set(documentId, new Map());
+        if (!activeUsers.has(roomId)) {
+          activeUsers.set(roomId, new Map());
         }
-        const roomUsers = activeUsers.get(documentId);
+        const roomUsers = activeUsers.get(roomId);
         roomUsers.set(socket.id, {
           socketId: socket.id,
           userId: socket.user.id,
@@ -118,10 +124,10 @@ function initSocket(server) {
         });
 
         // Initialize locks map if missing
-        if (!documentLocks.has(documentId)) {
-          documentLocks.set(documentId, new Map());
+        if (!documentLocks.has(roomId)) {
+          documentLocks.set(roomId, new Map());
         }
-        const roomLocks = documentLocks.get(documentId);
+        const roomLocks = documentLocks.get(roomId);
 
         // Send current room state (users and locks) to the newly joined client
         socket.emit("room-state", {
@@ -130,7 +136,7 @@ function initSocket(server) {
         });
 
         // Broadcast presence sync to all others in the room
-        socket.to(documentId).emit("presence-update", Array.from(roomUsers.values()));
+        socket.to(roomId).emit("presence-update", Array.from(roomUsers.values()));
       } catch (err) {
         console.error("Socket join-document error:", err);
         socket.emit("error", { message: "Failed to load document room" });
@@ -139,10 +145,10 @@ function initSocket(server) {
 
     // Acquire lock on a translation segment cell
     socket.on("acquire-lock", ({ segmentIndex }) => {
-      const documentId = socket.currentDocId;
-      if (!documentId || segmentIndex === undefined || segmentIndex === null) return;
+      const roomId = socket.currentRoomId;
+      if (!roomId || segmentIndex === undefined || segmentIndex === null) return;
 
-      const roomLocks = documentLocks.get(documentId);
+      const roomLocks = documentLocks.get(roomId);
       if (!roomLocks) return;
 
       const existingLock = roomLocks.get(segmentIndex);
@@ -167,47 +173,48 @@ function initSocket(server) {
       roomLocks.set(segmentIndex, lockInfo);
 
       // Update active user state to reflect focus
-      const roomUsers = activeUsers.get(documentId);
+      const roomUsers = activeUsers.get(roomId);
       if (roomUsers && roomUsers.has(socket.id)) {
         roomUsers.get(socket.id).activeSegmentIndex = segmentIndex;
-        io.to(documentId).emit("presence-update", Array.from(roomUsers.values()));
+        io.to(roomId).emit("presence-update", Array.from(roomUsers.values()));
       }
 
       // Broadcast cell lock update
-      io.to(documentId).emit("lock-update", Array.from(roomLocks.entries()));
+      io.to(roomId).emit("lock-update", Array.from(roomLocks.entries()));
     });
 
     // Release lock on a translation segment cell
     socket.on("release-lock", ({ segmentIndex }) => {
-      const documentId = socket.currentDocId;
-      if (!documentId || segmentIndex === undefined || segmentIndex === null) return;
+      const roomId = socket.currentRoomId;
+      if (!roomId || segmentIndex === undefined || segmentIndex === null) return;
 
-      const roomLocks = documentLocks.get(documentId);
+      const roomLocks = documentLocks.get(roomId);
       if (roomLocks) {
         const existingLock = roomLocks.get(segmentIndex);
         if (existingLock && existingLock.socketId === socket.id) {
           roomLocks.delete(segmentIndex);
-          io.to(documentId).emit("lock-update", Array.from(roomLocks.entries()));
+          io.to(roomId).emit("lock-update", Array.from(roomLocks.entries()));
         }
       }
 
       // Reset active segment in presence status
-      const roomUsers = activeUsers.get(documentId);
+      const roomUsers = activeUsers.get(roomId);
       if (roomUsers && roomUsers.has(socket.id)) {
         roomUsers.get(socket.id).activeSegmentIndex = null;
-        io.to(documentId).emit("presence-update", Array.from(roomUsers.values()));
+        io.to(roomId).emit("presence-update", Array.from(roomUsers.values()));
       }
     });
 
     // Handle real-time typing broadcast before saving
     socket.on("typing-update", ({ segmentIndex, targetText, originalTargetText, trackedBy }) => {
-      const documentId = socket.currentDocId;
-      if (!documentId) return;
-      socket.to(documentId).emit("typing-update", {
+      const roomId = socket.currentRoomId;
+      if (!roomId) return;
+      socket.to(roomId).emit("typing-update", {
         segmentIndex,
         targetText,
         originalTargetText,
         trackedBy,
+        targetLang: socket.currentTargetLang,
         socketId: socket.id
       });
     });
@@ -215,22 +222,22 @@ function initSocket(server) {
     // Handle user disconnect (either tab close or internet drop)
     socket.on("disconnect", () => {
       console.log(`User disconnected from workspace socket: ${socket.id}`);
-      const documentId = socket.currentDocId;
-      if (!documentId) return;
+      const roomId = socket.currentRoomId;
+      if (!roomId) return;
 
       // 1. Remove from presence users
-      const roomUsers = activeUsers.get(documentId);
+      const roomUsers = activeUsers.get(roomId);
       if (roomUsers) {
         roomUsers.delete(socket.id);
         if (roomUsers.size === 0) {
-          activeUsers.delete(documentId);
+          activeUsers.delete(roomId);
         } else {
-          io.to(documentId).emit("presence-update", Array.from(roomUsers.values()));
+          io.to(roomId).emit("presence-update", Array.from(roomUsers.values()));
         }
       }
 
       // 2. Auto-release all locks held by this socket session immediately
-      const roomLocks = documentLocks.get(documentId);
+      const roomLocks = documentLocks.get(roomId);
       if (roomLocks) {
         let changed = false;
         for (const [segmentIndex, lockInfo] of roomLocks.entries()) {
@@ -241,10 +248,10 @@ function initSocket(server) {
         }
         if (changed) {
           if (roomLocks.size === 0) {
-            documentLocks.delete(documentId);
-            io.to(documentId).emit("lock-update", []);
+            documentLocks.delete(roomId);
+            io.to(roomId).emit("lock-update", []);
           } else {
-            io.to(documentId).emit("lock-update", Array.from(roomLocks.entries()));
+            io.to(roomId).emit("lock-update", Array.from(roomLocks.entries()));
           }
         }
       }
@@ -258,5 +265,6 @@ function getIo() {
 
 module.exports = {
   initSocket,
-  getIo
+  getIo,
+  getDocumentRoomId
 };

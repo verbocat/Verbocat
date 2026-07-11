@@ -6,6 +6,8 @@ const { translateSegments } = require("../services/translationService");
 const { getProviderStatus } = require("../services/translationProviders");
 const { supabase, fetchAllSegments } = require("../config/supabase");
 const { checkAuth, checkTranslateAccess } = require("../utils/authMiddleware");
+const { getDocumentRoomId } = require("../services/socket");
+const { calculateProgress } = require("../utils/segmentProgress");
 const {
   generateXliff,
   generateTmx,
@@ -147,13 +149,14 @@ apiRouter.post("/translate-batch", checkAuth, checkTranslateAccess, async (reque
         } else {
           // Broadcast to other collaborative clients in real time
           if (io) {
-            io.to(documentId).emit("segment-updated", {
+            io.to(getDocumentRoomId(documentId, target)).emit("segment-updated", {
               segmentIndex,
               targetText: updateFields.target_text,
               status: updateFields.status,
               mqmAccuracyScore: updateFields.mqm_accuracy_score,
               mqmReport: updateFields.mqm_report,
-              updatedBy: request.user.email
+              updatedBy: request.user.email,
+              targetLang: target
             });
           }
         }
@@ -163,9 +166,8 @@ apiRouter.post("/translate-batch", checkAuth, checkTranslateAccess, async (reque
 
       // Recalculate job progress and update translation_jobs in database
       try {
-        const segmentsInDb = await fetchAllSegments(documentId, "status, target_text", target);
-        const completed = segmentsInDb.filter(s => s.target_text && s.target_text.trim() !== "").length;
-        const progress = segmentsInDb.length > 0 ? Math.round((completed / segmentsInDb.length) * 100) : 0;
+        const segmentsInDb = await fetchAllSegments(documentId, "source_text, status, target_text", target);
+        const progress = calculateProgress(segmentsInDb).progress;
         const newStatus = progress === 100 ? "completed" : "running";
 
         const { data: job } = await supabase
@@ -984,7 +986,7 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
           finalTrackedBy = null;
         }
 
-        io.to(doc.id).emit("segment-updated", {
+        io.to(getDocumentRoomId(doc.id, doc.target_lang)).emit("segment-updated", {
           segmentIndex: idx,
           targetText: propagatedTarget,
           status: status || "translated",
@@ -994,7 +996,8 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
           mqmReport: null,
           originalTargetText: finalOriginal,
           trackedBy: finalTrackedBy,
-          updatedBy: request.user.email
+          updatedBy: request.user.email,
+          targetLang: doc.target_lang
         });
       });
     }
@@ -1149,7 +1152,7 @@ apiRouter.post(
       const { getIo } = require("../services/socket");
       const io = getIo();
       if (io) {
-        io.to(doc.id).emit("segment-updated", {
+        io.to(getDocumentRoomId(doc.id, targetLang)).emit("segment-updated", {
           segmentIndex,
           targetText: translationResult.translated,
           status: "translated",
@@ -1157,7 +1160,8 @@ apiRouter.post(
           contextDescription,
           mqmAccuracyScore: translationResult.mqmAccuracyScore,
           mqmReport: translationResult.mqmReport,
-          updatedBy: request.user.email
+          updatedBy: request.user.email,
+          targetLang
         });
       }
 
@@ -2156,13 +2160,14 @@ apiRouter.post("/documents/:id/segments/:index/accept-change", checkAuth, async 
     const io = getIo();
     if (io) {
       matchingIndices.forEach((idx) => {
-        io.to(doc.id).emit("segment-updated", {
+        io.to(getDocumentRoomId(doc.id, doc.target_lang)).emit("segment-updated", {
           segmentIndex: idx,
           mqmAccuracyScore: undefined,
           mqmReport: null,
           originalTargetText: null,
           trackedBy: null,
-          updatedBy: request.user.email
+          updatedBy: request.user.email,
+          targetLang: doc.target_lang
         });
       });
     }
@@ -2248,14 +2253,15 @@ apiRouter.post("/documents/:id/segments/:index/reject-change", checkAuth, async 
     if (io) {
       matchingSegs.forEach((seg) => {
         const revertedTarget = seg.original_target_text !== null ? seg.original_target_text : (seg.target_text || "");
-        io.to(doc.id).emit("segment-updated", {
+        io.to(getDocumentRoomId(doc.id, doc.target_lang)).emit("segment-updated", {
           segmentIndex: seg.segment_index,
           targetText: revertedTarget,
           mqmAccuracyScore: undefined,
           mqmReport: null,
           originalTargetText: null,
           trackedBy: null,
-          updatedBy: request.user.email
+          updatedBy: request.user.email,
+          targetLang: doc.target_lang
         });
       });
     }
@@ -2296,9 +2302,10 @@ apiRouter.post("/documents/:id/accept-all-changes", checkAuth, async (request, r
     const { getIo } = require("../services/socket");
     const io = getIo();
     if (io) {
-      io.to(doc.id).emit("all-changes-accepted", {
+      io.to(getDocumentRoomId(doc.id, doc.target_lang)).emit("all-changes-accepted", {
         documentId: doc.id,
-        updatedBy: request.user.email
+        updatedBy: request.user.email,
+        targetLang: doc.target_lang
       });
     }
 
@@ -2917,18 +2924,18 @@ apiRouter.put("/jobs/:jobId/segments/:index", checkAuth, async (request, respons
     const { getIo } = require("../services/socket");
     const io = getIo();
     if (io) {
-      io.to(job.document_id).emit("segment-updated", {
+      io.to(getDocumentRoomId(job.document_id, job.target_lang)).emit("segment-updated", {
         segmentIndex,
         targetText: updateFields.target_text,
         status: updateFields.status,
-        updatedBy: request.user.email
+        updatedBy: request.user.email,
+        targetLang: job.target_lang
       });
     }
 
     // Update job progress
-    const segments = await fetchAllSegments(job.document_id, "status, target_text", job.target_lang);
-    const completed = segments.filter(s => s.target_text && s.target_text.trim() !== "").length;
-    const progress = Math.round((completed / segments.length) * 100);
+    const segments = await fetchAllSegments(job.document_id, "source_text, status, target_text", job.target_lang);
+    const progress = calculateProgress(segments).progress;
 
     const { broadcastJobStatus } = require("../services/jobQueue");
     await supabase
@@ -3022,13 +3029,14 @@ apiRouter.post("/jobs/:jobId/segments/:index/translate-context", checkAuth, uplo
     const { getIo } = require("../services/socket");
     const io = getIo();
     if (io) {
-      io.to(job.document_id).emit("segment-updated", {
+      io.to(getDocumentRoomId(job.document_id, job.target_lang)).emit("segment-updated", {
         segmentIndex,
         targetText: translationResult.translated,
         status: "translated",
         mqmAccuracyScore: translationResult.mqmAccuracyScore,
         mqmReport: translationResult.mqmReport,
-        updatedBy: request.user.email
+        updatedBy: request.user.email,
+        targetLang: job.target_lang
       });
     }
 
@@ -3460,18 +3468,18 @@ apiRouter.put("/documents/:documentId/lang/:lang/segments/:index", checkAuth, as
     const { getIo } = require("../services/socket");
     const io = getIo();
     if (io) {
-      io.to(documentId).emit("segment-updated", {
+      io.to(getDocumentRoomId(documentId, lang)).emit("segment-updated", {
         segmentIndex,
         targetText: updateFields.target_text,
         status: updateFields.status,
-        updatedBy: request.user.email
+        updatedBy: request.user.email,
+        targetLang: lang
       });
     }
 
     // Update job progress
-    const segments = await fetchAllSegments(documentId, "status, target_text", lang);
-    const completed = segments.filter(s => s.target_text && s.target_text.trim() !== "").length;
-    const progress = Math.round((completed / segments.length) * 100);
+    const segments = await fetchAllSegments(documentId, "source_text, status, target_text", lang);
+    const progress = calculateProgress(segments).progress;
 
     const { broadcastJobStatus } = require("../services/jobQueue");
     
@@ -3577,13 +3585,14 @@ apiRouter.post("/documents/:documentId/lang/:lang/segments/:index/translate-cont
     const { getIo } = require("../services/socket");
     const io = getIo();
     if (io) {
-      io.to(documentId).emit("segment-updated", {
+      io.to(getDocumentRoomId(documentId, lang)).emit("segment-updated", {
         segmentIndex,
         targetText: translationResult.translated,
         status: "translated",
         mqmAccuracyScore: translationResult.mqmAccuracyScore,
         mqmReport: translationResult.mqmReport,
-        updatedBy: request.user.email
+        updatedBy: request.user.email,
+        targetLang: lang
       });
     }
 

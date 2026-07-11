@@ -360,7 +360,7 @@ export default function App() {
 
     socket.on("connect", () => {
       console.log("Connected to collaborative workspace socket");
-      socket.emit("join-document", { documentId });
+      socket.emit("join-document", { documentId, targetLang: currentRoute.targetLang });
     });
 
     socket.on("translation-queue-update", ({ position }) => {
@@ -380,7 +380,10 @@ export default function App() {
       setCellLocks(new Map(locks));
     });
 
-    socket.on("segment-updated", ({ segmentIndex, targetText, status, contextJira, contextDescription, mqmAccuracyScore, mqmReport, originalTargetText, trackedBy }) => {
+    socket.on("segment-updated", ({ segmentIndex, targetText, status, contextJira, contextDescription, mqmAccuracyScore, mqmReport, originalTargetText, trackedBy, targetLang }) => {
+      if (targetLang && currentRoute.screen === "editor" && currentRoute.targetLang && targetLang !== currentRoute.targetLang) {
+        return;
+      }
       setSegments((prev) =>
         prev.map((seg, idx) => {
           if (idx === segmentIndex) {
@@ -408,7 +411,10 @@ export default function App() {
       showToast(`Track Changes was toggled ${enabled ? "ON" : "OFF"} by the creator.`, "info");
     });
 
-    socket.on("typing-update", ({ segmentIndex, targetText, originalTargetText, trackedBy }) => {
+    socket.on("typing-update", ({ segmentIndex, targetText, originalTargetText, trackedBy, targetLang }) => {
+      if (targetLang && currentRoute.screen === "editor" && currentRoute.targetLang && targetLang !== currentRoute.targetLang) {
+        return;
+      }
       setSegments((prev) => {
         const sourceSeg = prev[segmentIndex];
         if (!sourceSeg) return prev;
@@ -460,7 +466,10 @@ export default function App() {
       });
     });
 
-    socket.on("all-changes-accepted", () => {
+    socket.on("all-changes-accepted", ({ targetLang }) => {
+      if (targetLang && currentRoute.screen === "editor" && currentRoute.targetLang && targetLang !== currentRoute.targetLang) {
+        return;
+      }
       setSegments((prev) =>
         prev.map((seg) => ({ ...seg, originalTargetText: null, trackedBy: null }))
       );
@@ -531,7 +540,7 @@ export default function App() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [documentId, token, loadCollaborativeDocument]);
+    }, [documentId, token, loadCollaborativeDocument, currentRoute.targetLang]);
 
   const handleFocusSegment = (index) => {
     if (socketRef.current) {
@@ -681,6 +690,16 @@ export default function App() {
       return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
     };
 
+    const isCountableSegment = (segment) => {
+      if (!segment || segment.isMerged) return false;
+      const source = cleanString(segment.source);
+      if (!source) return false;
+      if (!/[\p{L}\p{N}]/u.test(source)) return false;
+      if (/^\s*@(?:page|media|import|font-face)\s*\{/i.test(source)) return false;
+      if (/(?:margin|padding|position|text-align)\s*:\s*[^;]+;/i.test(source) && source.includes("{") && source.includes("}")) return false;
+      return source.toLowerCase() !== "waiting for translation";
+    };
+
     let words = 0;
     let uniqueWords = 0;
     let duplicateWords = 0;
@@ -715,10 +734,10 @@ export default function App() {
       characters: segments.map((seg) => cleanString(seg.source)).join(" ").length,
       translatedWords: countWords(targetText),
       progress:
-        segments.length > 0
+        segments.filter(isCountableSegment).length > 0
           ? Math.round(
-              (segments.filter((segment) => segment.verified).length /
-                segments.length) *
+              (segments.filter((segment) => isCountableSegment(segment) && segment.verified).length /
+                segments.filter(isCountableSegment).length) *
                 100
             )
           : 0

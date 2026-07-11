@@ -1,6 +1,7 @@
 const { supabase, fetchAllSegments } = require("../config/supabase");
 const { translateSegments } = require("./translationService");
 const { getIo } = require("./socket");
+const { calculateProgress, isCountableSourceText } = require("../utils/segmentProgress");
 
 async function logJobQueueActivity(projectId, eventType, details, userName = "AI Translator") {
   try {
@@ -161,16 +162,17 @@ async function runJob(job) {
       dbSegments.push(...segmentInserts);
     }
 
-    const totalSegments = dbSegments.length;
-    let completedSegments = dbSegments.filter(s => s.target_text && s.target_text.trim() !== "").length;
+    const initialProgress = calculateProgress(dbSegments);
+    let completedSegments = initialProgress.completedSegments;
+    const totalSegments = initialProgress.totalSegments;
 
     // 5. Update initial progress
-    let progress = Math.round((completedSegments / totalSegments) * 100);
+    let progress = initialProgress.progress;
     await updateJobProgress(job.id, progress);
 
     // Filter segments that still need translation
     const pendingSegments = dbSegments.filter(
-      s => !s.target_text || s.target_text.replace(/<\/?\d+>/g, "").trim() === ""
+      s => isCountableSourceText(s.source_text) && (!s.target_text || s.target_text.replace(/<\/?\d+>/g, "").trim() === "")
     );
 
     // Group pending segments into chunks of 15 for execution
@@ -180,7 +182,7 @@ async function runJob(job) {
       chunks.push(pendingSegments.slice(i, i + CHUNK_SIZE));
     }
 
-    console.log(`[JobQueue] Job ${job.id}: ${pendingSegments.length} of ${totalSegments} segments remaining. Chunk count: ${chunks.length}`);
+    console.log(`[JobQueue] Job ${job.id}: ${pendingSegments.length} of ${initialProgress.totalSegments} segments remaining. Chunk count: ${chunks.length}`);
 
     // Process chunk-by-chunk
     for (let i = 0; i < chunks.length; i++) {
@@ -241,7 +243,7 @@ async function runJob(job) {
       await Promise.all(updatePromises);
 
       completedSegments += chunk.length;
-      progress = Math.min(100, Math.round((completedSegments / totalSegments) * 100));
+      progress = totalSegments > 0 ? Math.min(100, Math.round((completedSegments / totalSegments) * 100)) : 0;
 
       await updateJobProgress(job.id, progress);
     }
