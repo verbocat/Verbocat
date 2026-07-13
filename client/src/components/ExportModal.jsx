@@ -103,13 +103,26 @@ export const ExportModal = ({
 
           {/* XLIFF */}
           <ExportOption
-            title="Bilingual XLIFF (.xlf)"
-            desc="Standard XML format with source & target segments for CAT tools."
+            title="Source XLIFF (.xlf)"
+            desc="Standard XML format containing only source segments for CAT tools."
             accentColor="var(--sky)"
             btnBg="rgba(56,189,248,0.1)"
             btnBorder="rgba(56,189,248,0.3)"
             btnColor="var(--sky)"
-            onAction={() => { onExportXliff(); onClose(); }}
+            onAction={() => { onExportXliff(true); onClose(); }}
+          >
+            <Download style={{ width: 12, height: 12 }} />
+            Download
+          </ExportOption>
+
+          <ExportOption
+            title="Target XLIFF (.xlf)"
+            desc="Standard XML format with source & target (translated) segments for CAT tools."
+            accentColor="var(--sky)"
+            btnBg="rgba(56,189,248,0.1)"
+            btnBorder="rgba(56,189,248,0.3)"
+            btnColor="var(--sky)"
+            onAction={() => { onExportXliff(false); onClose(); }}
           >
             <Download style={{ width: 12, height: 12 }} />
             Download

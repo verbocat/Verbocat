@@ -2012,16 +2012,17 @@ export default function App() {
     }
   };
 
-  const handleExportXliff = async () => {
+  const handleExportXliff = async (exportSource = false) => {
     try {
-      const blob = await exportFile(fileId, segments, ".xlf", sourceLanguage, targetLanguage, fileName);
+      const blob = await exportFile(fileId, segments, ".xlf", sourceLanguage, targetLanguage, fileName, exportSource);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `${fileName}_${targetLanguage}.xlf`);
+      const suffix = exportSource ? "_source" : `_${targetLanguage}`;
+      link.setAttribute("download", `${fileName}${suffix}.xlf`);
       document.body.appendChild(link);
       link.click();
-      showToast("XLIFF exported successfully!");
+      showToast(`${exportSource ? "Source" : "Target"} XLIFF exported successfully!`);
     } catch (error) {
       console.log(error);
       showToast(`XLIFF export failed: ${error.message}`, "error");

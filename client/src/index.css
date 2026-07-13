@@ -509,18 +509,18 @@ code, .font-mono { font-family: "IBM Plex Mono", monospace; }
 .project-quick-menu {
   position: absolute;
   right: 0;
-  top: calc(100% + 10px);
-  width: 280px;
+  top: calc(100% + 8px);
+  width: 290px;
   padding: 8px;
-  background: linear-gradient(180deg, rgba(15,17,23,0.98), rgba(10,12,18,0.98));
+  background: var(--bg-surface);
   border: 1px solid var(--border-medium);
-  border-radius: 18px;
-  box-shadow: 0 22px 40px rgba(0,0,0,0.35);
-  backdrop-filter: blur(18px) saturate(180%);
+  border-radius: 16px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.25), 0 4px 12px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(20px) saturate(180%);
   opacity: 0;
   visibility: hidden;
-  transform: translateY(-4px) scale(0.98);
-  transition: opacity 0.16s ease, visibility 0.16s ease, transform 0.16s ease;
+  transform: translateY(-8px) scale(0.97);
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   z-index: 50;
 }
 .group:hover .project-quick-menu,
@@ -533,20 +533,21 @@ code, .font-mono { font-family: "IBM Plex Mono", monospace; }
 .project-quick-menu-header {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 8px 10px 10px;
-  margin-bottom: 4px;
+  gap: 3px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--border-subtle);
 }
 .project-quick-menu-header span:first-child {
   font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: var(--text-primary);
+  color: var(--accent);
 }
 .project-quick-menu-header span:last-child {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .project-quick-item {
@@ -554,55 +555,64 @@ code, .font-mono { font-family: "IBM Plex Mono", monospace; }
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px;
-  border-radius: 14px;
+  padding: 8px 10px;
+  border-radius: 10px;
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-primary);
   text-align: left;
-  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 .project-quick-item:hover {
-  background: rgba(255,255,255,0.03);
-  border-color: rgba(255,255,255,0.05);
-  transform: translateX(1px);
+  background: var(--bg-hover);
+  transform: translateX(2px);
 }
 .project-quick-item strong {
   display: block;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-primary);
 }
 .project-quick-item small {
   display: block;
-  margin-top: 2px;
+  margin-top: 1px;
   font-size: 10px;
   color: var(--text-muted);
-  line-height: 1.35;
+  line-height: 1.4;
 }
 .project-quick-item.danger:hover {
-  background: rgba(244,63,94,0.08);
-  border-color: rgba(244,63,94,0.15);
+  background: rgba(244, 63, 94, 0.08);
+  color: var(--text-rose);
 }
 .project-quick-item-icon {
-  width: 30px;
-  height: 30px;
-  border-radius: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(91,106,240,0.1);
-  color: var(--text-accent);
+  background: rgba(91, 106, 240, 0.08);
+  color: var(--accent);
   flex-shrink: 0;
+  transition: all 0.2s ease;
 }
-.project-quick-item-icon.danger {
-  background: rgba(244,63,94,0.08);
+.project-quick-item:hover .project-quick-item-icon {
+  background: var(--accent);
+  color: #fff;
+}
+.project-quick-item.danger .project-quick-item-icon {
+  background: rgba(244, 63, 94, 0.06);
   color: var(--text-rose);
+}
+.project-quick-item.danger:hover .project-quick-item-icon {
+  background: var(--text-rose);
+  color: #fff;
 }
 .project-quick-menu-sep {
   height: 1px;
-  margin: 6px 6px;
-  background: linear-gradient(90deg, transparent, var(--border-subtle), transparent);
+  margin: 6px 10px;
+  background: var(--border-subtle);
 }
 
 /* ================================================================

@@ -521,7 +521,7 @@ export const SettingsModal = ({
                       outline: "none"
                     }}
                   >
-                    {LANGUAGES.map(lang => (
+                    {LANGUAGES.filter(lang => !lang.hidden).map(lang => (
                       <option key={lang.code} value={lang.code}>{lang.flag} {lang.name}</option>
                     ))}
                   </select>

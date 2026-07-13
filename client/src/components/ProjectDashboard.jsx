@@ -335,7 +335,7 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
                         onChange={(e) => setSourceLang(e.target.value)}
                         className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-all"
                       >
-                        {LANGUAGES.map(lang => (
+                        {LANGUAGES.filter(lang => !lang.hidden).map(lang => (
                           <option key={lang.code} value={lang.code}>
                             {lang.flag} {lang.name} ({lang.code.toUpperCase()})
                           </option>
@@ -374,8 +374,10 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
                   
                   <div className="flex-1 min-h-0 bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl p-3 overflow-y-auto grid grid-cols-2 gap-2 max-h-56">
                     {LANGUAGES.filter(lang => 
-                      lang.name.toLowerCase().includes(langSearch.toLowerCase()) || 
-                      lang.code.toLowerCase().includes(langSearch.toLowerCase())
+                      !lang.hidden && (
+                        lang.name.toLowerCase().includes(langSearch.toLowerCase()) || 
+                        lang.code.toLowerCase().includes(langSearch.toLowerCase())
+                      )
                     ).map((lang) => {
                       const isSelected = selectedLangs.includes(lang.code);
                       return (

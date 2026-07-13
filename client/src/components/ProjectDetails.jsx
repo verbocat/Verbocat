@@ -707,42 +707,42 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                 <span>Everything in one place</span>
               </div>
               <button onClick={() => fileInputRef.current?.click()} className="project-quick-item">
-                <span className="project-quick-item-icon"><Upload size={12} /></span>
-                <span>
+                <span className="project-quick-item-icon"><Upload size={13} /></span>
+                <div className="flex flex-col text-left flex-1 min-w-0">
                   <strong>Upload files</strong>
                   <small>Bring more documents into the project</small>
-                </span>
+                </div>
               </button>
               <button onClick={() => { setSelectedAddLangs(project.target_languages || []); setShowAddLangModal(true); }} className="project-quick-item">
-                <span className="project-quick-item-icon"><Plus size={12} /></span>
-                <span>
+                <span className="project-quick-item-icon"><Plus size={13} /></span>
+                <div className="flex flex-col text-left flex-1 min-w-0">
                   <strong>Add language</strong>
                   <small>Create a new target locale version</small>
-                </span>
+                </div>
               </button>
               <button onClick={handleDownloadZipAll} className="project-quick-item">
-                <span className="project-quick-item-icon"><Download size={12} /></span>
-                <span>
+                <span className="project-quick-item-icon"><Download size={13} /></span>
+                <div className="flex flex-col text-left flex-1 min-w-0">
                   <strong>Download ZIP</strong>
                   <small>Export every translated file</small>
-                </span>
+                </div>
               </button>
               {isProjectOwner && (
                 <>
                   <button onClick={onOpenSettings} className="project-quick-item">
-                    <span className="project-quick-item-icon"><Settings size={12} /></span>
-                    <span>
+                    <span className="project-quick-item-icon"><Settings size={13} /></span>
+                    <div className="flex flex-col text-left flex-1 min-w-0">
                       <strong>Project settings</strong>
                       <small>Change metadata and workflow rules</small>
-                    </span>
+                    </div>
                   </button>
                   <div className="project-quick-menu-sep"></div>
                   <button onClick={handleDeleteProjectClick} className="project-quick-item danger">
-                    <span className="project-quick-item-icon danger"><Trash2 size={12} /></span>
-                    <span>
+                    <span className="project-quick-item-icon danger"><Trash2 size={13} /></span>
+                    <div className="flex flex-col text-left flex-1 min-w-0">
                       <strong>Delete project</strong>
                       <small>Permanently remove files and jobs</small>
-                    </span>
+                    </div>
                   </button>
                 </>
               )}
@@ -1408,7 +1408,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
               </p>
 
               <div className="grid grid-cols-2 gap-2.5 bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl p-4 max-h-56 overflow-y-auto">
-                {LANGUAGES.map((lang) => (
+                {LANGUAGES.filter(lang => !lang.hidden).map((lang) => (
                   <label 
                     key={lang.code} 
                     className="flex items-center gap-2.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer select-none py-1.5"
