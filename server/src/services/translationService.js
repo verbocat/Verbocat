@@ -569,6 +569,13 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
         provider = match.provider;
         fuzzyScore = match.fuzzyScore;
         matchType = match.matchType;
+      } else {
+        // Fallback to translated text from tmMap
+        const tmEntry = tmMap[segment.source];
+        if (tmEntry) {
+          targetText = tmEntry.target_text || "";
+          provider = tmEntry.provider || "TM Database";
+        }
       }
     }
 

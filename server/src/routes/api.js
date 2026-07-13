@@ -834,7 +834,7 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
     // Fetch the source text and context
     const { data: dbSegment } = await supabase
       .from("document_segments")
-      .select("source_text, context_jira, context_description, target_text, original_target_text, tracked_by")
+      .select("source_text, target_lang, context_jira, context_description, target_text, original_target_text, tracked_by")
       .eq("document_id", doc.id)
       .eq("segment_index", segmentIndex)
       .single();
@@ -947,7 +947,7 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
     // Save/Update human correction in Translation Memory as an ICE match
     if (targetText !== undefined && targetText !== null && String(targetText).trim() !== "") {
       const { upsertLinguistIceMatch } = require("../services/translationService");
-      await upsertLinguistIceMatch(sourceText, targetText, doc.source_lang || "en", doc.target_lang || targetLang);
+      await upsertLinguistIceMatch(sourceText, targetText, doc.source_lang || "en", dbSegment.target_lang);
     }
 
     // Broadcast manual save update immediately via Socket.io
