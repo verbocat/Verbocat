@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Folder, User, Calendar, Trash2, Search, Filter, Globe, BookOpen, Settings, ChevronRight } from "lucide-react";
+import { Plus, Folder, User, Calendar, Trash2, Search, Filter, Globe, BookOpen, Settings, ChevronRight, LayoutDashboard } from "lucide-react";
 import { fetchProjects, createProject, deleteProject } from "../services/api";
 import { LANGUAGES } from "../constants/languages";
 
-export default function ProjectDashboard({ onOpenProject, showToast, theme }) {
+export default function ProjectDashboard({ onOpenProject, showToast, theme, userRole, onOpenAdmin, onOpenSettings }) {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -105,12 +105,50 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme }) {
             Manage your translations with collaborative project workflows.
           </p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold px-4 py-2.5 rounded-xl cursor-pointer shadow-md transition-all"
-        >
-          <Plus size={16} /> Create Project
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {userRole === "admin" && (
+            <button
+              onClick={onOpenAdmin}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: 36, height: 36, borderRadius: 12,
+                background: "var(--bg-surface)",
+                border: "1px solid var(--border-subtle)",
+                color: "var(--text-secondary)",
+                cursor: "pointer", transition: "all 0.2s ease"
+              }}
+              onMouseOver={(e) => e.currentTarget.style.background = "var(--bg-elevated)"}
+              onMouseOut={(e) => e.currentTarget.style.background = "var(--bg-surface)"}
+              title="Admin Panel"
+            >
+              <LayoutDashboard size={15} />
+            </button>
+          )}
+
+          <button
+            onClick={onOpenSettings}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 36, height: 36, borderRadius: 12,
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-subtle)",
+              color: "var(--text-secondary)",
+              cursor: "pointer", transition: "all 0.2s ease"
+            }}
+            onMouseOver={(e) => e.currentTarget.style.background = "var(--bg-elevated)"}
+            onMouseOut={(e) => e.currentTarget.style.background = "var(--bg-surface)"}
+            title="Settings"
+          >
+            <Settings size={15} />
+          </button>
+
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold px-4 py-2.5 rounded-xl cursor-pointer shadow-md transition-all"
+          >
+            <Plus size={16} /> Create Project
+          </button>
+        </div>
       </div>
 
       {/* Filter and Search Bar */}

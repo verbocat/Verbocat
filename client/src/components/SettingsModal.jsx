@@ -36,7 +36,8 @@ export const SettingsModal = ({
   userEmail,
   theme,
   projectId,
-  onProjectUpdated
+  onProjectUpdated,
+  userId
 }) => {
   const [localDarkMode, setLocalDarkMode] = useState(darkMode);
   const [localFontSize, setLocalFontSize] = useState(editorFontSize);
@@ -70,6 +71,15 @@ export const SettingsModal = ({
       loadProjectData();
     }
   }, [show, projectId]);
+
+  useEffect(() => {
+    if (show && projectId && projectSettings) {
+      const isOwner = projectSettings.owner_id === userId;
+      if (!isOwner && activeTab === "project") {
+        setActiveTab("preferences");
+      }
+    }
+  }, [show, projectId, projectSettings, userId, activeTab]);
 
   const loadProjectData = async () => {
     try {
@@ -604,7 +614,7 @@ export const SettingsModal = ({
         <div className="settings-body-split">
           {/* Sidebar Tabs */}
           <div className="settings-sidebar">
-            {projectId && (
+            {projectId && (!projectSettings || projectSettings.owner_id === userId) && (
               <button
                 type="button"
                 className={`settings-tab-btn ${activeTab === "project" ? "active" : ""}`}

@@ -2775,6 +2775,7 @@ export default function App() {
         theme={theme}
         projectId={currentRoute.projectId}
         onProjectUpdated={() => setProjectRefreshTrigger(prev => prev + 1)}
+        userId={user ? user.id : null}
       />
 
       {showAdminDashboard && (
@@ -2792,6 +2793,9 @@ export default function App() {
           onOpenProject={(projId) => navigateTo(`/project/${projId}`)}
           showToast={showToast}
           theme={theme}
+          userRole={user ? user.role : ""}
+          onOpenAdmin={() => setShowAdminDashboard(true)}
+          onOpenSettings={() => setShowSettingsModal(true)}
         />
       )}
 
@@ -2807,6 +2811,9 @@ export default function App() {
           token={token}
           onOpenSettings={() => setShowSettingsModal(true)}
           refreshTrigger={projectRefreshTrigger}
+          userRole={user ? user.role : ""}
+          userId={user ? user.id : null}
+          onOpenAdmin={() => setShowAdminDashboard(true)}
         />
       )}
 

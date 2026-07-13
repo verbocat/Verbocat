@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   ArrowLeft, FileText, Globe, Play, Pause, XCircle, RotateCcw, 
   Download, Upload, CheckCircle2, AlertCircle, Eye, Database, BarChart3, TrendingUp, Folder, Plus, Trash2, 
-  Settings, List, Activity, Calendar, User, Clock, ChevronDown, Check, Edit2, Copy, FileCode, CheckSquare, Square, RefreshCw, Users
+  Settings, List, Activity, Calendar, User, Clock, ChevronDown, Check, Edit2, Copy, FileCode, CheckSquare, Square, RefreshCw, Users, LayoutDashboard
 } from "lucide-react";
 import io from "socket.io-client";
 import { 
@@ -13,7 +13,7 @@ import {
 import { LANGUAGES } from "../constants/languages";
 import { ShareModal } from "./ShareModal";
 
-export default function ProjectDetails({ projectId, onBack, onOpenEditor, showToast, theme, token, onOpenSettings }) {
+export default function ProjectDetails({ projectId, onBack, onOpenEditor, showToast, theme, token, onOpenSettings, userId, userRole, onOpenAdmin }) {
   const [project, setProject] = useState(null);
   const [files, setFiles] = useState([]);
   const [jobs, setJobs] = useState([]);
@@ -477,6 +477,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
     : 0;
 
   const projectStatus = project?.status || project?.settings?.status || "Active";
+  const isProjectOwner = project && project.owner_id === userId;
 
   if (loading) {
     return (
@@ -609,13 +610,25 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
               <Users size={14} />
             </button>
 
-            <button
-              onClick={onOpenSettings}
-              className="project-icon-action"
-              title="Project Settings"
-            >
-              <Settings size={14} />
-            </button>
+            {userRole === "admin" && (
+              <button
+                onClick={onOpenAdmin}
+                className="project-icon-action"
+                title="Admin Panel"
+              >
+                <LayoutDashboard size={14} />
+              </button>
+            )}
+
+            {isProjectOwner && (
+              <button
+                onClick={onOpenSettings}
+                className="project-icon-action"
+                title="Project Settings"
+              >
+                <Settings size={14} />
+              </button>
+            )}
           </div>
 
         </div>
@@ -714,21 +727,25 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                   <small>Export every translated file</small>
                 </span>
               </button>
-              <button onClick={onOpenSettings} className="project-quick-item">
-                <span className="project-quick-item-icon"><Settings size={12} /></span>
-                <span>
-                  <strong>Project settings</strong>
-                  <small>Change metadata and workflow rules</small>
-                </span>
-              </button>
-              <div className="project-quick-menu-sep"></div>
-              <button onClick={handleDeleteProjectClick} className="project-quick-item danger">
-                <span className="project-quick-item-icon danger"><Trash2 size={12} /></span>
-                <span>
-                  <strong>Delete project</strong>
-                  <small>Permanently remove files and jobs</small>
-                </span>
-              </button>
+              {isProjectOwner && (
+                <>
+                  <button onClick={onOpenSettings} className="project-quick-item">
+                    <span className="project-quick-item-icon"><Settings size={12} /></span>
+                    <span>
+                      <strong>Project settings</strong>
+                      <small>Change metadata and workflow rules</small>
+                    </span>
+                  </button>
+                  <div className="project-quick-menu-sep"></div>
+                  <button onClick={handleDeleteProjectClick} className="project-quick-item danger">
+                    <span className="project-quick-item-icon danger"><Trash2 size={12} /></span>
+                    <span>
+                      <strong>Delete project</strong>
+                      <small>Permanently remove files and jobs</small>
+                    </span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -1035,7 +1052,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                                       onClick={() => handleOpenLanguageSelection(file.id, "view")}
                                       className="bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-medium)] text-[var(--text-primary)] text-[10px] font-bold px-2.5 py-1 rounded-lg cursor-pointer transition-all shadow-sm active:scale-[0.95]"
                                     >
-                                      View
+                                      Download
                                     </button>
                                     
                                     {openLangSelectFileId === file.id && openLangAction === "view" && (
