@@ -4,7 +4,10 @@ import {
   fetchAdminUsers,
   updateAdminUser,
   deleteAdminUser,
-  fetchAdminCreditLogs
+  fetchAdminCreditLogs,
+  fetchAdminTm,
+  updateAdminTm,
+  deleteAdminTm
 } from "../services/api";
 
 export const AdminDashboard = ({ onClose, theme }) => {
@@ -29,6 +32,66 @@ export const AdminDashboard = ({ onClose, theme }) => {
   const [editTranslateAccess, setEditTranslateAccess] = useState(true);
   const [editEmailConfirmed, setEditEmailConfirmed] = useState(false);
   const [submittingEdit, setSubmittingEdit] = useState(false);
+
+  const [tmList, setTmList] = useState([]);
+  const [tmSearch, setTmSearch] = useState("");
+  const [editingTm, setEditingTm] = useState(null);
+  const [editingTmText, setEditingTmText] = useState("");
+  const [submittingTmEdit, setSubmittingTmEdit] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === "tm") {
+      loadTm();
+    }
+  }, [activeTab]);
+
+  const loadTm = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const res = await fetchAdminTm();
+      setTmList(res.tm || []);
+    } catch (err) {
+      console.error(err);
+      showToast(err.response?.data?.error || "Failed to load translation memory", true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditTm = (item) => {
+    setEditingTm(item);
+    setEditingTmText(item.target_text);
+  };
+
+  const handleSaveTmEdit = async (e) => {
+    e.preventDefault();
+    if (!editingTm) return;
+    try {
+      setSubmittingTmEdit(true);
+      await updateAdminTm(editingTm.id, editingTmText);
+      setTmList(prev => prev.map(item => item.id === editingTm.id ? { ...item, target_text: editingTmText } : item));
+      setEditingTm(null);
+      showToast("Translation memory entry updated");
+    } catch (err) {
+      console.error(err);
+      showToast(err.response?.data?.error || "Failed to update entry", true);
+    } finally {
+      setSubmittingTmEdit(false);
+    }
+  };
+
+  const handleDeleteTm = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this translation memory entry?")) return;
+    try {
+      await deleteAdminTm(id);
+      setTmList(prev => prev.filter(item => item.id !== id));
+      showToast("Translation memory entry deleted");
+    } catch (err) {
+      console.error(err);
+      showToast(err.response?.data?.error || "Failed to delete entry", true);
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -175,6 +238,17 @@ export const AdminDashboard = ({ onClose, theme }) => {
     }
     
     return true;
+  });
+
+  const filteredTm = tmList.filter(item => {
+    const term = tmSearch.toLowerCase();
+    return (
+      (item.source_text && item.source_text.toLowerCase().includes(term)) ||
+      (item.target_text && item.target_text.toLowerCase().includes(term)) ||
+      (item.provider && item.provider.toLowerCase().includes(term)) ||
+      (item.source_lang && item.source_lang.toLowerCase().includes(term)) ||
+      (item.target_lang && item.target_lang.toLowerCase().includes(term))
+    );
   });
 
   const sumFilteredWords = filteredLogs.reduce((sum, log) => sum + (log.word_count || 0), 0);
@@ -344,6 +418,16 @@ export const AdminDashboard = ({ onClose, theme }) => {
             >
               Credit Logs Audit
             </button>
+            <button
+              onClick={() => setActiveTab("tm")}
+              className={`px-4 py-2 rounded-xl text-xs font-black tracking-wide transition-all cursor-pointer ${
+                activeTab === "tm" 
+                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/15" 
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              Translation Memory
+            </button>
           </div>
 
           {/* Controls Container */}
@@ -417,12 +501,20 @@ export const AdminDashboard = ({ onClose, theme }) => {
                   placeholder="Search email, role, status..."
                   className="w-full pl-9 rounded-xl border border-white/10 bg-black/30 py-2.5 text-xs text-slate-200 placeholder:text-slate-600 outline-none focus:border-indigo-500/50 focus:bg-black/50 transition-all"
                 />
-              ) : (
+              ) : activeTab === "logs" ? (
                 <input
                   type="text"
                   value={logSearch}
                   onChange={(e) => setLogSearch(e.target.value)}
                   placeholder="Search email, action, file name..."
+                  className="w-full pl-9 rounded-xl border border-white/10 bg-black/30 py-2.5 text-xs text-slate-200 placeholder:text-slate-600 outline-none focus:border-indigo-500/50 focus:bg-black/50 transition-all"
+                />
+              ) : (
+                <input
+                  type="text"
+                  value={tmSearch}
+                  onChange={(e) => setTmSearch(e.target.value)}
+                  placeholder="Search TM text, languages, provider..."
                   className="w-full pl-9 rounded-xl border border-white/10 bg-black/30 py-2.5 text-xs text-slate-200 placeholder:text-slate-600 outline-none focus:border-indigo-500/50 focus:bg-black/50 transition-all"
                 />
               )}
@@ -581,7 +673,7 @@ export const AdminDashboard = ({ onClose, theme }) => {
               </tbody>
             </table>
           </div>
-        ) : (
+        ) : activeTab === "logs" ? (
           
           /* Credit Logs Tab */
           <div className="overflow-x-auto rounded-2xl border border-white/5 bg-slate-900/10 shadow-xl backdrop-blur-md">
@@ -607,12 +699,17 @@ export const AdminDashboard = ({ onClose, theme }) => {
                     const logDate = new Date(log.created_at).toLocaleString();
                     
                     return (
-                      <tr key={log.id} className="hover:bg-white/[0.01] transition-colors">
-                        <td className="px-6 py-3.5 text-slate-500 font-semibold select-none">{logDate}</td>
-                        <td className="px-6 py-3.5 font-sans font-bold text-slate-200">{log.email}</td>
+                      <tr key={log.id} className="hover:bg-white/[0.02] transition-colors">
+                        <td className="px-6 py-3.5 text-slate-400 select-none">{logDate}</td>
+                        <td className="px-6 py-3.5 text-slate-200 select-all font-semibold font-sans">{log.email}</td>
                         <td className="px-4 py-3.5">
-                          <span className="inline-flex rounded-md bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 text-[10px] font-bold text-indigo-400 capitalize font-sans">
-                            {log.action.replace("-", " ")}
+                          <span className={`inline-flex items-center rounded-lg px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider ${
+                            log.action === "credits_added" ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400" :
+                            log.action === "credits_reset" ? "bg-amber-500/10 border border-amber-500/20 text-amber-400" :
+                            log.action === "translation_success" ? "bg-indigo-500/10 border border-indigo-500/20 text-indigo-400" :
+                            "bg-slate-500/15 border border-white/5 text-slate-400"
+                          }`}>
+                            {log.action.replace("_", " ")}
                           </span>
                         </td>
                         <td className="px-6 py-3.5 text-slate-400 max-w-[250px] truncate" title={log.file_name || "N/A"}>
@@ -638,6 +735,73 @@ export const AdminDashboard = ({ onClose, theme }) => {
                   </tr>
                 </tfoot>
               )}
+            </table>
+          </div>
+        ) : (
+          /* Translation Memory Tab */
+          <div className="overflow-x-auto rounded-2xl border border-white/5 bg-slate-900/10 shadow-xl backdrop-blur-md">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-white/5 bg-slate-950/40 text-[10px] font-bold text-slate-500 uppercase tracking-widest select-none">
+                  <th className="px-6 py-4">Source Text</th>
+                  <th className="px-6 py-4">Translation (Target Text)</th>
+                  <th className="px-4 py-4">Langs</th>
+                  <th className="px-4 py-4">Provider</th>
+                  <th className="px-6 py-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5 text-[11.5px] font-semibold text-slate-300">
+                {filteredTm.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="px-6 py-12 text-center text-slate-500 font-sans font-bold uppercase tracking-wider select-none">
+                      No translation memory entries found.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredTm.map((item) => (
+                    <tr key={item.id} className="hover:bg-white/[0.02] transition-colors">
+                      <td className="px-6 py-4 max-w-xs truncate" title={item.source_text}>
+                        {item.source_text}
+                      </td>
+                      <td className="px-6 py-4 max-w-xs truncate font-medium text-slate-200 select-all" title={item.target_text}>
+                        {item.target_text}
+                      </td>
+                      <td className="px-4 py-4 select-none">
+                        <span className="bg-slate-850 text-indigo-300 border border-white/5 px-2 py-0.5 rounded text-[10px] uppercase font-black tracking-wide">
+                          {item.source_lang} → {item.target_lang}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 select-none">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
+                          item.provider && item.provider.startsWith("Linguist (ICE)")
+                            ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                            : "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
+                        }`}>
+                          {item.provider || "Unknown"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right select-none">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => handleEditTm(item)}
+                            className="rounded-lg p-1.5 border border-white/5 bg-slate-950/20 hover:bg-slate-950/40 text-slate-400 hover:text-white transition-all cursor-pointer"
+                            title="Edit TM entry"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteTm(item.id)}
+                            className="rounded-lg p-1.5 border border-rose-500/10 bg-rose-500/5 hover:bg-rose-500/15 text-rose-400 hover:text-rose-300 transition-all cursor-pointer"
+                            title="Delete TM entry"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
             </table>
           </div>
         )}
@@ -759,6 +923,91 @@ export const AdminDashboard = ({ onClose, theme }) => {
                   className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-indigo-500/15 transition-all hover:from-indigo-500 hover:to-violet-500 cursor-pointer"
                 >
                   {submittingEdit ? (
+                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  ) : "Save Changes"}
+                </button>
+              </div>
+
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit TM Modal Overlay */}
+      {editingTm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 transition-all duration-300 animate-fade-in">
+          <div className="relative w-full max-w-lg overflow-hidden rounded-[28px] border border-white/10 bg-slate-900 p-7 shadow-2xl">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-white/5 mb-5">
+              <div>
+                <h3 className="text-base font-black text-white">Edit TM Entry</h3>
+                <span className="text-[10px] text-slate-400 block font-bold mt-0.5">
+                  Source: {editingTm.source_text ? (editingTm.source_text.length > 60 ? editingTm.source_text.substring(0, 60) + "..." : editingTm.source_text) : ""}
+                </span>
+              </div>
+              <button
+                onClick={() => setEditingTm(null)}
+                className="rounded-lg p-1.5 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all cursor-pointer"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveTmEdit} className="space-y-4">
+              
+              {/* Source Text View-Only */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 select-none">
+                  Source Segment
+                </label>
+                <div className="w-full rounded-xl border border-white/5 bg-slate-950/30 px-3.5 py-2.5 text-slate-400 text-sm select-all max-h-32 overflow-y-auto">
+                  {editingTm.source_text}
+                </div>
+              </div>
+
+              {/* Edit Target Text */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 select-none">
+                  Target Translation
+                </label>
+                <textarea
+                  required
+                  rows="4"
+                  value={editingTmText}
+                  onChange={(e) => setEditingTmText(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-slate-100 outline-none transition-all focus:border-indigo-500/50 text-sm"
+                />
+              </div>
+
+              {/* Metadata Info */}
+              <div className="flex gap-4 text-[10px] text-slate-400 font-bold">
+                <div>
+                  Langs: <span className="text-indigo-400 uppercase">{editingTm.source_lang} → {editingTm.target_lang}</span>
+                </div>
+                <div>
+                  Provider: <span className="text-slate-300">{editingTm.provider}</span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-3 pt-3 border-t border-white/5 mt-5">
+                <button
+                  type="button"
+                  onClick={() => setEditingTm(null)}
+                  className="rounded-xl px-4 py-2.5 text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingTmEdit}
+                  className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-indigo-500/15 transition-all hover:from-indigo-500 hover:to-violet-500 cursor-pointer"
+                >
+                  {submittingTmEdit ? (
                     <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>

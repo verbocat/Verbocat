@@ -157,6 +157,21 @@ export const fetchAdminCreditLogs = async () => {
   return response.data;
 };
 
+export const fetchAdminTm = async (search = "", sourceLang = "", targetLang = "") => {
+  const response = await api.get(`/api/admin/tm?search=${search}&sourceLang=${sourceLang}&targetLang=${targetLang}`);
+  return response.data;
+};
+
+export const updateAdminTm = async (id, targetText) => {
+  const response = await api.put(`/api/admin/tm/${id}`, { target_text: targetText });
+  return response.data;
+};
+
+export const deleteAdminTm = async (id) => {
+  const response = await api.delete(`/api/admin/tm/${id}`);
+  return response.data;
+};
+
 export const fetchDocument = async (documentId) => {
   const response = await api.get(`/api/documents/${documentId}`);
   return response.data;

@@ -90,9 +90,14 @@ export const Header = ({
 
         {/* Primary upload CTA when no file */}
         {!hasFile && (
-          <label className="btn-cta" style={{ cursor: "pointer" }}>
-            <Plus style={{ width: 13, height: 13 }} />
-            Open File
+          <label className="btn-cta btn-cta-premium" style={{ cursor: "pointer" }}>
+            <span className="project-action-icon">
+              <Plus style={{ width: 13, height: 13 }} />
+            </span>
+            <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1 }}>
+              <span>Open File</span>
+              <span className="btn-cta-meta">Import a document into the workspace</span>
+            </span>
             <input type="file" onChange={onUpload} className="hidden" />
           </label>
         )}

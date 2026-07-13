@@ -944,6 +944,12 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
       return response.status(500).json({ error: "Failed to update segment." });
     }
 
+    // Save/Update human correction in Translation Memory as an ICE match
+    if (targetText !== undefined && targetText !== null && String(targetText).trim() !== "") {
+      const { upsertLinguistIceMatch } = require("../services/translationService");
+      await upsertLinguistIceMatch(sourceText, targetText, doc.source_lang || "en", doc.target_lang || targetLang);
+    }
+
     // Broadcast manual save update immediately via Socket.io
     const { getIo } = require("../services/socket");
     const io = getIo();
@@ -3403,6 +3409,76 @@ apiRouter.get("/documents/:documentId/lang/:lang/segments", checkAuth, async (re
     // Fetch target language segments
     const segments = await fetchAllSegments(documentId, "*", lang);
 
+    // Dynamic TM lookup to assign fuzzyScore and matchType
+    const uniqueSources = [...new Set(segments.map(s => s.source_text))];
+    const { data: tmEntries } = await supabase
+      .from("translation_memory")
+      .select("*")
+      .in("source_text", uniqueSources)
+      .eq("target_lang", lang);
+
+    const tmMap = {};
+    (tmEntries || []).forEach(item => {
+      // Prioritize ICE matches, then newer ones
+      const existing = tmMap[item.source_text];
+      if (!existing || item.provider.startsWith("Linguist (ICE)") || (!existing.provider.startsWith("Linguist (ICE)") && item.created_at > existing.created_at)) {
+        tmMap[item.source_text] = item;
+      }
+    });
+
+    const { data: allTm } = await supabase
+      .from("translation_memory")
+      .select("source_text, target_text, provider")
+      .eq("target_lang", lang);
+
+    const stringSimilarity = require("string-similarity");
+
+    const mappedSegments = segments.map(seg => {
+      let fuzzyScore = null;
+      let matchType = null;
+
+      if (seg.target_text && seg.target_text.trim() !== "") {
+        const exactTm = tmMap[seg.source_text];
+        if (exactTm && exactTm.target_text === seg.target_text) {
+          if (exactTm.provider.startsWith("Linguist (ICE)")) {
+            fuzzyScore = 101;
+            matchType = "ICE";
+          } else {
+            fuzzyScore = 100;
+            matchType = "TM";
+          }
+        } else if (allTm && allTm.length > 0) {
+          const sourceText = seg.source_text;
+          const matchSources = allTm.map(x => x.source_text).filter(Boolean);
+          if (matchSources.length > 0) {
+            const matches = stringSimilarity.findBestMatch(sourceText, matchSources);
+            const bestMatch = matches.bestMatch;
+            const bestMatchIndex = matches.bestMatchIndex;
+            if (bestMatch.rating >= 0.90 && allTm[bestMatchIndex].target_text === seg.target_text) {
+              fuzzyScore = Math.round(bestMatch.rating * 100);
+              matchType = "Fuzzy";
+            }
+          }
+        }
+      }
+
+      return {
+        id: seg.segment_index + 1,
+        source: seg.source_text,
+        target: seg.target_text || "",
+        status: seg.status,
+        verified: seg.status === "approved",
+        mqmAccuracyScore: seg.mqm_accuracy_score,
+        mqmReport: seg.mqm_report,
+        contextJira: seg.context_jira,
+        contextDescription: seg.context_description,
+        originalTargetText: seg.original_target_text,
+        trackedBy: seg.tracked_by,
+        fuzzyScore,
+        matchType
+      };
+    });
+
     response.json({
       jobId: job.id,
       documentId,
@@ -3418,19 +3494,7 @@ apiRouter.get("/documents/:documentId/lang/:lang/segments", checkAuth, async (re
       projectName: project.name,
       jobStatus: job.status,
       jobProgress: job.progress,
-      segments: segments.map(seg => ({
-        id: seg.segment_index + 1,
-        source: seg.source_text,
-        target: seg.target_text || "",
-        status: seg.status,
-        verified: seg.status === "approved",
-        mqmAccuracyScore: seg.mqm_accuracy_score,
-        mqmReport: seg.mqm_report,
-        contextJira: seg.context_jira,
-        contextDescription: seg.context_description,
-        originalTargetText: seg.original_target_text,
-        trackedBy: seg.tracked_by
-      }))
+      segments: mappedSegments
     });
   } catch (err) {
     console.error(err);
@@ -3462,6 +3526,32 @@ apiRouter.put("/documents/:documentId/lang/:lang/segments/:index", checkAuth, as
 
     if (updateErr) {
       return response.status(500).json({ error: updateErr.message });
+    }
+
+    // Save/Update human correction in Translation Memory as an ICE match
+    if (targetText !== undefined && targetText !== null && String(targetText).trim() !== "") {
+      try {
+        const { data: dbSegment } = await supabase
+          .from("document_segments")
+          .select("source_text")
+          .eq("document_id", documentId)
+          .eq("target_lang", lang)
+          .eq("segment_index", segmentIndex)
+          .maybeSingle();
+
+        const { data: doc } = await supabase
+          .from("documents")
+          .select("source_lang")
+          .eq("id", documentId)
+          .maybeSingle();
+
+        if (dbSegment && doc) {
+          const { upsertLinguistIceMatch } = require("../services/translationService");
+          await upsertLinguistIceMatch(dbSegment.source_text, targetText, doc.source_lang || "en", lang);
+        }
+      } catch (err) {
+        console.error("Failed to save segment human correction to TM:", err);
+      }
     }
 
     // Broadcast update via Socket.io

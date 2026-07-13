@@ -499,15 +499,37 @@ export const SegmentCard = ({
           <span className="seg-num-label">{String(segment.id).padStart(2, "0")}</span>
           <span className={`seg-dot ${dotClass}`} />
           {segment.fuzzyScore && (
-            <span style={{
-              fontSize: 8, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace",
-              color: "var(--text-amber)",
-              background: "rgba(245,158,11,0.08)",
-              border: "1px solid rgba(245,158,11,0.2)",
-              borderRadius: 3, padding: "0 3px"
-            }} title={`Fuzzy: ${segment.fuzzyScore}%`}>
-              {segment.fuzzyScore}%
-            </span>
+            segment.fuzzyScore === 101 ? (
+              <span style={{
+                fontSize: 8, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace",
+                color: "#10b981",
+                background: "rgba(16,185,129,0.08)",
+                border: "1px solid rgba(16,185,129,0.2)",
+                borderRadius: 3, padding: "0 3.5px"
+              }} title="In-Context Exact (ICE) match from human save">
+                ICE
+              </span>
+            ) : segment.fuzzyScore === 100 ? (
+              <span style={{
+                fontSize: 8, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace",
+                color: "#3b82f6",
+                background: "rgba(59,130,246,0.08)",
+                border: "1px solid rgba(59,130,246,0.2)",
+                borderRadius: 3, padding: "0 3.5px"
+              }} title="Translation Memory (TM) match from database">
+                TM
+              </span>
+            ) : (
+              <span style={{
+                fontSize: 8, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace",
+                color: "var(--text-amber)",
+                background: "rgba(245,158,11,0.08)",
+                border: "1px solid rgba(245,158,11,0.2)",
+                borderRadius: 3, padding: "0 3px"
+              }} title={`Fuzzy Match: ${segment.fuzzyScore}%`}>
+                {segment.fuzzyScore}%
+              </span>
+            )
           )}
         </div>
 

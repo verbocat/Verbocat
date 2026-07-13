@@ -205,22 +205,137 @@ const isPersistableProvider = (provider) =>
   !provider.startsWith("Fallback") && 
   !provider.startsWith("TooLong");
 
+const upsertTranslationMemoryBatch = async (rows) => {
+  if (!rows || rows.length === 0) return;
+  for (const row of rows) {
+    try {
+      const { data: existing } = await supabase
+        .from("translation_memory")
+        .select("id")
+        .eq("source_text", row.source_text)
+        .eq("source_lang", row.source_lang)
+        .eq("target_lang", row.target_lang)
+        .limit(1);
+
+      if (existing && existing.length > 0) {
+        await supabase
+          .from("translation_memory")
+          .update({
+            target_text: row.target_text,
+            provider: row.provider
+          })
+          .eq("id", existing[0].id);
+      } else {
+        await supabase
+          .from("translation_memory")
+          .insert(row);
+      }
+    } catch (err) {
+      console.error("Error in upsertTranslationMemoryBatch:", err);
+    }
+  }
+};
+
+const upsertLinguistIceMatch = async (sourceText, targetText, sourceLang, targetLang) => {
+  if (!sourceText || !targetText) return;
+  try {
+    const { data: existing } = await supabase
+      .from("translation_memory")
+      .select("id")
+      .eq("source_text", sourceText)
+      .eq("source_lang", sourceLang)
+      .eq("target_lang", targetLang)
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      await supabase
+        .from("translation_memory")
+        .update({
+          target_text: targetText,
+          provider: "Linguist (ICE)"
+        })
+        .eq("id", existing[0].id);
+    } else {
+      await supabase
+        .from("translation_memory")
+        .insert({
+          source_text: sourceText,
+          target_text: targetText,
+          source_lang: sourceLang,
+          target_lang: targetLang,
+          provider: "Linguist (ICE)"
+        });
+    }
+  } catch (err) {
+    console.error("Error in upsertLinguistIceMatch:", err);
+  }
+};
+
+const findTmMatch = (source, targetLang, tmMap, allTmList) => {
+  // 1. Exact match
+  if (tmMap[source]) {
+    const entry = tmMap[source];
+    const isIce = entry.provider && entry.provider.startsWith("Linguist (ICE)");
+    return {
+      targetText: entry.target_text,
+      provider: entry.provider,
+      fuzzyScore: isIce ? 101 : 100,
+      matchType: isIce ? "ICE" : "TM"
+    };
+  }
+
+  // 2. Fuzzy match (similarity >= 0.90)
+  if (allTmList && allTmList.length > 0) {
+    const stringSimilarity = require("string-similarity");
+    const matchSources = allTmList.map(x => x.source_text).filter(Boolean);
+    if (matchSources.length > 0) {
+      const matches = stringSimilarity.findBestMatch(source, matchSources);
+      const bestMatch = matches.bestMatch;
+      const bestMatchIndex = matches.bestMatchIndex;
+      if (bestMatch.rating >= 0.90) {
+        const entry = allTmList[bestMatchIndex];
+        const score = Math.round(bestMatch.rating * 100);
+        return {
+          targetText: entry.target_text,
+          provider: entry.provider + ` (Fuzzy: ${score}%)`,
+          fuzzyScore: score,
+          matchType: "Fuzzy"
+        };
+      }
+    }
+  }
+
+  return null;
+};
+
 const translateSegments = async (segments, target, sourceLang, contextSettings, userId) => {
   const providerState = createProviderState();
 
   const uniqueSources = [...new Set(segments.map((s) => s.source))];
 
+  // Fetch exact translations
   const { data: existingTranslations } = await supabase
     .from("translation_memory")
     .select("*")
     .in("source_text", uniqueSources)
     .eq("target_lang", target);
 
+  // Fetch all translations for this target language to compute fuzzy matches
+  const { data: allTmList } = await supabase
+    .from("translation_memory")
+    .select("*")
+    .eq("target_lang", target);
+
   const tmMap = {};
   (existingTranslations || []).forEach((item) => {
-    tmMap[item.source_text] = item;
+    // Deduplicate in memory: prefer Linguist (ICE) matches, then newer ones
+    const existing = tmMap[item.source_text];
+    if (!existing || item.provider.startsWith("Linguist (ICE)") || (!existing.provider.startsWith("Linguist (ICE)") && item.created_at > existing.created_at)) {
+      tmMap[item.source_text] = item;
+    }
   });
 
+  const matchResultMap = {};
   const uniqueMissingSources = [];
   const sourceToIndex = new Map();
 
@@ -228,7 +343,11 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
     const hasSafeTarget = segment.target && isSafeTranslation(segment.source, segment.target, target, contextSettings);
     if (!hasSafeTarget) {
       const source = segment.source;
-      if (!tmMap[source] || !isSafeTranslation(source, tmMap[source].target_text, target, contextSettings)) {
+      const match = findTmMatch(source, target, tmMap, allTmList);
+      if (match && isSafeTranslation(source, match.targetText, target, contextSettings)) {
+        // Safe match (Exact ICE, Exact TM, or Fuzzy >= 90%)
+        matchResultMap[source] = match;
+      } else {
         if (!sourceToIndex.has(source)) {
           sourceToIndex.set(source, []);
           uniqueMissingSources.push(source);
@@ -252,7 +371,6 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
 
     for (const source of sources) {
       const len = String(source || "").length;
-      // Start a new chunk if adding this segment would exceed limits
       if (currentChunk.length > 0 && (currentChars + len > MAX_CHARS_PER_CHUNK || currentChunk.length >= MAX_SEGMENTS_PER_CHUNK)) {
         chunks.push(currentChunk);
         currentChunk = [];
@@ -315,14 +433,8 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
     });
 
     if (insertRows.length > 0) {
-      const { error: insertError } = await supabase
-        .from("translation_memory")
-        .insert(insertRows);
-
-      if (insertError) {
-        console.log("SUPABASE INSERT ERROR");
-        console.log(insertError);
-      }
+      // Overwrite instead of raw insert to avoid duplicates
+      await upsertTranslationMemoryBatch(insertRows);
     }
   }
 
@@ -336,7 +448,6 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
     }
     const cleanSource = normalizeText(source).toLowerCase();
     const cleanTarget = normalizeText(entry.target_text).toLowerCase();
-    // If translation is identical to source and it shouldn't be, OR if it is empty/invalid/TooLong, mark for retry
     const isUntranslated = cleanSource === cleanTarget && !isLegitimatelyIdentical(source);
     const isEmptyOrTooLong = !entry.target_text || entry.target_text.trim() === "" || entry.provider === "TooLong" || entry.provider === "Fallback";
     
@@ -377,16 +488,15 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
             };
 
             if (isPersistableProvider(retried.provider)) {
-              await supabase.from("translation_memory").insert({
+              await upsertTranslationMemoryBatch([{
                 source_text: source,
                 target_text: translatedText,
                 source_lang: actualSourceLang,
                 target_lang: target,
                 provider: retried.provider + " (Final Retry)"
-              });
+              }]);
             }
           } else {
-            // It failed retry. Let's split it into sentences and translate them!
             const sentenceFailedAttempt = {
               translation: retried.originalTranslation || retried.translated,
               reason: retried.failureReason || "The translation was identical to English source text."
@@ -424,13 +534,13 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
                   provider: "OpenAI (Sentence-Split Fallback)"
                 };
                 
-                await supabase.from("translation_memory").insert({
+                await upsertTranslationMemoryBatch([{
                   source_text: source,
                   target_text: joinedTranslation,
                   source_lang: actualSourceLang,
                   target_lang: target,
                   provider: "OpenAI (Sentence-Split Fallback)"
-                });
+                }]);
                 console.log(`[Sentence Split Fallback] Successfully translated split segment!`);
               }
             }
@@ -445,21 +555,23 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
   const results = await Promise.all(segments.map(async (segment, index) => {
     let targetText = "";
     let provider = "";
+    let fuzzyScore = null;
+    let matchType = null;
 
-    // 1. Check if the segment already has a translation
     if (segment.target) {
       targetText = segment.target;
       provider = "Existing Segment Target";
     } else {
-      // 2. Check if TM has a translation
-      const tmEntry = tmMap[segment.source];
-      if (tmEntry) {
-        targetText = tmEntry.target_text || "";
-        provider = tmEntry.provider || "TM Database";
+      // Check if we matched it from TM
+      const match = matchResultMap[segment.source];
+      if (match) {
+        targetText = match.targetText;
+        provider = match.provider;
+        fuzzyScore = match.fuzzyScore;
+        matchType = match.matchType;
       }
     }
 
-    // FINAL STRICT CHECK: If it is still not safe, we must raise a genuine error!
     if (!isSafeTranslation(segment.source, targetText, target, contextSettings)) {
       let reason = "Unknown reason";
       if (!targetText || targetText.trim() === "") {
@@ -488,6 +600,8 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
       id: segment.id,
       translated: targetText,
       provider: provider,
+      fuzzyScore,
+      matchType,
       qaIssues: [],
       mqmAccuracyScore: 100,
       mqmReport: null
@@ -608,5 +722,6 @@ module.exports = {
   isSafeTranslation,
   translateSegmentWithContext,
   ensureEnglishNumerals,
-  postProcessTranslation
+  postProcessTranslation,
+  upsertLinguistIceMatch
 };

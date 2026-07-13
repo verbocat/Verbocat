@@ -538,8 +538,8 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
           </div>
         </div>
 
-        {/* Global Action Buttons (Top-Right Corner) */}
-        <div className="flex items-center gap-2">
+      {/* Global Action Buttons (Top-Right Corner) */}
+        <div className="project-actions-shell">
           
           <input
             type="file"
@@ -552,11 +552,16 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
-            className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all shadow-sm active:scale-[0.98] shrink-0 cursor-pointer"
+            className="project-primary-action"
             title="Upload Files"
           >
-            <Upload size={14} />
-            <span>Upload Files</span>
+            <span className="project-action-icon">
+              <Upload size={14} />
+            </span>
+            <span className="flex flex-col items-start leading-none">
+              <span className="text-[11px] font-black tracking-wide uppercase">Upload Files</span>
+              <span className="text-[10px] font-medium text-white/70">Add documents to this project</span>
+            </span>
           </button>
 
           <button
@@ -564,47 +569,54 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
               setSelectedAddLangs(project.target_languages || []);
               setShowAddLangModal(true);
             }}
-            className="flex items-center gap-1.5 bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-medium)] text-[var(--text-primary)] text-xs font-semibold px-4 py-2 rounded-xl transition-all shadow-sm active:scale-[0.98] shrink-0 cursor-pointer"
+            className="project-secondary-action"
             title="Add Languages"
           >
-            <Plus size={14} />
-            <span>Add Languages</span>
+            <span className="project-action-icon subtle">
+              <Plus size={14} />
+            </span>
+            <span className="flex flex-col items-start leading-none">
+              <span className="text-[11px] font-bold tracking-wide uppercase">Add Language</span>
+              <span className="text-[10px] font-medium text-[var(--text-muted)]">Create more target variants</span>
+            </span>
           </button>
 
-          <div className="h-6 w-px bg-[var(--border-subtle)] mx-1 shrink-0"></div>
+          <div className="project-divider"></div>
 
-          <button
-            onClick={handleDownloadZipAll}
-            disabled={jobs.length === 0}
-            className="flex items-center justify-center p-2 bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-medium)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-40 disabled:cursor-not-allowed rounded-xl transition-all shadow-sm active:scale-[0.98] shrink-0 cursor-pointer"
-            title="Download ZIP"
-          >
-            <Download size={14} />
-          </button>
+          <div className="project-icon-actions">
+            <button
+              onClick={handleDownloadZipAll}
+              disabled={jobs.length === 0}
+              className="project-icon-action"
+              title="Download ZIP"
+            >
+              <Download size={14} />
+            </button>
 
-          <button
-            onClick={handleExportReports}
-            className="flex items-center justify-center p-2 bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-medium)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-xl transition-all shadow-sm active:scale-[0.98] shrink-0 cursor-pointer"
-            title="Export Reports"
-          >
-            <FileCode size={14} />
-          </button>
+            <button
+              onClick={handleExportReports}
+              className="project-icon-action"
+              title="Export Reports"
+            >
+              <FileCode size={14} />
+            </button>
 
-          <button
-            onClick={() => setShowShareModal(true)}
-            className="flex items-center justify-center p-2 bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-medium)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-xl transition-all shadow-sm active:scale-[0.98] shrink-0 cursor-pointer"
-            title="Share Project"
-          >
-            <Users size={14} />
-          </button>
+            <button
+              onClick={() => setShowShareModal(true)}
+              className="project-icon-action"
+              title="Share Project"
+            >
+              <Users size={14} />
+            </button>
 
-          <button
-            onClick={() => setActiveTab("settings")}
-            className="flex items-center justify-center p-2 bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-medium)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-xl transition-all shadow-sm active:scale-[0.98] shrink-0 cursor-pointer"
-            title="Project Settings"
-          >
-            <Settings size={14} />
-          </button>
+            <button
+              onClick={() => setActiveTab("settings")}
+              className="project-icon-action"
+              title="Project Settings"
+            >
+              <Settings size={14} />
+            </button>
+          </div>
 
         </div>
       </header>
@@ -670,25 +682,53 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
         {/* Header Action Dropdown at the far right of tabs */}
         <div className="ml-auto flex items-center pr-2">
           <div className="relative group">
-            <button className="flex items-center gap-1 bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg cursor-pointer transition-all">
-              <span>Header Actions</span> <ChevronDown size={10} />
+            <button className="project-utility-trigger">
+              <span className="flex items-center gap-2">
+                <span className="project-utility-trigger-dot" />
+                Quick Actions
+              </span>
+              <ChevronDown size={10} />
             </button>
-            <div className="absolute right-0 mt-1 w-44 bg-[var(--bg-surface)] border border-[var(--border-medium)] rounded-xl py-1 shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-              <button onClick={() => fileInputRef.current?.click()} className="w-full text-left px-4 py-2 text-xs hover:bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-2 cursor-pointer">
-                <Upload size={12} /> Upload Files
+            <div className="project-quick-menu">
+              <div className="project-quick-menu-header">
+                <span>Workspace Actions</span>
+                <span>Everything in one place</span>
+              </div>
+              <button onClick={() => fileInputRef.current?.click()} className="project-quick-item">
+                <span className="project-quick-item-icon"><Upload size={12} /></span>
+                <span>
+                  <strong>Upload files</strong>
+                  <small>Bring more documents into the project</small>
+                </span>
               </button>
-              <button onClick={() => { setSelectedAddLangs(project.target_languages || []); setShowAddLangModal(true); }} className="w-full text-left px-4 py-2 text-xs hover:bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-2 cursor-pointer">
-                <Plus size={12} /> Add Languages
+              <button onClick={() => { setSelectedAddLangs(project.target_languages || []); setShowAddLangModal(true); }} className="project-quick-item">
+                <span className="project-quick-item-icon"><Plus size={12} /></span>
+                <span>
+                  <strong>Add language</strong>
+                  <small>Create a new target locale version</small>
+                </span>
               </button>
-              <button onClick={handleDownloadZipAll} className="w-full text-left px-4 py-2 text-xs hover:bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-var(--text-primary) flex items-center gap-2 cursor-pointer">
-                <Download size={12} /> Download ZIP
+              <button onClick={handleDownloadZipAll} className="project-quick-item">
+                <span className="project-quick-item-icon"><Download size={12} /></span>
+                <span>
+                  <strong>Download ZIP</strong>
+                  <small>Export every translated file</small>
+                </span>
               </button>
-              <button onClick={() => setActiveTab("settings")} className="w-full text-left px-4 py-2 text-xs hover:bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-2 cursor-pointer">
-                <Settings size={12} /> Settings
+              <button onClick={() => setActiveTab("settings")} className="project-quick-item">
+                <span className="project-quick-item-icon"><Settings size={12} /></span>
+                <span>
+                  <strong>Project settings</strong>
+                  <small>Change metadata and workflow rules</small>
+                </span>
               </button>
-              <div className="h-px bg-[var(--border-subtle)] my-1"></div>
-              <button onClick={handleDeleteProjectClick} className="w-full text-left px-4 py-2 text-xs hover:bg-[var(--bg-elevated)] text-rose-500 flex items-center gap-2 cursor-pointer">
-                <Trash2 size={12} /> Delete Project
+              <div className="project-quick-menu-sep"></div>
+              <button onClick={handleDeleteProjectClick} className="project-quick-item danger">
+                <span className="project-quick-item-icon danger"><Trash2 size={12} /></span>
+                <span>
+                  <strong>Delete project</strong>
+                  <small>Permanently remove files and jobs</small>
+                </span>
               </button>
             </div>
           </div>

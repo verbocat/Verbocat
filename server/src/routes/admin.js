@@ -152,6 +152,84 @@ adminRouter.get("/credit-logs", async (request, response) => {
   }
 });
 
+// 5. List/Search Translation Memory (TM)
+adminRouter.get("/tm", async (request, response) => {
+  try {
+    const { search, sourceLang, targetLang } = request.query;
+    let query = supabase.from("translation_memory").select("*").order("created_at", { ascending: false });
+
+    if (sourceLang) {
+      query = query.eq("source_lang", sourceLang);
+    }
+    if (targetLang) {
+      query = query.eq("target_lang", targetLang);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    let filtered = data || [];
+    if (search) {
+      const term = search.toLowerCase();
+      filtered = filtered.filter(item => 
+        (item.source_text && item.source_text.toLowerCase().includes(term)) ||
+        (item.target_text && item.target_text.toLowerCase().includes(term)) ||
+        (item.provider && item.provider.toLowerCase().includes(term))
+      );
+    }
+
+    response.json({ tm: filtered });
+  } catch (error) {
+    console.error("Admin List TM Error:", error);
+    response.status(500).json({ error: "Failed to fetch translation memory entries" });
+  }
+});
+
+// 6. Update Translation Memory entry
+adminRouter.put("/tm/:id", async (request, response) => {
+  try {
+    const { id } = request.params;
+    const { target_text } = request.body;
+
+    if (target_text === undefined || target_text === null) {
+      return response.status(400).json({ error: "Target text is required" });
+    }
+
+    const { data, error } = await supabase
+      .from("translation_memory")
+      .update({ target_text })
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    response.json({ message: "Translation memory entry updated successfully", entry: data });
+  } catch (error) {
+    console.error("Admin Update TM Error:", error);
+    response.status(500).json({ error: "Failed to update translation memory entry" });
+  }
+});
+
+// 7. Delete Translation Memory entry
+adminRouter.delete("/tm/:id", async (request, response) => {
+  try {
+    const { id } = request.params;
+
+    const { error } = await supabase
+      .from("translation_memory")
+      .delete()
+      .eq("id", id);
+
+    if (error) throw error;
+
+    response.json({ message: "Translation memory entry deleted successfully" });
+  } catch (error) {
+    console.error("Admin Delete TM Error:", error);
+    response.status(500).json({ error: "Failed to delete translation memory entry" });
+  }
+});
+
 module.exports = {
   adminRouter
 };
