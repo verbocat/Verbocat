@@ -231,6 +231,10 @@ export const WorkspaceToolbar = ({
             <option value="untranslated">Untranslated</option>
             <option value="verified">Verified</option>
             <option value="duplicate">Duplicates</option>
+            <option value="ice">ICE Matches</option>
+            <option value="tm">TM Matches</option>
+            <option value="fuzzy">Fuzzy Matches</option>
+            <option value="normal">Normal Translations</option>
           </select>
           <span className="filter-arrow">▼</span>
         </div>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, Sliders, Check, Sparkles, Loader } from "lucide-react";
+import { X, Sliders, Check, Sparkles, Loader, Upload, FileText, Trash2 } from "lucide-react";
 
 const DOMAINS = ["General", "Marketing", "Legal", "Medical", "Pharmaceutical", "Financial", "Banking", "Insurance", "Technical", "Software", "IT & Cybersecurity", "E-commerce", "Automotive", "Manufacturing", "Engineering", "Telecommunications", "Gaming", "Education", "Government", "HR & Recruitment", "Travel & Tourism", "Hospitality", "Retail", "Energy & Utilities", "Real Estate", "Life Sciences", "Healthcare", "Aerospace", "Agriculture", "Media & Entertainment"];
 
@@ -216,11 +216,36 @@ const PROFILES = {
   "E-commerce": { domain: "E-commerce", contentType: "Product Page", purpose: "Drive Purchases", tone: "Persuasive", audience: "Consumers", formality: "Neutral", terminologyStrictness: "Flexible" }
 };
 
-export const ContextSettingsModal = ({ show, onClose, contextSettings, setContextSettings, theme, documentId }) => {
-  if (!show) return null;
+const MAX_CONTEXT_FILE_CHARS = 12000;
+const CONTEXT_FILE_LABELS = {
+  markdown: "Markdown",
+  figma: "Figma"
+};
 
+const detectContextFileType = (file) => {
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".md") || name.endsWith(".markdown")) return "markdown";
+  if (name.endsWith(".fig") || file.type.includes("figma")) return "figma";
+  return "unknown";
+};
+
+const readContextFile = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(String(reader.result || ""));
+  reader.onerror = () => reject(reader.error || new Error("Failed to read context file."));
+  reader.readAsText(file);
+});
+
+const truncateContextContent = (content) => {
+  if (!content) return "";
+  if (content.length <= MAX_CONTEXT_FILE_CHARS) return content;
+  return `${content.slice(0, MAX_CONTEXT_FILE_CHARS)}\n\n[Context file truncated to ${MAX_CONTEXT_FILE_CHARS} characters]`;
+};
+
+export const ContextSettingsModal = ({ show, onClose, contextSettings, setContextSettings, documentId }) => {
   const [activeProfile, setActiveProfile] = useState("Custom");
   const [isDetecting, setIsDetecting] = useState(false);
+  const [fileError, setFileError] = useState("");
   
   const handleChange = (field, value) => {
     setContextSettings(prev => {
@@ -254,6 +279,56 @@ export const ContextSettingsModal = ({ show, onClose, contextSettings, setContex
     }
   };
 
+  const handleCustomPromptChange = (value) => {
+    setContextSettings(prev => ({ ...prev, customPrompt: value }));
+    setActiveProfile("Custom");
+  };
+
+  const handleContextFileChange = async (event, expectedType) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    const detectedType = detectContextFileType(file);
+    if (detectedType !== expectedType) {
+      setFileError(`Please upload a ${CONTEXT_FILE_LABELS[expectedType]} context file.`);
+      return;
+    }
+
+    setFileError("");
+    try {
+      const rawContent = detectedType === "markdown" ? await readContextFile(file) : "";
+      const nextFile = {
+        id: `${Date.now()}-${file.name}`,
+        name: file.name,
+        type: detectedType,
+        mimeType: file.type || "application/octet-stream",
+        size: file.size,
+        content: truncateContextContent(rawContent)
+      };
+
+      setContextSettings(prev => ({
+        ...prev,
+        contextFiles: [
+          ...(prev.contextFiles || []).filter(existing => existing.type !== detectedType),
+          nextFile
+        ]
+      }));
+      setActiveProfile("Custom");
+    } catch (err) {
+      console.error(err);
+      setFileError("Could not read this context file.");
+    }
+  };
+
+  const handleRemoveContextFile = (fileId) => {
+    setContextSettings(prev => ({
+      ...prev,
+      contextFiles: (prev.contextFiles || []).filter(file => file.id !== fileId)
+    }));
+    setActiveProfile("Custom");
+  };
+
   const handleAutoDetect = async () => {
     if (!documentId) return;
     setIsDetecting(true);
@@ -268,7 +343,7 @@ export const ContextSettingsModal = ({ show, onClose, contextSettings, setContex
       });
       const data = await response.json();
       if (response.ok && data.success && data.contextSettings) {
-        setContextSettings(data.contextSettings);
+        setContextSettings(prev => ({ ...prev, ...data.contextSettings }));
         setActiveProfile("Custom");
       } else {
         alert(data.error || "Failed to auto-detect context settings.");
@@ -280,6 +355,8 @@ export const ContextSettingsModal = ({ show, onClose, contextSettings, setContex
       setIsDetecting(false);
     }
   };
+
+  if (!show) return null;
 
   const currentDomain = contextSettings.domain || "General";
 
@@ -332,6 +409,72 @@ export const ContextSettingsModal = ({ show, onClose, contextSettings, setContex
                 ))}
               </div>
             </div>
+          </div>
+
+          <div>
+            <span className="settings-section-label">Custom Translation Prompt</span>
+            <div style={{ marginTop: 8 }}>
+              <textarea
+                className="context-textarea"
+                value={contextSettings.customPrompt || ""}
+                onChange={e => handleCustomPromptChange(e.target.value)}
+                placeholder="Add project-specific translation instructions, terminology rules, tone requirements, product context, or do-not-translate guidance."
+              />
+            </div>
+          </div>
+
+          <div>
+            <span className="settings-section-label">File-Based Context</span>
+            <div className="context-upload-grid" style={{ marginTop: 8 }}>
+              <label className="context-upload-card">
+                <input
+                  type="file"
+                  accept=".md,.markdown,text/markdown,text/plain"
+                  onChange={event => handleContextFileChange(event, "markdown")}
+                  hidden
+                />
+                <FileText style={{ width: 17, height: 17 }} />
+                <span>Upload Markdown</span>
+              </label>
+
+              <label className="context-upload-card">
+                <input
+                  type="file"
+                  accept=".fig,application/octet-stream"
+                  onChange={event => handleContextFileChange(event, "figma")}
+                  hidden
+                />
+                <Upload style={{ width: 17, height: 17 }} />
+                <span>Upload Figma</span>
+              </label>
+            </div>
+
+            {fileError && (
+              <div className="context-file-error">{fileError}</div>
+            )}
+
+            {(contextSettings.contextFiles || []).length > 0 && (
+              <div className="context-file-list">
+                {(contextSettings.contextFiles || []).map(file => (
+                  <div key={file.id} className="context-file-row">
+                    <div>
+                      <div className="context-file-name">{file.name}</div>
+                      <div className="context-file-meta">
+                        {CONTEXT_FILE_LABELS[file.type] || "Context"} context - {Math.max(1, Math.round(file.size / 1024))} KB
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="context-file-remove"
+                      onClick={() => handleRemoveContextFile(file.id)}
+                      aria-label={`Remove ${file.name}`}
+                    >
+                      <Trash2 style={{ width: 13, height: 13 }} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Context Options Grid */}

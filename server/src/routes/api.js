@@ -3300,50 +3300,92 @@ apiRouter.get("/projects/:projectId/analytics", checkAuth, async (request, respo
     const mqmScores = jobs?.filter(j => j.mqm_score !== null).map(j => Number(j.mqm_score)) || [];
     const averageMqm = mqmScores.length > 0 ? (mqmScores.reduce((sum, s) => sum + s, 0) / mqmScores.length).toFixed(1) : "100.0";
 
-    // Estimate Translation Memory Reuse & Savings
-    // (Here we query segment-level stats for TM Reuse vs Machine Translation)
-    let exactMatches = 0;
+    // Estimate Translation Memory & Context Analysis
+    let iceMatches = 0;
+    let tmMatches = 0;
     let fuzzyMatches = 0;
-    let mtTrans = 0;
+    let normalTrans = 0;
     let totalSegmentsCount = 0;
+
+    let segmentsWithJiraContext = 0;
+    let segmentsWithDescriptionContext = 0;
+    let totalSourceContextCount = 0;
 
     if (documents && documents.length > 0) {
       const docIds = documents.map(d => d.id);
-      const { data: segments } = await supabase
-        .from("document_segments")
-        .select("status, target_text, mqm_accuracy_score")
-        .in("document_id", docIds)
-        .is("target_lang", null); // checking source segments distribution or we can query job-level segments
 
-      // Query target segments to find TM usage distribution
+      // Query target segments to find TM usage distribution and context counts
       const { data: targetSegments } = await supabase
         .from("document_segments")
-        .select("status, target_text")
+        .select("status, source_text, target_text, target_lang, context_jira, context_description")
         .in("document_id", docIds)
         .not("target_lang", "is", null);
 
-      if (targetSegments) {
+      if (targetSegments && targetSegments.length > 0) {
         totalSegmentsCount = targetSegments.length;
-        // The mock distribution or simple heuristic based on status/TM mappings
+        const targetLangs = [...new Set(targetSegments.map(s => s.target_lang))];
+
+        // Fetch translation memory entries for these target languages
+        const { data: tmEntries } = await supabase
+          .from("translation_memory")
+          .select("source_text, target_text, target_lang, provider")
+          .in("target_lang", targetLangs);
+
+        const tmByLang = {};
+        (tmEntries || []).forEach(item => {
+          if (!tmByLang[item.target_lang]) {
+            tmByLang[item.target_lang] = [];
+          }
+          tmByLang[item.target_lang].push(item);
+        });
+
+        const stringSimilarity = require("string-similarity");
+
         targetSegments.forEach(seg => {
-          if (seg.status === "approved" || seg.status === "translated") {
-            // Heuristic for demonstration: 20% Exact, 15% Fuzzy, 65% MT
-            // If the user's project actually uses TM, we check how matches map.
-            // Let's count matching database logs or use standard distribution
+          // Source Context Analysis
+          const hasJira = seg.context_jira && seg.context_jira.trim() !== "";
+          const hasDesc = seg.context_description && seg.context_description.trim() !== "";
+          if (hasJira) segmentsWithJiraContext++;
+          if (hasDesc) segmentsWithDescriptionContext++;
+          if (hasJira || hasDesc) totalSourceContextCount++;
+
+          // TM Match Analysis
+          if (seg.target_text && seg.target_text.trim() !== "") {
+            const langTms = tmByLang[seg.target_lang] || [];
+            const exactTms = langTms.filter(t => t.source_text === seg.source_text);
+            const bestExact = exactTms.find(t => t.provider.startsWith("Linguist (ICE)")) || exactTms[0];
+
+            if (bestExact && bestExact.target_text === seg.target_text) {
+              if (bestExact.provider.startsWith("Linguist (ICE)")) {
+                iceMatches++;
+              } else {
+                tmMatches++;
+              }
+            } else {
+              const matchSources = langTms.map(x => x.source_text).filter(Boolean);
+              if (matchSources.length > 0) {
+                const matches = stringSimilarity.findBestMatch(seg.source_text, matchSources);
+                const bestMatch = matches.bestMatch;
+                const bestMatchIndex = matches.bestMatchIndex;
+                if (bestMatch.rating >= 0.90 && langTms[bestMatchIndex].target_text === seg.target_text) {
+                  fuzzyMatches++;
+                } else {
+                  normalTrans++;
+                }
+              } else {
+                normalTrans++;
+              }
+            }
+          } else {
+            normalTrans++;
           }
         });
       }
     }
 
-    // Heuristics for Savings based on exact matches/fuzzy reuse
-    // In Matecat, Exact match yields 90% savings, Fuzzy yields 40% savings
-    // Let's create a representative mock savings metrics based on TM size
-    const tmCountResult = await supabase
-      .from("translation_memory")
-      .select("id", { count: "exact", head: true });
-    
-    const tmTotalSize = tmCountResult.count || 0;
-    const estimatedSavings = baseWordCount > 0 ? Math.round(baseWordCount * (Math.min(35, tmTotalSize / 100) / 100) * 0.22) : 0; // standard estimation rate
+    const estimatedSavings = baseWordCount > 0 
+      ? Math.round(baseWordCount * ((iceMatches + tmMatches + fuzzyMatches * 0.4) / Math.max(1, totalSegmentsCount)) * 0.22) 
+      : 0;
 
     response.json({
       fileCount,
@@ -3356,9 +3398,17 @@ apiRouter.get("/projects/:projectId/analytics", checkAuth, async (request, respo
       totalWordCount: baseWordCount * Math.max(1, languagesCount),
       estimatedSavings: `${estimatedSavings} USD`,
       tmMatchStats: {
-        exact: Math.round(totalSegmentsCount * 0.15),
-        fuzzy: Math.round(totalSegmentsCount * 0.20),
-        machineTranslation: Math.round(totalSegmentsCount * 0.65)
+        ice: iceMatches,
+        tm: tmMatches,
+        fuzzy: fuzzyMatches,
+        normal: normalTrans,
+        total: totalSegmentsCount
+      },
+      sourceContextStats: {
+        jira: segmentsWithJiraContext,
+        description: segmentsWithDescriptionContext,
+        total: totalSourceContextCount,
+        totalSegments: totalSegmentsCount
       }
     });
   } catch (err) {

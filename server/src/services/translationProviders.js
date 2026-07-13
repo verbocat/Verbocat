@@ -231,6 +231,65 @@ ${domainGuidelines}
 `;
 };
 
+const truncatePromptText = (text, maxChars = 12000) => {
+  const value = String(text || "").trim();
+  if (!value) return "";
+  if (value.length <= maxChars) return value;
+  return `${value.slice(0, maxChars)}\n[Truncated to ${maxChars} characters]`;
+};
+
+const normalizeContextFiles = (contextFiles) => {
+  if (!Array.isArray(contextFiles)) return [];
+  return contextFiles
+    .filter(file => file && typeof file === "object")
+    .slice(0, 4)
+    .map(file => ({
+      name: truncatePromptText(file.name, 180),
+      type: truncatePromptText(file.type, 40),
+      mimeType: truncatePromptText(file.mimeType, 80),
+      size: Number(file.size) || 0,
+      content: truncatePromptText(file.content, 12000)
+    }));
+};
+
+const buildUploadedContextInstructions = (contextSettings = null) => {
+  if (!contextSettings) return "";
+
+  const customPrompt = truncatePromptText(contextSettings.customPrompt, 8000);
+  const contextFiles = normalizeContextFiles(contextSettings.contextFiles);
+  if (!customPrompt && contextFiles.length === 0) return "";
+
+  let instructions = `\n\nUSER-PROVIDED PROJECT CONTEXT:
+- Treat this section as translation context and style guidance for the current document.
+- Use it to resolve terminology, product names, UI labels, tone, intended meaning, and design intent.
+- Do not translate this context section itself. Translate only the source segments provided later.`;
+
+  if (customPrompt) {
+    instructions += `\n\nCustom Prompt:\n${customPrompt}`;
+  }
+
+  if (contextFiles.length > 0) {
+    instructions += "\n\nUploaded Context Files:";
+    for (const file of contextFiles) {
+      const label = file.type === "markdown" ? "Markdown context" : file.type === "figma" ? "Figma design context" : "Uploaded context";
+      instructions += `\n\n[${label}]
+File name: ${file.name || "Untitled"}
+MIME type: ${file.mimeType || "unknown"}
+Size: ${file.size} bytes`;
+
+      if (file.type === "figma") {
+        instructions += "\nThis file was uploaded as Figma context. Interpret it as design/product context for UI copy, layout intent, component names, product flows, and visual tone.";
+      }
+
+      if (file.content) {
+        instructions += `\nContent:\n${file.content}`;
+      }
+    }
+  }
+
+  return instructions;
+};
+
 const buildTranslationSystemPrompt = (targetLang, sourceLang, contextSettings, contextJira = "", contextDescription = "") => {
   const sourceName = getLangName(sourceLang);
   const targetName = getLangName(targetLang);
@@ -280,6 +339,7 @@ const buildTranslationSystemPrompt = (targetLang, sourceLang, contextSettings, c
   }
 
   const targetSpecificRules = getTargetSpecificTranslationRules(targetLang, sourceLang, contextSettings);
+  const uploadedContextInstructions = buildUploadedContextInstructions(contextSettings);
 
   const baseInstructions = `You are an expert human localizer and professional translator. You translate text from ${sourceName} to ${targetName}.
 Your goal is to produce translations that read as if they were originally written by a native speaker of ${targetName}, rather than a machine.
@@ -329,7 +389,7 @@ ${styleInstructions}
   * Ensure the output is strictly in the target language script (${targetName}) and vocabulary. Do NOT leave any Latin/English words in the translation, except for uppercase acronyms (e.g. GST, PAN, RBI) and section identifiers. Everything else must be translated or transliterated to ${targetName} script.`;
   }
 
-  return baseInstructions + "\n" + targetSpecificRules + "\n" + purposeInstructions + "\n" + retryInstructions;
+  return baseInstructions + "\n" + targetSpecificRules + "\n" + uploadedContextInstructions + "\n" + purposeInstructions + "\n" + retryInstructions;
 };
 
 const translateWithOpenAI = async (protectedTexts, target, source = DEFAULT_SOURCE_LANG, contextSettings = null) => {

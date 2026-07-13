@@ -1706,6 +1706,104 @@ code, .font-mono { font-family: "IBM Plex Mono", monospace; }
   border-color: var(--accent);
   background-color: var(--bg-elevated);
 }
+.context-textarea {
+  width: 100%;
+  min-height: 98px;
+  resize: vertical;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  border: 1px solid var(--border-medium);
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.45;
+  outline: none;
+  transition: border-color 0.12s, background-color 0.12s;
+}
+.context-textarea:focus {
+  border-color: var(--accent);
+  background: var(--bg-elevated);
+}
+.context-textarea::placeholder {
+  color: var(--text-muted);
+}
+.context-upload-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+.context-upload-card {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: var(--radius-md);
+  background: rgba(91, 106, 240, 0.06);
+  border: 1px dashed rgba(91, 106, 240, 0.38);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.12s, background-color 0.12s, transform 0.12s;
+}
+.context-upload-card:hover {
+  background: rgba(91, 106, 240, 0.12);
+  border-color: rgba(91, 106, 240, 0.65);
+  transform: translateY(-1px);
+}
+.context-file-error {
+  margin-top: 8px;
+  color: var(--text-red, #f87171);
+  font-size: 11px;
+  font-weight: 600;
+}
+.context-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.context-file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+}
+.context-file-name {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  word-break: break-word;
+}
+.context-file-meta {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+.context-file-remove {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-medium);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.context-file-remove:hover {
+  color: var(--text-red, #f87171);
+  border-color: rgba(248, 113, 113, 0.45);
+  background: rgba(248, 113, 113, 0.08);
+}
 
 /* ================================================================
    AUTH SCREENS (preserved)

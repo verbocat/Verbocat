@@ -649,7 +649,9 @@ export default function App() {
     tone: "General",
     formality: "Neutral",
     terminologyStrictness: "Flexible",
-    seoOptimization: "Off"
+    seoOptimization: "Off",
+    customPrompt: "",
+    contextFiles: []
   });
 
   const glossaryManager = useGlossaryManager({
@@ -795,6 +797,14 @@ export default function App() {
           } else if (filterStatus === "duplicate") {
             const cleaned = cleanString(segment.source);
             return cleaned && sourceCounts[cleaned] > 1;
+          } else if (filterStatus === "ice") {
+            return segment.matchType === "ICE";
+          } else if (filterStatus === "tm") {
+            return segment.matchType === "TM";
+          } else if (filterStatus === "fuzzy") {
+            return segment.matchType === "Fuzzy";
+          } else if (filterStatus === "normal") {
+            return !segment.matchType;
           }
           return true;
         }

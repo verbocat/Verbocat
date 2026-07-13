@@ -1302,6 +1302,84 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
 
               </div>
 
+              {/* TM match breakdown and source context analysis */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                
+                {/* TM & ICE & Fuzzy Match Distribution */}
+                <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-6 shadow-md space-y-6">
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">Translation Memory Match Analysis</h3>
+                    <p className="text-[10px] text-[var(--text-muted)] mt-1">Breakdown of segment matching sources within your TM database.</p>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    {[
+                      { label: "ICE Match (101%)", count: analytics?.tmMatchStats?.ice || 0, color: "bg-emerald-500" },
+                      { label: "TM Match (100%)", count: analytics?.tmMatchStats?.tm || 0, color: "bg-blue-500" },
+                      { label: "Fuzzy Match (>=90%)", count: analytics?.tmMatchStats?.fuzzy || 0, color: "bg-amber-500" },
+                      { label: "Normal (MT/None)", count: analytics?.tmMatchStats?.normal || 0, color: "bg-zinc-500" }
+                    ].map((st, i) => {
+                      const total = analytics?.tmMatchStats?.total || 1;
+                      const percent = Math.round((st.count / total) * 100);
+                      return (
+                        <div key={i} className="space-y-1">
+                          <div className="flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-2">
+                              <span className={`h-2 w-2 rounded-full ${st.color}`}></span>
+                              <span className="text-[var(--text-secondary)] font-semibold">{st.label}</span>
+                            </div>
+                            <div>
+                              <span className="font-bold text-[var(--text-primary)] mr-2">{st.count}</span>
+                              <span className="text-[var(--text-muted)] text-[10px]">{percent}%</span>
+                            </div>
+                          </div>
+                          <div className="w-full bg-[var(--bg-input)] h-1 rounded-full overflow-hidden">
+                            <div className={`h-full ${st.color}`} style={{ width: `${percent}%` }}></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Source Context Analysis */}
+                <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-6 shadow-md space-y-6">
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">Source Context Analysis</h3>
+                    <p className="text-[10px] text-[var(--text-muted)] mt-1">Analysis of context fields associated with your translation source segments.</p>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    {[
+                      { label: "Segments with Jira Keys", count: analytics?.sourceContextStats?.jira || 0, color: "bg-indigo-500" },
+                      { label: "Segments with Context Descriptions", count: analytics?.sourceContextStats?.description || 0, color: "bg-purple-500" },
+                      { label: "Total Segments with Context", count: analytics?.sourceContextStats?.total || 0, color: "bg-sky-500" }
+                    ].map((st, i) => {
+                      const total = analytics?.sourceContextStats?.totalSegments || 1;
+                      const percent = Math.round((st.count / total) * 100);
+                      return (
+                        <div key={i} className="space-y-1">
+                          <div className="flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-2">
+                              <span className={`h-2 w-2 rounded-full ${st.color}`}></span>
+                              <span className="text-[var(--text-secondary)] font-semibold">{st.label}</span>
+                            </div>
+                            <div>
+                              <span className="font-bold text-[var(--text-primary)] mr-2">{st.count}</span>
+                              <span className="text-[var(--text-muted)] text-[10px]">{percent}%</span>
+                            </div>
+                          </div>
+                          <div className="w-full bg-[var(--bg-input)] h-1 rounded-full overflow-hidden">
+                            <div className={`h-full ${st.color}`} style={{ width: `${percent}%` }}></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+              </div>
+
             </div>
           )}
 
