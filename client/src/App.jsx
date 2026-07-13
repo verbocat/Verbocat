@@ -2756,6 +2756,37 @@ export default function App() {
       <LoadingOverlay isUploading={isUploading} theme={theme} />
       <Toast toast={toast} />
 
+      <SettingsModal
+        show={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        darkMode={darkMode}
+        editorFontSize={editorFontSize}
+        autocompleteEnabled={autocompleteEnabled}
+        autoPropagateEnabled={autoPropagateEnabled}
+        onApplySettings={({ darkMode, editorFontSize, autocompleteEnabled, autoPropagateEnabled }) => {
+          setDarkMode(darkMode);
+          setEditorFontSize(editorFontSize);
+          setAutocompleteEnabled(autocompleteEnabled);
+          setAutoPropagateEnabled(autoPropagateEnabled);
+        }}
+        onLogout={logout}
+        userRole={user ? user.role : ""}
+        userEmail={user ? user.email : ""}
+        theme={theme}
+        projectId={currentRoute.projectId}
+        onProjectUpdated={() => setProjectRefreshTrigger(prev => prev + 1)}
+      />
+
+      {showAdminDashboard && (
+        <AdminDashboard
+          onClose={() => {
+            setShowAdminDashboard(false);
+            fetchProfile();
+          }}
+          theme={theme}
+        />
+      )}
+
       {currentRoute.screen === "dashboard" && (
         <ProjectDashboard
           onOpenProject={(projId) => navigateTo(`/project/${projId}`)}
@@ -2846,36 +2877,7 @@ export default function App() {
             theme={theme}
           />
 
-          <SettingsModal
-            show={showSettingsModal}
-            onClose={() => setShowSettingsModal(false)}
-            darkMode={darkMode}
-            editorFontSize={editorFontSize}
-            autocompleteEnabled={autocompleteEnabled}
-            autoPropagateEnabled={autoPropagateEnabled}
-            onApplySettings={({ darkMode, editorFontSize, autocompleteEnabled, autoPropagateEnabled }) => {
-              setDarkMode(darkMode);
-              setEditorFontSize(editorFontSize);
-              setAutocompleteEnabled(autocompleteEnabled);
-              setAutoPropagateEnabled(autoPropagateEnabled);
-            }}
-            onLogout={logout}
-            userRole={user ? user.role : ""}
-            userEmail={user ? user.email : ""}
-            theme={theme}
-            projectId={currentRoute.projectId}
-            onProjectUpdated={() => setProjectRefreshTrigger(prev => prev + 1)}
-          />
 
-          {showAdminDashboard && (
-            <AdminDashboard
-              onClose={() => {
-                setShowAdminDashboard(false);
-                fetchProfile();
-              }}
-              theme={theme}
-            />
-          )}
 
           {/* ── Zone 1: Topbar (always visible) ── */}
           <Header
