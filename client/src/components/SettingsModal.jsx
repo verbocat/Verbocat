@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import {
   X, LogOut, User, ShieldCheck, Sliders, Check,
-  Monitor, Sparkles, Keyboard, Activity
+  Monitor, Sparkles, Keyboard, Activity, Folder
 } from "lucide-react";
+import { fetchProjectDetails, updateProjectDetails } from "../services/api.js";
+import { LANGUAGES } from "../constants/languages.js";
 
 const Toggle = ({ on, onToggle }) => (
   <button
@@ -32,7 +34,9 @@ export const SettingsModal = ({
   onLogout,
   userRole,
   userEmail,
-  theme
+  theme,
+  projectId,
+  onProjectUpdated
 }) => {
   const [localDarkMode, setLocalDarkMode] = useState(darkMode);
   const [localFontSize, setLocalFontSize] = useState(editorFontSize);
@@ -40,24 +44,89 @@ export const SettingsModal = ({
   const [localAutoPropagate, setLocalAutoPropagate] = useState(autoPropagateEnabled);
   const [activeTab, setActiveTab] = useState("preferences");
 
+  const [projectSettings, setProjectSettings] = useState(null);
+  const [localProjectName, setLocalProjectName] = useState("");
+  const [localClientName, setLocalClientName] = useState("");
+  const [localDescription, setLocalDescription] = useState("");
+  const [localSourceLang, setLocalSourceLang] = useState("");
+  const [localTranslationPrompt, setLocalTranslationPrompt] = useState("");
+  const [localAutoSave, setLocalAutoSave] = useState(true);
+  const [localNotifications, setLocalNotifications] = useState(true);
+  const [loadingProject, setLoadingProject] = useState(false);
+  const [savingProject, setSavingProject] = useState(false);
+
   useEffect(() => {
     if (show) {
       setLocalDarkMode(darkMode);
       setLocalFontSize(editorFontSize);
       setLocalAutocomplete(autocompleteEnabled);
       setLocalAutoPropagate(autoPropagateEnabled);
+      setActiveTab(projectId ? "project" : "preferences");
     }
-  }, [show, darkMode, editorFontSize, autocompleteEnabled, autoPropagateEnabled]);
+  }, [show, darkMode, editorFontSize, autocompleteEnabled, autoPropagateEnabled, projectId]);
+
+  useEffect(() => {
+    if (show && projectId) {
+      loadProjectData();
+    }
+  }, [show, projectId]);
+
+  const loadProjectData = async () => {
+    try {
+      setLoadingProject(true);
+      const data = await fetchProjectDetails(projectId);
+      if (data && data.project) {
+        setProjectSettings(data.project);
+        setLocalProjectName(data.project.name || "");
+        setLocalClientName(data.project.client || "");
+        setLocalDescription(data.project.description || "");
+        setLocalSourceLang(data.project.source_language || "en");
+        const settings = data.project.settings || {};
+        setLocalTranslationPrompt(settings.translationPrompt || "");
+        setLocalAutoSave(settings.autoSave !== undefined ? settings.autoSave : true);
+        setLocalNotifications(settings.notifications !== undefined ? settings.notifications : true);
+      }
+    } catch (err) {
+      console.error("Failed to load project details in settings modal:", err);
+    } finally {
+      setLoadingProject(false);
+    }
+  };
 
   if (!show) return null;
 
-  const handleApply = () => {
+  const handleApply = async () => {
     onApplySettings({
       darkMode: localDarkMode,
       editorFontSize: localFontSize,
       autocompleteEnabled: localAutocomplete,
       autoPropagateEnabled: localAutoPropagate
     });
+
+    if (projectId && projectSettings) {
+      try {
+        setSavingProject(true);
+        await updateProjectDetails(projectId, {
+          name: localProjectName,
+          client: localClientName,
+          description: localDescription,
+          sourceLanguage: localSourceLang,
+          targetLanguages: projectSettings.target_languages || [],
+          settings: {
+            translationPrompt: localTranslationPrompt,
+            autoSave: localAutoSave,
+            notifications: localNotifications
+          }
+        });
+        if (onProjectUpdated) {
+          onProjectUpdated();
+        }
+      } catch (err) {
+        console.error("Failed to save project settings in modal:", err);
+      } finally {
+        setSavingProject(false);
+      }
+    }
     onClose();
   };
 
@@ -346,6 +415,158 @@ export const SettingsModal = ({
           </div>
         );
 
+      case "project":
+        if (loadingProject) {
+          return (
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%", color: "var(--text-muted)", fontSize: 13 }}>
+              Loading project settings...
+            </div>
+          );
+        }
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <div>
+              <span className="settings-section-label">Project Details</span>
+              <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 8 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: 10, fontWeight: 700, textTransform: "uppercase", tracking: "0.05em", color: "var(--text-muted)", marginBottom: 6 }}>
+                      Project Name
+                    </label>
+                    <input 
+                      type="text"
+                      value={localProjectName}
+                      onChange={(e) => setLocalProjectName(e.target.value)}
+                      style={{
+                        width: "100%",
+                        background: "var(--bg-active)",
+                        border: "1px solid var(--border-medium)",
+                        borderRadius: 8,
+                        padding: "8px 12px",
+                        fontSize: 12.5,
+                        color: "var(--text-primary)",
+                        outline: "none"
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 10, fontWeight: 700, textTransform: "uppercase", tracking: "0.05em", color: "var(--text-muted)", marginBottom: 6 }}>
+                      Client Name
+                    </label>
+                    <input 
+                      type="text"
+                      value={localClientName}
+                      onChange={(e) => setLocalClientName(e.target.value)}
+                      style={{
+                        width: "100%",
+                        background: "var(--bg-active)",
+                        border: "1px solid var(--border-medium)",
+                        borderRadius: 8,
+                        padding: "8px 12px",
+                        fontSize: 12.5,
+                        color: "var(--text-primary)",
+                        outline: "none"
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: "block", fontSize: 10, fontWeight: 700, textTransform: "uppercase", tracking: "0.05em", color: "var(--text-muted)", marginBottom: 6 }}>
+                    Project Description
+                  </label>
+                  <textarea 
+                    value={localDescription}
+                    onChange={(e) => setLocalDescription(e.target.value)}
+                    rows={3}
+                    style={{
+                      width: "100%",
+                      background: "var(--bg-active)",
+                      border: "1px solid var(--border-medium)",
+                      borderRadius: 8,
+                      padding: "8px 12px",
+                      fontSize: 12.5,
+                      color: "var(--text-primary)",
+                      outline: "none",
+                      resize: "none"
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: "block", fontSize: 10, fontWeight: 700, textTransform: "uppercase", tracking: "0.05em", color: "var(--text-muted)", marginBottom: 6 }}>
+                    Source Language
+                  </label>
+                  <select
+                    value={localSourceLang}
+                    onChange={(e) => setLocalSourceLang(e.target.value)}
+                    style={{
+                      width: "100%",
+                      background: "var(--bg-active)",
+                      border: "1px solid var(--border-medium)",
+                      borderRadius: 8,
+                      padding: "8px 12px",
+                      fontSize: 12.5,
+                      color: "var(--text-primary)",
+                      outline: "none"
+                    }}
+                  >
+                    {LANGUAGES.map(lang => (
+                      <option key={lang.code} value={lang.code}>{lang.flag} {lang.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: "block", fontSize: 10, fontWeight: 700, textTransform: "uppercase", tracking: "0.05em", color: "var(--text-muted)", marginBottom: 6 }}>
+                    AI Translation Instructions / Prompt
+                  </label>
+                  <textarea 
+                    value={localTranslationPrompt}
+                    onChange={(e) => setLocalTranslationPrompt(e.target.value)}
+                    placeholder="Specify constraints, target audience, style guidelines..."
+                    rows={3}
+                    style={{
+                      width: "100%",
+                      background: "var(--bg-active)",
+                      border: "1px solid var(--border-medium)",
+                      borderRadius: 8,
+                      padding: "8px 12px",
+                      fontSize: 12.5,
+                      color: "var(--text-primary)",
+                      outline: "none",
+                      resize: "none"
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, borderTop: "1px solid var(--border-subtle)", paddingTop: 14 }}>
+                  <div className="settings-card-row">
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>Auto Save Session</div>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                        Automatically save translation segments in progress.
+                      </div>
+                    </div>
+                    <Toggle on={localAutoSave} onToggle={() => setLocalAutoSave(v => !v)} />
+                  </div>
+
+                  <div className="settings-card-row">
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>Notifications Enabled</div>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                        Receive updates on job queue completion status.
+                      </div>
+                    </div>
+                    <Toggle on={localNotifications} onToggle={() => setLocalNotifications(v => !v)} />
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        );
+
       default:
         return null;
     }
@@ -383,6 +604,16 @@ export const SettingsModal = ({
         <div className="settings-body-split">
           {/* Sidebar Tabs */}
           <div className="settings-sidebar">
+            {projectId && (
+              <button
+                type="button"
+                className={`settings-tab-btn ${activeTab === "project" ? "active" : ""}`}
+                onClick={() => setActiveTab("project")}
+              >
+                <Folder style={{ width: 14, height: 14 }} />
+                <span>Project Settings</span>
+              </button>
+            )}
             <button
               type="button"
               className={`settings-tab-btn ${activeTab === "preferences" ? "active" : ""}`}

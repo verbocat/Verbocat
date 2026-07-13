@@ -141,14 +141,6 @@ export const Header = ({
           </NavBtn>
         )}
 
-        <div className="topbar-divider" />
-
-        {/* Logout */}
-        <NavBtn onClick={onLogout} title="Log Out">
-          <LogOut style={{ width: 13, height: 13 }} />
-          <span>Log Out</span>
-        </NavBtn>
-
       </div>
     </header>
   );

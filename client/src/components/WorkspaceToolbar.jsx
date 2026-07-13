@@ -36,17 +36,7 @@ export const WorkspaceToolbar = ({
       {/* ── ROW 1 — Actions + Stats ── */}
       <div className="action-row1">
 
-        {/* New File — always prominent */}
-        {isOwner && (
-          <>
-            <label className="ab ab-newfile" style={{ cursor: "pointer" }}>
-              <Plus style={{ width: 12, height: 12, flexShrink: 0 }} />
-              <span>New File</span>
-              <input type="file" onChange={onUpload} className="hidden" />
-            </label>
-            <div className="action-sep" />
-          </>
-        )}
+
 
         {/* Auto-Translate */}
         <button
@@ -128,16 +118,7 @@ export const WorkspaceToolbar = ({
           </button>
         )}
 
-        {/* Apply Glossary */}
-        <button
-          onClick={onApplyGlossary}
-          disabled={!canAct}
-          className="ab"
-          title="Apply glossary matching terms to the segments in this file"
-        >
-          <BookOpen style={{ width: 12, height: 12, color: "var(--indigo-400)", flexShrink: 0 }} />
-          <span>Apply Glossary</span>
-        </button>
+
 
         {/* Document dropdown */}
         {isOwner && (
@@ -192,30 +173,7 @@ export const WorkspaceToolbar = ({
         {/* Push Export to the right */}
         <div style={{ flex: 1 }} />
 
-        {/* Delete Project (Owner Only) */}
-        {isOwner && canAct && (
-          <button 
-            onClick={onDeleteProject} 
-            disabled={!canAct} 
-            className="ab ab-delete-project" 
-            title="Delete Project"
-            style={{
-              background: "rgba(244,63,94,0.08)",
-              border: "1px solid rgba(244,63,94,0.2)",
-              color: "var(--text-rose)",
-              marginRight: 8
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.background = "rgba(244,63,94,0.15)";
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.background = "rgba(244,63,94,0.08)";
-            }}
-          >
-            <Trash2 style={{ width: 12, height: 12, flexShrink: 0 }} />
-            <span>Delete Project</span>
-          </button>
-        )}
+
 
         {/* Export — premium CTA */}
         <button onClick={onExport} disabled={!canAct} className="ab ab-export">

@@ -639,6 +639,7 @@ export default function App() {
   const [showContextPanel, setShowContextPanel] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [projectRefreshTrigger, setProjectRefreshTrigger] = useState(0);
   const [filterStatus, setFilterStatus] = useState("all");
   const [contextSettings, setContextSettings] = useState({
     domain: "General",
@@ -2773,6 +2774,8 @@ export default function App() {
           showToast={showToast}
           theme={theme}
           token={token}
+          onOpenSettings={() => setShowSettingsModal(true)}
+          refreshTrigger={projectRefreshTrigger}
         />
       )}
 
@@ -2860,6 +2863,8 @@ export default function App() {
             userRole={user ? user.role : ""}
             userEmail={user ? user.email : ""}
             theme={theme}
+            projectId={currentRoute.projectId}
+            onProjectUpdated={() => setProjectRefreshTrigger(prev => prev + 1)}
           />
 
           {showAdminDashboard && (

@@ -13,7 +13,7 @@ import {
 import { LANGUAGES } from "../constants/languages";
 import { ShareModal } from "./ShareModal";
 
-export default function ProjectDetails({ projectId, onBack, onOpenEditor, showToast, theme, token }) {
+export default function ProjectDetails({ projectId, onBack, onOpenEditor, showToast, theme, token, onOpenSettings }) {
   const [project, setProject] = useState(null);
   const [files, setFiles] = useState([]);
   const [jobs, setJobs] = useState([]);
@@ -610,7 +610,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
             </button>
 
             <button
-              onClick={() => setActiveTab("settings")}
+              onClick={onOpenSettings}
               className="project-icon-action"
               title="Project Settings"
             >
@@ -658,8 +658,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
           { id: "overview", label: "Overview", icon: BarChart3 },
           { id: "files", label: "Files", icon: FileText },
           { id: "languages", label: "Languages", icon: Globe },
-          { id: "analytics", label: "Analytics", icon: TrendingUp },
-          { id: "settings", label: "Settings", icon: Settings }
+          { id: "analytics", label: "Analytics", icon: TrendingUp }
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -715,7 +714,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                   <small>Export every translated file</small>
                 </span>
               </button>
-              <button onClick={() => setActiveTab("settings")} className="project-quick-item">
+              <button onClick={onOpenSettings} className="project-quick-item">
                 <span className="project-quick-item-icon"><Settings size={12} /></span>
                 <span>
                   <strong>Project settings</strong>
@@ -1289,125 +1288,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
             </div>
           )}
 
-          {/* ── TAB 6: CONFIGURATION SETTINGS ── */}
-          {activeTab === "settings" && (
-            <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-6 shadow-md space-y-8 animate-[fadeIn_0.15s_ease-out]">
-              <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">Project Configuration & Settings</h3>
-                <p className="text-[10px] text-[var(--text-muted)] mt-1">Configure project metadata, translation instructions, model, and automatic saves.</p>
-              </div>
 
-              <form onSubmit={handleSaveSettings} className="space-y-6 max-w-2xl">
-                
-                {/* Name & Client */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Project Name</label>
-                    <input 
-                      type="text"
-                      required
-                      value={editProjectName}
-                      onChange={(e) => setEditProjectName(e.target.value)}
-                      className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-indigo-500 transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Client Name</label>
-                    <input 
-                      type="text"
-                      value={editClientName}
-                      onChange={(e) => setEditClientName(e.target.value)}
-                      className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-indigo-500 transition-all"
-                    />
-                  </div>
-                </div>
-
-                {/* Description */}
-                <div>
-                  <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Project Description</label>
-                  <textarea 
-                    value={editDescription}
-                    onChange={(e) => setEditDescription(e.target.value)}
-                    rows={4}
-                    className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-indigo-500 transition-all resize-none"
-                  />
-                </div>
-
-                {/* Source Language */}
-                <div>
-                  <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Source Language</label>
-                  <select
-                    value={editSourceLang}
-                    onChange={(e) => setEditSourceLang(e.target.value)}
-                    className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-indigo-500 transition-all"
-                  >
-                    {LANGUAGES.map(lang => (
-                      <option key={lang.code} value={lang.code}>{lang.flag} {lang.name} ({lang.code.toUpperCase()})</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* System Translation Prompt */}
-                <div>
-                  <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">AI Translation Instructions / Prompt</label>
-                  <textarea 
-                    value={editTranslationPrompt}
-                    onChange={(e) => setEditTranslationPrompt(e.target.value)}
-                    placeholder="Specify constraints, style guidelines, target audience, or specific translation rules..."
-                    rows={5}
-                    className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-indigo-500 transition-all resize-none"
-                  />
-                </div>
-
-                {/* Toggles */}
-                <div className="space-y-4 pt-2 select-none">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input 
-                      type="checkbox"
-                      checked={editAutoSave}
-                      onChange={(e) => setEditAutoSave(e.target.checked)}
-                      className="rounded border-[var(--border-subtle)] text-indigo-600 focus:ring-0"
-                    />
-                    <div className="text-xs">
-                      <span className="block font-semibold text-[var(--text-primary)]">Auto Save Session</span>
-                      <span className="block text-[10px] text-[var(--text-muted)] mt-0.5">Automatically save translation segments in progress.</span>
-                    </div>
-                  </label>
-
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input 
-                      type="checkbox"
-                      checked={editNotifications}
-                      onChange={(e) => setEditNotifications(e.target.checked)}
-                      className="rounded border-[var(--border-subtle)] text-indigo-600 focus:ring-0"
-                    />
-                    <div className="text-xs">
-                      <span className="block font-semibold text-[var(--text-primary)]">Notifications Enabled</span>
-                      <span className="block text-[10px] text-[var(--text-muted)] mt-0.5">Receive email or browser updates on job queue completion status.</span>
-                    </div>
-                  </label>
-                </div>
-
-                {/* Form Buttons */}
-                <div className="flex gap-3 pt-6 border-t border-[var(--border-subtle)]">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("overview")}
-                    className="bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-medium)] text-[var(--text-primary)] text-xs font-bold px-5 py-2.5 rounded-xl cursor-pointer transition-all active:scale-[0.98]"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-6 py-2.5 rounded-xl cursor-pointer shadow-md transition-all active:scale-[0.98]"
-                  >
-                    Save Configuration
-                  </button>
-                </div>
-
-              </form>
-            </div>
-          )}
 
         </div>
       </main>
