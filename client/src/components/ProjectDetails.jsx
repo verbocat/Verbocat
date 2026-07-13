@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
-import { 
-  ArrowLeft, FileText, Globe, Play, Pause, XCircle, RotateCcw, 
-  Download, Upload, CheckCircle2, AlertCircle, Eye, Database, BarChart3, TrendingUp, Folder, Plus, Trash2, 
+import {
+  ArrowLeft, FileText, Globe, Play, Pause, XCircle, RotateCcw,
+  Download, Upload, CheckCircle2, AlertCircle, Eye, Database, BarChart3, TrendingUp, Folder, Plus, Trash2,
   Settings, List, Activity, Calendar, User, Clock, ChevronDown, Check, Edit2, Copy, FileCode, CheckSquare, Square, RefreshCw, Users, LayoutDashboard
 } from "lucide-react";
 import io from "socket.io-client";
-import { 
-  fetchProjectDetails, uploadFileToProject, updateProjectLanguages, 
+import {
+  fetchProjectDetails, uploadFileToProject, updateProjectLanguages,
   controlJobQueue, downloadJobFile, downloadLanguageZip, downloadProjectZip, fetchProjectAnalytics, deleteDocument,
   updateProjectDetails, renameDocument, duplicateDocument, deleteProject
 } from "../services/api";
@@ -18,7 +18,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
   const [files, setFiles] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [analytics, setAnalytics] = useState(null);
-  
+
   const [loading, setLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [showAddLangModal, setShowAddLangModal] = useState(false);
@@ -27,7 +27,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
   const [uploadProgress, setUploadProgress] = useState(null);
   const [replacingFileId, setReplacingFileId] = useState(null);
   const [showShareModal, setShowShareModal] = useState(false);
-  
+
   // Navigation Tabs state: "overview", "files", "languages", "analytics", "settings"
   const [activeTab, setActiveTab] = useState("overview");
 
@@ -68,10 +68,10 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
     socketRef.current = socket;
 
     socket.on("global-job-update", ({ jobId, status, progress, errorMessage }) => {
-      setJobs(prevJobs => 
-        prevJobs.map(job => 
-          job.id === jobId 
-            ? { ...job, status, progress, error_message: errorMessage } 
+      setJobs(prevJobs =>
+        prevJobs.map(job =>
+          job.id === jobId
+            ? { ...job, status, progress, error_message: errorMessage }
             : job
         )
       );
@@ -101,7 +101,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
         setEditDescription(data.project.description || "");
         setEditSourceLang(data.project.source_lang || "en");
         setEditTargetLangs(data.project.target_languages || []);
-        
+
         const settings = data.project.settings || {};
         setEditTranslationPrompt(settings.translationPrompt || "");
         setEditAutoSave(settings.autoSave !== undefined ? settings.autoSave : true);
@@ -359,19 +359,19 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
       csvContent += "Source Language: " + project.source_lang.toUpperCase() + "\n";
       csvContent += "Target Languages: " + project.target_languages.join(", ").toUpperCase() + "\n";
       csvContent += "Total Word Count: " + (analytics?.totalWordCount || 0) + "\n\n";
-      
+
       csvContent += "Files Summary:\n";
       csvContent += "File Name,Word Count,Size (KB),Status\n";
       files.forEach(f => {
         csvContent += `"${f.name}",${f.word_count},${Math.round(f.file_size / 1024)},"${f.status}"\n`;
       });
-      
+
       csvContent += "\nJobs Summary:\n";
       csvContent += "Document Name,Target Language,Progress,Status\n";
       jobs.forEach(j => {
         csvContent += `"${j.documents?.name || 'Document'}",${j.target_lang.toUpperCase()},${j.progress || 0}%,${j.status}\n`;
       });
-      
+
       const encodedUri = encodeURI(csvContent);
       const link = document.createElement("a");
       link.setAttribute("href", encodedUri);
@@ -402,7 +402,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
   };
 
   const toggleSelectFile = (fileId) => {
-    setSelectedFiles(prev => 
+    setSelectedFiles(prev =>
       prev.includes(fileId) ? prev.filter(id => id !== fileId) : [...prev, fileId]
     );
   };
@@ -420,10 +420,10 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
     const totalFilesCount = files.length;
     const completedFilesCount = langJobs.filter(j => j.status === "completed").length;
     const pendingFilesCount = totalFilesCount - completedFilesCount;
-    
+
     const totalProgress = langJobs.reduce((sum, j) => sum + (j.progress || 0), 0);
     const progress = langJobs.length > 0 ? Math.round(totalProgress / langJobs.length) : 0;
-    
+
     return { progress, totalFiles: totalFilesCount, completedFiles: completedFilesCount, pendingFiles: pendingFilesCount };
   };
 
@@ -471,9 +471,9 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
   const pendingJobs = jobs.filter(j => j.status === "pending").length;
   const failedJobs = jobs.filter(j => j.status === "failed").length;
   const totalWordsCount = files.reduce((sum, f) => sum + (f.word_count || 0), 0);
-  
-  const overallProgressPercent = jobs.length > 0 
-    ? Math.round(jobs.reduce((sum, j) => sum + (j.progress || 0), 0) / jobs.length) 
+
+  const overallProgressPercent = jobs.length > 0
+    ? Math.round(jobs.reduce((sum, j) => sum + (j.progress || 0), 0) / jobs.length)
     : 0;
 
   const projectStatus = project?.status || project?.settings?.status || "Active";
@@ -490,7 +490,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
 
   return (
     <div className="h-screen flex flex-col bg-[var(--bg-base)] text-[var(--text-primary)]">
-      
+
       {/* ── TOP NAV BAR & GLOBAL ACTIONS ── */}
       <header className="border-b border-[var(--border-subtle)] bg-[var(--bg-panel)] px-8 py-4 flex items-center justify-between shadow-sm shrink-0">
         <div className="flex items-center gap-4">
@@ -506,7 +506,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
               <h1 className="text-lg font-bold bg-gradient-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent">
                 {project.name}
               </h1>
-              
+
               {/* Dynamic Status Dropdown Selector */}
               <div className="relative">
                 <button
@@ -539,9 +539,9 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
           </div>
         </div>
 
-      {/* Global Action Buttons (Top-Right Corner) */}
+        {/* Global Action Buttons (Top-Right Corner) */}
         <div className="project-actions-shell">
-          
+
           <input
             type="file"
             multiple
@@ -652,12 +652,12 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
           <Database size={13} className="text-amber-500" />
           <span>Words: <strong className="text-[var(--text-primary)]">{analytics?.totalWordCount?.toLocaleString() || 0}</strong></span>
         </div>
-        
+
         {/* Overall Progress Mini Bar */}
         <div className="flex items-center gap-3 ml-auto flex-1 max-w-xs min-w-[150px]">
           <span className="font-semibold text-[var(--text-primary)]">{overallProgressPercent}% Progress</span>
           <div className="flex-1 bg-[var(--bg-input)] h-1.5 rounded-full overflow-hidden border border-[var(--border-subtle)]">
-            <div 
+            <div
               className="bg-indigo-500 h-full rounded-full transition-all duration-500"
               style={{ width: `${overallProgressPercent}%` }}
             ></div>
@@ -679,18 +679,17 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-5 py-3 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
-                isActive 
-                  ? "border-indigo-500 text-indigo-600 dark:text-indigo-400 bg-indigo-500/5" 
+              className={`flex items-center gap-2 px-5 py-3 text-xs font-semibold border-b-2 transition-all cursor-pointer ${isActive
+                  ? "border-indigo-500 text-indigo-600 dark:text-indigo-400 bg-indigo-500/5"
                   : "border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
-              }`}
+                }`}
             >
               <Icon size={14} />
               <span>{tab.label}</span>
             </button>
           );
         })}
-        
+
         {/* Header Action Dropdown at the far right of tabs */}
         <div className="ml-auto flex items-center pr-2">
           <div className="relative group">
@@ -704,27 +703,23 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
             <div className="project-quick-menu">
               <div className="project-quick-menu-header">
                 <span>Workspace Actions</span>
-                <span>Everything in one place</span>
               </div>
               <button onClick={() => fileInputRef.current?.click()} className="project-quick-item">
                 <span className="project-quick-item-icon"><Upload size={13} /></span>
                 <div className="flex flex-col text-left flex-1 min-w-0">
                   <strong>Upload files</strong>
-                  <small>Bring more documents into the project</small>
                 </div>
               </button>
               <button onClick={() => { setSelectedAddLangs(project.target_languages || []); setShowAddLangModal(true); }} className="project-quick-item">
                 <span className="project-quick-item-icon"><Plus size={13} /></span>
                 <div className="flex flex-col text-left flex-1 min-w-0">
                   <strong>Add language</strong>
-                  <small>Create a new target locale version</small>
                 </div>
               </button>
               <button onClick={handleDownloadZipAll} className="project-quick-item">
                 <span className="project-quick-item-icon"><Download size={13} /></span>
                 <div className="flex flex-col text-left flex-1 min-w-0">
                   <strong>Download ZIP</strong>
-                  <small>Export every translated file</small>
                 </div>
               </button>
               {isProjectOwner && (
@@ -733,7 +728,6 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                     <span className="project-quick-item-icon"><Settings size={13} /></span>
                     <div className="flex flex-col text-left flex-1 min-w-0">
                       <strong>Project settings</strong>
-                      <small>Change metadata and workflow rules</small>
                     </div>
                   </button>
                   <div className="project-quick-menu-sep"></div>
@@ -741,7 +735,6 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                     <span className="project-quick-item-icon danger"><Trash2 size={13} /></span>
                     <div className="flex flex-col text-left flex-1 min-w-0">
                       <strong>Delete project</strong>
-                      <small>Permanently remove files and jobs</small>
                     </div>
                   </button>
                 </>
@@ -754,7 +747,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
       {/* ── CONTENT BODY AREA (SCROLLABLE) ── */}
       <main className="flex-1 overflow-y-auto p-8 bg-[var(--bg-base)]">
         <div className="max-w-7xl mx-auto space-y-8">
-          
+
           {/* ── UPLOADING OVERLAY INDICATOR ── */}
           {isUploading && uploadProgress && (
             <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-2xl p-4 flex items-center justify-between gap-4 animate-pulse">
@@ -763,7 +756,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                 <span className="text-xs font-bold text-indigo-400">Uploading Document ({uploadProgress.current}/{uploadProgress.total})</span>
               </div>
               <div className="flex-1 max-w-md bg-[var(--bg-input)] h-2 rounded-full overflow-hidden">
-                <div 
+                <div
                   className="bg-indigo-500 h-full rounded-full transition-all duration-300"
                   style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
                 ></div>
@@ -774,10 +767,10 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
           {/* ── TAB 1: OVERVIEW DASHBOARD ── */}
           {activeTab === "overview" && (
             <div className="space-y-8 animate-[fadeIn_0.15s_ease-out]">
-              
+
               {/* Summary Metrics Cards Grid */}
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-                
+
                 {[
                   { label: "Total Files", val: totalFiles, color: "text-[var(--text-primary)]" },
                   { label: "Total Languages", val: totalLanguages, color: "text-indigo-600 dark:text-indigo-400" },
@@ -800,7 +793,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
               <div className="grid grid-cols-1 gap-8">
                 <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-6 shadow-md space-y-6">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">Translation Progress Breakdown</h3>
-                  
+
                   {project?.target_languages?.length === 0 ? (
                     <p className="text-xs text-[var(--text-muted)] py-6 text-center">Configure target languages to see progress metrics.</p>
                   ) : (
@@ -814,7 +807,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                               <span className="font-bold text-indigo-500">{metrics.progress}%</span>
                             </div>
                             <div className="bg-[var(--bg-input)] h-2 rounded-full overflow-hidden border border-[var(--border-subtle)]">
-                              <div 
+                              <div
                                 className="bg-gradient-to-r from-indigo-500 to-purple-500 h-full rounded-full transition-all duration-500"
                                 style={{ width: `${metrics.progress}%` }}
                               ></div>
@@ -833,11 +826,11 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
           {/* ── TAB 2: FILES MANAGEMENT ── */}
           {activeTab === "files" && (
             <div className="space-y-6 animate-[fadeIn_0.15s_ease-out]">
-              
+
               {/* Bulk Actions Header Toolbar */}
               <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 shadow-sm">
                 <div className="flex items-center gap-2">
-                  <button 
+                  <button
                     onClick={toggleSelectAllFiles}
                     className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] mr-2 cursor-pointer"
                   >
@@ -851,7 +844,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                     {selectedFiles.length} Selected
                   </span>
                 </div>
-                
+
                 {/* Bulk operation buttons */}
                 <div className="flex items-center gap-2">
                   <button
@@ -877,7 +870,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                   <div className="text-center py-24 text-[var(--text-muted)] text-xs">
                     <FileText size={48} className="mx-auto mb-4 text-zinc-600" />
                     <p>No documents uploaded to this project yet.</p>
-                    <button 
+                    <button
                       onClick={() => fileInputRef.current?.click()}
                       className="mt-4 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-4 py-2 rounded-xl cursor-pointer"
                     >
@@ -904,7 +897,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                         {files.map(file => {
                           const isSelected = selectedFiles.includes(file.id);
                           const fileJobs = jobs.filter(j => j.document_id === file.id);
-                          
+
                           // File Status
                           const hasRunning = fileJobs.some(j => j.status === "running");
                           const allCompleted = fileJobs.length > 0 && fileJobs.every(j => j.status === "completed");
@@ -920,7 +913,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
 
                           return (
                             <tr key={file.id} className="hover:bg-[var(--bg-surface)]/40 transition-colors">
-                              
+
                               {/* Checkbox selector */}
                               <td className="py-4 px-5">
                                 <button onClick={() => toggleSelectFile(file.id)} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer">
@@ -950,7 +943,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                                 ) : (
                                   <div className="flex items-center gap-2 max-w-xs truncate" title={file.name}>
                                     <span>{file.name}</span>
-                                    <button 
+                                    <button
                                       onClick={() => { setRenamingFileId(file.id); setRenamingFileName(file.name); }}
                                       className="opacity-0 hover:opacity-100 group-hover:opacity-100 p-1 hover:text-[var(--text-primary)] text-[var(--text-muted)] cursor-pointer"
                                       title="Rename"
@@ -977,11 +970,10 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                               <td className="py-4 px-4">
                                 <div className="flex flex-wrap gap-1 max-w-[140px]">
                                   {fileJobs.map(j => (
-                                    <span 
-                                      key={j.id} 
-                                      className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase border ${
-                                        j.status === "completed" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-zinc-800 text-zinc-400 border-zinc-700"
-                                      }`}
+                                    <span
+                                      key={j.id}
+                                      className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase border ${j.status === "completed" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-zinc-800 text-zinc-400 border-zinc-700"
+                                        }`}
                                       title={`${getLanguageName(j.target_lang)}: ${j.progress}%`}
                                     >
                                       {j.target_lang}
@@ -1002,11 +994,10 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
 
                               {/* File Status Badge */}
                               <td className="py-4 px-4 capitalize">
-                                <span className={`text-[9px] font-bold px-2 py-0.5 rounded border ${
-                                  fileStatus === "completed" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
-                                  fileStatus === "translating" ? "bg-indigo-500/10 text-indigo-500 border-indigo-500/20 animate-pulse" :
-                                  "bg-zinc-800 text-zinc-400 border-zinc-700"
-                                }`}>
+                                <span className={`text-[9px] font-bold px-2 py-0.5 rounded border ${fileStatus === "completed" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
+                                    fileStatus === "translating" ? "bg-indigo-500/10 text-indigo-500 border-indigo-500/20 animate-pulse" :
+                                      "bg-zinc-800 text-zinc-400 border-zinc-700"
+                                  }`}>
                                   {fileStatus}
                                 </span>
                               </td>
@@ -1019,7 +1010,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                               {/* Action buttons dropdown / options */}
                               <td className="py-4 px-5 text-right">
                                 <div className="flex items-center justify-end gap-1.5">
-                                  
+
                                   {/* Open Dropdown trigger */}
                                   <div className="relative">
                                     <button
@@ -1028,7 +1019,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                                     >
                                       Open
                                     </button>
-                                    
+
                                     {openLangSelectFileId === file.id && openLangAction === "open" && (
                                       <div className="absolute right-0 mt-1.5 w-44 bg-[var(--bg-surface)] border border-[var(--border-medium)] rounded-xl py-1 shadow-2xl z-50 text-left">
                                         <div className="px-3 py-1.5 text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider border-b border-[var(--border-subtle)]">Open in Editor</div>
@@ -1054,7 +1045,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                                     >
                                       Download
                                     </button>
-                                    
+
                                     {openLangSelectFileId === file.id && openLangAction === "view" && (
                                       <div className="absolute right-0 mt-1.5 w-44 bg-[var(--bg-surface)] border border-[var(--border-medium)] rounded-xl py-1 shadow-2xl z-50 text-left">
                                         <div className="px-3 py-1.5 text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider border-b border-[var(--border-subtle)]">Export Translation</div>
@@ -1078,20 +1069,20 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                                       <ChevronDown size={14} />
                                     </button>
                                     <div className="absolute right-0 mt-1 w-44 bg-[var(--bg-surface)] border border-[var(--border-medium)] rounded-xl py-1 shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 text-left">
-                                      <button 
+                                      <button
                                         onClick={() => handleDuplicateFileSubmit(file.id)}
                                         className="w-full px-4 py-2 hover:bg-[var(--bg-elevated)] text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-2 cursor-pointer"
                                       >
                                         <Copy size={12} /> Duplicate File
                                       </button>
-                                      <button 
+                                      <button
                                         onClick={() => handleUploadNewVersion(file.id)}
                                         className="w-full px-4 py-2 hover:bg-[var(--bg-elevated)] text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-2 cursor-pointer"
                                       >
                                         <Upload size={12} /> Upload New Version
                                       </button>
                                       <div className="h-px bg-[var(--border-subtle)] my-1"></div>
-                                      <button 
+                                      <button
                                         onClick={() => handleDeleteFile(file.id, file.name)}
                                         className="w-full px-4 py-2 hover:bg-[var(--bg-elevated)] text-xs text-rose-500 flex items-center gap-2 cursor-pointer"
                                       >
@@ -1118,7 +1109,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
           {/* ── TAB 3: LANGUAGES LIST ── */}
           {activeTab === "languages" && (
             <div className="space-y-6 animate-[fadeIn_0.15s_ease-out]">
-              
+
               <div className="flex justify-between items-center">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">Target Translation Languages</h3>
                 <button
@@ -1143,7 +1134,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                     const metrics = getLanguageMetrics(lang);
                     return (
                       <div key={lang} className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-5 flex flex-col justify-between shadow-md group">
-                        
+
                         <div>
                           {/* Card header */}
                           <div className="flex justify-between items-start gap-2">
@@ -1153,21 +1144,21 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                                 {lang}
                               </span>
                             </div>
-                            
+
                             {/* Actions options menu */}
                             <div className="relative group/actions">
                               <button className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] p-1 rounded hover:bg-[var(--bg-hover)] transition-all cursor-pointer">
                                 <ChevronDown size={14} />
                               </button>
                               <div className="absolute right-0 mt-1 w-40 bg-[var(--bg-surface)] border border-[var(--border-medium)] rounded-xl py-1 shadow-2xl opacity-0 invisible group-hover/actions:opacity-100 group-hover/actions:visible transition-all z-50 text-left">
-                                <button 
+                                <button
                                   onClick={() => handleDownloadZipLanguage(lang)}
                                   className="w-full px-4 py-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] flex items-center gap-2 text-left cursor-pointer"
                                 >
                                   <Download size={12} /> Download ZIP
                                 </button>
                                 <div className="h-px bg-[var(--border-subtle)] my-1"></div>
-                                <button 
+                                <button
                                   onClick={() => handleRemoveLanguage(lang)}
                                   className="w-full px-4 py-2 text-xs text-rose-500 hover:bg-[var(--bg-elevated)] flex items-center gap-2 text-left cursor-pointer"
                                 >
@@ -1217,11 +1208,11 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
           {/* ── TAB 4: ANALYTICS & CHARTS ── */}
           {activeTab === "analytics" && (
             <div className="space-y-8 animate-[fadeIn_0.15s_ease-out]">
-              
+
               {/* Main Progress Breakdown */}
               <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-6 shadow-md space-y-6">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">Translation Progress</h3>
-                
+
                 {project?.target_languages?.length === 0 ? (
                   <p className="text-xs text-[var(--text-muted)] text-center py-6">No languages configured yet.</p>
                 ) : (
@@ -1235,7 +1226,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                             <span className="text-indigo-500">{metrics.progress}% Complete</span>
                           </div>
                           <div className="relative w-full bg-[var(--bg-input)] h-4 rounded-full overflow-hidden border border-[var(--border-subtle)] text-[10px] text-center select-none flex items-center justify-center">
-                            <div 
+                            <div
                               className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500 z-0"
                               style={{ width: `${metrics.progress}%` }}
                             ></div>
@@ -1250,17 +1241,17 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
 
               {/* Word Count & Queue Status Splits */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                
+
                 {/* Word Count metrics */}
                 <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-6 shadow-md space-y-6">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">Word Count Breakdown</h3>
-                  
+
                   <div className="space-y-4">
                     <div className="flex items-center justify-between text-xs border-b border-[var(--border-subtle)] pb-2.5">
                       <span className="text-[var(--text-secondary)]">Total Source Words</span>
                       <strong className="text-[var(--text-primary)] text-sm">{totalWordsCount?.toLocaleString() || 0}</strong>
                     </div>
-                    
+
                     {project?.target_languages?.length > 0 && (
                       <div className="space-y-3">
                         <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] tracking-wider">Estimated Translated Words</span>
@@ -1278,7 +1269,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                 {/* Queue status breakdown */}
                 <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-6 shadow-md space-y-6">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">Queue Status</h3>
-                  
+
                   <div className="space-y-4">
                     {[
                       { status: "Completed", count: completedJobs, color: "bg-emerald-500" },
@@ -1304,14 +1295,14 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
 
               {/* TM match breakdown and source context analysis */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                
+
                 {/* TM & ICE & Fuzzy Match Distribution */}
                 <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-6 shadow-md space-y-6">
                   <div>
                     <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">Translation Memory Match Analysis</h3>
                     <p className="text-[10px] text-[var(--text-muted)] mt-1">Breakdown of segment matching sources within your TM database.</p>
                   </div>
-                  
+
                   <div className="space-y-4">
                     {[
                       { label: "ICE Match (101%)", count: analytics?.tmMatchStats?.ice || 0, color: "bg-emerald-500" },
@@ -1348,7 +1339,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                     <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">Source Context Analysis</h3>
                     <p className="text-[10px] text-[var(--text-muted)] mt-1">Analysis of context fields associated with your translation source segments.</p>
                   </div>
-                  
+
                   <div className="space-y-4">
                     {[
                       { label: "Segments with Jira Keys", count: analytics?.sourceContextStats?.jira || 0, color: "bg-indigo-500" },
@@ -1394,14 +1385,14 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
           <div className="bg-[var(--bg-surface)] border border-[var(--border-medium)] rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-[fadeIn_0.15s_ease-out]">
             <div className="p-5 border-b border-[var(--border-subtle)] flex justify-between items-center bg-[var(--bg-panel)]">
               <h2 className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider">Configure Target Languages</h2>
-              <button 
+              <button
                 onClick={() => setShowAddLangModal(false)}
                 className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer text-xl font-bold"
               >
                 &times;
               </button>
             </div>
-            
+
             <div className="p-5 space-y-4">
               <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
                 Add target languages to this project. New target language versions will automatically generate independent translation jobs.
@@ -1409,15 +1400,15 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
 
               <div className="grid grid-cols-2 gap-2.5 bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl p-4 max-h-56 overflow-y-auto">
                 {LANGUAGES.filter(lang => !lang.hidden).map((lang) => (
-                  <label 
-                    key={lang.code} 
+                  <label
+                    key={lang.code}
                     className="flex items-center gap-2.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer select-none py-1.5"
                   >
                     <input
                       type="checkbox"
                       checked={selectedAddLangs.includes(lang.code)}
                       onChange={() => {
-                        setSelectedAddLangs(prev => 
+                        setSelectedAddLangs(prev =>
                           prev.includes(lang.code) ? prev.filter(c => c !== lang.code) : [...prev, lang.code]
                         );
                       }}
