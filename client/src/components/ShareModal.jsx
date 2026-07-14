@@ -182,7 +182,7 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card max-w-xl select-none text-left p-6 flex flex-col gap-6" style={{ borderRadius: "24px" }}>
+      <div className="modal-card max-w-2xl select-none text-left p-6 flex flex-col gap-6" style={{ borderRadius: "24px" }}>
         
         {/* Header */}
         <div className="flex justify-between items-start">
@@ -201,15 +201,15 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
         </div>
 
         {/* Form to Add Collaborators */}
-        <form onSubmit={handleGrant} className="flex gap-2 relative z-50">
-          <div className="flex-1 relative" ref={dropdownRef}>
+        <form onSubmit={handleGrant} className="flex gap-2 relative z-50 h-[42px]">
+          <div className="flex-1 relative h-full" ref={dropdownRef}>
             <input
               type="email"
               required
               placeholder="Add people by email..."
               value={email}
               onChange={handleEmailChange}
-              className="w-full rounded-xl border border-[var(--border-medium)] bg-[var(--bg-input)] px-4 py-2.5 text-[var(--text-primary)] outline-none transition-all focus:border-[var(--accent)] text-xs font-semibold placeholder-[var(--text-muted)]"
+              className="w-full h-full rounded-xl border border-[var(--border-medium)] bg-[var(--bg-input)] px-4 text-[var(--text-primary)] outline-none transition-all focus:border-[var(--accent)] text-xs font-semibold placeholder-[var(--text-muted)]"
             />
             
             {/* Email Suggestions Dropdown */}
@@ -230,11 +230,11 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
             )}
           </div>
 
-          <div className="w-[120px]">
+          <div className="w-[120px] h-full">
             <select
               value={permission}
               onChange={(e) => setPermission(e.target.value)}
-              className="w-full rounded-xl border border-[var(--border-medium)] bg-[var(--bg-input)] px-3 py-2.5 text-[var(--text-primary)] outline-none transition-all focus:border-[var(--accent)] text-xs font-semibold cursor-pointer h-full"
+              className="w-full h-full rounded-xl border border-[var(--border-medium)] bg-[var(--bg-input)] px-3 text-[var(--text-primary)] outline-none transition-all focus:border-[var(--accent)] text-xs font-semibold cursor-pointer"
             >
               <option value="read">Viewer</option>
               <option value="write">Editor</option>
@@ -244,7 +244,7 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
           <button
             type="submit"
             disabled={submitting || !email}
-            className="flex items-center justify-center bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold px-4 rounded-xl transition-all cursor-pointer shadow-sm disabled:opacity-50 h-full"
+            className="flex items-center justify-center bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold px-6 rounded-xl transition-all cursor-pointer shadow-sm disabled:opacity-50 h-full"
           >
             Add
           </button>
