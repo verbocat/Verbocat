@@ -1669,7 +1669,22 @@ apiRouter.get("/documents/:id/access", checkAuth, async (request, response) => {
       name: acc.profiles?.email ? acc.profiles.email.split("@")[0] : "Unknown"
     }));
 
-    response.json(list);
+    // Fetch owner profile to include in the share modal list
+    const { data: ownerProfile } = await supabase
+      .from("profiles")
+      .select("email")
+      .eq("id", doc.owner_id)
+      .single();
+
+    response.json({
+      owner: {
+        userId: doc.owner_id,
+        email: ownerProfile?.email || "Unknown",
+        name: ownerProfile?.email ? ownerProfile.email.split("@")[0] : "Owner",
+        permission: "owner"
+      },
+      collaborators: list
+    });
   } catch (error) {
     console.error(error);
     response.status(500).json({ error: "Internal server error." });
