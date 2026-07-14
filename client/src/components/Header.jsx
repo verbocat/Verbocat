@@ -18,6 +18,7 @@ const NavBtn = ({ children, onClick, disabled = false, title = "", iconOnly = fa
 );
 
 export const Header = ({
+  projectId, projectName, onNavigate,
   currentProvider, darkMode, onLoadProject, onOpenGlossary, onToggleDarkMode,
   qaIssuesCount, segmentsCount, progress, theme, onLock, isSidebar = false,
   fileName, fileExtension, sourceLanguage, onSourceLanguageChange,
@@ -52,10 +53,37 @@ export const Header = ({
 
       {/* Live breadcrumb */}
       {hasFile ? (
-        <div className="topbar-crumb">
-          <FileText style={{ width: 12, height: 12, color: "var(--text-muted)", flexShrink: 0 }} />
-          <span className="topbar-filename" title={fileName}>{fileName}</span>
-          {fileExtension && <span className="topbar-badge">{fileExtension.replace(".", "")}</span>}
+        <div className="topbar-crumb" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11 }}>
+          <button 
+            onClick={() => onNavigate && onNavigate("/")} 
+            style={{ background: "none", border: "none", padding: 0, margin: 0, color: "var(--text-secondary)", cursor: "pointer", transition: "color 0.2s" }}
+            onMouseOver={(e) => e.currentTarget.style.color = "var(--accent)"}
+            onMouseOut={(e) => e.currentTarget.style.color = "var(--text-secondary)"}
+          >
+            Dashboard
+          </button>
+          <ChevronRight style={{ width: 10, height: 10, opacity: 0.4 }} />
+
+          {projectName && projectId ? (
+            <>
+              <button 
+                onClick={() => onNavigate && onNavigate(`/project/${projectId}`)} 
+                style={{ background: "none", border: "none", padding: 0, margin: 0, color: "var(--text-secondary)", cursor: "pointer", transition: "color 0.2s" }}
+                onMouseOver={(e) => e.currentTarget.style.color = "var(--accent)"}
+                onMouseOut={(e) => e.currentTarget.style.color = "var(--text-secondary)"}
+              >
+                {projectName}
+              </button>
+              <ChevronRight style={{ width: 10, height: 10, opacity: 0.4 }} />
+            </>
+          ) : null}
+
+          <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--text-primary)", fontWeight: 600 }}>
+            <FileText style={{ width: 12, height: 12, color: "var(--text-muted)", flexShrink: 0 }} />
+            <span className="topbar-filename" title={fileName}>{fileName}</span>
+            {fileExtension && <span className="topbar-badge">{fileExtension.replace(".", "")}</span>}
+          </div>
+
           {srcLang && tgtLang && (
             <>
               <span className="topbar-sep-dot">·</span>

@@ -1870,10 +1870,10 @@ apiRouter.post("/documents/:id/request-access", checkAuth, async (request, respo
     const userEmail = request.user.email;
     const userName = request.profile.full_name || userEmail.split("@")[0];
 
-    // Fetch document details to get owner_id and name
+    // Fetch document details to get owner_id, name, project_id, and target_lang
     const { data: doc, error: docError } = await supabase
       .from("documents")
-      .select("owner_id, name")
+      .select("owner_id, name, project_id, target_lang")
       .eq("id", documentId)
       .single();
 
@@ -1895,7 +1895,59 @@ apiRouter.post("/documents/:id/request-access", checkAuth, async (request, respo
       return handleDatabaseError(insertError, response, "Failed to submit access request.");
     }
 
-    // Broadcast to room via Socket.io
+    // Fetch owner profile to get their email address
+    const { data: ownerProfile } = await supabase
+      .from("profiles")
+      .select("email, full_name")
+      .eq("id", doc.owner_id)
+      .single();
+
+    if (ownerProfile && ownerProfile.email) {
+      const { sendEmail } = require("../utils/mailer");
+      const clientUrl = process.env.CLIENT_URL || request.headers.origin || "http://localhost:5173";
+      const docLink = doc.project_id && doc.target_lang
+        ? `${clientUrl}/project/${doc.project_id}/file/${documentId}/lang/${doc.target_lang}`
+        : `${clientUrl}`;
+
+      const ownerName = ownerProfile.full_name || ownerProfile.email.split("@")[0];
+
+      // Send the email in the background without blocking the HTTP response
+      sendEmail({
+        to: ownerProfile.email,
+        subject: `🔑 Access Request for "${doc.name}"`,
+        text: `${userName} (${userEmail}) is requesting Edit Access to "${doc.name}". Review at: ${docLink}`,
+        html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f8fafc; color: #0f172a; margin: 0; padding: 20px; }
+    .card { background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; max-width: 500px; margin: 0 auto; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); }
+    .header { font-size: 18px; font-weight: bold; margin-bottom: 16px; color: #1e293b; }
+    .details { font-size: 14px; line-height: 1.5; color: #475569; margin-bottom: 24px; }
+    .btn { display: inline-block; background-color: #3b82f6; color: #ffffff !important; font-weight: bold; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-size: 14px; }
+    .footer { font-size: 12px; color: #94a3b8; margin-top: 24px; border-top: 1px solid #f1f5f9; padding-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">🔑 Document Access Request</div>
+    <div class="details">
+      <p>Hello <strong>${ownerName}</strong>,</p>
+      <p><strong>${userName}</strong> (${userEmail}) has requested <strong>Edit Access</strong> to your document: <strong>${doc.name}</strong>.</p>
+    </div>
+    <a href="${docLink}" class="btn" style="color: #ffffff;">View Workspace</a>
+    <div class="footer">
+      This is an automated notification from your Centroid Collaborative Translation Workspace.
+    </div>
+  </div>
+</body>
+</html>
+        `
+      }).catch(err => console.error("Error sending access request email:", err));
+    }
+
+    // Broadcast to room via Socket.io (strictly only to the owner)
     const { getIo } = require("../services/socket");
     const io = getIo();
     if (io) {
@@ -1919,10 +1971,8 @@ apiRouter.post("/documents/:id/request-access", checkAuth, async (request, respo
         payload.id = accessReq.id;
       }
 
-      // Send to owner's personal room
+      // Send to owner's personal room only
       io.to(`user:${doc.owner_id}`).emit("access-request-received", payload);
-      // Send to staff group room
-      io.to("verbolabs_staff").emit("access-request-received", payload);
     }
 
     response.json({ success: true });
@@ -2003,6 +2053,11 @@ apiRouter.post("/documents/:id/access-requests/:requestId/respond", checkAuth, a
 
     const targetUserId = accessReq.user_id;
 
+    // Security check: ensure request document matches URL document context
+    if (accessReq.document_id !== doc.id) {
+      return response.status(400).json({ error: "Access request does not match this document workspace." });
+    }
+
     // Update request status
     const newStatus = action === "approve" ? "approved" : "rejected";
     const { error: updateReqError } = await supabase
@@ -2019,7 +2074,7 @@ apiRouter.post("/documents/:id/access-requests/:requestId/respond", checkAuth, a
       const { error: grantError } = await supabase
         .from("document_access")
         .upsert({
-          document_id: doc.id,
+          document_id: accessReq.document_id,
           user_id: targetUserId,
           permission: "write"
         }, { onConflict: "document_id,user_id" });
@@ -2703,7 +2758,7 @@ apiRouter.post("/projects/:projectId/upload", checkAuth, upload.single("file"), 
             document_id: documentId,
             target_lang: targetLang,
             segment_index: idx,
-            source_text: seg.source || "",
+            source_text: "",
             target_text: "",
             status: "draft"
           });
@@ -2794,7 +2849,7 @@ apiRouter.post("/projects/:projectId/languages", checkAuth, async (request, resp
                 document_id: doc.id,
                 target_lang: targetLang,
                 segment_index: seg.segment_index,
-                source_text: seg.source_text,
+                source_text: "",
                 target_text: "",
                 status: "draft"
               }));
@@ -3585,7 +3640,7 @@ apiRouter.put("/documents/:documentId/lang/:lang/segments/:index", checkAuth, as
           .from("document_segments")
           .select("source_text")
           .eq("document_id", documentId)
-          .eq("target_lang", lang)
+          .is("target_lang", null)
           .eq("segment_index", segmentIndex)
           .maybeSingle();
 
@@ -3679,17 +3734,19 @@ apiRouter.post("/documents/:documentId/lang/:lang/segments/:index/translate-cont
       screenshotMimeType = request.file.mimetype;
     }
 
-    const { data: segment } = await supabase
-      .from("document_segments")
-      .select("source_text, target_text")
-      .eq("document_id", documentId)
-      .eq("target_lang", lang)
-      .eq("segment_index", segmentIndex)
-      .single();
+    const [templateSeg, targetSeg] = await Promise.all([
+      supabase.from("document_segments").select("source_text").eq("document_id", documentId).is("target_lang", null).eq("segment_index", segmentIndex).maybeSingle(),
+      supabase.from("document_segments").select("target_text").eq("document_id", documentId).eq("target_lang", lang).eq("segment_index", segmentIndex).maybeSingle()
+    ]);
 
-    if (!segment) {
+    if (!templateSeg.data || !targetSeg.data) {
       return response.status(404).json({ error: "Segment not found." });
     }
+
+    const segment = {
+      source_text: templateSeg.data.source_text,
+      target_text: targetSeg.data.target_text
+    };
 
     const { translateSegmentWithContext } = require("../services/translationService");
     const translationResult = await translateSegmentWithContext({

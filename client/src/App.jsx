@@ -477,6 +477,7 @@ export default function App() {
     });
 
     socket.on("access-request-received", (data) => {
+      if (data.documentId !== documentId) return; // Only process requests for the current document
       if (document.hidden) {
         if (Notification.permission === "granted") {
           new Notification("Access Request Received", {
@@ -503,6 +504,8 @@ export default function App() {
           setHasNoAccess(false);
           setHasPendingAccessRequest(false);
           loadCollaborativeDocument();
+        } else {
+          setHasPendingAccessRequest(false);
         }
       }
     });

@@ -101,7 +101,8 @@
 }
 
 /* Light mode overrides for hardcoded dark values */
-:root.light-mode .topbar {
+:root.light-mode .topbar,
+:root.light-mode .workspace-footer {
   background: rgba(241, 245, 249, 0.96) !important;
 }
 :root.light-mode .seg-editor:focus {
@@ -1991,7 +1992,7 @@ code, .font-mono { font-family: "IBM Plex Mono", monospace; }
    EXTREME ANIMATED THEME TOGGLE BUTTON & SMOOTH TRANSITION
    ================================================================ */
 /* Global transitions for theme-sensitive elements */
-body, .topbar, .seg-row, .seg-editor, .nav-btn, .modal-card, .btn-secondary, .btn-cta, .settings-row, .glossary-dropdown {
+body, .topbar, .workspace-footer, .seg-row, .seg-editor, .nav-btn, .modal-card, .btn-secondary, .btn-cta, .settings-row, .glossary-dropdown {
   transition: background 0.6s cubic-bezier(0.4, 0, 0.2, 1),
               background-color 0.6s cubic-bezier(0.4, 0, 0.2, 1),
               border-color 0.6s cubic-bezier(0.4, 0, 0.2, 1),

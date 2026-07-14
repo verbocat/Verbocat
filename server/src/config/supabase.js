@@ -23,7 +23,7 @@ const supabaseAdmin = createClient(
   }
 );
 
-const fetchAllSegments = async (documentId, select = "*", targetLang = null) => {
+const fetchAllSegmentsRaw = async (documentId, select = "*", targetLang = null) => {
   let allSegments = [];
   let page = 0;
   const pageSize = 1000;
@@ -61,6 +61,41 @@ const fetchAllSegments = async (documentId, select = "*", targetLang = null) => 
   }
 
   return allSegments;
+};
+
+const fetchAllSegments = async (documentId, select = "*", targetLang = null) => {
+  if (targetLang && targetLang !== "source") {
+    // 1. Fetch the target language segments (with source_text potentially = "")
+    const targetSegments = await fetchAllSegmentsRaw(documentId, select, targetLang);
+    
+    // Check if we need to map source_text (e.g. if select is "*" or includes "source_text")
+    const needsSourceText = select === "*" || select.includes("source_text");
+    if (needsSourceText) {
+      // 2. Fetch the template segments (target_lang IS NULL), selecting index and source_text
+      const sourceSegments = await fetchAllSegmentsRaw(documentId, "segment_index, source_text", "source");
+
+      // 3. Map source texts by segment_index
+      const sourceMap = {};
+      sourceSegments.forEach(seg => {
+        sourceMap[seg.segment_index] = seg.source_text;
+      });
+
+      // 4. Merge source_text into targetSegments
+      return targetSegments.map(seg => {
+        const mappedSourceText = sourceMap[seg.segment_index];
+        if (mappedSourceText !== undefined) {
+          return {
+            ...seg,
+            source_text: mappedSourceText
+          };
+        }
+        return seg;
+      });
+    }
+    return targetSegments;
+  } else {
+    return fetchAllSegmentsRaw(documentId, select, targetLang);
+  }
 };
 
 module.exports = {
