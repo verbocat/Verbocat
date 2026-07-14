@@ -1898,7 +1898,7 @@ apiRouter.post("/documents/:id/request-access", checkAuth, async (request, respo
     // Fetch owner profile to get their email address
     const { data: ownerProfile } = await supabase
       .from("profiles")
-      .select("email, full_name")
+      .select("email")
       .eq("id", doc.owner_id)
       .single();
 
@@ -1909,7 +1909,7 @@ apiRouter.post("/documents/:id/request-access", checkAuth, async (request, respo
         ? `${clientUrl}/project/${doc.project_id}/file/${documentId}/lang/${doc.target_lang}`
         : `${clientUrl}`;
 
-      const ownerName = ownerProfile.full_name || ownerProfile.email.split("@")[0];
+      const ownerName = ownerProfile.email.split("@")[0];
 
       // Send the email in the background without blocking the HTTP response
       sendEmail({
