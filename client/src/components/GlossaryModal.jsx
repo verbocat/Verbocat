@@ -1,6 +1,6 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import Papa from "papaparse";
-import { Icons } from "./Icons.jsx";
+import { X, Search, FileUp, Database, Edit, Plus, Trash2, Check, RefreshCw } from "lucide-react";
 
 export const GlossaryModal = ({
   darkMode,
@@ -38,7 +38,6 @@ export const GlossaryModal = ({
       ),
     [languages]
   );
-
 
   const [isEditing, setIsEditing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -114,8 +113,6 @@ export const GlossaryModal = ({
     const file = e.target.files[0];
     if (!file) return;
 
-    if (!file) return;
-
     const reader = new FileReader();
     reader.onload = (event) => {
       Papa.parse(event.target.result, {
@@ -145,350 +142,328 @@ export const GlossaryModal = ({
   }
 
   return (
-    <div className={`fixed inset-0 z-[9999] flex flex-col bg-slate-950 ${theme.text}`}>
-      <div className="flex-1 overflow-hidden">
-        <div className="h-full flex flex-col lg:flex-row">
-          <aside
-            className={`w-full lg:w-[320px] flex flex-col border-b lg:border-b-0 lg:border-r ${
-              darkMode ? "border-white/10 bg-slate-950" : "border-slate-200 bg-slate-50"
-            }`}
-          >
-            <div className="p-5 flex items-center justify-between border-b border-white/10">
-              <div>
-                <div className={`text-xs uppercase tracking-[0.25em] ${theme.muted}`}>
-                  Glossary
-                </div>
-                <h2 className="mt-1 text-xl font-bold">Language Pairs</h2>
-              </div>
-              <button
-                onClick={onClose}
-                className="rounded-xl px-4 py-2 text-sm font-semibold transition bg-rose-600 text-white hover:bg-rose-500"
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-5">
-              <div className="space-y-4">
-                <label className="block space-y-2">
-                <span className={`text-xs uppercase tracking-[0.2em] ${theme.muted}`}>
-                  Source
-                </span>
-                <select
-                  value={glossarySourceLang}
-                  onChange={(event) => setGlossarySourceLang(event.target.value)}
-                  className={`w-full rounded-xl border px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-sky-300 ${theme.input}`}
-                >
-                  {languages.filter((l) => !l.hidden).map((language) => (
-                    <option key={`source-${language.code}`} value={language.code}>
-                      {language.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block space-y-2">
-                <span className={`text-xs uppercase tracking-[0.2em] ${theme.muted}`}>
-                  Target
-                </span>
-                <select
-                  value={glossaryTargetLang}
-                  onChange={(event) => setGlossaryTargetLang(event.target.value)}
-                  className={`w-full rounded-xl border px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-sky-300 ${theme.input}`}
-                >
-                  {languages.filter((l) => !l.hidden).map((language) => (
-                    <option key={`target-${language.code}`} value={language.code}>
-                      {language.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div className="mt-5 flex flex-wrap gap-2">
-              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${theme.accentSoft}`}>
-                {glossary.length} terms
-              </span>
-              <span className="rounded-lg bg-slate-500/12 px-3 py-1 text-xs font-semibold text-slate-300 ring-1 ring-slate-400/20">
-                {selectedGlossaryRows.length} selected
-              </span>
-            </div>
-
-            <div className="mt-6 space-y-2">
-              {glossaryLanguagePairs.length > 0 ? (
-                glossaryLanguagePairs.map((pair) => (
-                  <div
-                    key={pair.key}
-                    className={`flex items-center gap-2 rounded-2xl border p-3 ${
-                      pair.key === glossaryKey
-                        ? "border-sky-300/30 bg-sky-400/10"
-                        : darkMode
-                          ? "border-white/10 bg-white/[0.02]"
-                          : "border-slate-200 bg-white"
-                    }`}
-                  >
-                    <button
-                      onClick={() => onSelectPair(pair.source, pair.target)}
-                      className="flex-1 text-left"
-                    >
-                      <div className="text-sm font-semibold">{pair.label}</div>
-                      <div className={`mt-1 text-xs ${theme.muted}`}>
-                        {pair.count} terms
-                      </div>
-                    </button>
-                    <button
-                      onClick={() => onDeleteLanguagePair(pair.key)}
-                      className="rounded-lg px-2 py-1 text-xs font-bold text-rose-300 transition hover:bg-rose-500/10"
-                    >
-                      x
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <div className={`rounded-2xl border p-4 text-sm ${theme.card}`}>
-                  No saved glossary pairs yet.
-                </div>
-              )}
-            </div>
+    <div className="modal-overlay">
+      <div className="modal-card max-w-5xl w-full flex flex-col overflow-hidden text-left" style={{ borderRadius: "6px", height: "82vh" }}>
+        
+        {/* Header */}
+        <div className="modal-header border-b border-[var(--border-subtle)] flex items-center justify-between p-4 bg-[var(--bg-surface)] shrink-0">
+          <div>
+            <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+              <Database className="w-4 h-4 text-[var(--text-accent)]" />
+              Document Glossary Manager
+            </h3>
           </div>
-        </aside>
+          <button 
+            onClick={onClose}
+            className="p-1.5 rounded-full hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all cursor-pointer"
+            title="Close glossary"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
 
-          <section className={`flex-1 flex flex-col min-w-0 ${darkMode ? "bg-slate-900" : "bg-white"}`}>
-            <div className="border-b border-white/10 p-5">
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-                <div>
-                  <div className={`text-xs uppercase tracking-[0.22em] ${theme.muted}`}>
-                    Active Pair
-                  </div>
-                  <h3 className="mt-1 text-2xl font-bold">
-                    {languageNameMap[glossarySourceLang] || glossarySourceLang} to{" "}
-                    {languageNameMap[glossaryTargetLang] || glossaryTargetLang}
-                  </h3>
+        {/* Modal Split View */}
+        <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-[var(--bg-surface)]">
+          
+          {/* Sidebar (Language Pairs Management) */}
+          <aside className="w-full md:w-[280px] shrink-0 border-b md:border-b-0 md:border-r border-[var(--border-subtle)] bg-[var(--bg-panel)] flex flex-col p-4 overflow-y-auto">
+            <div className="space-y-4">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                Glossary Language Selection
+              </div>
+              
+              <div className="flex flex-col gap-3">
+                <label className="block space-y-1.5">
+                  <span className="text-[10px] font-semibold text-[var(--text-secondary)]">Source</span>
+                  <select
+                    value={glossarySourceLang}
+                    onChange={(event) => setGlossarySourceLang(event.target.value)}
+                    className="w-full rounded-lg border border-[var(--border-medium)] bg-[var(--bg-input)] px-3 py-2 text-xs font-semibold text-[var(--text-primary)] outline-none cursor-pointer focus:border-[var(--accent)]"
+                  >
+                    {languages.filter((l) => !l.hidden).map((language) => (
+                      <option key={`source-${language.code}`} value={language.code}>
+                        {language.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-                  {/* View Tabs */}
-                  <div className="flex gap-4 mt-3">
-                    <button
-                      onClick={() => setActiveView("list")}
-                      className={`pb-1 text-xs font-semibold border-b-2 transition ${
-                        activeView === "list"
-                          ? "border-sky-400 text-sky-400 font-bold"
-                          : "border-transparent text-slate-400 hover:text-slate-200"
-                      }`}
-                    >
-                      Term List
-                    </button>
-                    <button
-                      onClick={() => setActiveView("spreadsheet")}
-                      className={`pb-1 text-xs font-semibold border-b-2 transition ${
-                        activeView === "spreadsheet"
-                          ? "border-sky-400 text-sky-400 font-bold"
-                          : "border-transparent text-slate-400 hover:text-slate-200"
-                      }`}
-                    >
-                      Spreadsheet Importer
-                    </button>
-                  </div>
+                <label className="block space-y-1.5">
+                  <span className="text-[10px] font-semibold text-[var(--text-secondary)]">Target</span>
+                  <select
+                    value={glossaryTargetLang}
+                    onChange={(event) => setGlossaryTargetLang(event.target.value)}
+                    className="w-full rounded-lg border border-[var(--border-medium)] bg-[var(--bg-input)] px-3 py-2 text-xs font-semibold text-[var(--text-primary)] outline-none cursor-pointer focus:border-[var(--accent)]"
+                  >
+                    {languages.filter((l) => !l.hidden).map((language) => (
+                      <option key={`target-${language.code}`} value={language.code}>
+                        {language.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              {/* Status Stats */}
+              <div className="flex items-center gap-2 pt-1 border-t border-[var(--border-subtle)]">
+                <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${theme.accentSoft}`}>
+                  {glossary.length} terms
+                </span>
+                {selectedGlossaryRows.length > 0 && (
+                  <span className="rounded-full bg-[var(--bg-active)] px-2.5 py-0.5 text-[10px] font-bold text-[var(--text-accent)] border border-[var(--border-subtle)]">
+                    {selectedGlossaryRows.length} selected
+                  </span>
+                )}
+              </div>
+
+              {/* List of active pairs */}
+              <div className="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mb-1">
+                  Active Glossaries
                 </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${theme.inputSoft}`}>
-                    <Icons.Search className="w-4 h-4 opacity-50" />
-                    <input 
-                      type="text" 
-                      placeholder="Search glossary..." 
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                      className="bg-transparent outline-none w-32"
-                    />
+                {glossaryLanguagePairs.length > 0 ? (
+                  glossaryLanguagePairs.map((pair) => (
+                    <div
+                      key={pair.key}
+                      className={`flex items-center justify-between p-2.5 rounded-lg border transition-all cursor-pointer ${
+                        pair.key === glossaryKey
+                          ? "border-[var(--accent)] bg-[var(--bg-active)] text-[var(--text-primary)]"
+                          : "border-[var(--border-medium)] bg-[var(--bg-surface)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)]"
+                      }`}
+                      onClick={() => onSelectPair(pair.source, pair.target)}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-bold truncate">{pair.label}</div>
+                        <div className="text-[9px] text-[var(--text-muted)] mt-0.5">{pair.count} terms</div>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteLanguagePair(pair.key);
+                        }}
+                        className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-rose)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer ml-1 font-bold text-xs"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-[10px] text-[var(--text-muted)] font-medium p-2 bg-[var(--bg-input)] rounded-lg text-center border border-[var(--border-subtle)]">
+                    No active glossaries.
                   </div>
+                )}
+              </div>
+            </div>
+          </aside>
 
-                  <button
-                    onClick={onApplyGlossary}
-                    disabled={!canApplyGlossary}
-                    className="rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:from-emerald-400 hover:to-teal-500 shadow-md shadow-emerald-500/10 hover:shadow-emerald-500/20 disabled:from-slate-800 disabled:to-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title={canApplyGlossary ? "Apply glossary terms to segment translations" : "Open a file first to apply glossary terms"}
-                  >
-                    Apply to Project
-                  </button>
-                  
-                  <input type="file" accept=".csv" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${theme.buttonSecondary}`}
-                  >
-                    Upload CSV
-                  </button>
-                  
-                  <input
-                    type="file"
-                    accept=".tmx"
-                    id="tmx-import-file-input"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files[0];
-                      if (file) {
-                        onImportTmx(file);
-                      }
-                      e.target.value = "";
-                    }}
+          {/* Right Section (Content Table & Importer) */}
+          <section className="flex-1 flex flex-col min-w-0 bg-[var(--bg-surface)]">
+            
+            {/* Toolbar Header */}
+            <div className="p-4 border-b border-[var(--border-subtle)] flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between shrink-0">
+              {/* Tab selector */}
+              <div className="flex gap-2 p-1 bg-[var(--bg-panel)] rounded-xl border border-[var(--border-medium)] w-fit shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setActiveView("list")}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    activeView === "list"
+                      ? "bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-sm border border-[var(--border-subtle)]"
+                      : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent"
+                  }`}
+                >
+                  Term List
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveView("spreadsheet")}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    activeView === "spreadsheet"
+                      ? "bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-sm border border-[var(--border-subtle)]"
+                      : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent"
+                  }`}
+                >
+                  Spreadsheet Importer
+                </button>
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-wrap items-center gap-2">
+                
+                {/* Search Bar */}
+                <div className="flex items-center gap-1.5 rounded-lg border border-[var(--border-medium)] bg-[var(--bg-input)] px-2.5 py-1.5 text-xs text-[var(--text-primary)]">
+                  <Search className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                  <input 
+                    type="text" 
+                    placeholder="Search terms..." 
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    className="bg-transparent outline-none w-28 placeholder-[var(--text-muted)] font-semibold"
                   />
-                  <button
-                    onClick={() => document.getElementById("tmx-import-file-input")?.click()}
-                    className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${theme.buttonSecondary}`}
-                    title="Import Translation Memory TMX file into database"
-                  >
-                    Import TMX
-                  </button>
-
-                  <button
-                    onClick={() => setIsEditing(!isEditing)}
-                    className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${isEditing ? 'bg-sky-600 text-white' : theme.buttonSecondary}`}
-                  >
-                    Edit
-                  </button>
-                  
-                  {selectedGlossaryRows.length > 0 && (
-                    <button
-                      onClick={onDeleteSelected}
-                      title="Remove Selected"
-                      className="rounded-xl px-3 py-2.5 text-sm font-semibold transition bg-rose-500/10 text-rose-500 hover:bg-rose-500/20"
-                    >
-                      <Icons.Trash />
-                    </button>
-                  )}
-
-                  <button
-                    onClick={handleAddRow}
-                    className="rounded-xl bg-gradient-to-r from-sky-400 to-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:from-sky-300 hover:to-slate-200"
-                  >
-                    Add Field
-                  </button>
                 </div>
+
+                {/* Edit Button */}
+                <button
+                  onClick={() => setIsEditing(!isEditing)}
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold border transition-all cursor-pointer shadow-sm ${
+                    isEditing 
+                      ? "bg-[var(--accent)] border-[var(--accent)] text-white" 
+                      : "bg-transparent border-[var(--border-medium)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
+                  }`}
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                  {isEditing ? "Editing Mode" : "Edit"}
+                </button>
+
+                {/* Delete Selected */}
+                {selectedGlossaryRows.length > 0 && (
+                  <button
+                    onClick={onDeleteSelected}
+                    title="Remove Selected"
+                    className="rounded-lg p-1.5 border border-transparent bg-[var(--text-rose)]/10 text-[var(--text-rose)] hover:bg-[var(--text-rose)]/20 transition-all cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+
+                {/* Add Field */}
+                <button
+                  onClick={handleAddRow}
+                  className="flex items-center gap-1.5 rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold px-3 py-1.5 transition-all cursor-pointer shadow-sm"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add Term
+                </button>
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 p-5 flex flex-col">
+            {/* Content viewport */}
+            <div className="flex-1 p-4 overflow-hidden flex flex-col">
+              
               {activeView === "spreadsheet" ? (
-                <div className="flex flex-col flex-1 gap-4 p-6 rounded-[24px] border border-white/10 bg-slate-900/40 backdrop-blur-sm">
-                  <div>
-                    <h4 className="text-lg font-bold text-white mb-1">Spreadsheet Paste Importer</h4>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      Copy rows from Google Sheets or Excel (with Source term in the first column and Target term in the second column) and paste them below. Tab separators will be parsed automatically.
+                /* Paste importer */
+                <div className="flex flex-col flex-1 gap-3.5 p-4 rounded-xl border border-[var(--border-medium)] bg-[var(--bg-input)] overflow-hidden">
+                  <div className="shrink-0">
+                    <h4 className="text-xs font-bold text-[var(--text-primary)]">Spreadsheet Paste Importer</h4>
+                    <p className="text-[10px] text-[var(--text-muted)] mt-1 font-semibold leading-relaxed">
+                      Copy rows from Excel or Google Sheets (Source term in column 1, Target term in column 2) and paste them here.
                     </p>
                   </div>
 
                   <textarea
                     value={pasteText}
                     onChange={(e) => setPasteText(e.target.value)}
-                    placeholder="Paste Excel/Google Sheets cells here...&#10;Example:&#10;hello&#9;नमस्ते&#10;world&#9;दुनिया"
-                    className="flex-1 w-full p-4 rounded-xl outline-none border border-white/10 font-mono text-xs bg-slate-950/60 text-slate-200 resize-none focus:ring-2 focus:ring-sky-500"
+                    placeholder="Paste cells here...&#10;Example:&#10;hello&#9;नमस्ते&#10;world&#9;दुनिया"
+                    className="flex-1 w-full p-3 rounded-lg border border-[var(--border-medium)] bg-[var(--bg-surface)] text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none font-mono text-xs resize-none focus:border-[var(--accent)]"
                   />
 
-                  <div className="flex items-center justify-between mt-2">
+                  <div className="flex items-center justify-between shrink-0">
                     <button
                       onClick={() => setPasteText("")}
-                      className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-400 hover:text-white transition"
+                      className="rounded-lg px-3 py-1.5 text-xs font-bold text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer"
                     >
                       Clear
                     </button>
                     <button
                       onClick={handleImportSpreadsheet}
                       disabled={!pasteText.trim()}
-                      className="rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:from-emerald-400 hover:to-teal-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] px-4 py-2 text-xs font-bold text-white transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-sm"
                     >
                       Import & Apply
                     </button>
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-col flex-1 min-h-0 overflow-hidden rounded-[24px] border border-white/10">
-                  <div
-                    className={`grid grid-cols-[64px_1fr_1fr_48px] border-b px-4 py-3 text-xs font-bold uppercase tracking-[0.22em] shrink-0 ${
-                      darkMode ? "border-white/10 bg-white/[0.04] text-slate-300" : "border-slate-200 bg-slate-100 text-slate-500"
-                    }`}
-                  >
+                /* Terms grid table */
+                <div className="flex-1 flex flex-col min-h-0 overflow-hidden border border-[var(--border-medium)] rounded-xl bg-[var(--bg-input)]">
+                  
+                  {/* Grid Header */}
+                  <div className="grid grid-cols-[56px_1fr_1fr_48px] border-b border-[var(--border-subtle)] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] shrink-0 bg-[var(--bg-panel)]">
                     <div className="text-center">No.</div>
-                    <div>Source</div>
-                    <div>Target</div>
-                    <div className="text-center">Delete</div>
+                    <div className="pl-1">Source Term</div>
+                    <div className="pl-1">Target Term</div>
+                    <div className="text-center">Action</div>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto">
+                  {/* Grid Rows */}
+                  <div className="flex-1 overflow-y-auto divide-y divide-[var(--border-subtle)] bg-[var(--bg-surface)]">
                     {filteredGlossary.length === 0 ? (
-                      <div className={`p-10 text-center text-sm ${theme.muted}`}>
+                      <div className="p-10 text-center text-xs text-[var(--text-muted)] font-bold">
                         No glossary rows found.
                       </div>
                     ) : (
-                    filteredGlossary.map((item) => {
-                      const index = item.originalIndex;
-                      const selected = selectedGlossaryRows.includes(index);
+                      filteredGlossary.map((item) => {
+                        const index = item.originalIndex;
+                        const selected = selectedGlossaryRows.includes(index);
 
-                      return (
-                        <div
-                          key={`${glossaryKey}-${index}`}
-                          onClick={(event) => onToggleRow(index, event)}
-                          className={`glossary-row grid grid-cols-[64px_1fr_1fr_48px] border-t border-white/10 ${
-                            selected
-                              ? darkMode
-                                ? "bg-sky-400/10"
-                                : "bg-sky-50"
-                              : ""
-                          }`}
-                        >
+                        return (
                           <div
-                            className={`flex items-center justify-center border-r border-white/10 font-bold ${selected ? 'text-sky-500' : theme.muted}`}
+                            key={`${glossaryKey}-${index}`}
+                            onClick={(event) => onToggleRow(index, event)}
+                            className={`glossary-row grid grid-cols-[56px_1fr_1fr_48px] items-center cursor-pointer transition-colors ${
+                              selected ? "bg-[var(--bg-active)]" : "hover:bg-[var(--bg-hover)]"
+                            }`}
                           >
-                            {index + 1}
+                            {/* Row number */}
+                            <div className="h-full border-r border-[var(--border-subtle)] flex items-center justify-center font-bold text-[10px] text-[var(--text-muted)] bg-[var(--bg-panel)]/50 shrink-0">
+                              {index + 1}
+                            </div>
+
+                            {/* Source term input */}
+                            <div className="h-full border-r border-[var(--border-subtle)] flex items-center">
+                              <input
+                                value={item.source}
+                                disabled={!isEditing && newRowIndex !== index}
+                                onClick={(event) => event.stopPropagation()}
+                                onBlur={handleBlur}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    setNewRowIndex(null);
+                                    e.target.blur();
+                                  }
+                                }}
+                                onChange={(event) =>
+                                  onUpdateGlossary(index, "source", event.target.value)
+                                }
+                                placeholder="Enter source term..."
+                                className="w-full h-full bg-transparent border-none outline-none text-xs text-[var(--text-primary)] px-3.5 py-2.5 placeholder-[var(--text-muted)] disabled:opacity-85 font-semibold focus:bg-[var(--bg-panel)]"
+                              />
+                            </div>
+
+                            {/* Target term input */}
+                            <div className="h-full flex items-center">
+                              <input
+                                value={item.target}
+                                disabled={!isEditing && newRowIndex !== index}
+                                onClick={(event) => event.stopPropagation()}
+                                onBlur={handleBlur}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    setNewRowIndex(null);
+                                    e.target.blur();
+                                  }
+                                }}
+                                onChange={(event) =>
+                                  onUpdateGlossary(index, "target", event.target.value)
+                                }
+                                placeholder="Enter target term..."
+                                className="w-full h-full bg-transparent border-none outline-none text-xs text-[var(--text-primary)] px-3.5 py-2.5 placeholder-[var(--text-muted)] disabled:opacity-85 font-semibold focus:bg-[var(--bg-panel)]"
+                              />
+                            </div>
+
+                            {/* Delete row */}
+                            <div className="h-full border-l border-[var(--border-subtle)] flex items-center justify-center">
+                              <button
+                                onClick={(e) => handleDeleteRow(index, e)}
+                                className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-rose)] hover:bg-[var(--text-rose)]/10 transition-all cursor-pointer"
+                                title="Delete term"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
-
-                          <input
-                            value={item.source}
-                            disabled={!isEditing && newRowIndex !== index}
-                            onClick={(event) => event.stopPropagation()}
-                            onBlur={handleBlur}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                setNewRowIndex(null);
-                                e.target.blur();
-                              }
-                            }}
-                            onChange={(event) =>
-                              onUpdateGlossary(index, "source", event.target.value)
-                            }
-                            placeholder="Source term"
-                            className={`border-r border-white/10 px-4 py-3 outline-none disabled:opacity-70 disabled:cursor-not-allowed ${theme.inputSoft}`}
-                          />
-
-                          <input
-                            value={item.target}
-                            disabled={!isEditing && newRowIndex !== index}
-                            onClick={(event) => event.stopPropagation()}
-                            onBlur={handleBlur}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                setNewRowIndex(null);
-                                e.target.blur();
-                              }
-                            }}
-                            onChange={(event) =>
-                              onUpdateGlossary(index, "target", event.target.value)
-                            }
-                            placeholder="Target term"
-                            className={`px-4 py-3 outline-none disabled:opacity-70 disabled:cursor-not-allowed ${theme.inputSoft}`}
-                          />
-
-                          <div className="flex items-center justify-center px-2 py-1.5 border-l border-white/10">
-                            <button
-                              onClick={(e) => handleDeleteRow(index, e)}
-                              className="flex items-center justify-center text-rose-400 hover:text-rose-600 transition hover:bg-rose-500/10 rounded-lg p-1.5"
-                              title="Delete term"
-                            >
-                              <Icons.Trash className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })
+                        );
+                      })
                     )}
                   </div>
                 </div>
@@ -496,6 +471,63 @@ export const GlossaryModal = ({
             </div>
           </section>
         </div>
+
+        {/* Footer Actions */}
+        <div className="p-4 bg-[var(--bg-panel)] border-t border-[var(--border-subtle)] flex items-center justify-between shrink-0">
+          
+          {/* File management */}
+          <div className="flex items-center gap-2">
+            <input type="file" accept=".csv" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-1.5 rounded-lg bg-[var(--bg-surface)] hover:bg-[var(--bg-hover)] border border-[var(--border-medium)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-bold px-3 py-2 transition-all cursor-pointer shadow-sm"
+            >
+              <FileUp className="w-3.5 h-3.5" />
+              Upload CSV
+            </button>
+            
+            <input
+              type="file"
+              accept=".tmx"
+              id="tmx-import-file-input"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files[0];
+                if (file) {
+                  onImportTmx(file);
+                }
+                e.target.value = "";
+              }}
+            />
+            <button
+              onClick={() => document.getElementById("tmx-import-file-input")?.click()}
+              className="flex items-center gap-1.5 rounded-lg bg-[var(--bg-surface)] hover:bg-[var(--bg-hover)] border border-[var(--border-medium)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-bold px-3 py-2 transition-all cursor-pointer shadow-sm"
+              title="Import Translation Memory TMX file into database"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Import TMX
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onApplyGlossary}
+              disabled={!canApplyGlossary}
+              className="rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] px-4 py-2 text-xs font-bold text-white transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-sm"
+              title={canApplyGlossary ? "Apply glossary terms to segment translations" : "Open a file first to apply glossary terms"}
+            >
+              Apply to Project
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg bg-transparent border border-[var(--border-medium)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] text-xs font-bold px-4 py-2 transition-all cursor-pointer"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+
       </div>
     </div>
   );

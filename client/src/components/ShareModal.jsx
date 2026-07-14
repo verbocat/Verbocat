@@ -182,7 +182,7 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card max-w-2xl select-none text-left p-6 flex flex-col gap-6" style={{ borderRadius: "24px" }}>
+      <div className="modal-card max-w-2xl select-none text-left p-6 flex flex-col gap-6" style={{ borderRadius: "6px" }}>
         
         {/* Header */}
         <div className="flex justify-between items-start">

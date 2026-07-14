@@ -59,6 +59,8 @@ import ProjectDetails from "./components/ProjectDetails.jsx";
 
 export default function App() {
   const virtuosoRef = useRef(null);
+  const pendingFocusSegmentIdRef = useRef(null);
+  const pendingSavesRef = useRef(new Map());
   
   // Zustand Session Store hook
   const { isAuth, fetchProfile, token, logout, user, loading } = useUserStore();
@@ -68,6 +70,10 @@ export default function App() {
   }, [user]);
 
   const [segments, setSegments] = useState([]);
+  const segmentsRef = useRef(segments);
+  useEffect(() => {
+    segmentsRef.current = segments;
+  }, [segments]);
   const [history, setHistory] = useState([]);
   const [future, setFuture] = useState([]);
   const [fileId, setFileId] = useState(null);
@@ -390,6 +396,8 @@ export default function App() {
             const updatedSeg = { ...seg };
             if (targetText !== undefined) {
               updatedSeg.target = targetText;
+            }
+            if (status !== undefined) {
               updatedSeg.status = status;
               updatedSeg.verified = status === "approved";
             }
@@ -841,6 +849,47 @@ export default function App() {
 
   const filteredSegmentsRef = useRef([]);
   filteredSegmentsRef.current = filteredSegments;
+
+  useEffect(() => {
+    if (pendingFocusSegmentIdRef.current !== null) {
+      const nextId = pendingFocusSegmentIdRef.current;
+      const nextIndex = filteredSegments.findIndex((s) => s.id === nextId);
+      if (nextIndex !== -1) {
+        pendingFocusSegmentIdRef.current = null;
+        if (virtuosoRef.current) {
+          virtuosoRef.current.scrollToIndex({ index: nextIndex, align: 'center', behavior: 'smooth' });
+        }
+        
+        // Polling focus helper to handle virtualized rendering delay
+        const tryFocus = (attempts = 0) => {
+          const nextTa = document.getElementById(`target-${nextId}`);
+          if (nextTa) {
+            const nextElement = document.getElementById(`segment-${nextId}`);
+            if (nextElement) {
+              nextElement.classList.add("ring-2", "ring-teal-500");
+              setTimeout(() => nextElement.classList.remove("ring-2", "ring-teal-500"), 1000);
+            }
+            nextTa.focus();
+          } else if (attempts < 15) {
+            setTimeout(() => tryFocus(attempts + 1), 50);
+          }
+        };
+        tryFocus();
+      }
+    }
+  }, [filteredSegments]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (pendingSavesRef.current.size > 0) {
+        e.preventDefault();
+        e.returnValue = "You have unsaved translation changes. Are you sure you want to leave?";
+        return e.returnValue;
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
 
   const qaIssuesList = useMemo(
     () =>
@@ -1661,6 +1710,33 @@ export default function App() {
     }
   };
 
+
+
+  const flushPendingSave = async (id) => {
+    if (!pendingSavesRef.current.has(id)) return;
+    const pending = pendingSavesRef.current.get(id);
+    clearTimeout(pending.timeoutId);
+    pendingSavesRef.current.delete(id);
+
+    if (documentId) {
+      const segmentIndex = segmentsRef.current.findIndex((s) => s.id === id);
+      if (segmentIndex !== -1) {
+        // Read the current state of this segment from our ref to avoid stale closures
+        const currentSegmentState = segmentsRef.current[segmentIndex];
+        const finalStatus = (currentSegmentState && currentSegmentState.verified) 
+          ? "approved" 
+          : pending.status;
+
+        try {
+          await updateSegment(documentId, segmentIndex, pending.value, finalStatus, undefined, undefined, autoPropagateEnabled);
+        } catch (err) {
+          console.error("Failed to save translation to database via queue:", err);
+          showToast(`Failed to save translation to database: ${err.message || err}`, "error");
+        }
+      }
+    }
+  };
+
   const updateTranslation = async (id, value) => {
     let sourceText = "";
     setSegments((previous) => {
@@ -1704,38 +1780,45 @@ export default function App() {
     });
 
     if (documentId) {
-      const segmentIndex = segments.findIndex((s) => s.id === id);
-      if (segmentIndex !== -1) {
-        try {
-          await updateSegment(documentId, segmentIndex, value, "draft", undefined, undefined, autoPropagateEnabled);
-        } catch (err) {
-          console.error("Failed to update segment in database:", err);
-          showToast(`Failed to save translation to database: ${err.message || err}`, "error");
-        }
+      if (pendingSavesRef.current.has(id)) {
+        const pending = pendingSavesRef.current.get(id);
+        clearTimeout(pending.timeoutId);
       }
+      
+      const timeoutId = setTimeout(async () => {
+        await flushPendingSave(id);
+      }, 1000);
+      
+      pendingSavesRef.current.set(id, { timeoutId, value, status: "draft" });
     }
   };
 
   const toggleVerify = async (id) => {
     let nextVerified = false;
     let sourceText = "";
+    const targetSeg = segments.find((s) => s.id === id);
+    if (!targetSeg) return;
+
+    sourceText = targetSeg.source;
+    nextVerified = !targetSeg.verified;
+
+    // Immediately flush or cancel any pending saves for this segment
+    if (pendingSavesRef.current.has(id)) {
+      const pending = pendingSavesRef.current.get(id);
+      clearTimeout(pending.timeoutId);
+      pendingSavesRef.current.delete(id);
+    }
+
+    const cleanString = (str) => {
+      if (!str) return "";
+      return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+    };
+    const cleanedSource = cleanString(sourceText);
+
     setSegments((previous) => {
-      const targetSeg = previous.find((s) => s.id === id);
-      if (targetSeg) {
-        sourceText = targetSeg.source;
-        nextVerified = !targetSeg.verified;
-      }
-      
-      const cleanString = (str) => {
-        if (!str) return "";
-        return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
-      };
-
-      const cleanedSource = cleanString(sourceText);
-
       return previous.map((segment) => {
-        if (segment.id === id || (autoPropagateEnabled && cleanedSource && cleanString(segment.source) === cleanedSource)) {
-          return { ...segment, verified: nextVerified };
+        if (segment.id === id) {
+          return { ...segment, verified: nextVerified, status: nextVerified ? "approved" : "draft" };
         }
         return segment;
       });
@@ -1750,72 +1833,109 @@ export default function App() {
         } catch (err) {
           console.error("Failed to update verification in database:", err);
           showToast(`Failed to save verification state: ${err.message || err}`, "error");
+          // Revert frontend state on database save failure
+          setSegments((previous) => {
+            return previous.map((segment) => {
+              if (segment.id === id) {
+                return { ...segment, verified: !nextVerified, status: !nextVerified ? "approved" : "draft" };
+              }
+              return segment;
+            });
+          });
         }
       }
     }
   };
 
-  const verifyAndNextSegment = async (id) => {
-    let sourceText = "";
+  const verifyAndNextSegment = async (id, updatedTargetText) => {
+    const targetSeg = segments.find((s) => s.id === id);
+    if (!targetSeg) return;
+
+    const sourceText = targetSeg.source;
+    let finalTargetText = updatedTargetText !== undefined ? updatedTargetText : targetSeg.target;
+
+    // Immediately cancel any pending saves for this segment
+    if (pendingSavesRef.current.has(id)) {
+      const pending = pendingSavesRef.current.get(id);
+      clearTimeout(pending.timeoutId);
+      pendingSavesRef.current.delete(id);
+    }
+
+    const cleanString = (str) => {
+      if (!str) return "";
+      return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+    };
+
+    const propagateTranslation = (targetA, sourceB) => {
+      if (!targetA) return "";
+      const tagsInSourceB = sourceB.match(/<[^>]+>/g) || [];
+      let tagIdx = 0;
+      let propagated = targetA.replace(/<[^>]+>/g, () => {
+        if (tagIdx < tagsInSourceB.length) {
+          return tagsInSourceB[tagIdx++];
+        }
+        return "";
+      });
+      while (tagIdx < tagsInSourceB.length) {
+        propagated += tagsInSourceB[tagIdx++];
+      }
+      return propagated;
+    };
+
+    const cleanedSource = cleanString(sourceText);
+
+    // Optimistic update
     setSegments((previous) => {
-      const targetSeg = previous.find((s) => s.id === id);
-      if (targetSeg) {
-        sourceText = targetSeg.source;
+      return previous.map((segment) => {
+        if (segment.id === id) {
+          return { ...segment, target: finalTargetText, verified: true, status: "approved" };
+        }
+        if (autoPropagateEnabled && cleanedSource && cleanString(segment.source) === cleanedSource) {
+          return { ...segment, target: propagateTranslation(finalTargetText, segment.source) };
+        }
+        return segment;
+      });
+    });
+
+    // Move focus to next segment (do this synchronously before awaiting network call!)
+    const currentIndex = filteredSegments.findIndex((s) => s.id === id);
+    if (currentIndex !== -1) {
+      let nextIndex = currentIndex + 1;
+      let foundNext = false;
+
+      while (nextIndex < filteredSegments.length) {
+        const seg = filteredSegments[nextIndex];
+        if (!seg.verified) {
+          pendingFocusSegmentIdRef.current = seg.id;
+          foundNext = true;
+          break;
+        }
+        nextIndex++;
       }
 
-      const cleanString = (str) => {
-        if (!str) return "";
-        return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
-      };
-
-      const cleanedSource = cleanString(sourceText);
-
-      return previous.map((segment) =>
-        (segment.id === id || (autoPropagateEnabled && cleanedSource && cleanString(segment.source) === cleanedSource))
-          ? { ...segment, verified: true }
-          : segment
-      );
-    });
+      if (!foundNext) {
+        pendingFocusSegmentIdRef.current = null;
+      }
+    }
 
     if (documentId) {
       const segmentIndex = segments.findIndex((s) => s.id === id);
       if (segmentIndex !== -1) {
         try {
-          const targetText = segments[segmentIndex].target;
-          await updateSegment(documentId, segmentIndex, targetText, "approved", undefined, undefined, autoPropagateEnabled);
+          await updateSegment(documentId, segmentIndex, finalTargetText, "approved", undefined, undefined, autoPropagateEnabled);
         } catch (err) {
           console.error("Failed to verify in database:", err);
           showToast(`Failed to save verification state: ${err.message || err}`, "error");
-        }
-      }
-    }
-
-    // Move focus to next segment
-    const currentIndex = filteredSegments.findIndex((s) => s.id === id);
-    if (currentIndex !== -1) {
-      let nextIndex = currentIndex + 1;
-      
-      while (nextIndex < filteredSegments.length) {
-        if (!filteredSegments[nextIndex].verified) {
-          const nextId = filteredSegments[nextIndex].id;
-          
-          setTimeout(() => {
-            if (virtuosoRef.current) {
-              virtuosoRef.current.scrollToIndex({ index: nextIndex, align: 'center', behavior: 'smooth' });
-            }
-            setTimeout(() => {
-              const nextElement = document.getElementById(`segment-${nextId}`);
-              if (nextElement) {
-                nextElement.classList.add("ring-2", "ring-teal-500");
-                setTimeout(() => nextElement.classList.remove("ring-2", "ring-teal-500"), 1000);
+          // Revert state
+          setSegments((previous) => {
+            return previous.map((segment) => {
+              if (segment.id === id) {
+                return { ...segment, verified: false, status: "draft" };
               }
-              const nextTa = document.getElementById(`target-${nextId}`);
-              if (nextTa) nextTa.focus();
-            }, 300);
-          }, 50);
-          break;
+              return segment;
+            });
+          });
         }
-        nextIndex++;
       }
     }
   };
@@ -3025,7 +3145,7 @@ export default function App() {
                       onCopy={copyToClipboard}
                       onUpdateTranslation={updateTranslation}
                       onToggleVerify={() => toggleVerify(item.id)}
-                      onVerifyAndNext={() => verifyAndNextSegment(item.id)}
+                      onVerifyAndNext={(updatedText) => verifyAndNextSegment(item.id, updatedText)}
                       lockInfo={
                         cellLocks.has(item.id - 1) && cellLocks.get(item.id - 1).userId !== user?.id
                           ? cellLocks.get(item.id - 1)

@@ -459,8 +459,7 @@ export const SegmentCard = ({
       e.preventDefault();
       const t = htmlToTarget(e.currentTarget);
       lastSaved.current = t;
-      onUpdateTranslation(segment.id, t);
-      onVerifyAndNext();
+      onVerifyAndNext(t);
     }
   };
 
@@ -720,7 +719,20 @@ export const SegmentCard = ({
 
               {/* Verify Tick button */}
               <button
-                onClick={segment.verified ? onToggleVerify : onVerifyAndNext}
+                onMouseDown={(e) => {
+                  if (readOnly || !!lockInfo) return;
+                  e.preventDefault();
+                }}
+                onClick={() => {
+                  if (readOnly || !!lockInfo) return;
+                  const t = htmlToTarget(editorRef.current);
+                  lastSaved.current = t;
+                  if (segment.verified) {
+                    onToggleVerify();
+                  } else {
+                    onVerifyAndNext(t);
+                  }
+                }}
                 disabled={readOnly || !!lockInfo}
                 title={segment.verified ? "Unverify segment" : "Verify & Next"}
                 className={`seg-btn-new ${segment.verified ? "active-verified" : ""}`}

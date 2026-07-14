@@ -362,10 +362,10 @@ export const ContextSettingsModal = ({ show, onClose, contextSettings, setContex
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card" style={{ maxWidth: 720 }}>
+      <div className="modal-card" style={{ maxWidth: 720, maxHeight: "90vh", display: "flex", flexDirection: "column", borderRadius: "6px" }}>
 
         {/* Header */}
-        <div className="modal-header">
+        <div className="modal-header" style={{ flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{
               width: 32, height: 32, borderRadius: 8,
@@ -389,7 +389,7 @@ export const ContextSettingsModal = ({ show, onClose, contextSettings, setContex
         </div>
 
         {/* Body */}
-        <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 20, flex: 1, overflowY: "auto" }}>
           
           {/* Preset profiles */}
           <div>

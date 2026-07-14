@@ -36,17 +36,12 @@ export const Header = ({
     <header className="topbar">
 
       {/* Brand */}
-      <div className="topbar-brand">
-        <svg viewBox="0 0 100 100" style={{ width: 22, height: 22, color: "var(--accent)", flexShrink: 0 }}
-          fill="none" stroke="currentColor" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M 50,15 L 80,32 L 80,68 L 50,85 L 20,68 L 20,32 Z" opacity="0.4" />
-          <path d="M 50,15 L 50,42" />
-          <path d="M 80,68 L 57,55" />
-          <path d="M 20,68 L 43,55" />
-          <circle cx="50" cy="50" r="8" fill="currentColor" />
-          <circle cx="50" cy="50" r="16" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" />
-        </svg>
-        <span className="topbar-brand-name">Centroid</span>
+      <div className="topbar-brand" onClick={() => onNavigate && onNavigate("/")} style={{ cursor: "pointer" }}>
+        <img 
+          src={darkMode ? "/centroid_final_LOGO_dark.png" : "/centroid_final_LOGO_light.png"} 
+          alt="Centroid" 
+          style={{ height: 26, width: "auto", objectFit: "contain" }} 
+        />
       </div>
 
       <div className="topbar-divider" />

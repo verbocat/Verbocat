@@ -603,7 +603,7 @@ apiRouter.get("/documents/:id", checkAuth, async (request, response) => {
     // Fetch segments
     let segments;
     try {
-      segments = await fetchAllSegments(doc.id);
+      segments = await fetchAllSegments(doc.id, "*", doc.target_lang);
     } catch (segError) {
       console.error("Failed to load document segments:", segError);
       return response.status(500).json({ error: "Failed to load document segments." });
@@ -638,6 +638,7 @@ apiRouter.get("/documents/:id", checkAuth, async (request, response) => {
       source: seg.source_text,
       target: seg.target_text || "",
       status: seg.status,
+      verified: seg.status === "approved",
       contextJira: seg.context_jira || "",
       contextDescription: seg.context_description || "",
       mqmAccuracyScore: seg.mqm_accuracy_score !== undefined && seg.mqm_accuracy_score !== null ? seg.mqm_accuracy_score : 100,
@@ -873,7 +874,7 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
     if (sourceText && autoPropagate !== false) {
       let allSegs;
       try {
-        allSegs = await fetchAllSegments(doc.id, "segment_index, source_text, target_text, original_target_text, tracked_by");
+        allSegs = await fetchAllSegments(doc.id, "segment_index, source_text, target_text, original_target_text, tracked_by", dbSegment.target_lang);
       } catch (err) {
         console.error("Failed to fetch all segments for propagation:", err);
       }
@@ -934,6 +935,7 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
         .from("document_segments")
         .update(segmentFields)
         .eq("document_id", doc.id)
+        .eq("target_lang", dbSegment.target_lang)
         .eq("segment_index", idx);
     });
 
@@ -1356,7 +1358,7 @@ apiRouter.post("/documents/:id/audit/estimate", checkAuth, async (request, respo
 
     let segments;
     try {
-      segments = await fetchAllSegments(documentId, "source_text");
+      segments = await fetchAllSegments(documentId, "source_text", "source");
     } catch (fetchErr) {
       console.error("Failed to fetch document segments:", fetchErr);
       return response.status(500).json({ error: "Failed to fetch document segments." });
@@ -1418,7 +1420,7 @@ apiRouter.post("/documents/:id/audit/start", checkAuth, async (request, response
     // Fetch segments to count words
     let segments;
     try {
-      segments = await fetchAllSegments(documentId, "source_text");
+      segments = await fetchAllSegments(documentId, "source_text", "source");
     } catch (fetchErr) {
       console.error("Failed to fetch document segments for audit check:", fetchErr);
       return response.status(500).json({ error: "Failed to fetch document segments for credit check." });
@@ -3626,6 +3628,12 @@ apiRouter.get("/documents/:documentId/lang/:lang/segments", checkAuth, async (re
 apiRouter.put("/documents/:documentId/lang/:lang/segments/:index", checkAuth, async (request, response) => {
   try {
     const { documentId, lang, index } = request.params;
+    
+    // Map parameter id for verifyDocumentAccess
+    request.params.id = documentId;
+    const doc = await verifyDocumentAccess(request, response, "write");
+    if (!doc) return;
+
     const segmentIndex = parseInt(index, 10);
     const { targetText, status, contextJira, contextDescription, autoPropagate } = request.body;
 
@@ -3637,59 +3645,237 @@ apiRouter.put("/documents/:documentId/lang/:lang/segments/:index", checkAuth, as
     if (contextJira !== undefined) updateFields.context_jira = contextJira;
     if (contextDescription !== undefined) updateFields.context_description = contextDescription;
 
-    const { error: updateErr } = await supabase
+    // Fetch the segment details to find source text and tracking information
+    const { data: dbSegment, error: segErr } = await supabase
       .from("document_segments")
-      .update(updateFields)
-      .eq("document_id", documentId)
+      .select("source_text, target_lang, context_jira, context_description, target_text, original_target_text, tracked_by")
+      .eq("document_id", doc.id)
       .eq("target_lang", lang)
-      .eq("segment_index", segmentIndex);
+      .eq("segment_index", segmentIndex)
+      .single();
 
-    if (updateErr) {
-      return response.status(500).json({ error: updateErr.message });
+    if (segErr || !dbSegment) {
+      return response.status(404).json({ error: "Segment not found." });
+    }
+
+    let sourceText = dbSegment.source_text;
+    if (!sourceText) {
+      const { data: templateSeg } = await supabase
+        .from("document_segments")
+        .select("source_text")
+        .eq("document_id", doc.id)
+        .is("target_lang", null)
+        .eq("segment_index", segmentIndex)
+        .single();
+      if (templateSeg) {
+        sourceText = templateSeg.source_text;
+      }
+    }
+
+    // Clean string helper (ignores tags, normalizes whitespace)
+    const cleanString = (str) => {
+      if (!str) return "";
+      return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+    };
+
+    // Propagate translation helper
+    const propagateTranslation = (targetA, sourceB) => {
+      if (!targetA) return "";
+      const tagsInSourceB = sourceB.match(/<[^>]+>/g) || [];
+      let tagIdx = 0;
+      let propagated = targetA.replace(/<[^>]+>/g, () => {
+        if (tagIdx < tagsInSourceB.length) {
+          return tagsInSourceB[tagIdx++];
+        }
+        return "";
+      });
+      while (tagIdx < tagsInSourceB.length) {
+        propagated += tagsInSourceB[tagIdx++];
+      }
+      return propagated;
+    };
+
+    // Find all duplicate segment indices and their source/target texts in the document
+    let matchingSegs = [{ segment_index: segmentIndex, source_text: sourceText, target_text: dbSegment.target_text, status: dbSegment.status, original_target_text: dbSegment.original_target_text, tracked_by: dbSegment.tracked_by }];
+    if (sourceText && autoPropagate !== false) {
+      try {
+        // Direct query to fetch all template segments for this document
+        const { data: templateRows } = await supabase
+          .from("document_segments")
+          .select("segment_index, source_text")
+          .eq("document_id", doc.id)
+          .is("target_lang", null);
+
+        // Direct query to fetch all target language segments for this document
+        const { data: targetRows } = await supabase
+          .from("document_segments")
+          .select("segment_index, target_text, status, original_target_text, tracked_by")
+          .eq("document_id", doc.id)
+          .eq("target_lang", lang);
+
+        if (templateRows && targetRows) {
+          const sourceMap = {};
+          templateRows.forEach((row) => {
+            sourceMap[row.segment_index] = row.source_text || "";
+          });
+
+          const cleanedSource = cleanString(sourceText);
+          matchingSegs = targetRows
+            .map((row) => ({
+              segment_index: row.segment_index,
+              source_text: sourceMap[row.segment_index] || "",
+              target_text: row.target_text,
+              status: row.status,
+              original_target_text: row.original_target_text,
+              tracked_by: row.tracked_by
+            }))
+            .filter((row) => cleanString(row.source_text) === cleanedSource);
+        }
+      } catch (err) {
+        console.error("Failed to fetch duplicate segments directly:", err);
+      }
+    }
+
+    const isOwner = doc.owner_id === request.user.id;
+    const isTracking = doc.track_changes_enabled && !isOwner;
+
+    // Perform individual updates for each duplicate segment in parallel
+    const updatePromises = matchingSegs.map(async (seg) => {
+      const idx = seg.segment_index;
+      const segmentFields = { ...updateFields };
+      
+      // If we are updating a duplicate segment (idx !== segmentIndex), 
+      // we must NOT modify its status (delete status from segmentFields so it remains unchanged in DB!)
+      if (idx !== segmentIndex) {
+        delete segmentFields.status;
+      }
+
+      if (targetText !== undefined) {
+        const newTarget = idx === segmentIndex 
+          ? targetText 
+          : propagateTranslation(targetText, seg.source_text);
+          
+        if (isTracking) {
+          if (!seg.original_target_text) {
+            if (newTarget !== (seg.target_text || "")) {
+              segmentFields.original_target_text = seg.target_text || "";
+              segmentFields.tracked_by = request.user.email;
+            } else {
+              segmentFields.original_target_text = null;
+              segmentFields.tracked_by = null;
+            }
+          } else {
+            if (newTarget === seg.original_target_text) {
+              segmentFields.original_target_text = null;
+              segmentFields.tracked_by = null;
+            } else {
+              segmentFields.original_target_text = seg.original_target_text;
+              segmentFields.tracked_by = request.user.email;
+            }
+          }
+          segmentFields.target_text = newTarget;
+        } else {
+          // Owner edit or tracking disabled: commit directly, clear tracked state
+          segmentFields.target_text = newTarget;
+          segmentFields.original_target_text = null;
+          segmentFields.tracked_by = null;
+        }
+      }
+
+      // If owner approves the segment, clear tracked changes
+      if (isOwner && status === "approved" && idx === segmentIndex) {
+        segmentFields.original_target_text = null;
+        segmentFields.tracked_by = null;
+      }
+
+      return supabase
+        .from("document_segments")
+        .update(segmentFields)
+        .eq("document_id", doc.id)
+        .eq("target_lang", lang)
+        .eq("segment_index", idx);
+    });
+
+    const updateResults = await Promise.all(updatePromises);
+    const failedUpdate = updateResults.find((r) => r.error);
+    if (failedUpdate) {
+      console.error("Segment update error in lang PUT:", failedUpdate.error);
+      return response.status(500).json({ error: "Failed to update segment." });
     }
 
     // Save/Update human correction in Translation Memory as an ICE match
     if (targetText !== undefined && targetText !== null && String(targetText).trim() !== "") {
       try {
-        const { data: dbSegment } = await supabase
-          .from("document_segments")
-          .select("source_text")
-          .eq("document_id", documentId)
-          .is("target_lang", null)
-          .eq("segment_index", segmentIndex)
-          .maybeSingle();
-
-        const { data: doc } = await supabase
-          .from("documents")
-          .select("source_lang")
-          .eq("id", documentId)
-          .maybeSingle();
-
-        if (dbSegment && doc) {
-          const { upsertLinguistIceMatch } = require("../services/translationService");
-          await upsertLinguistIceMatch(dbSegment.source_text, targetText, doc.source_lang || "en", lang);
-        }
-      } catch (err) {
-        console.error("Failed to save segment human correction to TM:", err);
+        const { upsertLinguistIceMatch } = require("../services/translationService");
+        await upsertLinguistIceMatch(sourceText, targetText, doc.source_lang || "en", lang);
+      } catch (tmErr) {
+        console.error("Failed to save segment human correction to TM:", tmErr);
       }
     }
 
-    // Broadcast update via Socket.io
+    // Broadcast manual save update immediately via Socket.io
     const { getIo } = require("../services/socket");
     const io = getIo();
     if (io) {
-      io.to(getDocumentRoomId(documentId, lang)).emit("segment-updated", {
-        segmentIndex,
-        targetText: updateFields.target_text,
-        status: updateFields.status,
-        updatedBy: request.user.email,
-        targetLang: lang
+      matchingSegs.forEach((seg) => {
+        const idx = seg.segment_index;
+        const propagatedTarget = (idx === segmentIndex || targetText === undefined)
+          ? targetText 
+          : propagateTranslation(targetText, seg.source_text);
+
+        // Compute resulting fields for broadcast
+        let finalOriginal = seg.original_target_text;
+        let finalTrackedBy = seg.tracked_by;
+        if (targetText !== undefined) {
+          if (isTracking) {
+            if (!seg.original_target_text) {
+              if (propagatedTarget !== (seg.target_text || "")) {
+                finalOriginal = seg.target_text || "";
+                finalTrackedBy = request.user.email;
+              } else {
+                finalOriginal = null;
+                finalTrackedBy = null;
+              }
+            } else {
+              if (propagatedTarget === seg.original_target_text) {
+                finalOriginal = null;
+                finalTrackedBy = null;
+              } else {
+                finalOriginal = seg.original_target_text;
+                finalTrackedBy = request.user.email;
+              }
+            }
+          } else {
+            finalOriginal = null;
+            finalTrackedBy = null;
+          }
+        }
+        if (isOwner && status === "approved" && idx === segmentIndex) {
+          finalOriginal = null;
+          finalTrackedBy = null;
+        }
+
+        const finalStatus = idx === segmentIndex ? (status || "translated") : (seg.status || "draft");
+
+        io.to(getDocumentRoomId(doc.id, lang)).emit("segment-updated", {
+          segmentIndex: idx,
+          targetText: propagatedTarget,
+          status: finalStatus,
+          contextJira,
+          contextDescription,
+          mqmAccuracyScore: undefined,
+          mqmReport: null,
+          originalTargetText: finalOriginal,
+          trackedBy: finalTrackedBy,
+          updatedBy: request.user.email,
+          targetLang: lang
+        });
       });
     }
 
     // Update job progress
-    const segments = await fetchAllSegments(documentId, "source_text, status, target_text", lang);
-    const progress = calculateProgress(segments).progress;
+    const progressSegments = await fetchAllSegments(doc.id, "source_text, status, target_text", lang);
+    const progress = calculateProgress(progressSegments).progress;
 
     const { broadcastJobStatus } = require("../services/jobQueue");
     
@@ -3697,7 +3883,7 @@ apiRouter.put("/documents/:documentId/lang/:lang/segments/:index", checkAuth, as
     const { data: job } = await supabase
       .from("translation_jobs")
       .select("id")
-      .eq("document_id", documentId)
+      .eq("document_id", doc.id)
       .eq("target_lang", lang)
       .single();
 
@@ -3708,7 +3894,7 @@ apiRouter.put("/documents/:documentId/lang/:lang/segments/:index", checkAuth, as
         .update({ progress, status: newStatus })
         .eq("id", job.id);
 
-      broadcastJobStatus(job.id, documentId, newStatus, progress);
+      broadcastJobStatus(job.id, doc.id, newStatus, progress);
     }
 
     response.json({ success: true });

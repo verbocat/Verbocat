@@ -2010,7 +2010,7 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null, userI
 
     let segments;
     try {
-      segments = await fetchAllSegments(documentId);
+      segments = await fetchAllSegments(documentId, "*", doc.target_lang);
     } catch (fetchErr) {
       console.error("Failed to fetch all segments for audit job:", fetchErr);
       throw new Error("Failed to load document segments for auditing.");
