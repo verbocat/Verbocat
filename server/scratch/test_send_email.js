@@ -11,7 +11,7 @@ async function main() {
 
   try {
     const result = await sendEmail({
-      to: "divyanshusinghchouhan@verbolabs.com",
+      to: "verbocat@verbolabs.com",
       subject: "🧪 Centroid Test Email",
       text: "This is a test email sent from the Centroid Collaborative Workspace mailer service.",
       html: `
