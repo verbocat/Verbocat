@@ -3,7 +3,8 @@ import { CollaboratorsList } from "./CollaboratorsList.jsx";
 import {
   BookOpen, Users, Settings as SettingsIcon,
   LogOut, Plus, LockKeyhole, Sliders,
-  ChevronRight, FileText, LayoutDashboard
+  ChevronRight, FileText, LayoutDashboard, BarChart3,
+  MessageCircle
 } from "lucide-react";
 
 const NavBtn = ({ children, onClick, disabled = false, title = "", iconOnly = false }) => (
@@ -23,7 +24,7 @@ export const Header = ({
   qaIssuesCount, segmentsCount, progress, theme, onLock, isSidebar = false,
   fileName, fileExtension, sourceLanguage, onSourceLanguageChange,
   targetLanguage, onTargetLanguageChange, stats, onDeleteProject, onSaveProject,
-  onRelinkHtml, onImportXliff, onOpenContext, onOpenSettings,
+  onRelinkHtml, onImportXliff, onOpenContext, onOpenSettings, onOpenAnalysis,
   userRole, onOpenAdmin, creditsAllowed, creditsConsumed, onLogout, onUpload,
   collaborators, onOpenShare, onTeleport
 }) => {
@@ -125,6 +126,12 @@ export const Header = ({
           </label>
         )}
 
+        {/* Chat */}
+        <NavBtn onClick={() => onNavigate && onNavigate("/chat")} title="Chat Workspace">
+          <MessageCircle style={{ width: 13, height: 13 }} />
+          <span>Chat</span>
+        </NavBtn>
+
         {/* Glossary */}
         <NavBtn onClick={onOpenGlossary} title="Glossary">
           <BookOpen style={{ width: 13, height: 13 }} />
@@ -136,6 +143,14 @@ export const Header = ({
           <Sliders style={{ width: 13, height: 13 }} />
           <span>Context</span>
         </NavBtn>
+
+        {/* Analysis */}
+        {hasFile && onOpenAnalysis && (
+          <NavBtn onClick={onOpenAnalysis} title="TM Analysis">
+            <BarChart3 style={{ width: 13, height: 13 }} />
+            <span>Analysis</span>
+          </NavBtn>
+        )}
 
         {/* Admin Panel — NOT "Team" */}
         {isAdmin && onOpenAdmin && (

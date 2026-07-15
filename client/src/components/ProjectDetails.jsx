@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   ArrowLeft, FileText, Globe, Play, Pause, XCircle, RotateCcw,
   Download, Upload, CheckCircle2, AlertCircle, Eye, Database, BarChart3, TrendingUp, Folder, Plus, Trash2,
-  Settings, List, Activity, Calendar, User, Clock, ChevronDown, Check, Edit2, Copy, FileCode, CheckSquare, Square, RefreshCw, Users, LayoutDashboard
+  Settings, List, Activity, Calendar, User, Clock, ChevronDown, Check, Edit2, Copy, FileCode, CheckSquare, Square, RefreshCw, Users, LayoutDashboard,
+  MessageCircle
 } from "lucide-react";
 import io from "socket.io-client";
 import {
@@ -619,6 +620,17 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                 <LayoutDashboard size={14} />
               </button>
             )}
+
+            <button
+              onClick={() => {
+                window.history.pushState({}, "", "/chat");
+                window.dispatchEvent(new PopStateEvent("popstate"));
+              }}
+              className="project-icon-action"
+              title="Chat Workspace"
+            >
+              <MessageCircle size={14} />
+            </button>
 
             {isProjectOwner && (
               <button

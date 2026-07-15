@@ -3624,6 +3624,151 @@ apiRouter.get("/documents/:documentId/lang/:lang/segments", checkAuth, async (re
   }
 });
 
+// 15.5. Translation Memory (TM) Analysis for a document + lang
+apiRouter.get("/documents/:documentId/lang/:lang/tm-analysis", checkAuth, async (request, response) => {
+  try {
+    const { documentId, lang } = request.params;
+    request.params.id = documentId;
+    const doc = await verifyDocumentAccess(request, response, "read");
+    if (!doc) {
+      try {
+        const fs = require("fs");
+        fs.writeFileSync("c:/Users/divya/Desktop/matecat/server/scratch/api-error.log", "verifyDocumentAccess returned null for docId: " + documentId + ", params: " + JSON.stringify(request.params));
+      } catch (fsErr) {}
+      return;
+    }
+
+    // 1. Fetch all segments for this document + lang
+    let templateRows;
+    try {
+      templateRows = await fetchAllSegments(doc.id, "segment_index, source_text", lang);
+    } catch (templErr) {
+      console.error("Failed to fetch segments for TM Analysis:", templErr);
+      try {
+        const fs = require("fs");
+        fs.writeFileSync("c:/Users/divya/Desktop/matecat/server/scratch/api-error.log", "fetchAllSegments failed: " + (templErr.stack || String(templErr)));
+      } catch (fsErr) {}
+      return response.status(500).json({ error: "Failed to fetch document segments." });
+    }
+
+    if (!templateRows) {
+      try {
+        const fs = require("fs");
+        fs.writeFileSync("c:/Users/divya/Desktop/matecat/server/scratch/api-error.log", "templateRows is empty or null");
+      } catch (fsErr) {}
+      return response.status(500).json({ error: "Failed to fetch document segments." });
+    }
+
+    // 2. Fetch all translations for this target language to compute matches
+    const { data: allTmList, error: tmErr } = await supabase
+      .from("translation_memory")
+      .select("source_text, target_text, provider")
+      .eq("target_lang", lang);
+
+    if (tmErr || !allTmList) {
+      console.error("Failed to fetch TM entries for TM Analysis:", tmErr);
+      try {
+        const fs = require("fs");
+        fs.writeFileSync("c:/Users/divya/Desktop/matecat/server/scratch/api-error.log", "translation_memory fetch failed: " + (tmErr?.message || String(tmErr)));
+      } catch (fsErr) {}
+      return response.status(500).json({ error: "Failed to fetch TM database entries." });
+    }
+
+    // Build TM maps for quick O(1) exact matching
+    const tmMap = {};
+    allTmList.forEach((item) => {
+      const existing = tmMap[item.source_text];
+      if (!existing || item.provider.startsWith("Linguist (ICE)") || (!existing.provider.startsWith("Linguist (ICE)"))) {
+        tmMap[item.source_text] = item;
+      }
+    });
+
+    // Keep statistics
+    let totalSegments = templateRows.length;
+    let totalWords = 0;
+    let totalCharacters = 0;
+    
+    // Breakdown categories
+    const categories = {
+      ice: { count: 0, words: 0, percentage: 0, billingWeight: 0.1, weightedWords: 0, name: "ICE Match (101%)" },
+      exact: { count: 0, words: 0, percentage: 0, billingWeight: 0.2, weightedWords: 0, name: "Exact Match (100%)" },
+      fuzzy95: { count: 0, words: 0, percentage: 0, billingWeight: 0.3, weightedWords: 0, name: "Fuzzy Match (95%-99%)" },
+      fuzzy85: { count: 0, words: 0, percentage: 0, billingWeight: 0.4, weightedWords: 0, name: "Fuzzy Match (85%-94%)" },
+      fuzzy75: { count: 0, words: 0, percentage: 0, billingWeight: 0.6, weightedWords: 0, name: "Fuzzy Match (75%-84%)" },
+      fuzzy50: { count: 0, words: 0, percentage: 0, billingWeight: 0.8, weightedWords: 0, name: "Fuzzy Match (50%-74%)" },
+      new: { count: 0, words: 0, percentage: 0, billingWeight: 1.0, weightedWords: 0, name: "New Words / No Match (<50%)" }
+    };
+
+    const stringSimilarity = require("string-similarity");
+    const matchSources = allTmList.map(x => x.source_text).filter(Boolean);
+
+    templateRows.forEach((row) => {
+      const source = row.source_text || "";
+      const wordCount = countWords(source);
+      const charCount = source.length;
+
+      totalWords += wordCount;
+      totalCharacters += charCount;
+
+      let categoryKey = "new";
+
+      // 1. Exact match check
+      if (tmMap[source]) {
+        const entry = tmMap[source];
+        const isIce = entry.provider && entry.provider.startsWith("Linguist (ICE)");
+        categoryKey = isIce ? "ice" : "exact";
+      } else if (matchSources.length > 0) {
+        // 2. Fuzzy match calculation
+        const matches = stringSimilarity.findBestMatch(source, matchSources);
+        const bestMatch = matches.bestMatch;
+        const score = Math.round(bestMatch.rating * 100);
+
+        if (score >= 50) {
+          if (score >= 95) categoryKey = "fuzzy95";
+          else if (score >= 85) categoryKey = "fuzzy85";
+          else if (score >= 75) categoryKey = "fuzzy75";
+          else categoryKey = "fuzzy50";
+        }
+      }
+
+      categories[categoryKey].count += 1;
+      categories[categoryKey].words += wordCount;
+    });
+
+    // Compute percentages and weighted totals
+    let totalWeightedWords = 0;
+    Object.keys(categories).forEach((key) => {
+      const cat = categories[key];
+      cat.percentage = totalWords > 0 ? parseFloat(((cat.words / totalWords) * 100).toFixed(2)) : 0;
+      cat.weightedWords = Math.round(cat.words * cat.billingWeight);
+      totalWeightedWords += cat.weightedWords;
+    });
+
+    const savingsPercentage = totalWords > 0 
+      ? parseFloat(((1 - (totalWeightedWords / totalWords)) * 100).toFixed(2)) 
+      : 0;
+
+    response.json({
+      documentId: doc.id,
+      fileName: doc.name,
+      targetLang: lang,
+      totalSegments,
+      totalWords,
+      totalCharacters,
+      totalWeightedWords,
+      savingsPercentage,
+      categories
+    });
+  } catch (err) {
+    console.error("TM Analysis error:", err);
+    try {
+      const fs = require("fs");
+      fs.writeFileSync("c:/Users/divya/Desktop/matecat/server/scratch/api-error.log", "Outer catch block error: " + (err.stack || String(err)));
+    } catch (fsErr) {}
+    response.status(500).json({ error: "Failed to perform TM Analysis." });
+  }
+});
+
 // 16. Update segment for a document + lang
 apiRouter.put("/documents/:documentId/lang/:lang/segments/:index", checkAuth, async (request, response) => {
   try {

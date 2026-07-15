@@ -4,6 +4,7 @@ const path = require("path");
 const { authRouter } = require("./routes/auth");
 const { adminRouter } = require("./routes/admin");
 const { apiRouter } = require("./routes/api");
+const { chatRouter } = require("./routes/chatRoutes");
 
 const app = express();
 
@@ -18,6 +19,9 @@ app.use(
 // Mount authentication and administration routers
 app.use("/api/auth", authRouter);
 app.use("/api/admin", adminRouter);
+
+// Mount chat router
+app.use("/api/chat", chatRouter);
 
 // Mount API router under both `/` and `/api` so older clients
 // expecting root paths (e.g. `/upload`) continue to work while

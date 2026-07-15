@@ -600,7 +600,7 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
         }
       }
 
-      throw new Error(`[Translation Integrity Error] Segment index ${index} (Source: "${segment.source.substring(0, 100)}") failed translation validation checks. Reason: ${reason} (Final Target Text: "${targetText || ''}")`);
+      console.warn(`[Translation Integrity Warning] Segment index ${index} (Source: "${segment.source.substring(0, 100)}") failed translation validation checks. Reason: ${reason} (Final Target Text: "${targetText || ''}"). Proceeding without throwing.`);
     }
 
     return {

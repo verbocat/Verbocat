@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { Header } from "./components/Header.jsx";
+import { TmAnalysisModal } from "./components/TmAnalysisModal.jsx";
 import { LoginScreen } from "./components/LoginScreen.jsx";
 import { AdminDashboard } from "./components/AdminDashboard.jsx";
 import { DragOverlay } from "./components/DragOverlay.jsx";
@@ -55,6 +56,9 @@ import { getTheme } from "./utils/theme.js";
 import { Globe } from "lucide-react";
 import ProjectDashboard from "./components/ProjectDashboard.jsx";
 import ProjectDetails from "./components/ProjectDetails.jsx";
+import { ChatBubble } from "./components/chat/ChatBubble.jsx";
+import { FullChatScreen } from "./components/chat/FullChatScreen.jsx";
+import { useChatStore } from "./services/chatStore.js";
 
 
 export default function App() {
@@ -107,12 +111,18 @@ export default function App() {
   const [isUploading, setIsUploading] = useState(false);
   const [resetMode, setResetMode] = useState(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
+  const [showTmAnalysis, setShowTmAnalysis] = useState(false);
 
   const [collaborators, setCollaborators] = useState([]);
   const [cellLocks, setCellLocks] = useState(new Map());
   const [showShareModal, setShowShareModal] = useState(false);
   const parseUrlRoute = () => {
     const path = window.location.pathname;
+    if (path === "/chat" || path.startsWith("/chat")) {
+      return {
+        screen: "chat"
+      };
+    }
     const jobMatch = path.match(/^\/project\/([^\/]+)\/file\/([^\/]+)\/lang\/([^\/]+)/);
     if (jobMatch) {
       return {
@@ -352,6 +362,49 @@ export default function App() {
   }, [documentId, isAuth, token, loadCollaborativeDocument]);
 
   const socketRef = useRef(null);
+
+  // ── Chat socket (always connected when authenticated) ──
+  const chatSocketRef = useRef(null);
+
+  useEffect(() => {
+    if (!isAuth || !token || !user) return;
+
+    const socketUrl = import.meta.env.VITE_API_URL || window.location.origin;
+    const chatSocket = io(socketUrl, { auth: { token } });
+    chatSocketRef.current = chatSocket;
+
+    const store = useChatStore.getState();
+    store.setSocket(chatSocket);
+
+    chatSocket.on("connect", () => {
+      chatSocket.emit("chat:join");
+    });
+
+    chatSocket.on("chat:new-message", store.handleNewMessage);
+    chatSocket.on("chat:message-unsent", store.handleMessageUnsent);
+    chatSocket.on("chat:typing", store.handleTyping);
+    chatSocket.on("chat:stop-typing", store.handleStopTyping);
+    chatSocket.on("chat:new-conversation", (conv) => {
+      store.handleNewConversation(conv);
+      chatSocket.emit("chat:join-conversation", { conversationId: conv.id });
+    });
+    chatSocket.on("chat:online-users", store.handleOnlineUsers);
+    chatSocket.on("chat:user-online", store.handleUserOnline);
+    chatSocket.on("chat:user-offline", store.handleUserOffline);
+    chatSocket.on("chat:participants-updated", store.handleParticipantsUpdated);
+    chatSocket.on("chat:group-updated", store.handleGroupUpdated);
+    chatSocket.on("chat:message-edited", store.handleMessageEdited);
+    chatSocket.on("chat:message-pinned", store.handleMessagePinned);
+    chatSocket.on("chat:reaction-updated", store.handleReactionUpdated);
+
+    store.fetchConversations();
+
+    return () => {
+      chatSocket.disconnect();
+      chatSocketRef.current = null;
+      store.setSocket(null);
+    };
+  }, [isAuth, token, user]);
 
   // Initialize socket connection
   useEffect(() => {
@@ -2922,6 +2975,15 @@ export default function App() {
         />
       )}
 
+      {currentRoute.screen === "chat" && (
+        <FullChatScreen
+          user={user}
+          chatSocketRef={chatSocketRef}
+          navigateTo={navigateTo}
+          theme={theme}
+        />
+      )}
+
       {currentRoute.screen === "dashboard" && (
         <ProjectDashboard
           onOpenProject={(projId) => navigateTo(`/project/${projId}`)}
@@ -3011,6 +3073,14 @@ export default function App() {
             documentId={documentId}
           />
 
+          <TmAnalysisModal
+            show={showTmAnalysis}
+            onClose={() => setShowTmAnalysis(false)}
+            documentId={documentId}
+            targetLanguage={targetLanguage}
+            showToast={showToast}
+          />
+
           <SearchReplaceModal
             show={showSearchReplace}
             onClose={() => setShowSearchReplace(false)}
@@ -3050,6 +3120,7 @@ export default function App() {
             onOpenAdmin={() => setShowAdminDashboard(true)}
             onUpload={handleUpload}
             onOpenSettings={() => setShowSettingsModal(true)}
+            onOpenAnalysis={() => setShowTmAnalysis(true)}
             collaborators={collaborators}
             onOpenShare={ownerId && (ownerId === user?.id || ["admin", "verbolabs_staff"].includes(user?.role)) ? () => setShowShareModal(true) : null}
             onTeleport={handleTeleport}
@@ -3432,6 +3503,11 @@ export default function App() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* ── Chat System ── */}
+      {isAuth && user && (
+        <ChatBubble user={user} chatSocketRef={chatSocketRef} />
       )}
     </div>
   );

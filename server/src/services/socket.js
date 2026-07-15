@@ -6,6 +6,8 @@ let io = null;
 // Track active users and segment locks in memory for high-performance and auto-cleanup
 const activeUsers = new Map(); // Map<roomId, Map<socketId, userInfo>>
 const documentLocks = new Map(); // Map<roomId, Map<segmentIndex, lockInfo>>
+const onlineChatUsers = new Map(); // Map<userId, Set<socketId>>
+
 
 const getDocumentRoomId = (documentId, targetLang = null) => `${documentId}:${targetLang || "default"}`;
 
@@ -57,6 +59,30 @@ function initSocket(server) {
 
   io.on("connection", (socket) => {
     console.log(`User connected to workspace socket: ${socket.user.email} (${socket.id})`);
+
+    // Track user connection for chat online status
+    if (socket.user && socket.user.id) {
+      if (!onlineChatUsers.has(socket.user.id)) {
+        onlineChatUsers.set(socket.user.id, new Set());
+      }
+      onlineChatUsers.get(socket.user.id).add(socket.id);
+
+      // If first connection, broadcast user is online
+      if (onlineChatUsers.get(socket.user.id).size === 1) {
+        io.emit("chat:user-online", socket.user.id);
+      }
+
+      // Send currently online users list to this client
+      socket.emit("chat:online-users", Array.from(onlineChatUsers.keys()));
+
+      // Update last_seen_at in DB
+      supabase.from("profiles")
+        .update({ last_seen_at: new Date().toISOString() })
+        .eq("id", socket.user.id)
+        .then(({ error }) => {
+          if (error) console.error("[Socket] Failed to update last_seen_at:", error.message);
+        });
+    }
 
     // Join personal user room for direct user-targeted notifications
     socket.join(`user:${socket.user.id}`);
@@ -219,9 +245,75 @@ function initSocket(server) {
       });
     });
 
+    // ── CHAT SYSTEM ──────────────────────────────────────────────
+    // Auto-join all chat conversation rooms on connect
+    const joinChatRooms = async () => {
+      try {
+        const { data: participations } = await supabase
+          .from("chat_participants")
+          .select("conversation_id")
+          .eq("user_id", socket.user.id);
+        if (participations) {
+          participations.forEach(p => {
+            socket.join(`chat:${p.conversation_id}`);
+          });
+        }
+      } catch (err) {
+        console.error("Failed to join chat rooms:", err);
+      }
+    };
+
+    // Join chat rooms when client explicitly requests (after auth)
+    socket.on("chat:join", () => {
+      joinChatRooms();
+    });
+
+    // Join a specific conversation room (for newly created conversations)
+    socket.on("chat:join-conversation", ({ conversationId }) => {
+      if (conversationId) {
+        socket.join(`chat:${conversationId}`);
+      }
+    });
+
+    // Typing indicator
+    socket.on("chat:typing", ({ conversationId }) => {
+      if (!conversationId) return;
+      socket.to(`chat:${conversationId}`).emit("chat:typing", {
+        conversationId,
+        userId: socket.user.id,
+        userName: socket.profile.full_name || socket.profile.email?.split("@")[0] || "User"
+      });
+    });
+
+    // Stop typing indicator
+    socket.on("chat:stop-typing", ({ conversationId }) => {
+      if (!conversationId) return;
+      socket.to(`chat:${conversationId}`).emit("chat:stop-typing", {
+        conversationId,
+        userId: socket.user.id
+      });
+    });
+
     // Handle user disconnect (either tab close or internet drop)
     socket.on("disconnect", () => {
       console.log(`User disconnected from workspace socket: ${socket.id}`);
+
+      // Track user disconnection for chat online status
+      if (socket.user && socket.user.id && onlineChatUsers.has(socket.user.id)) {
+        const userSockets = onlineChatUsers.get(socket.user.id);
+        userSockets.delete(socket.id);
+        if (userSockets.size === 0) {
+          onlineChatUsers.delete(socket.user.id);
+          io.emit("chat:user-offline", socket.user.id);
+
+          // Update last_seen_at in DB
+          supabase.from("profiles")
+            .update({ last_seen_at: new Date().toISOString() })
+            .eq("id", socket.user.id)
+            .then(() => {});
+        }
+      }
+
       const roomId = socket.currentRoomId;
       if (!roomId) return;
 

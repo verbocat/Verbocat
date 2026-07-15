@@ -447,6 +447,11 @@ export const updateJobSegmentByPath = async (documentId, lang, segmentIndex, tar
   return response.data;
 };
 
+export const fetchTmAnalysis = async (documentId, lang) => {
+  const response = await api.get(`/api/documents/${documentId}/lang/${lang}/tm-analysis`);
+  return response.data;
+};
+
 export const translateJobSegmentContextByPath = async (documentId, lang, segmentIndex, { contextJira, contextDescription, screenshot, contextSettings }) => {
   const formData = new FormData();
   if (contextJira !== undefined && contextJira !== null) formData.append("contextJira", contextJira);

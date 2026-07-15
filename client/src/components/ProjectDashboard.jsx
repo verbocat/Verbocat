@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Folder, User, Calendar, Trash2, Search, Filter, Globe, BookOpen, Settings, ChevronRight, LayoutDashboard } from "lucide-react";
+import { Plus, Folder, User, Calendar, Trash2, Search, Filter, Globe, BookOpen, Settings, ChevronRight, LayoutDashboard, MessageCircle } from "lucide-react";
 import { fetchProjects, createProject, deleteProject } from "../services/api";
 import { LANGUAGES } from "../constants/languages";
 
@@ -140,6 +140,26 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
             title="Settings"
           >
             <Settings size={15} />
+          </button>
+
+          <button
+            onClick={() => {
+              window.history.pushState({}, "", "/chat");
+              window.dispatchEvent(new PopStateEvent("popstate"));
+            }}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 36, height: 36, borderRadius: 12,
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-subtle)",
+              color: "var(--text-secondary)",
+              cursor: "pointer", transition: "all 0.2s ease"
+            }}
+            onMouseOver={(e) => e.currentTarget.style.background = "var(--bg-elevated)"}
+            onMouseOut={(e) => e.currentTarget.style.background = "var(--bg-surface)"}
+            title="Chat Workspace"
+          >
+            <MessageCircle size={15} />
           </button>
 
           <button
