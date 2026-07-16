@@ -3,7 +3,7 @@ import { useChatStore } from "../../services/chatStore";
 import { ChatPanel } from "./ChatPanel";
 import { MessageCircle, X } from "lucide-react";
 
-export function ChatBubble({ user, chatSocketRef }) {
+export function ChatBubble({ user, chatSocketRef, onTeleport }) {
   const { isOpen, toggleOpen, totalUnread } = useChatStore();
 
   /* ── Draggable position ────────────────── */
@@ -56,6 +56,7 @@ export function ChatBubble({ user, chatSocketRef }) {
         <ChatPanel
           chatSocketRef={chatSocketRef}
           panelPosition={position}
+          onTeleport={onTeleport}
         />
       )}
 

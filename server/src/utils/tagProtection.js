@@ -65,7 +65,62 @@ const restoreProtectedTags = (translated, tags) => {
   return output;
 };
 
+const getTagName = (tagString) => {
+  if (!tagString) return "";
+  const match = tagString.match(/^<\/?([a-zA-Z0-9:-]+)/);
+  return match ? match[1].toLowerCase() : "";
+};
+
+const alignSegmentTags = (sourceText, targetText, sourceTagMap, targetTagMap) => {
+  if (!sourceText || !targetText) return targetText || "";
+
+  // Find all placeholders in targetText (e.g., <1>, <2>, etc.)
+  const targetPlaceholders = targetText.match(/<\d+>/g) || [];
+  if (targetPlaceholders.length === 0) {
+    return targetText; // No placeholders to align
+  }
+
+  // Find all placeholders in sourceText
+  const sourcePlaceholders = sourceText.match(/<\d+>/g) || [];
+
+  // Map each source placeholder to its tag info
+  const sourceTagsInfo = sourcePlaceholders.map(p => {
+    const tag = sourceTagMap.get(p) || "";
+    return {
+      placeholder: p,
+      tag,
+      name: getTagName(tag),
+      used: false
+    };
+  });
+
+  let alignedText = targetText;
+
+  // For each placeholder in targetText, try to find a matching placeholder in sourceText
+  targetPlaceholders.forEach(tp => {
+    const targetTag = targetTagMap.get(tp) || "";
+    const targetTagName = getTagName(targetTag);
+
+    // Find the first unused source tag with the same name
+    const match = sourceTagsInfo.find(s => s.name === targetTagName && !s.used);
+    if (match) {
+      match.used = true;
+      const sp = match.placeholder; // e.g., <2>
+      const spClose = sp.replace("<", "</"); // e.g., </2>
+      const tpClose = tp.replace("<", "</"); // e.g., </1>
+
+      // Replace target placeholder and its closing counterpart
+      alignedText = alignedText.split(tp).join(sp);
+      alignedText = alignedText.split(tpClose).join(spClose);
+    }
+  });
+
+  return alignedText;
+};
+
 module.exports = {
   protectTags,
-  restoreProtectedTags
+  restoreProtectedTags,
+  getTagName,
+  alignSegmentTags
 };

@@ -68,11 +68,17 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
     const socket = io(socketUrl, { auth: { token } });
     socketRef.current = socket;
 
-    socket.on("global-job-update", ({ jobId, status, progress, errorMessage }) => {
+    socket.on("global-job-update", ({ jobId, status, progress, verifiedProgress, errorMessage }) => {
       setJobs(prevJobs =>
         prevJobs.map(job =>
           job.id === jobId
-            ? { ...job, status, progress, error_message: errorMessage }
+            ? { 
+                ...job, 
+                status, 
+                progress, 
+                verified_progress: verifiedProgress !== undefined ? verifiedProgress : job.verified_progress,
+                error_message: errorMessage 
+              }
             : job
         )
       );
@@ -425,7 +431,16 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
     const totalProgress = langJobs.reduce((sum, j) => sum + (j.progress || 0), 0);
     const progress = langJobs.length > 0 ? Math.round(totalProgress / langJobs.length) : 0;
 
-    return { progress, totalFiles: totalFilesCount, completedFiles: completedFilesCount, pendingFiles: pendingFilesCount };
+    const totalVerified = langJobs.reduce((sum, j) => sum + (j.verified_progress || 0), 0);
+    const verifiedProgress = langJobs.length > 0 ? Math.round(totalVerified / langJobs.length) : 0;
+
+    return { 
+      progress, 
+      verifiedProgress, 
+      totalFiles: totalFilesCount, 
+      completedFiles: completedFilesCount, 
+      pendingFiles: pendingFilesCount 
+    };
   };
 
   const getLanguageName = (code) => {
@@ -439,6 +454,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
       case "active": return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20";
       case "completed": return "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20";
       case "archived": return "bg-zinc-500/20 text-zinc-600 dark:text-zinc-400 border border-zinc-500/30";
+      case "cancelled": return "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20";
       default: return "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400 border border-zinc-500/20";
     }
   };
@@ -475,6 +491,10 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
 
   const overallProgressPercent = jobs.length > 0
     ? Math.round(jobs.reduce((sum, j) => sum + (j.progress || 0), 0) / jobs.length)
+    : 0;
+
+  const overallVerifiedPercent = jobs.length > 0
+    ? Math.round(jobs.reduce((sum, j) => sum + (j.verified_progress || 0), 0) / jobs.length)
     : 0;
 
   const projectStatus = project?.status || project?.settings?.status || "Active";
@@ -518,7 +538,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                 </button>
                 {showStatusDropdown && (
                   <div className="absolute left-0 mt-1.5 w-32 bg-[var(--bg-surface)] border border-[var(--border-medium)] rounded-xl py-1 shadow-2xl z-50">
-                    {["Active", "Completed", "Archived"].map((st) => (
+                    {["Active", "Completed", "Archived", "Cancelled"].map((st) => (
                       <button
                         key={st}
                         onClick={() => handleStatusChange(st)}
@@ -665,14 +685,30 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
           <span>Words: <strong className="text-[var(--text-primary)]">{analytics?.totalWordCount?.toLocaleString() || 0}</strong></span>
         </div>
 
-        {/* Overall Progress Mini Bar */}
-        <div className="flex items-center gap-3 ml-auto flex-1 max-w-xs min-w-[150px]">
-          <span className="font-semibold text-[var(--text-primary)]">{overallProgressPercent}% Progress</span>
-          <div className="flex-1 bg-[var(--bg-input)] h-1.5 rounded-full overflow-hidden border border-[var(--border-subtle)]">
-            <div
-              className="bg-indigo-500 h-full rounded-full transition-all duration-500"
-              style={{ width: `${overallProgressPercent}%` }}
-            ></div>
+        {/* Progress Bars */}
+        <div className="flex flex-col gap-1.5 ml-auto shrink-0 min-w-[220px] max-w-[250px] justify-center py-1">
+          {/* Translation Progress */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold text-[var(--text-secondary)] w-18 select-none">Translated</span>
+            <div className="flex-1 bg-[var(--bg-input)] h-1.5 rounded-full overflow-hidden border border-[var(--border-subtle)]">
+              <div
+                className="bg-indigo-500 h-full rounded-full transition-all duration-300"
+                style={{ width: `${overallProgressPercent}%` }}
+              ></div>
+            </div>
+            <span className="text-[10px] font-black text-indigo-500 w-8 text-right shrink-0">{overallProgressPercent}%</span>
+          </div>
+
+          {/* Verified Progress */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold text-[var(--text-secondary)] w-18 select-none">Verified</span>
+            <div className="flex-1 bg-[var(--bg-input)] h-1.5 rounded-full overflow-hidden border border-[var(--border-subtle)]">
+              <div
+                className="bg-emerald-500 h-full rounded-full transition-all duration-300"
+                style={{ width: `${overallVerifiedPercent}%` }}
+              ></div>
+            </div>
+            <span className="text-[10px] font-black text-emerald-500 w-8 text-right shrink-0">{overallVerifiedPercent}%</span>
           </div>
         </div>
       </section>
@@ -813,16 +849,37 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                       {project.target_languages.map(lang => {
                         const metrics = getLanguageMetrics(lang);
                         return (
-                          <div key={lang} className="space-y-2">
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="font-semibold text-[var(--text-primary)]">{getLanguageName(lang)} ({lang.toUpperCase()})</span>
-                              <span className="font-bold text-indigo-500">{metrics.progress}%</span>
-                            </div>
-                            <div className="bg-[var(--bg-input)] h-2 rounded-full overflow-hidden border border-[var(--border-subtle)]">
-                              <div
-                                className="bg-gradient-to-r from-indigo-500 to-purple-500 h-full rounded-full transition-all duration-500"
-                                style={{ width: `${metrics.progress}%` }}
-                              ></div>
+                          <div key={lang} className="space-y-2 border-b border-[var(--border-subtle)]/40 pb-4 last:border-0 last:pb-0">
+                            <span className="font-bold text-[13px] text-[var(--text-primary)] block mb-1">{getLanguageName(lang)} ({lang.toUpperCase()})</span>
+                            
+                            <div className="grid grid-cols-2 gap-4">
+                              {/* Translated */}
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between text-[11px] font-semibold">
+                                  <span className="text-[var(--text-secondary)]">Translated</span>
+                                  <span className="text-indigo-500 font-bold">{metrics.progress}%</span>
+                                </div>
+                                <div className="bg-[var(--bg-input)] h-2 rounded-full overflow-hidden border border-[var(--border-subtle)]">
+                                  <div
+                                    className="bg-indigo-500 h-full rounded-full transition-all duration-300"
+                                    style={{ width: `${metrics.progress}%` }}
+                                  ></div>
+                                </div>
+                              </div>
+
+                              {/* Verified */}
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between text-[11px] font-semibold">
+                                  <span className="text-[var(--text-secondary)]">Verified</span>
+                                  <span className="text-emerald-500 font-bold">{metrics.verifiedProgress}%</span>
+                                </div>
+                                <div className="bg-[var(--bg-input)] h-2 rounded-full overflow-hidden border border-[var(--border-subtle)]">
+                                  <div
+                                    className="bg-emerald-500 h-full rounded-full transition-all duration-300"
+                                    style={{ width: `${metrics.verifiedProgress}%` }}
+                                  ></div>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         );
@@ -920,6 +977,10 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                             ? Math.round(fileJobs.reduce((sum, j) => sum + (j.progress || 0), 0) / fileJobs.length)
                             : 0;
 
+                          const avgVerifiedProgress = fileJobs.length > 0
+                            ? Math.round(fileJobs.reduce((sum, j) => sum + (j.verified_progress || 0), 0) / fileJobs.length)
+                            : 0;
+
                           const extIndex = file.name.lastIndexOf(".");
                           const ext = extIndex !== -1 ? file.name.substring(extIndex).toUpperCase() : "UNKNOWN";
 
@@ -994,12 +1055,22 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                                 </div>
                               </td>
 
-                              {/* File Progress bar */}
+                              {/* File Progress bars */}
                               <td className="py-4 px-4">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-bold text-[11px] w-8 shrink-0">{avgProgress}%</span>
-                                  <div className="w-16 bg-[var(--bg-input)] h-1 rounded-full overflow-hidden">
-                                    <div className="bg-indigo-500 h-full" style={{ width: `${avgProgress}%` }}></div>
+                                <div className="flex flex-col gap-1 w-24">
+                                  {/* Translated */}
+                                  <div className="flex items-center gap-1.5 text-[10px]">
+                                    <span className="font-bold text-indigo-500 w-8 shrink-0 text-right">{avgProgress}%</span>
+                                    <div className="flex-1 bg-[var(--bg-input)] h-1 rounded-full overflow-hidden">
+                                      <div className="bg-indigo-500 h-full rounded-full" style={{ width: `${avgProgress}%` }}></div>
+                                    </div>
+                                  </div>
+                                  {/* Verified */}
+                                  <div className="flex items-center gap-1.5 text-[10px]">
+                                    <span className="font-bold text-emerald-500 w-8 shrink-0 text-right">{avgVerifiedProgress}%</span>
+                                    <div className="flex-1 bg-[var(--bg-input)] h-1 rounded-full overflow-hidden">
+                                      <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${avgVerifiedProgress}%` }}></div>
+                                    </div>
                                   </div>
                                 </div>
                               </td>
@@ -1198,13 +1269,27 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                         </div>
 
                         {/* Progress Bar footer */}
-                        <div className="pt-2 border-t border-[var(--border-subtle)]">
-                          <div className="flex justify-between items-center text-xs mb-1.5 font-semibold">
-                            <span className="text-[var(--text-secondary)]">Translation Progress</span>
-                            <span className="text-indigo-500">{metrics.progress}%</span>
+                        <div className="pt-2 border-t border-[var(--border-subtle)] space-y-2">
+                          {/* Translation Progress */}
+                          <div>
+                            <div className="flex justify-between items-center text-[10px] mb-1 font-bold">
+                              <span className="text-[var(--text-secondary)] select-none">Translated</span>
+                              <span className="text-indigo-500">{metrics.progress}%</span>
+                            </div>
+                            <div className="w-full bg-[var(--bg-input)] h-1 rounded-full overflow-hidden border border-[var(--border-subtle)]">
+                              <div className="bg-indigo-500 h-full rounded-full" style={{ width: `${metrics.progress}%` }}></div>
+                            </div>
                           </div>
-                          <div className="w-full bg-[var(--bg-input)] h-1.5 rounded-full overflow-hidden border border-[var(--border-subtle)]">
-                            <div className="bg-indigo-500 h-full" style={{ width: `${metrics.progress}%` }}></div>
+                          
+                          {/* Verified Progress */}
+                          <div>
+                            <div className="flex justify-between items-center text-[10px] mb-1 font-bold">
+                              <span className="text-[var(--text-secondary)] select-none">Verified</span>
+                              <span className="text-emerald-500">{metrics.verifiedProgress}%</span>
+                            </div>
+                            <div className="w-full bg-[var(--bg-input)] h-1 rounded-full overflow-hidden border border-[var(--border-subtle)]">
+                              <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${metrics.verifiedProgress}%` }}></div>
+                            </div>
                           </div>
                         </div>
 
@@ -1232,17 +1317,39 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                     {project.target_languages.map(lang => {
                       const metrics = getLanguageMetrics(lang);
                       return (
-                        <div key={lang} className="space-y-2">
-                          <div className="flex justify-between text-xs font-semibold">
-                            <span>{getLanguageName(lang)} ({lang.toUpperCase()})</span>
-                            <span className="text-indigo-500">{metrics.progress}% Complete</span>
-                          </div>
-                          <div className="relative w-full bg-[var(--bg-input)] h-4 rounded-full overflow-hidden border border-[var(--border-subtle)] text-[10px] text-center select-none flex items-center justify-center">
-                            <div
-                              className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500 z-0"
-                              style={{ width: `${metrics.progress}%` }}
-                            ></div>
-                            <span className="relative z-10 text-white font-bold">{metrics.progress}%</span>
+                        <div key={lang} className="space-y-3 border-b border-[var(--border-subtle)]/40 pb-4 last:border-0 last:pb-0">
+                          <span className="font-bold text-xs text-[var(--text-primary)] block mb-1">{getLanguageName(lang)} ({lang.toUpperCase()})</span>
+                          
+                          <div className="grid grid-cols-2 gap-4">
+                            {/* Translated Progress */}
+                            <div className="space-y-1">
+                              <div className="flex justify-between text-xs font-semibold">
+                                <span className="text-[var(--text-secondary)]">Translated Progress</span>
+                                <span className="text-indigo-500 font-bold">{metrics.progress}%</span>
+                              </div>
+                              <div className="relative w-full bg-[var(--bg-input)] h-4 rounded-full overflow-hidden border border-[var(--border-subtle)] text-[10px] text-center select-none flex items-center justify-center">
+                                <div
+                                  className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-300 z-0"
+                                  style={{ width: `${metrics.progress}%` }}
+                                ></div>
+                                <span className="relative z-10 text-white font-bold">{metrics.progress}%</span>
+                              </div>
+                            </div>
+
+                            {/* Verified Progress */}
+                            <div className="space-y-1">
+                              <div className="flex justify-between text-xs font-semibold">
+                                <span className="text-[var(--text-secondary)]">Verified Progress</span>
+                                <span className="text-emerald-500 font-bold">{metrics.verifiedProgress}%</span>
+                              </div>
+                              <div className="relative w-full bg-[var(--bg-input)] h-4 rounded-full overflow-hidden border border-[var(--border-subtle)] text-[10px] text-center select-none flex items-center justify-center">
+                                <div
+                                  className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-300 z-0"
+                                  style={{ width: `${metrics.verifiedProgress}%` }}
+                                ></div>
+                                <span className="relative z-10 text-white font-bold">{metrics.verifiedProgress}%</span>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       );

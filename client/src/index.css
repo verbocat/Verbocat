@@ -1187,6 +1187,11 @@ code, .font-mono { font-family: "IBM Plex Mono", monospace; }
   border-color: rgba(16,185,129,0.4);
   color: var(--emerald);
 }
+.seg-btn-new.active-comments {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #60a5fa;
+}
 .seg-btn-new:disabled {
   opacity: 0.35;
   cursor: not-allowed;

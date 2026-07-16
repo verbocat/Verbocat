@@ -1,5 +1,6 @@
 import { LANGUAGES } from "../constants/languages.js";
 import { CollaboratorsList } from "./CollaboratorsList.jsx";
+import { useChatStore } from "../services/chatStore.js";
 import {
   BookOpen, Users, Settings as SettingsIcon,
   LogOut, Plus, LockKeyhole, Sliders,
@@ -32,6 +33,7 @@ export const Header = ({
   const hasFile = segmentsCount > 0;
   const srcLang = LANGUAGES.find(l => l.code === sourceLanguage);
   const tgtLang = LANGUAGES.find(l => l.code === targetLanguage);
+  const { totalUnread } = useChatStore();
 
   return (
     <header className="topbar">
@@ -128,8 +130,13 @@ export const Header = ({
 
         {/* Chat */}
         <NavBtn onClick={() => onNavigate && onNavigate("/chat")} title="Chat Workspace">
-          <MessageCircle style={{ width: 13, height: 13 }} />
-          <span>Chat</span>
+          <div className="relative flex items-center gap-1">
+            <MessageCircle style={{ width: 13, height: 13 }} />
+            <span>Chat</span>
+            {totalUnread > 0 && (
+              <span className="absolute -top-1.5 -right-2.5 w-2 h-2 rounded-full bg-rose-500 shadow-sm animate-pulse" />
+            )}
+          </div>
         </NavBtn>
 
         {/* Glossary */}

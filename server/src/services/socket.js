@@ -131,6 +131,7 @@ function initSocket(server) {
 
         // Join socket room
         socket.join(roomId);
+        socket.join(`document_chat:${documentId}`);
         socket.currentDocId = documentId;
         socket.currentTargetLang = targetLang || doc.target_lang || "default";
         socket.currentRoomId = roomId;
@@ -245,54 +246,6 @@ function initSocket(server) {
       });
     });
 
-    // ── CHAT SYSTEM ──────────────────────────────────────────────
-    // Auto-join all chat conversation rooms on connect
-    const joinChatRooms = async () => {
-      try {
-        const { data: participations } = await supabase
-          .from("chat_participants")
-          .select("conversation_id")
-          .eq("user_id", socket.user.id);
-        if (participations) {
-          participations.forEach(p => {
-            socket.join(`chat:${p.conversation_id}`);
-          });
-        }
-      } catch (err) {
-        console.error("Failed to join chat rooms:", err);
-      }
-    };
-
-    // Join chat rooms when client explicitly requests (after auth)
-    socket.on("chat:join", () => {
-      joinChatRooms();
-    });
-
-    // Join a specific conversation room (for newly created conversations)
-    socket.on("chat:join-conversation", ({ conversationId }) => {
-      if (conversationId) {
-        socket.join(`chat:${conversationId}`);
-      }
-    });
-
-    // Typing indicator
-    socket.on("chat:typing", ({ conversationId }) => {
-      if (!conversationId) return;
-      socket.to(`chat:${conversationId}`).emit("chat:typing", {
-        conversationId,
-        userId: socket.user.id,
-        userName: socket.profile.full_name || socket.profile.email?.split("@")[0] || "User"
-      });
-    });
-
-    // Stop typing indicator
-    socket.on("chat:stop-typing", ({ conversationId }) => {
-      if (!conversationId) return;
-      socket.to(`chat:${conversationId}`).emit("chat:stop-typing", {
-        conversationId,
-        userId: socket.user.id
-      });
-    });
 
     // Handle user disconnect (either tab close or internet drop)
     socket.on("disconnect", () => {

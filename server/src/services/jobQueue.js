@@ -340,10 +340,32 @@ async function updateJobProgress(jobId, progress) {
 /**
  * Broadcast status changes to frontend client rooms via socket.io.
  */
-function broadcastJobStatus(jobId, documentId, status, progress, errorMessage = null) {
+async function broadcastJobStatus(jobId, documentId, status, progress, errorMessage = null) {
   try {
     const io = getIo();
     if (!io) return;
+
+    // Fetch the target lang of the job to compute verified progress
+    const { data: job } = await supabase
+      .from("translation_jobs")
+      .select("target_lang")
+      .eq("id", jobId)
+      .single();
+
+    let verifiedProgress = 0;
+    if (job) {
+      const { data: segmentStats } = await supabase
+        .from("document_segments")
+        .select("status, source_text")
+        .eq("document_id", documentId)
+        .eq("target_lang", job.target_lang);
+
+      if (segmentStats) {
+        const countable = segmentStats.filter(s => isCountableSourceText(s.source_text));
+        const verifiedCount = countable.filter(s => s.status === "approved").length;
+        verifiedProgress = countable.length > 0 ? Math.round((verifiedCount / countable.length) * 100) : 0;
+      }
+    }
 
     // Broadcast to the document room
     io.to(documentId).emit("job-status-changed", {
@@ -351,6 +373,7 @@ function broadcastJobStatus(jobId, documentId, status, progress, errorMessage = 
       documentId,
       status,
       progress,
+      verifiedProgress,
       errorMessage
     });
 
@@ -360,6 +383,7 @@ function broadcastJobStatus(jobId, documentId, status, progress, errorMessage = 
       documentId,
       status,
       progress,
+      verifiedProgress,
       errorMessage
     });
   } catch (err) {

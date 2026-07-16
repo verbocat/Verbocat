@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Copy, Check, ArrowRight, AlertTriangle, Lock, Sparkles, Award, UploadCloud, Trash2, Image, MessageSquare, X } from "lucide-react";
+import { useChatStore } from "../services/chatStore";
 
 const removeTags = (text) => {
   if (typeof text !== "string") return text;
@@ -150,9 +151,10 @@ const htmlToTarget = (el) => {
 export const SegmentCard = ({
   darkMode, index, segment, theme, translationGlossary = [],
   onCopy, onUpdateTranslation, onToggleVerify, onVerifyAndNext,
-  lockInfo, onFocusSegment, onBlurSegment, readOnly,
+  lockInfo, onFocusSegment, onBlurSegment, readOnly, permission,
   onSaveContext, onTranslateWithContext, onTyping,
-  isOwner, onAcceptChange, onRejectChange, autocompleteEnabled = true
+  isOwner, onAcceptChange, onRejectChange, autocompleteEnabled = true,
+  isSelected, onToggleSelect
 }) => {
   const editorRef = useRef(null);
   const lastSaved = useRef(segment.target || "");
@@ -167,6 +169,22 @@ export const SegmentCard = ({
   const [screenshotPreview, setScreenshotPreview] = useState(null);
   const [activeTab, setActiveTab] = useState("screenshot");
   const [translatingLocal, setTranslatingLocal] = useState(false);
+  const [showComments, setShowComments] = useState(false);
+
+  const chatStore = useChatStore();
+  const existingQuery = chatStore.queries.find(
+    (q) => q.query_type === "segment" && parseInt(q.segment_index) === (segment.id - 1)
+  );
+
+  useEffect(() => {
+    if (showComments && existingQuery && !chatStore.messages[existingQuery.id]) {
+      chatStore.fetchQueryMessages(existingQuery.id);
+    }
+  }, [showComments, existingQuery, chatStore]);
+
+  const handleCommentClick = () => {
+    setShowComments(!showComments);
+  };
 
   let parsedMqmReport = segment.mqmReport;
   if (typeof parsedMqmReport === "string") {
@@ -494,7 +512,16 @@ export const SegmentCard = ({
       <article id={`segment-${segment.id}`} className={`seg-row ${statusClass}`} style={{ borderBottom: "none" }}>
 
         {/* Col 1: Number */}
-        <div className="seg-num">
+        <div className="seg-num" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+          {onToggleSelect && (
+            <input
+              type="checkbox"
+              checked={isSelected || false}
+              onChange={(e) => onToggleSelect(segment.id, e.target.checked)}
+              style={{ cursor: "pointer", width: "13px", height: "13px", marginBottom: "2px" }}
+              title="Select segment"
+            />
+          )}
           <span className="seg-num-label">{String(segment.id).padStart(2, "0")}</span>
           <span className={`seg-dot ${dotClass}`} />
           {segment.fuzzyScore && (
@@ -713,6 +740,35 @@ export const SegmentCard = ({
                     position: "absolute", top: 3, right: 3,
                     width: 4, height: 4, borderRadius: "50%",
                     background: "var(--text-amber)"
+                  }} />
+                )}
+              </button>
+
+              {/* Comment / Query button */}
+              <button
+                onClick={handleCommentClick}
+                title={existingQuery ? "View Segment Comments" : "Add Comment to Segment"}
+                className={`seg-btn-new ${existingQuery ? "active-comments" : ""}`}
+                style={{ position: "relative" }}
+              >
+                <MessageSquare style={{
+                  width: 12,
+                  height: 12,
+                  color: existingQuery ? "#60a5fa" : "inherit"
+                }} />
+                {existingQuery && chatStore.unreadQueries.has(existingQuery.id) && (
+                  <span style={{
+                    position: "absolute", top: 3, right: 3,
+                    width: 5, height: 5, borderRadius: "50%",
+                    background: "var(--text-rose)",
+                    animation: "chatPulse 2s ease infinite"
+                  }} />
+                )}
+                {existingQuery && !chatStore.unreadQueries.has(existingQuery.id) && (
+                  <span style={{
+                    position: "absolute", top: 3, right: 3,
+                    width: 4, height: 4, borderRadius: "50%",
+                    background: "#60a5fa"
                   }} />
                 )}
               </button>
@@ -1349,6 +1405,165 @@ export const SegmentCard = ({
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showComments && (
+        <div style={{
+          display: "flex",
+          justifyContent: "center",
+          width: "100%",
+          background: "transparent",
+          borderTop: "1px solid var(--border-subtle)",
+          padding: "12px 16px"
+        }}>
+          <div className="seg-context-panel" style={{
+            width: "100%",
+            maxWidth: 580,
+            background: darkMode ? "rgba(30, 41, 59, 0.4)" : "rgba(248, 250, 252, 0.8)",
+            border: "1px solid var(--border-subtle)",
+            borderRadius: 12,
+            padding: "14px 18px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+            boxShadow: "0 8px 30px rgba(0, 0, 0, 0.25)",
+            backdropFilter: "blur(4px)"
+          }}>
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: 6 }}>
+                <MessageSquare style={{ width: 14, height: 14, color: "var(--accent)" }} />
+                Segment Comments
+              </span>
+              
+              {existingQuery && existingQuery.status === "open" && isOwner && (
+                <button
+                  onClick={async () => {
+                    try {
+                      await chatStore.resolveQuery(existingQuery.id, "resolved");
+                    } catch (e) {
+                      console.error(e);
+                    }
+                  }}
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: "#10b981",
+                    background: "rgba(16, 185, 129, 0.1)",
+                    border: "1px solid rgba(16, 185, 129, 0.2)",
+                    borderRadius: 6,
+                    padding: "4px 8px",
+                    cursor: "pointer"
+                  }}
+                >
+                  Resolve Thread
+                </button>
+              )}
+            </div>
+
+            {/* Comments List */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 220, overflowY: "auto", paddingRight: 4 }}>
+              {!existingQuery || !chatStore.messages[existingQuery.id] || chatStore.messages[existingQuery.id].length === 0 ? (
+                <div style={{ textAlign: "center", padding: "16px 0", color: "var(--text-muted)", fontSize: 11.5 }}>
+                  No comments yet on this segment.
+                </div>
+              ) : (
+                chatStore.messages[existingQuery.id].map((msg) => (
+                  <div
+                    key={msg.id}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 4,
+                      padding: "8px 10px",
+                      borderRadius: 8,
+                      background: darkMode ? "rgba(255, 255, 255, 0.02)" : "rgba(0, 0, 0, 0.02)",
+                      border: "1px solid var(--border-subtle)"
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)" }}>
+                        {msg.sender?.name || msg.sender?.email?.split("@")[0] || "User"}
+                      </span>
+                      <span style={{ fontSize: 9, color: "var(--text-muted)" }}>
+                        {new Date(msg.created_at).toLocaleString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: 11.5, color: "var(--text-primary)", margin: 0, whiteSpace: "pre-wrap" }}>
+                      {msg.content}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Input form - Hidden for viewers */}
+            {readOnly && permission !== "comment" ? null : (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const text = e.target.commentText.value.trim();
+                  if (!text) return;
+                  
+                  e.target.commentText.value = "";
+                  try {
+                    if (!existingQuery) {
+                      // Retrieve doc ID from path
+                      const path = window.location.pathname;
+                      const match = path.match(/^\/project\/([^\/]+)\/file\/([^\/]+)\/lang\/([^\/]+)/);
+                      const activeDocumentId = match ? match[2] : null;
+                      if (activeDocumentId) {
+                        await chatStore.createQuery(
+                          activeDocumentId,
+                          "segment",
+                          segment.id - 1,
+                          `Comment on Segment #${segment.id}`,
+                          text
+                        );
+                      }
+                    } else {
+                      await chatStore.sendQueryMessage(existingQuery.id, text);
+                    }
+                  } catch (err) {
+                    console.error(err);
+                  }
+                }}
+                style={{ display: "flex", gap: 8, marginTop: 4 }}
+              >
+                <input
+                  name="commentText"
+                  placeholder="Type a comment or reply..."
+                  required
+                  style={{
+                    flex: 1,
+                    fontSize: 11.5,
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    background: "var(--bg-input)",
+                    border: "1px solid var(--border-subtle)",
+                    color: "var(--text-primary)",
+                    outline: "none"
+                  }}
+                />
+                <button
+                  type="submit"
+                  style={{
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    color: "#fff",
+                    background: "var(--accent)",
+                    border: "none",
+                    borderRadius: 8,
+                    padding: "0 14px",
+                    cursor: "pointer"
+                  }}
+                >
+                  Post
+                </button>
+              </form>
+            )}
           </div>
         </div>
       )}

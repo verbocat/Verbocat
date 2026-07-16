@@ -99,7 +99,8 @@ const splitByPunctuation = (str, tagMap) => {
         const postPunctIndex = match.index + splitMatch.index + punctuation.length;
         const remainder = str.substring(postPunctIndex);
         const remainderNoTags = remainder.replace(/<\/?\d+>/g, "");
-        const isValidBoundary = remainderNoTags.length === 0 || /^\s/.test(remainderNoTags);
+        const isNonSpacePunct = /[।॥。]/.test(punctuation);
+        const isValidBoundary = isNonSpacePunct || remainderNoTags.length === 0 || /^\s/.test(remainderNoTags);
         const hasTextRemainder = remainderNoTags.trim().length > 0;
 
         if (isValidBoundary && hasTextRemainder && (currentTextLength + before.length + punctuation.length >= MIN_LENGTH)) {

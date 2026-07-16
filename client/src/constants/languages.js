@@ -9,6 +9,8 @@ export const LANGUAGES = [
   { code: "pa", name: "Punjabi", flag: "🇮🇳" },
   { code: "kn", name: "Kannada", flag: "🇮🇳" },
   { code: "ml", name: "Malayalam", flag: "🇮🇳" },
+  { code: "or", name: "Odia", flag: "🇮🇳" },
+  { code: "as", name: "Assamese", flag: "🇮🇳" },
   { code: "ur", name: "Urdu", flag: "🇵🇰" },
   { code: "ar", name: "Arabic", flag: "🇸🇦" },
   { code: "fr", name: "French", flag: "🇫🇷" },

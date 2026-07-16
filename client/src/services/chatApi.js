@@ -9,48 +9,60 @@ const getHeaders = () => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-export const fetchConversations = async () => {
-  const { data } = await axios.get(`${API_BASE}/conversations`, {
+// Fetch support queries. If documentId is provided, filters for that document.
+export const fetchQueries = async (documentId = null) => {
+  const params = new URLSearchParams();
+  if (documentId) params.set("documentId", documentId);
+  
+  const { data } = await axios.get(`${API_BASE}/queries?${params}`, {
     headers: getHeaders(),
   });
   return data;
 };
 
-export const createConversation = async (type, participantIds, name = null) => {
+// Create a new support query (Linguist raises for self, or Staff initiates contact with a linguist)
+export const createQuery = async (documentId, queryType, segmentIndex, topic, message, linguistId = null) => {
   const { data } = await axios.post(
-    `${API_BASE}/conversations`,
-    { type, participantIds, name },
+    `${API_BASE}/queries`,
+    { documentId, queryType, segmentIndex, topic, message, linguistId },
     { headers: getHeaders() }
   );
   return data;
 };
 
-export const fetchMessages = async (conversationId, cursor = null, limit = 40) => {
-  const params = new URLSearchParams({ limit: String(limit) });
-  if (cursor) params.set("cursor", cursor);
-  const { data } = await axios.get(
-    `${API_BASE}/conversations/${conversationId}/messages?${params}`,
-    { headers: getHeaders() }
-  );
+// Fetch all assigned linguists for a document (Staff only)
+export const fetchDocumentLinguists = async (documentId) => {
+  const { data } = await axios.get(`${API_BASE}/documents/${documentId}/linguists`, {
+    headers: getHeaders(),
+  });
   return data;
 };
 
-export const sendMessage = async (conversationId, content, replyTo = null, threadParentId = null) => {
+// Fetch messages for a specific query
+export const fetchQueryMessages = async (queryId) => {
+  const { data } = await axios.get(`${API_BASE}/queries/${queryId}/messages`, {
+    headers: getHeaders(),
+  });
+  return data;
+};
+
+// Send a text message to a query thread
+export const sendQueryMessage = async (queryId, content) => {
   const { data } = await axios.post(
-    `${API_BASE}/conversations/${conversationId}/messages`,
-    { content, replyTo, threadParentId },
+    `${API_BASE}/queries/${queryId}/messages`,
+    { content },
     { headers: getHeaders() }
   );
   return data;
 };
 
-export const uploadChatFile = async (conversationId, file, replyTo = null, threadParentId = null) => {
+// Upload an attachment to a query thread
+export const uploadQueryFile = async (queryId, file) => {
   const formData = new FormData();
   formData.append("file", file);
-  if (replyTo) formData.append("replyTo", replyTo);
-  if (threadParentId) formData.append("threadParentId", threadParentId);
+  
   const { data } = await axios.post(
-    `${API_BASE}/conversations/${conversationId}/upload`,
+    `${API_BASE}/queries/${queryId}/upload`,
     formData,
     {
       headers: {
@@ -62,106 +74,28 @@ export const uploadChatFile = async (conversationId, file, replyTo = null, threa
   return data;
 };
 
-export const unsendMessage = async (messageId) => {
+// Resolve or close a support query
+export const resolveQuery = async (queryId, status = "resolved") => {
   const { data } = await axios.put(
-    `${API_BASE}/messages/${messageId}/unsend`,
-    {},
+    `${API_BASE}/queries/${queryId}/resolve`,
+    { status },
     { headers: getHeaders() }
   );
   return data;
 };
 
-export const markAsRead = async (conversationId) => {
-  const { data } = await axios.put(
-    `${API_BASE}/conversations/${conversationId}/read`,
-    {},
-    { headers: getHeaders() }
-  );
+// Delete a support message for everyone
+export const deleteQueryMessage = async (messageId) => {
+  const { data } = await axios.delete(`${API_BASE}/messages/${messageId}`, {
+    headers: getHeaders(),
+  });
   return data;
 };
 
-export const searchChatUsers = async (search) => {
-  const { data } = await axios.get(
-    `${API_BASE}/users?search=${encodeURIComponent(search)}`,
-    { headers: getHeaders() }
-  );
-  return data;
-};
-
-export const updateGroup = async (conversationId, name) => {
-  const { data } = await axios.put(
-    `${API_BASE}/conversations/${conversationId}`,
-    { name },
-    { headers: getHeaders() }
-  );
-  return data;
-};
-
-export const addParticipants = async (conversationId, userIds) => {
-  const { data } = await axios.post(
-    `${API_BASE}/conversations/${conversationId}/participants`,
-    { userIds },
-    { headers: getHeaders() }
-  );
-  return data;
-};
-
-export const removeParticipant = async (conversationId, userId) => {
-  const { data } = await axios.delete(
-    `${API_BASE}/conversations/${conversationId}/participants/${userId}`,
-    { headers: getHeaders() }
-  );
-  return data;
-};
-
-export const leaveGroup = async (conversationId) => {
-  const { data } = await axios.delete(
-    `${API_BASE}/conversations/${conversationId}/leave`,
-    { headers: getHeaders() }
-  );
-  return data;
-};
-
-export const editMessage = async (messageId, content) => {
-  const { data } = await axios.put(
-    `${API_BASE}/messages/${messageId}`,
-    { content },
-    { headers: getHeaders() }
-  );
-  return data;
-};
-
-export const togglePin = async (messageId) => {
-  const { data } = await axios.put(
-    `${API_BASE}/messages/${messageId}/pin`,
-    {},
-    { headers: getHeaders() }
-  );
-  return data;
-};
-
-export const toggleReaction = async (messageId, emoji) => {
-  const { data } = await axios.post(
-    `${API_BASE}/messages/${messageId}/reactions`,
-    { emoji },
-    { headers: getHeaders() }
-  );
-  return data;
-};
-
-export const forwardMessage = async (messageId, conversationId) => {
-  const { data } = await axios.post(
-    `${API_BASE}/messages/${messageId}/forward`,
-    { conversationId },
-    { headers: getHeaders() }
-  );
-  return data;
-};
-
-export const fetchThreadReplies = async (messageId) => {
-  const { data } = await axios.get(
-    `${API_BASE}/messages/${messageId}/thread`,
-    { headers: getHeaders() }
-  );
+// Edit a support message
+export const editQueryMessage = async (messageId, content) => {
+  const { data } = await axios.put(`${API_BASE}/messages/${messageId}`, { content }, {
+    headers: getHeaders(),
+  });
   return data;
 };

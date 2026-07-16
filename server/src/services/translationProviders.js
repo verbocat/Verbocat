@@ -572,7 +572,7 @@ const isScriptValidForLanguage = (text, targetLang, sourceText = "") => {
   const cleanLang = String(targetLang || "").toLowerCase();
   
   // Strip tags/placeholders first to avoid false positives on tag characters
-  const cleanText = String(text || "").replace(/__TAG_\d+__/g, "");
+  const cleanText = String(text || "").replace(/__TAG_\d+__/g, "").replace(/<\/?\d+>/g, "");
 
   // 1. If target is Hindi, strictly forbid any Perso-Arabic characters
   if (cleanLang.startsWith("hi")) {
@@ -588,7 +588,7 @@ const isScriptValidForLanguage = (text, targetLang, sourceText = "") => {
 
     const latinTokens = textToAnalyze.match(/[a-zA-Z0-9.-]+/g) || [];
     if (latinTokens.length > 0) {
-      const cleanSource = String(sourceText || "").replace(/__TAG_\d+__/g, "");
+      const cleanSource = String(sourceText || "").replace(/__TAG_\d+__/g, "").replace(/<\/?\d+>/g, "");
       const sourceLatinTokens = new Set(
         (cleanSource.match(/[a-zA-Z0-9.-]+/g) || []).map(t => t.toLowerCase())
       );

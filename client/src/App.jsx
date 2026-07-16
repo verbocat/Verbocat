@@ -25,6 +25,8 @@ import {
   uploadFile,
   importXliff,
   importTmx,
+  importTargetHtml,
+  bulkActionSegments,
   exportGlobalTm,
   fetchDocument,
   deleteDocument,
@@ -53,11 +55,10 @@ import { ShareModal } from "./components/ShareModal.jsx";
 import { io } from "socket.io-client";
 import { applyGlossaryTerms } from "./utils/glossary.js";
 import { getTheme } from "./utils/theme.js";
-import { Globe } from "lucide-react";
+import { Globe, Check, Sparkles, Trash2, X, Sliders } from "lucide-react";
 import ProjectDashboard from "./components/ProjectDashboard.jsx";
 import ProjectDetails from "./components/ProjectDetails.jsx";
 import { ChatBubble } from "./components/chat/ChatBubble.jsx";
-import { FullChatScreen } from "./components/chat/FullChatScreen.jsx";
 import { useChatStore } from "./services/chatStore.js";
 
 
@@ -116,13 +117,10 @@ export default function App() {
   const [collaborators, setCollaborators] = useState([]);
   const [cellLocks, setCellLocks] = useState(new Map());
   const [showShareModal, setShowShareModal] = useState(false);
+  const [selectedSegmentIds, setSelectedSegmentIds] = useState(new Set());
+  const [isPerformingBulk, setIsPerformingBulk] = useState(false);
   const parseUrlRoute = () => {
     const path = window.location.pathname;
-    if (path === "/chat" || path.startsWith("/chat")) {
-      return {
-        screen: "chat"
-      };
-    }
     const jobMatch = path.match(/^\/project\/([^\/]+)\/file\/([^\/]+)\/lang\/([^\/]+)/);
     if (jobMatch) {
       return {
@@ -157,6 +155,10 @@ export default function App() {
   }, []);
 
   const navigateTo = (path) => {
+    if (path === "/chat" || path.startsWith("/chat")) {
+      useChatStore.getState().setOpen(true);
+      return;
+    }
     window.history.pushState(null, "", path);
     setCurrentRoute(parseUrlRoute());
   };
@@ -196,6 +198,7 @@ export default function App() {
   const [trackChangesEnabled, setTrackChangesEnabled] = useState(false);
   const [hasNoAccess, setHasNoAccess] = useState(false);
   const [hasPendingAccessRequest, setHasPendingAccessRequest] = useState(false);
+  const [requestedPermission, setRequestedPermission] = useState("write");
   const [accessRequestMessage, setAccessRequestMessage] = useState("");
   const [pendingAccessRequests, setPendingAccessRequests] = useState([]);
 
@@ -363,52 +366,11 @@ export default function App() {
 
   const socketRef = useRef(null);
 
-  // ── Chat socket (always connected when authenticated) ──
+  // ── Unified Socket Connection (always connected when authenticated) ──
   const chatSocketRef = useRef(null);
 
   useEffect(() => {
     if (!isAuth || !token || !user) return;
-
-    const socketUrl = import.meta.env.VITE_API_URL || window.location.origin;
-    const chatSocket = io(socketUrl, { auth: { token } });
-    chatSocketRef.current = chatSocket;
-
-    const store = useChatStore.getState();
-    store.setSocket(chatSocket);
-
-    chatSocket.on("connect", () => {
-      chatSocket.emit("chat:join");
-    });
-
-    chatSocket.on("chat:new-message", store.handleNewMessage);
-    chatSocket.on("chat:message-unsent", store.handleMessageUnsent);
-    chatSocket.on("chat:typing", store.handleTyping);
-    chatSocket.on("chat:stop-typing", store.handleStopTyping);
-    chatSocket.on("chat:new-conversation", (conv) => {
-      store.handleNewConversation(conv);
-      chatSocket.emit("chat:join-conversation", { conversationId: conv.id });
-    });
-    chatSocket.on("chat:online-users", store.handleOnlineUsers);
-    chatSocket.on("chat:user-online", store.handleUserOnline);
-    chatSocket.on("chat:user-offline", store.handleUserOffline);
-    chatSocket.on("chat:participants-updated", store.handleParticipantsUpdated);
-    chatSocket.on("chat:group-updated", store.handleGroupUpdated);
-    chatSocket.on("chat:message-edited", store.handleMessageEdited);
-    chatSocket.on("chat:message-pinned", store.handleMessagePinned);
-    chatSocket.on("chat:reaction-updated", store.handleReactionUpdated);
-
-    store.fetchConversations();
-
-    return () => {
-      chatSocket.disconnect();
-      chatSocketRef.current = null;
-      store.setSocket(null);
-    };
-  }, [isAuth, token, user]);
-
-  // Initialize socket connection
-  useEffect(() => {
-    if (!documentId || !token) return;
 
     const socketUrl = import.meta.env.VITE_API_URL || window.location.origin;
     const socket = io(socketUrl, {
@@ -416,12 +378,57 @@ export default function App() {
     });
 
     socketRef.current = socket;
+    chatSocketRef.current = socket; // Unified socket reference
+
+    const store = useChatStore.getState();
+    store.setSocket(socket);
 
     socket.on("connect", () => {
-      console.log("Connected to collaborative workspace socket");
-      socket.emit("join-document", { documentId, targetLang: currentRoute.targetLang });
+      console.log("[Socket] Unified socket connected, socketId:", socket.id);
+      
+      // Auto-join collaborative room on connect if in document view
+      if (documentId) {
+        console.log("[Socket] Auto-joining document room:", documentId);
+        socket.emit("join-document", { documentId, targetLang: currentRoute.targetLang });
+      }
     });
 
+    socket.on("disconnect", (reason) => {
+      console.warn("[Socket] Unified socket disconnected, reason:", reason);
+    });
+
+    // Support Chat listeners
+    socket.on("support:query-created", (query) => {
+      console.log("[Socket] Received support:query-created:", query);
+      store.handleNewQuery(query);
+    });
+
+    socket.on("support:new-message", (msg) => {
+      console.log("[Socket] Received support:new-message:", msg);
+      store.handleNewMessage({ queryId: msg.query_id, message: msg });
+    });
+
+    socket.on("support:message-notification", ({ queryId, message }) => {
+      console.log("[Socket] Received support:message-notification:", { queryId, message });
+      store.handleNewMessage({ queryId, message });
+    });
+
+    socket.on("support:query-updated", ({ query, message }) => {
+      console.log("[Socket] Received support:query-updated:", { query, message });
+      store.handleQueryUpdated({ query, message });
+    });
+
+    socket.on("support:message-deleted", ({ queryId, messageId, lastMessage }) => {
+      console.log("[Socket] Received support:message-deleted:", { queryId, messageId, lastMessage });
+      store.handleMessageDeleted({ queryId, messageId, lastMessage });
+    });
+
+    socket.on("support:message-updated", (message) => {
+      console.log("[Socket] Received support:message-updated:", message);
+      store.handleMessageUpdated(message);
+    });
+
+    // Collaborative editor listeners
     socket.on("translation-queue-update", ({ position }) => {
       setTranslationQueuePosition(position);
     });
@@ -447,9 +454,7 @@ export default function App() {
         prev.map((seg, idx) => {
           if (idx === segmentIndex) {
             const updatedSeg = { ...seg };
-            if (targetText !== undefined) {
-              updatedSeg.target = targetText;
-            }
+            if (targetText !== undefined) updatedSeg.target = targetText;
             if (status !== undefined) {
               updatedSeg.status = status;
               updatedSeg.verified = status === "approved";
@@ -469,62 +474,24 @@ export default function App() {
 
     socket.on("track-changes-toggled", ({ enabled }) => {
       setTrackChangesEnabled(enabled);
-      showToast(`Track Changes was toggled ${enabled ? "ON" : "OFF"} by the creator.`, "info");
     });
 
     socket.on("typing-update", ({ segmentIndex, targetText, originalTargetText, trackedBy, targetLang }) => {
       if (targetLang && currentRoute.screen === "editor" && currentRoute.targetLang && targetLang !== currentRoute.targetLang) {
         return;
       }
-      setSegments((prev) => {
-        const sourceSeg = prev[segmentIndex];
-        if (!sourceSeg) return prev;
-
-        const cleanString = (str) => {
-          if (!str) return "";
-          return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
-        };
-
-        const propagateTranslation = (targetA, sourceB) => {
-          if (!targetA) return "";
-          const tagsInSourceB = sourceB.match(/<[^>]+>/g) || [];
-          let tagIdx = 0;
-          let propagated = targetA.replace(/<[^>]+>/g, () => {
-            if (tagIdx < tagsInSourceB.length) {
-              return tagsInSourceB[tagIdx++];
-            }
-            return "";
-          });
-          while (tagIdx < tagsInSourceB.length) {
-            propagated += tagsInSourceB[tagIdx++];
-          }
-          return propagated;
-        };
-
-        const cleanedSource = cleanString(sourceSeg.source);
-
-        return prev.map((seg, idx) => {
+      setSegments((prev) =>
+        prev.map((seg, idx) => {
           if (idx === segmentIndex) {
-            const updated = { ...seg, target: targetText };
-            if (originalTargetText !== undefined) updated.originalTargetText = originalTargetText;
-            if (trackedBy !== undefined) updated.trackedBy = trackedBy;
-            return updated;
-          }
-          if (autoPropagateEnabled && cleanedSource && cleanString(seg.source) === cleanedSource) {
-            const updated = { ...seg, target: propagateTranslation(targetText, seg.source) };
-            if (originalTargetText !== undefined) {
-              if (originalTargetText === null) {
-                updated.originalTargetText = null;
-              } else if (!seg.originalTargetText) {
-                updated.originalTargetText = seg.target || "";
-              }
-            }
-            if (trackedBy !== undefined) updated.trackedBy = trackedBy;
-            return updated;
+            const updatedSeg = { ...seg };
+            if (targetText !== undefined) updatedSeg.target = targetText;
+            if (originalTargetText !== undefined) updatedSeg.originalTargetText = originalTargetText;
+            if (trackedBy !== undefined) updatedSeg.trackedBy = trackedBy;
+            return updatedSeg;
           }
           return seg;
-        });
-      });
+        })
+      );
     });
 
     socket.on("all-changes-accepted", ({ targetLang }) => {
@@ -532,41 +499,30 @@ export default function App() {
         return;
       }
       setSegments((prev) =>
-        prev.map((seg) => ({ ...seg, originalTargetText: null, trackedBy: null }))
+        prev.map((seg) => ({
+          ...seg,
+          originalTargetText: null,
+          trackedBy: null
+        }))
       );
-      showToast("All changes accepted by the creator.", "info");
     });
 
     socket.on("access-request-received", (data) => {
-      if (data.documentId !== documentId) return; // Only process requests for the current document
-      if (document.hidden) {
-        if (Notification.permission === "granted") {
-          new Notification("Access Request Received", {
-            body: `${data.userName} (${data.userEmail}) is requesting Edit Access to ${data.docName}.`
-          });
-        }
-      }
       setPendingAccessRequests((prev) => {
         if (prev.some((r) => r.id === data.id)) return prev;
-        return [...prev, {
-          id: data.id,
-          document_id: data.documentId,
-          user_id: data.userId,
-          profiles: { email: data.userEmail }
-        }];
+        return [...prev, data];
       });
+      showToast(`${data.profiles?.email.split("@")[0]} is requesting access to this document.`, "info");
     });
 
     socket.on("access-request-responded", ({ documentId: docId, action, userId }) => {
-      if (userId === userRef.current?.id && docId === documentId) {
-        showToast(`Your edit access request has been ${action === "approve" ? "approved" : "declined"}.`);
+      if (docId === documentId && userId === user?.id) {
         if (action === "approve") {
           setPermission("write");
-          setHasNoAccess(false);
-          setHasPendingAccessRequest(false);
-          loadCollaborativeDocument();
+          showToast("You have been granted edit access to this document.", "success");
         } else {
-          setHasPendingAccessRequest(false);
+          setPermission("read");
+          showToast("Your edit access request was declined.", "warning");
         }
       }
     });
@@ -580,14 +536,8 @@ export default function App() {
         showToast("Your access to this workspace has been revoked.");
         setPermission("read");
         setHasNoAccess(true);
-        if (socketRef.current) {
-          socketRef.current.disconnect();
-          socketRef.current = null;
-        }
       }
     });
-
-
 
     socket.on("document-audit-completed", ({ documentId: docId }) => {
       if (docId === documentId) {
@@ -600,11 +550,30 @@ export default function App() {
       showToast(err.message || "Collaboration error.", "error");
     });
 
+    store.fetchQueries();
+
     return () => {
+      console.log("[Socket] Cleaning up unified socket connection...");
       socket.disconnect();
       socketRef.current = null;
+      chatSocketRef.current = null;
+      store.setSocket(null);
     };
-    }, [documentId, token, loadCollaborativeDocument, currentRoute.targetLang]);
+  }, [isAuth, token, user, documentId, currentRoute.targetLang]);
+
+  // Handle joining collaborative document room dynamically on navigation
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket || !socket.connected) return;
+
+    if (documentId) {
+      console.log("[Socket] Navigated to document, joining rooms:", documentId);
+      socket.emit("join-document", { documentId, targetLang: currentRoute.targetLang });
+    } else {
+      console.log("[Socket] Navigated to dashboard, leaving document rooms");
+      socket.emit("leave-document");
+    }
+  }, [documentId, currentRoute.targetLang]);
 
   const handleFocusSegment = (index) => {
     if (socketRef.current) {
@@ -620,7 +589,7 @@ export default function App() {
 
   const handleRequestEditAccess = async () => {
     try {
-      await requestAccess(documentId);
+      await requestAccess(documentId, requestedPermission);
       setHasPendingAccessRequest(true);
       setAccessRequestMessage("Access request submitted successfully!");
       showToast("Access request submitted successfully!");
@@ -641,15 +610,44 @@ export default function App() {
     }
   };
 
-  const handleTeleport = (segmentIndex) => {
-    const elements = document.querySelectorAll(".seg-row");
-    if (elements && elements[segmentIndex]) {
-      elements[segmentIndex].scrollIntoView({ behavior: "smooth", block: "center" });
-      elements[segmentIndex].classList.add("teleport-highlight");
-      setTimeout(() => {
-        elements[segmentIndex].classList.remove("teleport-highlight");
-      }, 2000);
+  const handleTeleport = (segmentIdVal) => {
+    const targetSegmentId = parseInt(segmentIdVal);
+    if (isNaN(targetSegmentId) || !virtuosoRef.current || !filteredSegments) {
+      return;
     }
+
+    const itemIndex = filteredSegments.findIndex((s) => s.id === targetSegmentId);
+    if (itemIndex === -1) {
+      console.warn(`[Teleport] Segment ID ${targetSegmentId} not found in filtered segments.`);
+      return;
+    }
+
+    const elementId = `segment-${targetSegmentId}`;
+
+    // Scroll virtuoso to the item index
+    virtuosoRef.current.scrollToIndex({
+      index: itemIndex,
+      align: "center",
+      behavior: "smooth"
+    });
+
+    // Poll for the element to appear in DOM and highlight it
+    let attempts = 0;
+    const interval = setInterval(() => {
+      const el = document.getElementById(elementId);
+      if (el) {
+        clearInterval(interval);
+        el.classList.add("teleport-highlight");
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        setTimeout(() => {
+          el.classList.remove("teleport-highlight");
+        }, 2000);
+      }
+      attempts++;
+      if (attempts > 30) {
+        clearInterval(interval);
+      }
+    }, 100);
   };
 
   // Request notification permission on mount
@@ -2758,6 +2756,139 @@ export default function App() {
     }
   };
 
+  const handleImportTargetHtml = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    try {
+      showToast("Importing target HTML translations...");
+      const data = await importTargetHtml(documentId, targetLanguage, file);
+      if (data.segments && data.segments.length > 0) {
+        const newSegments = segments.map((seg) => {
+          const match = data.segments.find(
+            (s) => s.id === seg.id
+          );
+          if (match) {
+            return {
+              ...seg,
+              target: match.target,
+              verified: match.verified || false,
+              status: match.status || seg.status
+            };
+          }
+          return seg;
+        });
+        setSegments(newSegments);
+        showToast(`Successfully imported ${data.count} segments from Target HTML!`);
+      } else {
+        showToast("No matching segments aligned", "warn");
+      }
+    } catch (error) {
+      console.error(error);
+      showToast(`Target HTML import failed: ${error.response?.data?.error || error.message}`, "error");
+    } finally {
+      if (event.target) event.target.value = "";
+    }
+  };
+
+  const handleToggleSelect = (segmentId, checked) => {
+    setSelectedSegmentIds((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(segmentId);
+      } else {
+        next.delete(segmentId);
+      }
+      return next;
+    });
+  };
+
+  const handleToggleSelectAll = (checked) => {
+    if (checked) {
+      const allIds = filteredSegments.map((s) => s.id);
+      setSelectedSegmentIds(new Set(allIds));
+    } else {
+      setSelectedSegmentIds(new Set());
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedSegmentIds(new Set());
+  };
+
+  const handleBulkAction = async (action) => {
+    if (selectedSegmentIds.size === 0) return;
+    try {
+      setIsPerformingBulk(true);
+      showToast(`Performing bulk ${action}...`);
+
+      const segmentIndices = Array.from(selectedSegmentIds).map((id) => id - 1);
+      const data = await bulkActionSegments(documentId, targetLanguage, segmentIndices, action);
+
+      if (data.segments) {
+        const newSegments = segments.map((seg) => {
+          const match = data.segments.find((s) => s.id === seg.id);
+          if (match) {
+            return {
+              ...seg,
+              target: match.target,
+              status: match.status,
+              verified: match.verified
+            };
+          }
+          return seg;
+        });
+        setSegments(newSegments);
+        setSelectedSegmentIds(new Set());
+        showToast(`Successfully updated ${data.count} segments!`);
+      }
+    } catch (error) {
+      console.error(error);
+      showToast(`Bulk action failed: ${error.response?.data?.error || error.message}`, "error");
+    } finally {
+      setIsPerformingBulk(false);
+    }
+  };
+
+  const handleBulkTranslate = async () => {
+    if (selectedSegmentIds.size === 0) return;
+    try {
+      setIsPerformingBulk(true);
+      showToast("Translating selected segments...");
+
+      const selectedSegs = segments.filter((s) => selectedSegmentIds.has(s.id));
+      const batch = selectedSegs.map((s) => ({
+        id: s.id,
+        source: s.source
+      }));
+
+      const data = await translateBatch(batch, targetLanguage, sourceLanguage, { ...contextSettings }, documentId);
+      if (data.results && data.results.length > 0) {
+        const newSegments = segments.map((seg) => {
+          const match = data.results.find((item) => item.id === seg.id);
+          if (match) {
+            return {
+              ...seg,
+              target: match.translated,
+              status: "translated",
+              verified: false,
+              mqmAccuracyScore: match.mqmAccuracyScore !== undefined ? match.mqmAccuracyScore : 100,
+              mqmReport: match.mqmReport || null
+            };
+          }
+          return seg;
+        });
+        setSegments(newSegments);
+        setSelectedSegmentIds(new Set());
+        showToast(`Successfully translated ${data.results.length} segments!`);
+      }
+    } catch (error) {
+      console.error(error);
+      showToast(`Bulk translation failed: ${error.response?.data?.error || error.message}`, "error");
+    } finally {
+      setIsPerformingBulk(false);
+    }
+  };
+
   const handleImportTmx = async (file) => {
     try {
       showToast("Importing TMX to database...");
@@ -2912,7 +3043,21 @@ export default function App() {
               You do not have permission to access this document workspace. Please request access from the owner or administrator to participate.
             </p>
           </div>
-          <div className="flex flex-col gap-2 pt-2">
+          <div className="flex flex-col gap-3 pt-2">
+            {!hasPendingAccessRequest && (
+              <div className="flex flex-col gap-1.5 text-left">
+                <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">Choose requested role</label>
+                <select
+                  value={requestedPermission}
+                  onChange={(e) => setRequestedPermission(e.target.value)}
+                  className="w-full rounded-xl border border-[var(--border-medium)] bg-[var(--bg-input)] px-3 py-2.5 text-xs text-[var(--text-primary)] outline-none transition-all focus:border-[var(--accent)] font-semibold cursor-pointer"
+                >
+                  <option value="read">Viewer</option>
+                  <option value="comment">Commenter</option>
+                  <option value="write">Editor</option>
+                </select>
+              </div>
+            )}
             <button
               onClick={handleRequestEditAccess}
               disabled={hasPendingAccessRequest}
@@ -2942,6 +3087,63 @@ export default function App() {
       <DragOverlay isDragging={isDragging} />
       <LoadingOverlay isUploading={isUploading} theme={theme} />
       <Toast toast={toast} />
+
+      {/* ── Floating Bulk Actions Bar ── */}
+      {selectedSegmentIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 px-6 py-3 rounded-2xl shadow-2xl animate-fade-in-up"
+             style={{ boxShadow: "0 20px 40px rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.08)" }}>
+          <span className="text-xs font-bold text-slate-300">
+            {selectedSegmentIds.size} segment{selectedSegmentIds.size > 1 ? "s" : ""} selected
+          </span>
+          <div className="w-px h-4 bg-slate-700/50" />
+          
+          <button
+            onClick={() => handleBulkAction("approve")}
+            disabled={isPerformingBulk}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-400 hover:bg-emerald-500/10 active:scale-95 transition-all cursor-pointer"
+          >
+            <Check style={{ width: 13, height: 13 }} />
+            Approve
+          </button>
+
+          <button
+            onClick={() => handleBulkAction("draft")}
+            disabled={isPerformingBulk}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:bg-slate-500/10 active:scale-95 transition-all cursor-pointer"
+          >
+            <Sliders style={{ width: 13, height: 13 }} />
+            Mark Draft
+          </button>
+
+          <button
+            onClick={handleBulkTranslate}
+            disabled={isPerformingBulk}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-indigo-400 hover:bg-indigo-500/10 active:scale-95 transition-all cursor-pointer"
+          >
+            <Sparkles style={{ width: 13, height: 13 }} />
+            AI Translate
+          </button>
+
+          <button
+            onClick={() => handleBulkAction("delete")}
+            disabled={isPerformingBulk}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-rose-400 hover:bg-rose-500/10 active:scale-95 transition-all cursor-pointer"
+          >
+            <Trash2 style={{ width: 13, height: 13 }} />
+            Delete
+          </button>
+
+          <div className="w-px h-4 bg-slate-700/50" />
+
+          <button
+            onClick={handleClearSelection}
+            className="p-1 rounded-lg text-slate-400 hover:bg-slate-500/10 active:scale-95 transition-all cursor-pointer"
+            title="Clear selection"
+          >
+            <X style={{ width: 14, height: 14 }} />
+          </button>
+        </div>
+      )}
 
       <SettingsModal
         show={showSettingsModal}
@@ -2975,14 +3177,7 @@ export default function App() {
         />
       )}
 
-      {currentRoute.screen === "chat" && (
-        <FullChatScreen
-          user={user}
-          chatSocketRef={chatSocketRef}
-          navigateTo={navigateTo}
-          theme={theme}
-        />
-      )}
+
 
       {currentRoute.screen === "dashboard" && (
         <ProjectDashboard
@@ -3145,6 +3340,7 @@ export default function App() {
                 onSaveProject={saveProject}
                 onRelinkHtml={permission === "write" ? handleRelinkHtml : null}
                 onImportXliff={permission === "write" ? handleImportXliff : null}
+                onImportTargetHtml={permission === "write" ? handleImportTargetHtml : null}
                 onTranslate={permission === "write" ? handleTranslateSegments : null}
                 onToggleQa={() => setShowQaPanel((value) => !value)}
                 onRunQc={permission === "write" ? handleRunQc : null}
@@ -3172,6 +3368,9 @@ export default function App() {
                 onAcceptAllChanges={handleAcceptAllChanges}
                 hasTrackedChanges={segments.some(s => s.originalTargetText && s.originalTargetText !== s.target)}
                 onApplyGlossary={permission === "write" ? handleApplyGlossary : null}
+                isAllSelected={filteredSegments.length > 0 && selectedSegmentIds.size === filteredSegments.length}
+                onToggleSelectAll={handleToggleSelectAll}
+                selectedCount={selectedSegmentIds.size}
               />
 
               {/* QA panel (collapsible modal) */}
@@ -3187,7 +3386,7 @@ export default function App() {
               {/* Zone 3: Segment editor */}
               <div className="segment-table">
 
-                {permission === "read" && (
+                {["read", "comment"].includes(permission) && (
                   <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl px-4 py-3 text-xs font-bold mb-3 shadow-lg mx-1 select-none">
                     <div className="flex items-center gap-2">
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 flex-shrink-0">
@@ -3195,7 +3394,7 @@ export default function App() {
                         <line x1="12" x2="12" y1="8" y2="12" />
                         <line x1="12" x2="12.01" y1="16" y2="16" />
                       </svg>
-                      Read-Only Workspace
+                      {permission === "comment" ? "Commenter (Read-Only) Workspace" : "Read-Only Workspace"}
                     </div>
                   </div>
                 )}
@@ -3224,7 +3423,8 @@ export default function App() {
                       }
                       onFocusSegment={handleFocusSegment}
                       onBlurSegment={handleBlurSegment}
-                      readOnly={permission === "read"}
+                      readOnly={permission === "read" || permission === "comment"}
+                      permission={permission}
                       onSaveContext={saveSegmentContext}
                       onTranslateWithContext={handleTranslateSegmentWithContext}
                       onTyping={handleSegmentTyping}
@@ -3232,6 +3432,8 @@ export default function App() {
                       onAcceptChange={handleAcceptChange}
                       onRejectChange={handleRejectChange}
                       autocompleteEnabled={autocompleteEnabled}
+                      isSelected={selectedSegmentIds.has(item.id)}
+                      onToggleSelect={permission === "write" ? handleToggleSelect : null}
                     />
                   )}
                 />
@@ -3486,7 +3688,7 @@ export default function App() {
             </span>
           </div>
           <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-            <strong>{pendingAccessRequests[0].profiles?.email.split("@")[0]}</strong> ({pendingAccessRequests[0].profiles?.email}) is requesting <strong>Edit Access</strong> to this document workspace.
+            <strong>{pendingAccessRequests[0].profiles?.email.split("@")[0]}</strong> ({pendingAccessRequests[0].profiles?.email}) is requesting <strong>{pendingAccessRequests[0].requestedPermission === "write" ? "Editor" : pendingAccessRequests[0].requestedPermission === "comment" ? "Commenter" : "Viewer"} Access</strong> to this document workspace.
           </p>
           <div className="flex gap-2 justify-end">
             <button
@@ -3499,15 +3701,15 @@ export default function App() {
               onClick={() => handleRespondToAccessRequest(pendingAccessRequests[0].id, "approve")}
               className="rounded-xl px-4 py-2 text-xs font-bold bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white border border-[var(--accent)] transition-all cursor-pointer shadow-md"
             >
-              Grant Edit Access
+              Grant {pendingAccessRequests[0].requestedPermission === "write" ? "Editor" : pendingAccessRequests[0].requestedPermission === "comment" ? "Commenter" : "Viewer"} Access
             </button>
           </div>
         </div>
       )}
 
       {/* ── Chat System ── */}
-      {isAuth && user && (
-        <ChatBubble user={user} chatSocketRef={chatSocketRef} />
+      {isAuth && user && permission !== "read" && (
+        <ChatBubble user={user} chatSocketRef={chatSocketRef} onTeleport={handleTeleport} />
       )}
     </div>
   );

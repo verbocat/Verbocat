@@ -237,6 +237,7 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
               className="w-full h-full rounded-xl border border-[var(--border-medium)] bg-[var(--bg-input)] px-3 text-[var(--text-primary)] outline-none transition-all focus:border-[var(--accent)] text-xs font-semibold cursor-pointer"
             >
               <option value="read">Viewer</option>
+              <option value="comment">Commenter</option>
               <option value="write">Editor</option>
             </select>
           </div>
@@ -311,6 +312,7 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
                         className="bg-transparent border-none outline-none text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer pr-2 py-1 rounded transition-colors"
                       >
                         <option value="read">Viewer</option>
+                        <option value="comment">Commenter</option>
                         <option value="write">Editor</option>
                         <option value="remove">Remove access</option>
                       </select>
@@ -355,7 +357,9 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
                     ? "Only people added can open with this link" 
                     : publicAccess === "write"
                       ? "Anyone on the Internet with this link can edit"
-                      : "Anyone on the Internet with this link can view"
+                      : publicAccess === "comment"
+                        ? "Anyone on the Internet with this link can comment"
+                        : "Anyone on the Internet with this link can view"
                   }
                 </p>
               </div>
@@ -368,6 +372,7 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
                     className="bg-transparent border-none outline-none text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer py-0.5 rounded transition-colors"
                   >
                     <option value="read">Viewer</option>
+                    <option value="comment">Commenter</option>
                     <option value="write">Editor</option>
                   </select>
                 </div>

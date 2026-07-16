@@ -137,6 +137,21 @@ export const importTmx = async (file) => {
   return response.data;
 };
 
+export const importTargetHtml = async (documentId, lang, file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await api.post(`/api/documents/${documentId}/lang/${lang}/import-target-html`, formData);
+  return response.data;
+};
+
+export const bulkActionSegments = async (documentId, lang, segmentIndices, action) => {
+  const response = await api.post(`/api/documents/${documentId}/lang/${lang}/segments/bulk-action`, {
+    segmentIndices,
+    action
+  });
+  return response.data;
+};
+
 export const fetchAdminUsers = async () => {
   const response = await api.get("/api/admin/users");
   return response.data;
@@ -216,8 +231,8 @@ export const fetchRequestStatus = async (documentId) => {
   return response.data;
 };
 
-export const requestAccess = async (documentId) => {
-  const response = await api.post(`/api/documents/${documentId}/request-access`);
+export const requestAccess = async (documentId, permission = "write") => {
+  const response = await api.post(`/api/documents/${documentId}/request-access`, { permission });
   return response.data;
 };
 

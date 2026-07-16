@@ -8,17 +8,25 @@ import {
 
 export const WorkspaceToolbar = ({
   onDeleteProject, onExport, onLoadProject, onSaveProject,
-  onRelinkHtml, onImportXliff, onTranslate, onToggleQa,
+  onRelinkHtml, onImportXliff, onImportTargetHtml, onTranslate, onToggleQa,
   isTranslating, qaIssuesCount, searchQuery, segmentsCount,
   setSearchQuery, stats, sourceLanguage, onSourceLanguageChange,
   targetLanguage, onTargetLanguageChange, fileName, theme,
   canTranslate = true, fileExtension, filterStatus, setFilterStatus, onUpload,
   onRunQc, isAuditing,
   trackChangesEnabled, onToggleTrackChanges, isOwner,
-  onAcceptAllChanges, hasTrackedChanges, onApplyGlossary
+  onAcceptAllChanges, hasTrackedChanges, onApplyGlossary,
+  isAllSelected, onToggleSelectAll, selectedCount
 }) => {
   const [showDocMenu, setShowDocMenu] = useState(false);
   const docMenuRef = useRef(null);
+  const selectAllRef = useRef(null);
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = selectedCount > 0 && selectedCount < segmentsCount;
+    }
+  }, [selectedCount, segmentsCount]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -153,6 +161,16 @@ export const WorkspaceToolbar = ({
                     className="hidden" disabled={!canAct} />
                 </label>
 
+                {onImportTargetHtml && (
+                  <label className={`dropdown-item ${!canAct ? "opacity-30 pointer-events-none" : "cursor-pointer"}`}>
+                    <Upload style={{ width: 13, height: 13, opacity: 0.65, flexShrink: 0 }} />
+                    Import Target HTML
+                    <input type="file" accept=".html,.htm"
+                      onChange={(e) => { onImportTargetHtml(e); setShowDocMenu(false); }}
+                      className="hidden" disabled={!canAct} />
+                  </label>
+                )}
+
                 <label className={`dropdown-item ${!canAct ? "opacity-30 pointer-events-none" : "cursor-pointer"}`}>
                   <Link2 style={{ width: 13, height: 13, opacity: 0.65, flexShrink: 0 }} />
                   Relink Template
@@ -185,6 +203,23 @@ export const WorkspaceToolbar = ({
 
       {/* ── ROW 2 — Language pair + Search + Filter ── */}
       <div className="action-row2">
+
+        {/* Select All Checkbox */}
+        {segmentsCount > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginRight: "12px", borderRight: "1px solid var(--border-subtle)", paddingRight: "12px" }}>
+            <input
+              type="checkbox"
+              ref={selectAllRef}
+              checked={isAllSelected}
+              onChange={(e) => onToggleSelectAll(e.target.checked)}
+              style={{ cursor: "pointer", width: "13px", height: "13px" }}
+              title="Select all segments"
+            />
+            <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", userSelect: "none" }}>
+              Select All
+            </span>
+          </div>
+        )}
 
         {/* Source language */}
         <div className="lang-wrap">

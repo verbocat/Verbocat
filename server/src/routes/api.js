@@ -1865,7 +1865,7 @@ apiRouter.get("/documents/:id/request-status", checkAuth, async (request, respon
       .select("status")
       .eq("document_id", documentId)
       .eq("user_id", userId)
-      .eq("status", "pending")
+      .ilike("status", "pending%")
       .maybeSingle();
 
     if (error) {
@@ -1898,13 +1898,16 @@ apiRouter.post("/documents/:id/request-access", checkAuth, async (request, respo
       return response.status(404).json({ error: "Document not found." });
     }
 
+    const { permission } = request.body;
+    const requestedPermission = ["write", "read", "comment"].includes(permission) ? permission : "write";
+
     // Insert or update access request
     const { error: insertError } = await supabase
       .from("document_access_requests")
       .upsert({
         document_id: documentId,
         user_id: userId,
-        status: "pending",
+        status: `pending:${requestedPermission}`,
         created_at: new Date().toISOString()
       }, { onConflict: "document_id,user_id" });
 
@@ -1927,12 +1930,13 @@ apiRouter.post("/documents/:id/request-access", checkAuth, async (request, respo
         : `${clientUrl}`;
 
       const ownerName = ownerProfile.email.split("@")[0];
+      const permLabel = requestedPermission === "write" ? "Edit" : requestedPermission === "comment" ? "Comment" : "View";
 
       // Send the email in the background without blocking the HTTP response
       sendEmail({
         to: ownerProfile.email,
         subject: `🔑 Access Request for "${doc.name}"`,
-        text: `${userName} (${userEmail}) is requesting Edit Access to "${doc.name}". Review at: ${docLink}`,
+        text: `${userName} (${userEmail}) is requesting ${permLabel} Access to "${doc.name}". Review at: ${docLink}`,
         html: `
 <!DOCTYPE html>
 <html>
@@ -1951,7 +1955,7 @@ apiRouter.post("/documents/:id/request-access", checkAuth, async (request, respo
     <div class="header">🔑 Document Access Request</div>
     <div class="details">
       <p>Hello <strong>${ownerName}</strong>,</p>
-      <p><strong>${userName}</strong> (${userEmail}) has requested <strong>Edit Access</strong> to your document: <strong>${doc.name}</strong>.</p>
+      <p><strong>${userName}</strong> (${userEmail}) has requested <strong>${permLabel} Access</strong> to your document: <strong>${doc.name}</strong>.</p>
     </div>
     <a href="${docLink}" class="btn" style="color: #ffffff;">View Workspace</a>
     <div class="footer">
@@ -2023,13 +2027,22 @@ apiRouter.get("/documents/:id/access-requests", checkAuth, async (request, respo
         )
       `)
       .eq("document_id", doc.id)
-      .eq("status", "pending");
+      .ilike("status", "pending%");
 
     if (error) {
       return handleDatabaseError(error, response, "Failed to load access requests.");
     }
 
-    response.json(requests || []);
+    const mappedRequests = (requests || []).map(r => {
+      const parts = (r.status || "").split(":");
+      return {
+        ...r,
+        status: parts[0] || "pending",
+        requestedPermission: parts[1] || "write"
+      };
+    });
+
+    response.json(mappedRequests);
   } catch (err) {
     console.error(err);
     response.status(500).json({ error: "Server error." });
@@ -2087,13 +2100,14 @@ apiRouter.post("/documents/:id/access-requests/:requestId/respond", checkAuth, a
     }
 
     if (action === "approve") {
-      // Grant write access to the user
+      const requestedPerm = (accessReq.status || "").split(":")[1] || "write";
+      // Grant access with user's requested permission
       const { error: grantError } = await supabase
         .from("document_access")
         .upsert({
           document_id: accessReq.document_id,
           user_id: targetUserId,
-          permission: "write"
+          permission: requestedPerm
         }, { onConflict: "document_id,user_id" });
 
       if (grantError) {
@@ -2510,10 +2524,53 @@ apiRouter.get("/projects/:projectId", checkAuth, async (request, response) => {
       .select("*, documents(name)")
       .eq("project_id", projectId);
 
+    // Calculate verified progress for each job on the fly
+    const docIds = (documents || []).map(d => d.id);
+    let verifiedProgressMap = {};
+
+    if (docIds.length > 0) {
+      const { data: segmentStats } = await supabase
+        .from("document_segments")
+        .select("document_id, target_lang, status, source_text")
+        .in("document_id", docIds);
+
+      if (segmentStats) {
+        // Group segments by document_id and target_lang
+        const grouped = {};
+        segmentStats.forEach(seg => {
+          const key = `${seg.document_id}:${seg.target_lang}`;
+          if (!grouped[key]) {
+            grouped[key] = [];
+          }
+          grouped[key].push(seg);
+        });
+
+        const { isCountableSourceText } = require("../utils/segmentProgress");
+        for (const [key, segs] of Object.entries(grouped)) {
+          const countable = segs.filter(s => isCountableSourceText(s.source_text));
+          if (countable.length > 0) {
+            const verifiedCount = countable.filter(s => s.status === "approved").length;
+            const verifiedPercent = Math.round((verifiedCount / countable.length) * 100);
+            verifiedProgressMap[key] = verifiedPercent;
+          } else {
+            verifiedProgressMap[key] = 0;
+          }
+        }
+      }
+    }
+
+    const enrichedJobs = (jobs || []).map(job => {
+      const key = `${job.document_id}:${job.target_lang}`;
+      return {
+        ...job,
+        verified_progress: verifiedProgressMap[key] || 0
+      };
+    });
+
     response.json({
       project,
       files: documents || [],
-      jobs: jobs || []
+      jobs: enrichedJobs
     });
   } catch (err) {
     console.error(err);
@@ -4151,6 +4208,359 @@ apiRouter.post("/documents/:documentId/lang/:lang/segments/:index/translate-cont
     if (tempPath && fs.existsSync(tempPath)) {
       fs.unlinkSync(tempPath);
     }
+  }
+});
+
+// 16. Import Target HTML and Align Segments
+apiRouter.post("/documents/:documentId/lang/:lang/import-target-html", checkAuth, upload.single("file"), async (request, response) => {
+  try {
+    const { documentId, lang } = request.params;
+
+    // 1. Verify write access
+    request.params.id = documentId;
+    const doc = await verifyDocumentAccess(request, response, "write");
+    if (!doc) return;
+
+    if (!request.file) {
+      return response.status(400).json({ error: "No file uploaded." });
+    }
+
+    const targetFilePath = request.file.path;
+
+    // 2. Parse target HTML file
+    const htmlParser = require("../utils/parsers/htmlParser");
+    const targetResult = await htmlParser.parseFile(targetFilePath);
+    const targetSegments = targetResult.segments || [];
+
+    // 3. Fetch source template segments
+    const sourceSegments = await fetchAllSegments(documentId, "*", "source");
+    if (!sourceSegments || sourceSegments.length === 0) {
+      return response.status(400).json({ error: "Source segments not found for this document." });
+    }
+
+    // 4. Retrieve tag maps for both source and target HTML
+    const zlib = require("zlib");
+    let targetTagMap = new Map();
+    try {
+      const buffer = Buffer.from(targetResult.template, "base64");
+      const unzipped = zlib.gunzipSync(buffer).toString("utf-8");
+      const templateData = JSON.parse(unzipped);
+      targetTagMap = new Map(templateData.tagMap || []);
+    } catch (e) {
+      console.error("Failed to decode target tag map:", e);
+    }
+
+    const BLOCK_TAGS = [
+      "p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "th", "blockquote", 
+      "section", "article", "nav", "header", "footer", "figcaption", "address", "main",
+      "ul", "ol", "table", "tbody", "thead", "tr", "dl", "dt", "dd", "form", "fieldset",
+      "body", "html"
+    ];
+
+    const getSourceSegmentBlockIndices = (html) => {
+      const cheerio = require("cheerio");
+      const $ = cheerio.load(html, { decodeEntities: false });
+      const segmentToBlockMap = {};
+      const leafTextBlocks = [];
+
+      const traverse = (node) => {
+        if (!node) return false;
+        if (node.type === "tag") {
+          const tagName = node.name.toLowerCase();
+          if (["script", "style", "noscript", "svg", "canvas"].includes(tagName)) {
+            return false;
+          }
+        }
+        if (node.type === "text") {
+          return node.data.trim().length > 0;
+        }
+        let hasText = false;
+        let hasDescendantBlock = false;
+        if (node.children) {
+          for (let i = 0; i < node.children.length; i++) {
+            const child = node.children[i];
+            const isChildBlock = child.type === "tag" && 
+              (BLOCK_TAGS.includes(child.name.toLowerCase()) || 
+               (child.attribs && child.attribs.class && child.attribs.class.includes("__temp-leaf-block__")));
+            const childHasText = traverse(child);
+            if (childHasText) hasText = true;
+            if (isChildBlock && childHasText) hasDescendantBlock = true;
+          }
+        }
+        const isThisBlock = node.type === "tag" && 
+          (BLOCK_TAGS.includes(node.name.toLowerCase()) || 
+           (node.attribs && node.attribs.class && node.attribs.class.includes("__temp-leaf-block__")));
+        if (isThisBlock && hasText && !hasDescendantBlock) {
+          leafTextBlocks.push(node);
+        }
+        return hasText;
+      };
+
+      if ($("body").length > 0) {
+        traverse($("body")[0]);
+      } else {
+        traverse($.root()[0]);
+      }
+
+      leafTextBlocks.forEach((blockNode, blockIdx) => {
+        const blockHtml = $(blockNode).html() || "";
+        const matches = blockHtml.match(/__SEG_(\d+)__/g) || [];
+        matches.forEach(m => {
+          const segId = parseInt(m.replace(/\D/g, ""), 10);
+          segmentToBlockMap[segId] = blockIdx;
+        });
+      });
+
+      return segmentToBlockMap;
+    };
+
+    let templateHtml = "";
+    let sourceTagMap = new Map();
+    const { data: fileData, error: fileErr } = await supabase
+      .from("html_files")
+      .select("content")
+      .eq("id", doc.file_id)
+      .single();
+
+    if (!fileErr && fileData && fileData.content) {
+      try {
+        const buffer = Buffer.from(fileData.content, "base64");
+        const unzipped = zlib.gunzipSync(buffer).toString("utf-8");
+        const templateData = JSON.parse(unzipped);
+        templateHtml = templateData.html || "";
+        sourceTagMap = new Map(templateData.tagMap || []);
+      } catch (e) {
+        console.error("Failed to decode source tag map:", e);
+      }
+    }
+
+    const sourceSegmentToBlockMap = getSourceSegmentBlockIndices(templateHtml);
+
+    // 5. Align target segments to source segments using DOM leaf block positions
+    const N = sourceSegments.length;
+    const M = targetSegments.length;
+
+    // Group target segments by blockIndex
+    const targetGroups = {};
+    targetSegments.forEach(seg => {
+      if (seg.blockIndex !== undefined) {
+        if (!targetGroups[seg.blockIndex]) {
+          targetGroups[seg.blockIndex] = [];
+        }
+        targetGroups[seg.blockIndex].push(seg);
+      }
+    });
+
+    // Group source segments by blockIndex to allow relative index matching per block
+    const sourceGroups = {};
+    sourceSegments.forEach(seg => {
+      const blockIdx = sourceSegmentToBlockMap[seg.segment_index];
+      if (blockIdx !== undefined) {
+        if (!sourceGroups[blockIdx]) {
+          sourceGroups[blockIdx] = [];
+        }
+        sourceGroups[blockIdx].push(seg);
+      }
+    });
+
+    const updatePromises = [];
+    const alignedResults = [];
+
+    for (let i = 0; i < N; i++) {
+      const sourceSeg = sourceSegments[i];
+      const blockIdx = sourceSegmentToBlockMap[sourceSeg.segment_index];
+      let targetText = "";
+
+      if (blockIdx !== undefined && targetGroups[blockIdx] && targetGroups[blockIdx].length > 0) {
+        const blockSourceSegs = sourceGroups[blockIdx] || [];
+        const blockTargetSegs = targetGroups[blockIdx] || [];
+        
+        // Partition target segments monotonically into source segments
+        const mappedTargetTexts = Array(blockSourceSegs.length).fill("");
+        blockTargetSegs.forEach((tgtSeg, k) => {
+          const j = Math.floor((k / blockTargetSegs.length) * blockSourceSegs.length);
+          if (j >= 0 && j < mappedTargetTexts.length) {
+            mappedTargetTexts[j] += (mappedTargetTexts[j] ? " " : "") + (tgtSeg.source || "");
+          }
+        });
+
+        const relativeIdx = blockSourceSegs.findIndex(s => s.segment_index === sourceSeg.segment_index);
+        if (relativeIdx !== -1) {
+          targetText = mappedTargetTexts[relativeIdx] || "";
+        }
+      }
+
+      // Use target translation text directly without any tag alignment or script validation fallbacks
+      const finalTargetText = targetText;
+      const status = finalTargetText ? "translated" : "draft";
+
+      alignedResults.push({
+        segment_index: sourceSeg.segment_index,
+        target_text: finalTargetText,
+        status
+      });
+
+      // Update in DB
+      updatePromises.push(
+        supabase
+          .from("document_segments")
+          .update({
+            target_text: finalTargetText,
+            status: status,
+            updated_at: new Date().toISOString()
+          })
+          .eq("document_id", documentId)
+          .eq("target_lang", lang)
+          .eq("segment_index", sourceSeg.segment_index)
+      );
+    }
+
+    // Run parallel DB updates
+    const updateResults = await Promise.all(updatePromises);
+    const updateErrors = updateResults.filter(r => r.error);
+    if (updateErrors.length > 0) {
+      console.error("Errors updating segments during target import:", updateErrors.map(e => e.error));
+      return response.status(500).json({ error: "Failed to save some segment translations to the database." });
+    }
+
+    // 6. Broadcast socket update for each segment
+    const { getIo } = require("../services/socket");
+    const io = getIo();
+    if (io) {
+      alignedResults.forEach(res => {
+        io.to(getDocumentRoomId(documentId, lang)).emit("segment-updated", {
+          segmentIndex: res.segment_index,
+          targetText: res.target_text,
+          status: res.status,
+          updatedBy: request.user.email || "System Import",
+          targetLang: lang
+        });
+      });
+    }
+
+    // 7. Clean up the temp uploaded file
+    try {
+      const fs = require("fs");
+      if (fs.existsSync(targetFilePath)) {
+        fs.unlinkSync(targetFilePath);
+      }
+    } catch (cleanupErr) {
+      console.error("Failed to delete temp file:", cleanupErr);
+    }
+
+    // 8. Fetch updated segments list to return to client
+    const updatedSegments = await fetchAllSegments(documentId, "*", lang);
+    const clientSegments = updatedSegments.map(seg => ({
+      id: seg.segment_index + 1,
+      source: seg.source_text,
+      target: seg.target_text || "",
+      status: seg.status,
+      verified: seg.status === "approved",
+      mqmAccuracyScore: seg.mqm_accuracy_score,
+      mqmReport: seg.mqm_report,
+      contextJira: seg.context_jira,
+      contextDescription: seg.context_description,
+      originalTargetText: seg.original_target_text,
+      trackedBy: seg.tracked_by
+    }));
+
+    response.json({
+      success: true,
+      count: N,
+      segments: clientSegments
+    });
+
+  } catch (err) {
+    console.error(err);
+    response.status(500).json({ error: err.message });
+  }
+});
+
+// 17. Bulk action on segments (delete, approve, draft)
+apiRouter.post("/documents/:documentId/lang/:lang/segments/bulk-action", checkAuth, async (request, response) => {
+  try {
+    const { documentId, lang } = request.params;
+    const { segmentIndices, action } = request.body;
+
+    if (!segmentIndices || !Array.isArray(segmentIndices) || segmentIndices.length === 0) {
+      return response.status(400).json({ error: "segmentIndices array is required and must not be empty." });
+    }
+
+    if (!["delete", "approve", "draft"].includes(action)) {
+      return response.status(400).json({ error: "Invalid action. Allowed values: delete, approve, draft." });
+    }
+
+    // 1. Verify write access
+    request.params.id = documentId;
+    const doc = await verifyDocumentAccess(request, response, "write");
+    if (!doc) return;
+
+    // 2. Perform updates
+    const updateFields = {
+      updated_at: new Date().toISOString()
+    };
+
+    if (action === "delete") {
+      updateFields.target_text = "";
+      updateFields.status = "draft";
+    } else if (action === "approve") {
+      updateFields.status = "approved";
+    } else if (action === "draft") {
+      updateFields.status = "draft";
+    }
+
+    const { error } = await supabase
+      .from("document_segments")
+      .update(updateFields)
+      .eq("document_id", documentId)
+      .eq("target_lang", lang)
+      .in("segment_index", segmentIndices);
+
+    if (error) {
+      console.error("Bulk action failed in DB update:", error);
+      return response.status(500).json({ error: "Failed to update segment translations." });
+    }
+
+    // 3. Broadcast updates to document room via WebSocket
+    const { getIo } = require("../services/socket");
+    const io = getIo();
+    if (io) {
+      segmentIndices.forEach(idx => {
+        io.to(getDocumentRoomId(documentId, lang)).emit("segment-updated", {
+          segmentIndex: idx,
+          targetText: action === "delete" ? "" : undefined,
+          status: action === "delete" || action === "draft" ? "draft" : "approved",
+          updatedBy: request.user.email || "System Bulk",
+          targetLang: lang
+        });
+      });
+    }
+
+    // 4. Return updated segments
+    const updatedSegments = await fetchAllSegments(documentId, "*", lang);
+    const clientSegments = updatedSegments.map(seg => ({
+      id: seg.segment_index + 1,
+      source: seg.source_text,
+      target: seg.target_text || "",
+      status: seg.status,
+      verified: seg.status === "approved",
+      mqmAccuracyScore: seg.mqm_accuracy_score,
+      mqmReport: seg.mqm_report,
+      contextJira: seg.context_jira,
+      contextDescription: seg.context_description,
+      originalTargetText: seg.original_target_text,
+      trackedBy: seg.tracked_by
+    }));
+
+    response.json({
+      success: true,
+      count: segmentIndices.length,
+      segments: clientSegments
+    });
+
+  } catch (err) {
+    console.error(err);
+    response.status(500).json({ error: err.message });
   }
 });
 

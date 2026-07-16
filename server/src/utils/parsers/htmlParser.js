@@ -164,7 +164,7 @@ const parseFile = async (filePath) => {
   }
 
   // 3. Process each leaf text block
-  leafTextBlocks.forEach((blockNode) => {
+  leafTextBlocks.forEach((blockNode, blockIdx) => {
     const placeholderStr = extractPlaceholders(blockNode, $, tagMapGlobal, tagCounter);
     const subSegments = splitByPunctuation(placeholderStr, tagMapGlobal);
 
@@ -180,6 +180,7 @@ const parseFile = async (filePath) => {
         target: "",
         leading,
         trailing,
+        blockIndex: blockIdx
       });
     });
   });
