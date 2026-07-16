@@ -144,6 +144,16 @@ export const importTargetHtml = async (documentId, lang, file) => {
   return response.data;
 };
 
+export const relinkFiles = async (sourceFile, targetFile) => {
+  const formData = new FormData();
+  formData.append("sourceFile", sourceFile);
+  formData.append("targetFile", targetFile);
+  const response = await api.post("/api/relink-files", formData, {
+    headers: { "Content-Type": "multipart/form-data" }
+  });
+  return response.data;
+};
+
 export const bulkActionSegments = async (documentId, lang, segmentIndices, action) => {
   const response = await api.post(`/api/documents/${documentId}/lang/${lang}/segments/bulk-action`, {
     segmentIndices,

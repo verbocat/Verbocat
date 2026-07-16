@@ -4211,6 +4211,41 @@ apiRouter.post("/documents/:documentId/lang/:lang/segments/:index/translate-cont
   }
 });
 
+// 15.5 Dual Source & Target Relinking Endpoint
+apiRouter.post("/relink-files", checkAuth, upload.fields([{ name: "sourceFile", maxCount: 1 }, { name: "targetFile", maxCount: 1 }]), async (request, response) => {
+  try {
+    const files = request.files;
+    if (!files || !files.sourceFile || !files.sourceFile[0] || !files.targetFile || !files.targetFile[0]) {
+      return response.status(400).json({ error: "Both sourceFile and targetFile are required for relinking." });
+    }
+
+    const sourceFilePath = files.sourceFile[0].path;
+    const targetFilePath = files.targetFile[0].path;
+
+    const { processRelinkDualFiles } = require("../utils/parsers/relinkEngine");
+    const result = await processRelinkDualFiles(sourceFilePath, targetFilePath);
+
+    // Clean up temporary files
+    try {
+      const fs = require("fs");
+      if (fs.existsSync(sourceFilePath)) fs.unlinkSync(sourceFilePath);
+      if (fs.existsSync(targetFilePath)) fs.unlinkSync(targetFilePath);
+    } catch (cleanupErr) {
+      console.error("Temp file cleanup failed:", cleanupErr);
+    }
+
+    response.json({
+      success: true,
+      count: result.count,
+      segments: result.segments,
+      template: result.template
+    });
+  } catch (err) {
+    console.error("Relink processing error:", err);
+    response.status(500).json({ error: err.message || "Failed to process relinking files." });
+  }
+});
+
 // 16. Import Target HTML and Align Segments
 apiRouter.post("/documents/:documentId/lang/:lang/import-target-html", checkAuth, upload.single("file"), async (request, response) => {
   try {
@@ -4336,61 +4371,23 @@ apiRouter.post("/documents/:documentId/lang/:lang/import-target-html", checkAuth
 
     const sourceSegmentToBlockMap = getSourceSegmentBlockIndices(templateHtml);
 
-    // 5. Align target segments to source segments using DOM leaf block positions
+    // 5. Align target HTML segments to source segments using structure & tag-aware targetAligner
+    const { alignTargetHtmlToSource } = require("../utils/parsers/targetAligner");
+    const alignedTargetMap = await alignTargetHtmlToSource(
+      targetFilePath,
+      templateHtml,
+      sourceTagMap,
+      sourceSegments,
+      sourceSegmentToBlockMap
+    );
+
     const N = sourceSegments.length;
-    const M = targetSegments.length;
-
-    // Group target segments by blockIndex
-    const targetGroups = {};
-    targetSegments.forEach(seg => {
-      if (seg.blockIndex !== undefined) {
-        if (!targetGroups[seg.blockIndex]) {
-          targetGroups[seg.blockIndex] = [];
-        }
-        targetGroups[seg.blockIndex].push(seg);
-      }
-    });
-
-    // Group source segments by blockIndex to allow relative index matching per block
-    const sourceGroups = {};
-    sourceSegments.forEach(seg => {
-      const blockIdx = sourceSegmentToBlockMap[seg.segment_index];
-      if (blockIdx !== undefined) {
-        if (!sourceGroups[blockIdx]) {
-          sourceGroups[blockIdx] = [];
-        }
-        sourceGroups[blockIdx].push(seg);
-      }
-    });
-
     const updatePromises = [];
     const alignedResults = [];
 
     for (let i = 0; i < N; i++) {
       const sourceSeg = sourceSegments[i];
-      const blockIdx = sourceSegmentToBlockMap[sourceSeg.segment_index];
-      let targetText = "";
-
-      if (blockIdx !== undefined && targetGroups[blockIdx] && targetGroups[blockIdx].length > 0) {
-        const blockSourceSegs = sourceGroups[blockIdx] || [];
-        const blockTargetSegs = targetGroups[blockIdx] || [];
-        
-        // Partition target segments monotonically into source segments
-        const mappedTargetTexts = Array(blockSourceSegs.length).fill("");
-        blockTargetSegs.forEach((tgtSeg, k) => {
-          const j = Math.floor((k / blockTargetSegs.length) * blockSourceSegs.length);
-          if (j >= 0 && j < mappedTargetTexts.length) {
-            mappedTargetTexts[j] += (mappedTargetTexts[j] ? " " : "") + (tgtSeg.source || "");
-          }
-        });
-
-        const relativeIdx = blockSourceSegs.findIndex(s => s.segment_index === sourceSeg.segment_index);
-        if (relativeIdx !== -1) {
-          targetText = mappedTargetTexts[relativeIdx] || "";
-        }
-      }
-
-      // Use target translation text directly without any tag alignment or script validation fallbacks
+      const targetText = alignedTargetMap.get(sourceSeg.segment_index) || "";
       const finalTargetText = targetText;
       const status = finalTargetText ? "translated" : "draft";
 

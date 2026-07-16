@@ -16,6 +16,7 @@ import { LoadingOverlay } from "./components/LoadingOverlay.jsx";
 import { ContextSettingsModal } from "./components/ContextSettingsModal.jsx";
 import { SearchReplaceModal } from "./components/SearchReplaceModal.jsx";
 import { SettingsModal } from "./components/SettingsModal.jsx";
+import { RelinkingPage } from "./components/RelinkingPage.jsx";
 import { LANGUAGES } from "./constants/languages.js";
 import { useGlossaryManager } from "./hooks/useGlossaryManager.js";
 import { useUserStore } from "./services/userStore.js";
@@ -136,6 +137,12 @@ export default function App() {
       return {
         screen: "project",
         projectId: projectMatch[1]
+      };
+    }
+
+    if (path === "/relink" || path.startsWith("/relink")) {
+      return {
+        screen: "relink"
       };
     }
 
@@ -3205,6 +3212,23 @@ export default function App() {
           userRole={user ? user.role : ""}
           userId={user ? user.id : null}
           onOpenAdmin={() => setShowAdminDashboard(true)}
+        />
+      )}
+
+      {currentRoute.screen === "relink" && (
+        <RelinkingPage
+          onNavigate={navigateTo}
+          showToast={showToast}
+          theme={theme}
+          onLoadRelinkedDocument={({ fileName, segments, sourceLanguage, targetLanguage, fileExtension }) => {
+            setFileName(fileName);
+            setSegments(segments);
+            setSourceLanguage(sourceLanguage || "en");
+            setTargetLanguage(targetLanguage || "hi");
+            setFileExtension(fileExtension || ".html");
+            setDocumentId("relinked_session_" + Date.now());
+            showToast("Relinked document loaded into Workspace Editor!");
+          }}
         />
       )}
 

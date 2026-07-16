@@ -161,16 +161,6 @@ export const WorkspaceToolbar = ({
                     className="hidden" disabled={!canAct} />
                 </label>
 
-                {onImportTargetHtml && (
-                  <label className={`dropdown-item ${!canAct ? "opacity-30 pointer-events-none" : "cursor-pointer"}`}>
-                    <Upload style={{ width: 13, height: 13, opacity: 0.65, flexShrink: 0 }} />
-                    Import Target HTML
-                    <input type="file" accept=".html,.htm"
-                      onChange={(e) => { onImportTargetHtml(e); setShowDocMenu(false); }}
-                      className="hidden" disabled={!canAct} />
-                  </label>
-                )}
-
                 <label className={`dropdown-item ${!canAct ? "opacity-30 pointer-events-none" : "cursor-pointer"}`}>
                   <Link2 style={{ width: 13, height: 13, opacity: 0.65, flexShrink: 0 }} />
                   Relink Template

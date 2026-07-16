@@ -5,7 +5,7 @@ import {
   BookOpen, Users, Settings as SettingsIcon,
   LogOut, Plus, LockKeyhole, Sliders,
   ChevronRight, FileText, LayoutDashboard, BarChart3,
-  MessageCircle
+  MessageCircle, Layers
 } from "lucide-react";
 
 const NavBtn = ({ children, onClick, disabled = false, title = "", iconOnly = false }) => (
@@ -136,6 +136,14 @@ export const Header = ({
             {totalUnread > 0 && (
               <span className="absolute -top-1.5 -right-2.5 w-2 h-2 rounded-full bg-rose-500 shadow-sm animate-pulse" />
             )}
+          </div>
+        </NavBtn>
+
+        {/* Relink Page */}
+        <NavBtn onClick={() => onNavigate && onNavigate("/relink")} title="Relinking Page">
+          <div className="flex items-center gap-1">
+            <Layers style={{ width: 13, height: 13, color: "#6366f1" }} />
+            <span>Relink Page</span>
           </div>
         </NavBtn>
 
