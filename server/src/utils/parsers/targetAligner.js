@@ -293,7 +293,18 @@ function splitTargetBlockToN(targetPlaceholderStr, N, sourceSubSegments, targetT
     let accumulatedRatio = 0;
     for (let k = 0; k < N - 1; k++) {
       accumulatedRatio += sourceWeights[k] / totalSourceLen;
-      const pureIdx = Math.min(pureText.length - 1, Math.max(1, Math.round(pureText.length * accumulatedRatio)));
+      let pureIdx = Math.min(pureText.length - 1, Math.max(1, Math.round(pureText.length * accumulatedRatio)));
+      
+      if (pureIdx > 0 && pureIdx < pureText.length && !/\s/.test(pureText[pureIdx - 1]) && !/\s/.test(pureText[pureIdx])) {
+        const nextSpace = pureText.indexOf(" ", pureIdx);
+        const prevSpace = pureText.lastIndexOf(" ", pureIdx);
+        if (nextSpace !== -1 && (prevSpace === -1 || (nextSpace - pureIdx) <= (pureIdx - prevSpace))) {
+          pureIdx = nextSpace + 1;
+        } else if (prevSpace !== -1) {
+          pureIdx = prevSpace + 1;
+        }
+      }
+
       pureSplitIndices.push(pureIdx);
     }
 
