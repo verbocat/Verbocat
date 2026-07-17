@@ -1,269 +1,161 @@
 const fs = require("fs");
 const cheerio = require("cheerio");
-const zlib = require("zlib");
-const { extractPlaceholders } = require("./segmentationUtils");
+const { extractPlaceholders, splitByPunctuation, balanceSegmentTags } = require("./segmentationUtils");
 const { alignSegmentTags } = require("../tagProtection");
+const { getLeafTextBlocks, projectSourceTagsOntoTarget } = require("./relinkEngine");
 
-const BLOCK_TAGS = [
-  "p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "th", "blockquote", 
-  "section", "article", "nav", "header", "footer", "figcaption", "address", "main",
-  "ul", "ol", "table", "tbody", "thead", "tr", "dl", "dt", "dd", "form", "fieldset",
-  "body", "html"
-];
+function extractEntityAnchors(text) {
+  if (!text) return new Set();
+  const clean = String(text).replace(/<\/?\d+>/g, " ");
+  const anchors = new Set();
 
-const wrapInlineSiblings = (element, $) => {
-  $(element).children().each((_, child) => {
-    wrapInlineSiblings(child, $);
-  });
+  const numbers = clean.match(/\b\d+[\d.,/-]*\b/g);
+  if (numbers) numbers.forEach(n => anchors.add(n.toLowerCase()));
 
-  const children = $(element).contents();
-  let hasBlock = false;
-  let hasInline = false;
+  const urls = clean.match(/\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b|\b(?:https?:\/\/|www\.)[^\s]+\b/gi);
+  if (urls) urls.forEach(u => anchors.add(u.toLowerCase()));
 
-  children.each((_, child) => {
-    if (child.type === "text") {
-      if ($(child).text().trim()) {
-        hasInline = true;
-      }
-    } else if (child.type === "tag") {
-      const isBlock = BLOCK_TAGS.includes(child.name.toLowerCase()) || 
-        (child.attribs && child.attribs.class && child.attribs.class.includes("__temp-leaf-block__"));
-      if (isBlock) {
-        hasBlock = true;
-      } else if (!["script", "style", "noscript"].includes(child.name.toLowerCase())) {
-        hasInline = true;
-      }
-    }
-  });
+  const codes = clean.match(/\b[A-Z0-9_-]{3,}\b/g);
+  if (codes) codes.forEach(c => anchors.add(c.toLowerCase()));
 
-  if (hasBlock && hasInline) {
-    let currentGroup = [];
-    
-    children.each((_, child) => {
-      const isBlock = child.type === "tag" && (
-        BLOCK_TAGS.includes(child.name.toLowerCase()) || 
-        (child.attribs && child.attribs.class && child.attribs.class.includes("__temp-leaf-block__"))
-      );
-      const isWhitespaceText = child.type === "text" && !$(child).text().trim();
-      const isIgnoredTag = child.type === "tag" && ["script", "style", "noscript"].includes(child.name.toLowerCase());
-
-      if (isBlock || isIgnoredTag) {
-        if (currentGroup.length > 0) {
-          const wrapper = $("<div class='__temp-leaf-block__'></div>");
-          $(currentGroup[0]).replaceWith(wrapper);
-          currentGroup.forEach((node) => {
-            wrapper.append(node);
-          });
-          currentGroup = [];
-        }
-      } else if (!isWhitespaceText) {
-        currentGroup.push(child);
-      }
-    });
-
-    if (currentGroup.length > 0) {
-      const wrapper = $("<div class='__temp-leaf-block__'></div>");
-      $(currentGroup[0]).replaceWith(wrapper);
-      currentGroup.forEach((node) => {
-        wrapper.append(node);
-      });
-    }
-  }
-};
-
-const getLeafTextBlocks = ($) => {
-  if ($("body").length > 0) {
-    wrapInlineSiblings($("body")[0], $);
-  }
-
-  const leafTextBlocks = [];
-  const traverse = (node) => {
-    if (!node) return false;
-    if (node.type === "tag") {
-      const tagName = node.name.toLowerCase();
-      if (["script", "style", "noscript", "svg", "canvas"].includes(tagName)) {
-        return false;
-      }
-    }
-    if (node.type === "text") {
-      return node.data.trim().length > 0;
-    }
-    let hasText = false;
-    let hasDescendantBlock = false;
-    if (node.children) {
-      for (let i = 0; i < node.children.length; i++) {
-        const child = node.children[i];
-        const isChildBlock = child.type === "tag" && 
-          (BLOCK_TAGS.includes(child.name.toLowerCase()) || 
-           (child.attribs && child.attribs.class && child.attribs.class.includes("__temp-leaf-block__")));
-        const childHasText = traverse(child);
-        if (childHasText) hasText = true;
-        if (isChildBlock && childHasText) hasDescendantBlock = true;
-      }
-    }
-    const isThisBlock = node.type === "tag" && 
-      (BLOCK_TAGS.includes(node.name.toLowerCase()) || 
-       (node.attribs && node.attribs.class && node.attribs.class.includes("__temp-leaf-block__")));
-    if (isThisBlock && hasText && !hasDescendantBlock) {
-      leafTextBlocks.push(node);
-    }
-    return hasText;
-  };
-
-  if ($("body").length > 0) {
-    traverse($("body")[0]);
-  } else {
-    traverse($.root()[0]);
-  }
-  return leafTextBlocks;
-};
-
-function createPureTextMapping(targetPlaceholderStr) {
-  let pureText = "";
-  const pureToRawPos = [];
-  let i = 0;
-
-  while (i < targetPlaceholderStr.length) {
-    if (targetPlaceholderStr[i] === '<') {
-      const closingIdx = targetPlaceholderStr.indexOf('>', i);
-      if (closingIdx !== -1) {
-        i = closingIdx + 1;
-        continue;
-      }
-    }
-    pureToRawPos.push(i);
-    pureText += targetPlaceholderStr[i];
-    i++;
-  }
-  pureToRawPos.push(targetPlaceholderStr.length);
-
-  return { pureText, pureToRawPos };
+  return anchors;
 }
 
-/**
- * Projects 100% of English Source tags onto target translated text.
- */
-function projectSourceTagsOntoTarget(sourceText, targetText) {
-  if (!sourceText) return targetText || "";
-  
-  const sourceTags = sourceText.match(/<\/?\d+>/g);
-  if (!sourceTags || sourceTags.length === 0) {
-    return (targetText || "").replace(/<[^>]+>/g, "").trim();
-  }
+function alignLeafBlocksDP(sourceBlockIndices, sourceGroups, targetBlockPlaceholders, targetBlockTableIds, sourceBlockTableIds) {
+  const N = sourceBlockIndices.length;
+  const M = targetBlockPlaceholders.length;
 
-  const targetTagMatches = (targetText || "").match(/<\/?\d+>/g) || [];
-  const missingSourceTags = sourceTags.filter(t => !targetTagMatches.includes(t));
-  if (missingSourceTags.length === 0 && targetTagMatches.length === sourceTags.length) {
-    return targetText;
-  }
-
-  const cleanTarget = (targetText || "").replace(/<[^>]+>/g, "").trim();
-  if (!cleanTarget) return sourceText;
-
-  const { pureText: pureSource } = createPureTextMapping(sourceText);
-  const pureSourceLen = Math.max(1, pureSource.length);
-
-  const tagSpecs = [];
-  const tagRegex = /<\/?\d+>/g;
-  let match;
-  let pureOffset = 0;
-  let lastRawIdx = 0;
-
-  let tagIndex = 0;
-  while ((match = tagRegex.exec(sourceText)) !== null) {
-    const rawIdx = match.index;
-    const textBefore = sourceText.slice(lastRawIdx, rawIdx).replace(/<\/?\d+>/g, "");
-    pureOffset += textBefore.length;
-    lastRawIdx = rawIdx + match[0].length;
-
-    tagSpecs.push({
-      tag: match[0],
-      ratio: pureOffset / pureSourceLen,
-      order: tagIndex++
+  if (N === 0) return {};
+  if (M === 0) {
+    const fallback = {};
+    sourceBlockIndices.forEach(bIdx => {
+      fallback[bIdx] = (sourceGroups[bIdx] || []).map(s => s.source_text || s.source || "").join(" ").trim();
     });
+    return fallback;
   }
 
-  const targetLen = cleanTarget.length;
-
-  const isInsideWord = (str, idx) => {
-    if (idx <= 0 || idx >= str.length) return false;
-    const prevChar = str[idx - 1];
-    const nextChar = str[idx];
-    return !/\s/.test(prevChar) && !/\s/.test(nextChar);
-  };
-
-  const targetTagPositions = tagSpecs.map(spec => {
-    let pIdx = Math.round(targetLen * spec.ratio);
-    pIdx = Math.max(0, Math.min(targetLen, pIdx));
-
-    if (isInsideWord(cleanTarget, pIdx)) {
-      const nextSpace = cleanTarget.indexOf(" ", pIdx);
-      const prevSpace = cleanTarget.lastIndexOf(" ", pIdx);
-      if (nextSpace !== -1 && (prevSpace === -1 || (nextSpace - pIdx) <= (pIdx - prevSpace))) {
-        pIdx = nextSpace;
-      } else if (prevSpace !== -1) {
-        pIdx = prevSpace + 1;
-      }
-    }
-
+  const srcInfos = sourceBlockIndices.map(bIdx => {
+    const segs = sourceGroups[bIdx] || [];
+    const fullText = segs.map(s => s.source_text || s.source || "").join(" ").trim();
+    const cleanText = fullText.replace(/<\/?\d+>/g, "").trim();
     return {
-      tag: spec.tag,
-      pos: pIdx,
-      order: spec.order
+      bIdx,
+      fullText,
+      cleanText,
+      tableId: sourceBlockTableIds[bIdx],
+      anchors: extractEntityAnchors(fullText),
+      len: cleanText.length
     };
   });
 
-  // Position descending (right to left); for equal positions, order descending (so earlier source tags insert after later source tags at same index, preserving left-to-right order)
-  targetTagPositions.sort((a, b) => (b.pos - a.pos) || (b.order - a.order));
-
-  let resultTarget = cleanTarget;
-  targetTagPositions.forEach(item => {
-    resultTarget = resultTarget.slice(0, item.pos) + item.tag + resultTarget.slice(item.pos);
+  const tgtInfos = targetBlockPlaceholders.map((ph, idx) => {
+    const cleanText = (ph || "").replace(/<\/?\d+>/g, "").trim();
+    return {
+      tIdx: idx,
+      fullText: ph || "",
+      cleanText,
+      tableId: targetBlockTableIds[idx],
+      anchors: extractEntityAnchors(ph),
+      len: cleanText.length
+    };
   });
 
-  return resultTarget;
+  const DP = Array.from({ length: N + 1 }, () => new Float64Array(M + 1));
+  const Backtrack = Array.from({ length: N + 1 }, () => new Int32Array(M + 1));
+  const GAP_COST = 25.0;
+
+  for (let i = 0; i <= N; i++) DP[i][0] = i * GAP_COST;
+  for (let j = 0; j <= M; j++) DP[0][j] = j * GAP_COST;
+
+  for (let i = 1; i <= N; i++) {
+    const src = srcInfos[i - 1];
+    for (let j = 1; j <= M; j++) {
+      const tgt = tgtInfos[j - 1];
+
+      let matchCost = 50.0;
+      if (src.tableId !== undefined && tgt.tableId !== undefined && src.tableId !== tgt.tableId) {
+        matchCost = 10000.0;
+      } else {
+        let sharedAnchors = 0;
+        src.anchors.forEach(a => {
+          if (tgt.anchors.has(a)) sharedAnchors++;
+        });
+
+        const posDiff = Math.abs((i / N) - (j / M));
+        const posPenalty = posDiff * 20.0;
+
+        const lenRatio = src.len > 0 ? tgt.len / src.len : 1.0;
+        let lenCost = 10.0;
+        if (lenRatio >= 0.4 && lenRatio <= 2.2) {
+          lenCost = Math.abs(lenRatio - 1.1) * 5.0;
+        } else {
+          lenCost = 35.0;
+        }
+
+        matchCost = lenCost + posPenalty - (sharedAnchors * 35.0);
+      }
+
+      const costMatch = DP[i - 1][j - 1] + matchCost;
+      const costSkipSrc = DP[i - 1][j] + GAP_COST;
+      const costSkipTgt = DP[i][j - 1] + GAP_COST;
+
+      if (costMatch <= costSkipSrc && costMatch <= costSkipTgt) {
+        DP[i][j] = costMatch;
+        Backtrack[i][j] = 1;
+      } else if (costSkipSrc <= costSkipTgt) {
+        DP[i][j] = costSkipSrc;
+        Backtrack[i][j] = 2;
+      } else {
+        DP[i][j] = costSkipTgt;
+        Backtrack[i][j] = 3;
+      }
+    }
+  }
+
+  const matchedPlaceholders = {};
+  let currI = N;
+  let currJ = M;
+
+  while (currI > 0 || currJ > 0) {
+    if (currI > 0 && currJ > 0 && Backtrack[currI][currJ] === 1) {
+      const src = srcInfos[currI - 1];
+      const tgt = tgtInfos[currJ - 1];
+      matchedPlaceholders[src.bIdx] = tgt.fullText || src.fullText;
+      currI--;
+      currJ--;
+    } else if (currI > 0 && (currJ === 0 || Backtrack[currI][currJ] === 2)) {
+      const src = srcInfos[currI - 1];
+      matchedPlaceholders[src.bIdx] = src.fullText;
+      currI--;
+    } else {
+      currJ--;
+    }
+  }
+
+  return matchedPlaceholders;
 }
 
-function splitTargetBySentence(str) {
-  const sentences = [];
-  const regex = /([^.!?।॥]+[.!?।॥]+(?:\s+|$))/g;
-  let match;
-  let lastIdx = 0;
-  while ((match = regex.exec(str)) !== null) {
-    sentences.push(match[0].trim());
-    lastIdx = regex.lastIndex;
-  }
-  if (lastIdx < str.length) {
-    const rem = str.slice(lastIdx).trim();
-    if (rem) sentences.push(rem);
-  }
-  return sentences.length ? sentences : [str];
-}
-
-/**
- * 100% Language-Agnostic Segment Partitioner with Sentence-Aware Partitioning and Source Tag Projection.
- */
 function splitTargetBlockToN(targetPlaceholderStr, N, sourceSubSegments, targetTagMap, sourceTagMap) {
   if (!targetPlaceholderStr || targetPlaceholderStr.trim().length === 0) {
-    return sourceSubSegments.map(s => projectSourceTagsOntoTarget(s.source_text || "", ""));
+    return sourceSubSegments.map(s => projectSourceTagsOntoTarget(s.source_text || s.source || "", ""));
   }
 
   if (N <= 1) {
     let text = targetPlaceholderStr.trim();
-    const srcText = sourceSubSegments[0] ? (sourceSubSegments[0].source_text || "") : "";
+    const srcText = sourceSubSegments[0] ? (sourceSubSegments[0].source_text || sourceSubSegments[0].source || "") : "";
     if (sourceTagMap && targetTagMap && srcText) {
       text = alignSegmentTags(srcText, text, sourceTagMap, targetTagMap);
     }
     return [projectSourceTagsOntoTarget(srcText, text)];
   }
 
-  const targetSentences = splitTargetBySentence(targetPlaceholderStr);
+  const targetSentences = splitByPunctuation(targetPlaceholderStr);
   let rawSegments = [];
 
   if (targetSentences.length === N) {
     rawSegments = targetSentences;
   } else if (targetSentences.length > 1) {
-    const srcWeights = sourceSubSegments.map(s => Math.max(1, (s.source_text || "").replace(/<[^>]+>/g, "").trim().length));
+    const srcWeights = sourceSubSegments.map(s => Math.max(1, (s.source_text || s.source || "").replace(/<[^>]+>/g, "").trim().length));
     const totalSrcLen = srcWeights.reduce((a, b) => a + b, 0);
     const totalTgtLen = targetSentences.reduce((a, s) => a + s.length, 0);
 
@@ -285,49 +177,16 @@ function splitTargetBlockToN(targetPlaceholderStr, N, sourceSubSegments, targetT
       tgtIdx += takeCount;
     }
   } else {
-    const { pureText, pureToRawPos } = createPureTextMapping(targetPlaceholderStr);
-    const sourceWeights = sourceSubSegments.map(s => Math.max(1, (s.source_text || "").replace(/<\/?\d+>/g, "").trim().length));
-    const totalSourceLen = sourceWeights.reduce((a, b) => a + b, 0);
-
-    const pureSplitIndices = [];
-    let accumulatedRatio = 0;
-    for (let k = 0; k < N - 1; k++) {
-      accumulatedRatio += sourceWeights[k] / totalSourceLen;
-      let pureIdx = Math.min(pureText.length - 1, Math.max(1, Math.round(pureText.length * accumulatedRatio)));
-      
-      if (pureIdx > 0 && pureIdx < pureText.length && !/\s/.test(pureText[pureIdx - 1]) && !/\s/.test(pureText[pureIdx])) {
-        const nextSpace = pureText.indexOf(" ", pureIdx);
-        const prevSpace = pureText.lastIndexOf(" ", pureIdx);
-        if (nextSpace !== -1 && (prevSpace === -1 || (nextSpace - pureIdx) <= (pureIdx - prevSpace))) {
-          pureIdx = nextSpace + 1;
-        } else if (prevSpace !== -1) {
-          pureIdx = prevSpace + 1;
-        }
-      }
-
-      pureSplitIndices.push(pureIdx);
-    }
-
-    const rawSplitIndices = pureSplitIndices.map(pIdx => {
-      let rawIdx = pureToRawPos[Math.min(pIdx, pureToRawPos.length - 1)];
-      const trailingTagRegex = /^(\s*<\/\d+>)+/;
-      const remainder = targetPlaceholderStr.slice(rawIdx);
-      const m = remainder.match(trailingTagRegex);
-      if (m) rawIdx += m[0].length;
-      return rawIdx;
-    });
-
-    let startRawIdx = 0;
+    let text = targetPlaceholderStr.trim();
     for (let k = 0; k < N; k++) {
-      const endRawIdx = (k < N - 1) ? rawSplitIndices[k] : targetPlaceholderStr.length;
-      rawSegments.push(targetPlaceholderStr.slice(startRawIdx, endRawIdx).trim());
-      startRawIdx = endRawIdx;
+      if (k === 0) rawSegments.push(text);
+      else rawSegments.push("");
     }
   }
 
   return rawSegments.map((segText, idx) => {
     const sourceSeg = sourceSubSegments[idx];
-    const srcText = sourceSeg ? (sourceSeg.source_text || "") : "";
+    const srcText = sourceSeg ? (sourceSeg.source_text || sourceSeg.source || "") : "";
     let alignedTarget = segText;
     if (sourceTagMap && targetTagMap && srcText) {
       alignedTarget = alignSegmentTags(srcText, segText, sourceTagMap, targetTagMap);
@@ -336,21 +195,14 @@ function splitTargetBlockToN(targetPlaceholderStr, N, sourceSubSegments, targetT
   });
 }
 
-/**
- * Main entry point to align uploaded target HTML to source segments
- */
 async function alignTargetHtmlToSource(targetFilePath, templateHtml, sourceTagMap, sourceSegments, sourceSegmentToBlockMap) {
   const targetHtmlContent = fs.readFileSync(targetFilePath, "utf-8");
   const $target = cheerio.load(targetHtmlContent, { decodeEntities: false });
   const targetTagMap = new Map();
   const tagCounter = { value: 1 };
 
-  $target("table").each((idx, el) => {
-    $target(el).attr("data-relink-table-id", String(idx));
-  });
-
   const targetLeafBlocks = getLeafTextBlocks($target);
-  const targetBlockTableIds = targetLeafBlocks.map(b => $target(b).closest("table").attr("data-relink-table-id"));
+  const targetBlockTableIds = targetLeafBlocks.map(b => b.tableId);
   const targetBlockPlaceholders = targetLeafBlocks.map(blockNode => {
     return extractPlaceholders(blockNode, $target, targetTagMap, tagCounter);
   });
@@ -365,52 +217,15 @@ async function alignTargetHtmlToSource(targetFilePath, templateHtml, sourceTagMa
   });
 
   const sourceBlockIndices = Object.keys(sourceGroups).map(Number).sort((a, b) => a - b);
-  const matchedTargetPlaceholders = {};
-  let targetCursor = 0;
-  const numTargetBlocks = targetBlockPlaceholders.length;
+  const sourceBlockTableIds = sourceLeafBlocks => sourceLeafBlocks.map(b => b.tableId); // Dummy if needed
 
-  sourceBlockIndices.forEach(bIdx => {
-    const blockSourceSegs = sourceGroups[bIdx] || [];
-    const sourceBlockText = blockSourceSegs.map(s => s.source_text || "").join(" ").trim();
-    const srcClean = sourceBlockText.replace(/<\/?\d+>/g, "").trim();
-    const isPureSymbol = /^[\s_\-—.*:;|=+]*$/.test(srcClean) && srcClean.length > 0;
-    
-    while (targetCursor < numTargetBlocks - 1) {
-      const candidateText = targetBlockPlaceholders[targetCursor] || "";
-      const prevText = targetCursor > 0 ? (targetBlockPlaceholders[targetCursor - 1] || "") : "";
-      const candClean = candidateText.replace(/<\/?\d+>/g, "").trim();
-
-      if (bIdx > 0 && candidateText.length > 5 && prevText.length > 5 && candidateText.replace(/\s+/g, "") === prevText.replace(/\s+/g, "")) {
-        targetCursor++;
-        continue;
-      }
-      if (/^\d+$/.test(srcClean) && candClean.length > 10 && !/^\d+$/.test(candClean)) {
-        targetCursor++;
-        continue;
-      }
-
-      if (isPureSymbol && candClean.length > 0 && !/^[\s_\-—.*:;|=+]*$/.test(candClean)) {
-        let foundSymbolAhead = -1;
-        for (let look = targetCursor; look < Math.min(numTargetBlocks, targetCursor + 5); look++) {
-          const aheadClean = (targetBlockPlaceholders[look] || "").replace(/<\/?\d+>/g, "").trim();
-          if (/^[\s_\-—.*:;|=+]*$/.test(aheadClean) && aheadClean.length > 0) {
-            foundSymbolAhead = look;
-            break;
-          }
-        }
-        if (foundSymbolAhead !== -1) {
-          targetCursor = foundSymbolAhead;
-        } else {
-          matchedTargetPlaceholders[bIdx] = sourceBlockText;
-          return;
-        }
-      }
-      break;
-    }
-
-    matchedTargetPlaceholders[bIdx] = targetBlockPlaceholders[targetCursor] || sourceBlockText;
-    targetCursor++;
-  });
+  const matchedTargetPlaceholders = alignLeafBlocksDP(
+    sourceBlockIndices,
+    sourceGroups,
+    targetBlockPlaceholders,
+    targetBlockTableIds,
+    {}
+  );
 
   const alignedMap = new Map();
 
@@ -433,6 +248,5 @@ module.exports = {
   alignTargetHtmlToSource,
   splitTargetBlockToN,
   getLeafTextBlocks,
-  createPureTextMapping,
   projectSourceTagsOntoTarget
 };

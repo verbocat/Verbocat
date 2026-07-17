@@ -1,7 +1,7 @@
 const fs = require("fs");
 const cheerio = require("cheerio");
 const zlib = require("zlib");
-const { extractPlaceholders } = require("./segmentationUtils");
+const { extractPlaceholders, splitByPunctuation, balanceSegmentTags } = require("./segmentationUtils");
 const { alignSegmentTags } = require("../tagProtection");
 
 const BLOCK_TAGS = [
@@ -125,133 +125,205 @@ const getLeafTextBlocks = ($) => {
   return leafTextBlocks;
 };
 
-// Creates pure-text mapping to prevent splitting inside tag placeholders
-function createPureTextMapping(targetPlaceholderStr) {
-  let pureText = "";
-  const pureToRawPos = [];
-  let i = 0;
+// Extracts entity anchors (numbers, codes, URLs, emails) from text
+function extractEntityAnchors(text) {
+  if (!text) return new Set();
+  const clean = String(text).replace(/<\/?\d+>/g, " ");
+  const anchors = new Set();
 
-  while (i < targetPlaceholderStr.length) {
-    if (targetPlaceholderStr[i] === '<') {
-      const closingIdx = targetPlaceholderStr.indexOf('>', i);
-      if (closingIdx !== -1) {
-        i = closingIdx + 1;
-        continue;
-      }
-    }
-    pureToRawPos.push(i);
-    pureText += targetPlaceholderStr[i];
-    i++;
-  }
-  pureToRawPos.push(targetPlaceholderStr.length);
+  const numbers = clean.match(/\b\d+[\d.,/-]*\b/g);
+  if (numbers) numbers.forEach(n => anchors.add(n.toLowerCase()));
 
-  return { pureText, pureToRawPos };
+  const urls = clean.match(/\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b|\b(?:https?:\/\/|www\.)[^\s]+\b/gi);
+  if (urls) urls.forEach(u => anchors.add(u.toLowerCase()));
+
+  const codes = clean.match(/\b[A-Z0-9_-]{3,}\b/g);
+  if (codes) codes.forEach(c => anchors.add(c.toLowerCase()));
+
+  return anchors;
 }
 
-/**
- * Projects 100% of English Source tags onto target translated text with Word-Boundary Snap Protection.
- */
-function projectSourceTagsOntoTarget(sourceText, targetText) {
-  if (!sourceText) return targetText || "";
-  
-  const sourceTags = sourceText.match(/<\/?\d+>/g);
-  if (!sourceTags || sourceTags.length === 0) {
-    return (targetText || "").replace(/<[^>]+>/g, "").trim();
-  }
+// Global Dynamic Programming Sequence Aligner for Source & Target Leaf Blocks
+function alignLeafBlocksDP(sourceBlockIndices, sourceGroups, targetBlockPlaceholders, targetBlockTableIds, sourceBlockTableIds) {
+  const N = sourceBlockIndices.length;
+  const M = targetBlockPlaceholders.length;
 
-  // Check if target text already has all source tags present
-  const targetTagMatches = (targetText || "").match(/<\/?\d+>/g) || [];
-  const missingSourceTags = sourceTags.filter(t => !targetTagMatches.includes(t));
-  if (missingSourceTags.length === 0 && targetTagMatches.length === sourceTags.length) {
-    return targetText; // All tags present
-  }
-
-  const cleanTarget = (targetText || "").replace(/<[^>]+>/g, "").trim();
-  if (!cleanTarget) return sourceText;
-
-  const { pureText: pureSource } = createPureTextMapping(sourceText);
-  const pureSourceLen = Math.max(1, pureSource.length);
-
-  const tagSpecs = [];
-  const tagRegex = /<\/?\d+>/g;
-  let match;
-  let pureOffset = 0;
-  let lastRawIdx = 0;
-
-  let tagIndex = 0;
-  while ((match = tagRegex.exec(sourceText)) !== null) {
-    const rawIdx = match.index;
-    const textBefore = sourceText.slice(lastRawIdx, rawIdx).replace(/<\/?\d+>/g, "");
-    pureOffset += textBefore.length;
-    lastRawIdx = rawIdx + match[0].length;
-
-    tagSpecs.push({
-      tag: match[0],
-      ratio: pureOffset / pureSourceLen,
-      order: tagIndex++
+  if (N === 0) return {};
+  if (M === 0) {
+    const fallback = {};
+    sourceBlockIndices.forEach(bIdx => {
+      fallback[bIdx] = (sourceGroups[bIdx] || []).map(s => s.source || "").join(" ").trim();
     });
+    return fallback;
   }
 
-  const targetLen = cleanTarget.length;
-
-  const isInsideWord = (str, idx) => {
-    if (idx <= 0 || idx >= str.length) return false;
-    const prevChar = str[idx - 1];
-    const nextChar = str[idx];
-    return !/\s/.test(prevChar) && !/\s/.test(nextChar);
-  };
-
-  const targetTagPositions = tagSpecs.map(spec => {
-    let pIdx = Math.round(targetLen * spec.ratio);
-    pIdx = Math.max(0, Math.min(targetLen, pIdx));
-
-    if (isInsideWord(cleanTarget, pIdx)) {
-      const nextSpace = cleanTarget.indexOf(" ", pIdx);
-      const prevSpace = cleanTarget.lastIndexOf(" ", pIdx);
-      if (nextSpace !== -1 && (prevSpace === -1 || (nextSpace - pIdx) <= (pIdx - prevSpace))) {
-        pIdx = nextSpace;
-      } else if (prevSpace !== -1) {
-        pIdx = prevSpace + 1;
-      }
-    }
-
+  const srcInfos = sourceBlockIndices.map(bIdx => {
+    const segs = sourceGroups[bIdx] || [];
+    const fullText = segs.map(s => s.source || "").join(" ").trim();
+    const cleanText = fullText.replace(/<\/?\d+>/g, "").trim();
     return {
-      tag: spec.tag,
-      pos: pIdx,
-      order: spec.order
+      bIdx,
+      fullText,
+      cleanText,
+      tableId: sourceBlockTableIds[bIdx],
+      anchors: extractEntityAnchors(fullText),
+      len: cleanText.length
     };
   });
 
-  // Position descending (right to left); for equal positions, order descending (so earlier source tags insert after later source tags at same index, preserving left-to-right order)
-  targetTagPositions.sort((a, b) => (b.pos - a.pos) || (b.order - a.order));
-
-  let resultTarget = cleanTarget;
-  targetTagPositions.forEach(item => {
-    resultTarget = resultTarget.slice(0, item.pos) + item.tag + resultTarget.slice(item.pos);
+  const tgtInfos = targetBlockPlaceholders.map((ph, idx) => {
+    const cleanText = (ph || "").replace(/<\/?\d+>/g, "").trim();
+    return {
+      tIdx: idx,
+      fullText: ph || "",
+      cleanText,
+      tableId: targetBlockTableIds[idx],
+      anchors: extractEntityAnchors(ph),
+      len: cleanText.length
+    };
   });
 
-  return resultTarget;
+  const DP = Array.from({ length: N + 1 }, () => new Float64Array(M + 1));
+  const Backtrack = Array.from({ length: N + 1 }, () => new Int32Array(M + 1));
+  const GAP_COST = 25.0;
+
+  for (let i = 0; i <= N; i++) DP[i][0] = i * GAP_COST;
+  for (let j = 0; j <= M; j++) DP[0][j] = j * GAP_COST;
+
+  for (let i = 1; i <= N; i++) {
+    const src = srcInfos[i - 1];
+    for (let j = 1; j <= M; j++) {
+      const tgt = tgtInfos[j - 1];
+
+      let matchCost = 50.0;
+      if (src.tableId !== undefined && tgt.tableId !== undefined && src.tableId !== tgt.tableId) {
+        matchCost = 10000.0; // Table boundary mismatch penalty
+      } else {
+        let sharedAnchors = 0;
+        src.anchors.forEach(a => {
+          if (tgt.anchors.has(a)) sharedAnchors++;
+        });
+
+        const posDiff = Math.abs((i / N) - (j / M));
+        const posPenalty = posDiff * 20.0;
+
+        const lenRatio = src.len > 0 ? tgt.len / src.len : 1.0;
+        let lenCost = 10.0;
+        if (lenRatio >= 0.4 && lenRatio <= 2.2) {
+          lenCost = Math.abs(lenRatio - 1.1) * 5.0;
+        } else {
+          lenCost = 35.0;
+        }
+
+        matchCost = lenCost + posPenalty - (sharedAnchors * 35.0);
+      }
+
+      const costMatch = DP[i - 1][j - 1] + matchCost;
+      const costSkipSrc = DP[i - 1][j] + GAP_COST;
+      const costSkipTgt = DP[i][j - 1] + GAP_COST;
+
+      if (costMatch <= costSkipSrc && costMatch <= costSkipTgt) {
+        DP[i][j] = costMatch;
+        Backtrack[i][j] = 1;
+      } else if (costSkipSrc <= costSkipTgt) {
+        DP[i][j] = costSkipSrc;
+        Backtrack[i][j] = 2;
+      } else {
+        DP[i][j] = costSkipTgt;
+        Backtrack[i][j] = 3;
+      }
+    }
+  }
+
+  const matchedPlaceholders = {};
+  let currI = N;
+  let currJ = M;
+
+  while (currI > 0 || currJ > 0) {
+    if (currI > 0 && currJ > 0 && Backtrack[currI][currJ] === 1) {
+      const src = srcInfos[currI - 1];
+      const tgt = tgtInfos[currJ - 1];
+      matchedPlaceholders[src.bIdx] = tgt.fullText || src.fullText;
+      currI--;
+      currJ--;
+    } else if (currI > 0 && (currJ === 0 || Backtrack[currI][currJ] === 2)) {
+      const src = srcInfos[currI - 1];
+      matchedPlaceholders[src.bIdx] = src.fullText;
+      currI--;
+    } else {
+      currJ--;
+    }
+  }
+
+  return matchedPlaceholders;
 }
 
-function splitTargetBySentence(str) {
-  const sentences = [];
-  const regex = /([^.!?।॥]+[.!?।॥]+(?:\s+|$))/g;
-  let match;
-  let lastIdx = 0;
-  while ((match = regex.exec(str)) !== null) {
-    sentences.push(match[0].trim());
-    lastIdx = regex.lastIndex;
+// Term-aware and word-boundary safe source tag projection onto target text
+function projectSourceTagsOntoTarget(sourceText, targetText) {
+  if (!sourceText) return targetText || "";
+
+  const tagPairs = [];
+  const tagRegex = /<(\d+)>(.*?)<\/(\d+)>/g;
+  let m;
+  while ((m = tagRegex.exec(sourceText)) !== null) {
+    if (m[1] === m[3]) {
+      tagPairs.push({
+        id: m[1],
+        openTag: `<${m[1]}>`,
+        closeTag: `</${m[1]}>`,
+        innerSrc: m[2].replace(/<\/?\d+>/g, "").trim()
+      });
+    }
   }
-  if (lastIdx < str.length) {
-    const rem = str.slice(lastIdx).trim();
-    if (rem) sentences.push(rem);
+
+  let resultTarget = targetText || "";
+  const existingTags = resultTarget.match(/<\/?\d+>/g) || [];
+  if (existingTags.length > 0) {
+    return balanceSegmentTags(resultTarget);
   }
-  return sentences.length ? sentences : [str];
+
+  const cleanTarget = resultTarget.replace(/<[^>]+>/g, "").trim();
+  if (!cleanTarget) return balanceSegmentTags(sourceText);
+
+  resultTarget = cleanTarget;
+
+  tagPairs.forEach(pair => {
+    if (resultTarget.includes(pair.openTag)) return;
+
+    const inner = pair.innerSrc;
+    let placed = false;
+
+    if (inner && inner.length > 1) {
+      const idx = resultTarget.indexOf(inner);
+      if (idx !== -1) {
+        resultTarget = resultTarget.slice(0, idx) + pair.openTag + inner + pair.closeTag + resultTarget.slice(idx + inner.length);
+        placed = true;
+      }
+    }
+
+    if (!placed) {
+      const cleanSource = sourceText.replace(/<\/?\d+>/g, "").trim();
+      const tagOffset = sourceText.indexOf(pair.openTag);
+      const ratio = cleanSource.length > 0 ? Math.max(0, Math.min(1, tagOffset / sourceText.length)) : 0;
+
+      const words = resultTarget.split(/(\s+)/);
+      let targetWordIdx = Math.round(words.length * ratio);
+      targetWordIdx = Math.max(0, Math.min(words.length - 1, targetWordIdx));
+
+      let charIdx = 0;
+      for (let w = 0; w < targetWordIdx; w++) {
+        charIdx += words[w].length;
+      }
+
+      const wordLen = words[targetWordIdx] ? words[targetWordIdx].length : 0;
+      resultTarget = resultTarget.slice(0, charIdx) + pair.openTag + resultTarget.slice(charIdx, charIdx + wordLen) + pair.closeTag + resultTarget.slice(charIdx + wordLen);
+    }
+  });
+
+  return balanceSegmentTags(resultTarget);
 }
 
-/**
- * 100% Language-Agnostic Segment Partitioner with Sentence-Aware Partitioning and Source Tag Projection.
- */
+// Aligns block target text to N source sub-segments using sentence splitting & anchors
 function alignBlockTargetToSourceN(targetPlaceholderStr, sourceSubSegments, targetTagMap, sourceTagMap) {
   const N = sourceSubSegments.length;
   if (!targetPlaceholderStr || targetPlaceholderStr.trim().length === 0) {
@@ -267,8 +339,7 @@ function alignBlockTargetToSourceN(targetPlaceholderStr, sourceSubSegments, targ
     return [projectSourceTagsOntoTarget(srcText, text)];
   }
 
-  // Try sentence-aware splitting first
-  const targetSentences = splitTargetBySentence(targetPlaceholderStr);
+  const targetSentences = splitByPunctuation(targetPlaceholderStr);
   let rawSegments = [];
 
   if (targetSentences.length === N) {
@@ -296,49 +367,13 @@ function alignBlockTargetToSourceN(targetPlaceholderStr, sourceSubSegments, targ
       tgtIdx += takeCount;
     }
   } else {
-    // Fallback to character length ratio splitting
-    const { pureText, pureToRawPos } = createPureTextMapping(targetPlaceholderStr);
-    const sourceWeights = sourceSubSegments.map(s => Math.max(1, (s.source || "").replace(/<\/?\d+>/g, "").trim().length));
-    const totalSourceLen = sourceWeights.reduce((a, b) => a + b, 0);
-
-    const pureSplitIndices = [];
-    let accumulatedRatio = 0;
-    for (let k = 0; k < N - 1; k++) {
-      accumulatedRatio += sourceWeights[k] / totalSourceLen;
-      let pureIdx = Math.min(pureText.length - 1, Math.max(1, Math.round(pureText.length * accumulatedRatio)));
-      
-      // Snap pureIdx to nearest space boundary so target words are never broken mid-word
-      if (pureIdx > 0 && pureIdx < pureText.length && !/\s/.test(pureText[pureIdx - 1]) && !/\s/.test(pureText[pureIdx])) {
-        const nextSpace = pureText.indexOf(" ", pureIdx);
-        const prevSpace = pureText.lastIndexOf(" ", pureIdx);
-        if (nextSpace !== -1 && (prevSpace === -1 || (nextSpace - pureIdx) <= (pureIdx - prevSpace))) {
-          pureIdx = nextSpace + 1;
-        } else if (prevSpace !== -1) {
-          pureIdx = prevSpace + 1;
-        }
-      }
-      
-      pureSplitIndices.push(pureIdx);
-    }
-
-    const rawSplitIndices = pureSplitIndices.map(pIdx => {
-      let rawIdx = pureToRawPos[Math.min(pIdx, pureToRawPos.length - 1)];
-      const trailingTagRegex = /^(\s*<\/\d+>)+/;
-      const remainder = targetPlaceholderStr.slice(rawIdx);
-      const m = remainder.match(trailingTagRegex);
-      if (m) rawIdx += m[0].length;
-      return rawIdx;
-    });
-
-    let startRawIdx = 0;
+    let text = targetPlaceholderStr.trim();
     for (let k = 0; k < N; k++) {
-      const endRawIdx = (k < N - 1) ? rawSplitIndices[k] : targetPlaceholderStr.length;
-      rawSegments.push(targetPlaceholderStr.slice(startRawIdx, endRawIdx).trim());
-      startRawIdx = endRawIdx;
+      if (k === 0) rawSegments.push(text);
+      else rawSegments.push("");
     }
   }
 
-  // Re-align tag placeholders and force project English source tags
   return rawSegments.map((segText, idx) => {
     const sourceSeg = sourceSubSegments[idx];
     const srcText = sourceSeg ? (sourceSeg.source || "") : "";
@@ -350,41 +385,10 @@ function alignBlockTargetToSourceN(targetPlaceholderStr, sourceSubSegments, targ
   });
 }
 
-const KEYWORD_MAP = [
-  { src: /annex\s*[a-c]/i, tgt: /अनुलग्नक|विवरण/i },
-  { src: /computation of apr|apr/i, tgt: /apr\s*गणना|वार्षिक प्रतिशत दर/i },
-  { src: /sr\.?\s*no\.?/i, tgt: /क्रमांक|क्र\.?\s*सं\.?|क्रम/i },
-  { src: /parameter/i, tgt: /ब्योरा|विवरण/i },
-  { src: /sanctioned loan amount/i, tgt: /स्वीकृत लोन/i },
-  { src: /loan term/i, tgt: /लोन\s*अवधि|लोन\s*टर्म/i },
-  { src: /rate of interest/i, tgt: /ब्याज\s*दर/i },
-  { src: /fee\/charges/i, tgt: /फीस|चार्जेस/i },
-  { src: /net disbursed/i, tgt: /नेट डिस्बर्स्ड|नेट डिस्बर्स/i }
-];
-
-function isCandidateForFutureSourceBlock(candText, currentBIdx, sourceBlockIndices, sourceGroups) {
-  if (!candText || candText.length < 2) return false;
-  const futureIndices = sourceBlockIndices.filter(idx => idx > currentBIdx).slice(0, 10);
-  for (const fIdx of futureIndices) {
-    const fSegs = sourceGroups[fIdx] || [];
-    const fText = fSegs.map(s => s.source || "").join(" ").trim();
-    if (!fText) continue;
-    for (const rule of KEYWORD_MAP) {
-      if (rule.src.test(fText) && rule.tgt.test(candText)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-/**
- * Main process function for dual source & target HTML file relinking
- */
+// Main entry point for dual source & target HTML file relinking
 async function processRelinkDualFiles(sourceFilePath, targetFilePath) {
   const htmlParser = require("./htmlParser");
   
-  // 1. Parse source file & DOM
   const sourceResult = await htmlParser.parseFile(sourceFilePath);
   const sourceSegments = sourceResult.segments || [];
 
@@ -393,7 +397,6 @@ async function processRelinkDualFiles(sourceFilePath, targetFilePath) {
   const sourceLeafBlocks = getLeafTextBlocks($source);
   const sourceBlockTableIds = sourceLeafBlocks.map(b => b.tableId);
 
-  // 2. Parse target file DOM
   const targetHtmlContent = fs.readFileSync(targetFilePath, "utf-8");
   const $target = cheerio.load(targetHtmlContent, { decodeEntities: false });
   const targetTagMap = new Map();
@@ -405,7 +408,6 @@ async function processRelinkDualFiles(sourceFilePath, targetFilePath) {
     return extractPlaceholders(blockNode, $target, targetTagMap, tagCounter);
   });
 
-  // Decode source tag map
   let sourceTagMap = new Map();
   try {
     const buffer = Buffer.from(sourceResult.template, "base64");
@@ -416,7 +418,6 @@ async function processRelinkDualFiles(sourceFilePath, targetFilePath) {
     console.error("Failed to decode source tag map:", e);
   }
 
-  // Group source segments by block index
   const sourceGroups = {};
   sourceSegments.forEach(seg => {
     const bIdx = seg.blockIndex !== undefined ? seg.blockIndex : 0;
@@ -426,89 +427,17 @@ async function processRelinkDualFiles(sourceFilePath, targetFilePath) {
     sourceGroups[bIdx].push(seg);
   });
 
-  // Dynamically match Target leaf blocks to Source leaf blocks with Table Isolation
   const sourceBlockIndices = Object.keys(sourceGroups).map(Number).sort((a, b) => a - b);
-  const matchedTargetPlaceholders = {};
   
-  let targetCursor = 0;
-  const numTargetBlocks = targetBlockPlaceholders.length;
+  // Use Global DP Sequence Aligner
+  const matchedTargetPlaceholders = alignLeafBlocksDP(
+    sourceBlockIndices,
+    sourceGroups,
+    targetBlockPlaceholders,
+    targetBlockTableIds,
+    sourceBlockTableIds
+  );
 
-  sourceBlockIndices.forEach(bIdx => {
-    const blockSourceSegs = sourceGroups[bIdx] || [];
-    const sourceBlockText = blockSourceSegs.map(s => s.source || "").join(" ").trim();
-    const srcClean = sourceBlockText.replace(/<\/?\d+>/g, "").trim();
-    const isPureSymbol = /^[\s_\-—.*:;|=+]*$/.test(srcClean) && srcClean.length > 0;
-    const srcTableId = sourceBlockTableIds[bIdx];
-
-    // Enforce Table Isolation: align table blocks with matching target table IDs
-    if (srcTableId !== undefined) {
-      const currentTargetTableId = targetBlockTableIds[targetCursor];
-      if (currentTargetTableId !== srcTableId) {
-        const matchedIdx = targetBlockTableIds.findIndex((tid, idx) => idx >= targetCursor && tid === srcTableId);
-        if (matchedIdx !== -1) {
-          targetCursor = matchedIdx;
-        }
-      }
-    } else if (srcTableId === undefined && targetBlockTableIds[targetCursor] !== undefined) {
-      const nonTableIdx = targetBlockTableIds.findIndex((tid, idx) => idx >= targetCursor && tid === undefined);
-      if (nonTableIdx !== -1) {
-        targetCursor = nonTableIdx;
-      }
-    }
-    
-    while (targetCursor < numTargetBlocks - 1) {
-      const candidateText = targetBlockPlaceholders[targetCursor] || "";
-      const prevText = targetCursor > 0 ? (targetBlockPlaceholders[targetCursor - 1] || "") : "";
-      
-      const candClean = candidateText.replace(/<\/?\d+>/g, "").trim();
-
-      // Skip duplicate blocks or mismatched non-numeric text for numeric source blocks
-      if (bIdx > 0 && candidateText.length > 5 && prevText.length > 5 && candidateText.replace(/\s+/g, "") === prevText.replace(/\s+/g, "")) {
-        targetCursor++;
-        continue;
-      }
-      if (/^\d+$/.test(srcClean) && candClean.length > 10 && !/^\d+$/.test(candClean)) {
-        targetCursor++;
-        continue;
-      }
-
-      // Future Keyword Protection: If candidateText belongs to a future Source block, do not consume it for current block
-      if (isCandidateForFutureSourceBlock(candClean, bIdx, sourceBlockIndices, sourceGroups)) {
-        const srcMatchesRule = KEYWORD_MAP.some(rule => rule.src.test(srcClean) && rule.tgt.test(candClean));
-        if (!srcMatchesRule) {
-          targetCursor++;
-          continue;
-        }
-      }
-
-      // Symbol/Underscore protection: If source block is pure symbols/underscores (e.g. "___") and target candidate contains actual translated words, do not consume target candidate text!
-      if (isPureSymbol && candClean.length > 0 && !/^[\s_\-—.*:;|=+]*$/.test(candClean)) {
-        let foundSymbolAhead = -1;
-        for (let look = targetCursor; look < Math.min(numTargetBlocks, targetCursor + 5); look++) {
-          if (targetBlockTableIds[look] !== srcTableId) break;
-          const aheadClean = (targetBlockPlaceholders[look] || "").replace(/<\/?\d+>/g, "").trim();
-          if (/^[\s_\-—.*:;|=+]*$/.test(aheadClean) && aheadClean.length > 0) {
-            foundSymbolAhead = look;
-            break;
-          }
-        }
-
-        if (foundSymbolAhead !== -1) {
-          targetCursor = foundSymbolAhead;
-        } else {
-          matchedTargetPlaceholders[bIdx] = sourceBlockText;
-          return;
-        }
-      }
-
-      break;
-    }
-
-    matchedTargetPlaceholders[bIdx] = targetBlockPlaceholders[targetCursor] || sourceBlockText;
-    targetCursor++;
-  });
-
-  // Perform multi-strategy alignment per leaf block
   const alignedSegments = [];
 
   sourceSegments.forEach(srcSeg => {
@@ -521,7 +450,6 @@ async function processRelinkDualFiles(sourceFilePath, targetFilePath) {
 
     let targetText = splitTargetSegs[relativeIdx >= 0 ? relativeIdx : 0] || "";
 
-    // Strip redundant outer leading and trailing tags matching srcSeg.leading/srcSeg.trailing
     const srcLeading = (srcSeg.leading || "").trim();
     const srcTrailing = (srcSeg.trailing || "").trim();
 
@@ -554,6 +482,5 @@ module.exports = {
   processRelinkDualFiles,
   alignBlockTargetToSourceN,
   getLeafTextBlocks,
-  createPureTextMapping,
   projectSourceTagsOntoTarget
 };

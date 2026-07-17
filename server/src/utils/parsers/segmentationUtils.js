@@ -97,10 +97,84 @@ const splitByTags = (str) => {
   return segments.length ? segments : (str && str.trim() ? [str] : []);
 };
 
-// Splits a placeholder string into segments based on punctuation
-// Automatically balances active tags across segments
+// Automatically balances active tag placeholders <1>...</1> within a segment
+const balanceSegmentTags = (str) => {
+  if (!str) return str;
+  const tagRegex = /<\/?(\d+)>/g;
+  const activeTags = [];
+  const unopenedClosers = [];
+  let match;
+
+  while ((match = tagRegex.exec(str)) !== null) {
+    const fullTag = match[0];
+    const id = match[1];
+    if (fullTag.startsWith("</")) {
+      const idx = activeTags.lastIndexOf(id);
+      if (idx !== -1) {
+        activeTags.splice(idx, 1);
+      } else {
+        unopenedClosers.push(id);
+      }
+    } else {
+      activeTags.push(id);
+    }
+  }
+
+  let balanced = str;
+  unopenedClosers.reverse().forEach(id => {
+    balanced = `<${id}>` + balanced;
+  });
+  activeTags.reverse().forEach(id => {
+    balanced = balanced + `</${id}>`;
+  });
+
+  return balanced;
+};
+
+// Splits a placeholder string into natural sentence segments based on punctuation (. ! ? । ॥ \n)
+// Automatically balances active tags across split segments
 const splitByPunctuation = (str, tagMap) => {
-  return splitByTags(str);
+  if (!str || !str.trim()) return [];
+
+  const regex = /([^.!?।॥\n\r]+[.!?।॥\n\r]+(?:\s+|$))|([^.!?।॥\n\r]+$)/g;
+  const rawPieces = [];
+  let match;
+  while ((match = regex.exec(str)) !== null) {
+    const piece = match[0];
+    if (piece && piece.trim()) {
+      rawPieces.push(piece.trim());
+    }
+  }
+
+  if (rawPieces.length === 0) {
+    rawPieces.push(str.trim());
+  }
+
+  const sentences = [];
+  let currentAcc = "";
+
+  for (let i = 0; i < rawPieces.length; i++) {
+    const p = rawPieces[i];
+    if (currentAcc) {
+      currentAcc += " " + p;
+    } else {
+      currentAcc = p;
+    }
+
+    const isDecimalOrAbbr = /\b[A-Za-z0-9]\.$/.test(currentAcc) && i < rawPieces.length - 1 && /^\d/.test(rawPieces[i+1]);
+    const isShortWord = /\b(sr|no|v|vol|sec|art|cin|inc|ltd|co|st|dr|mr|mrs|vs|e\.g|i\.e)\.$/i.test(currentAcc);
+
+    if (!isDecimalOrAbbr && !isShortWord) {
+      sentences.push(balanceSegmentTags(currentAcc));
+      currentAcc = "";
+    }
+  }
+
+  if (currentAcc) {
+    sentences.push(balanceSegmentTags(currentAcc));
+  }
+
+  return sentences.length ? sentences : [balanceSegmentTags(str)];
 };
 
 // Replaces placeholders back with original HTML tags
@@ -143,4 +217,5 @@ module.exports = {
   splitByTags,
   restorePlaceholders,
   extractSegmentTags,
+  balanceSegmentTags,
 };
