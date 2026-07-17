@@ -292,7 +292,7 @@ export default function App() {
 
   // Load collaborative document from DB on startup/change
   const loadCollaborativeDocument = useCallback(async () => {
-    if (!documentId || !token) return;
+    if (!documentId || !token || String(documentId).startsWith("relinked_session_")) return;
     setIsUploading(true);
     setHasNoAccess(false);
     setAccessRequestMessage("");
@@ -400,7 +400,7 @@ export default function App() {
       console.log("[Socket] Unified socket connected, socketId:", socket.id);
       
       // Auto-join collaborative room on connect if in document view
-      if (documentId) {
+      if (documentId && !String(documentId).startsWith("relinked_session_")) {
         console.log("[Socket] Auto-joining document room:", documentId);
         socket.emit("join-document", { documentId, targetLang: currentRoute.targetLang });
       }
