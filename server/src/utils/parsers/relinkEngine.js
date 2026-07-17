@@ -144,27 +144,99 @@ function createPureTextMapping(targetPlaceholderStr) {
 }
 
 /**
- * 100% Language-Agnostic Segment Partitioner.
- * Zero hardcoded punctuation regexes.
- * Uses Tag Fingerprint Anchoring and Source-Relative Length Weight Ratios.
+ * Projects 100% of English Source tags onto target translated text.
+ * Guarantees that every opening/closing tag from English Source is present in target.
+ */
+function projectSourceTagsOntoTarget(sourceText, targetText) {
+  if (!sourceText) return targetText || "";
+  
+  const sourceTags = sourceText.match(/<\/?\d+>/g);
+  if (!sourceTags || sourceTags.length === 0) {
+    return (targetText || "").replace(/<[^>]+>/g, "").trim();
+  }
+
+  // Check if target text already has all source tags present
+  const targetTagMatches = (targetText || "").match(/<\/?\d+>/g) || [];
+  const missingSourceTags = sourceTags.filter(t => !targetTagMatches.includes(t));
+  if (missingSourceTags.length === 0 && targetTagMatches.length === sourceTags.length) {
+    return targetText; // All tags present
+  }
+
+  const cleanTarget = (targetText || "").replace(/<[^>]+>/g, "").trim();
+  if (!cleanTarget) return sourceText;
+
+  const { pureText: pureSource } = createPureTextMapping(sourceText);
+  const pureSourceLen = Math.max(1, pureSource.length);
+
+  const tagSpecs = [];
+  const tagRegex = /<\/?\d+>/g;
+  let match;
+  let pureOffset = 0;
+  let lastRawIdx = 0;
+
+  while ((match = tagRegex.exec(sourceText)) !== null) {
+    const rawIdx = match.index;
+    const textBefore = sourceText.slice(lastRawIdx, rawIdx).replace(/<\/?\d+>/g, "");
+    pureOffset += textBefore.length;
+    lastRawIdx = rawIdx + match[0].length;
+
+    tagSpecs.push({
+      tag: match[0],
+      ratio: pureOffset / pureSourceLen
+    });
+  }
+
+  const targetLen = cleanTarget.length;
+  const targetTagPositions = tagSpecs.map(spec => {
+    let pIdx = Math.round(targetLen * spec.ratio);
+    pIdx = Math.max(0, Math.min(targetLen, pIdx));
+
+    if (pIdx > 0 && pIdx < targetLen) {
+      const nextSpace = cleanTarget.indexOf(" ", pIdx);
+      const prevSpace = cleanTarget.lastIndexOf(" ", pIdx);
+      if (nextSpace !== -1 && (nextSpace - pIdx) <= 4) {
+        pIdx = nextSpace;
+      } else if (prevSpace !== -1 && (pIdx - prevSpace) <= 4) {
+        pIdx = prevSpace + 1;
+      }
+    }
+
+    return {
+      tag: spec.tag,
+      pos: pIdx
+    };
+  });
+
+  targetTagPositions.sort((a, b) => b.pos - a.pos);
+
+  let resultTarget = cleanTarget;
+  targetTagPositions.forEach(item => {
+    resultTarget = resultTarget.slice(0, item.pos) + item.tag + resultTarget.slice(item.pos);
+  });
+
+  return resultTarget;
+}
+
+/**
+ * 100% Language-Agnostic Segment Partitioner with Source Tag Projection.
  */
 function alignBlockTargetToSourceN(targetPlaceholderStr, sourceSubSegments, targetTagMap, sourceTagMap) {
   const N = sourceSubSegments.length;
   if (!targetPlaceholderStr || targetPlaceholderStr.trim().length === 0) {
-    return Array(N).fill("");
+    return sourceSubSegments.map(s => projectSourceTagsOntoTarget(s.source || "", ""));
   }
 
   if (N <= 1) {
     let text = targetPlaceholderStr.trim();
-    if (sourceTagMap && targetTagMap && sourceSubSegments[0]) {
-      text = alignSegmentTags(sourceSubSegments[0].source || "", text, sourceTagMap, targetTagMap);
+    const srcText = sourceSubSegments[0] ? (sourceSubSegments[0].source || "") : "";
+    if (sourceTagMap && targetTagMap && srcText) {
+      text = alignSegmentTags(srcText, text, sourceTagMap, targetTagMap);
     }
-    return [text];
+    return [projectSourceTagsOntoTarget(srcText, text)];
   }
 
   const { pureText, pureToRawPos } = createPureTextMapping(targetPlaceholderStr);
 
-  // Calculate relative source weights based on pure text length of each source sub-segment
   const sourceWeights = sourceSubSegments.map(s => {
     const cleanText = (s.source || "").replace(/<\/?\d+>/g, "").trim();
     return Math.max(1, cleanText.length);
@@ -177,17 +249,12 @@ function alignBlockTargetToSourceN(targetPlaceholderStr, sourceSubSegments, targ
   for (let k = 0; k < N - 1; k++) {
     const ratio = sourceWeights[k] / totalSourceLen;
     accumulatedRatio += ratio;
-
-    // Pure text character index corresponding to cumulative ratio
     const pureIdx = Math.min(pureText.length - 1, Math.max(1, Math.round(pureText.length * accumulatedRatio)));
     pureSplitIndices.push(pureIdx);
   }
 
-  // Convert pure text split indices to raw string indices without breaking tag placeholders
   const rawSplitIndices = pureSplitIndices.map(pIdx => {
     let rawIdx = pureToRawPos[Math.min(pIdx, pureToRawPos.length - 1)];
-    
-    // Guard: Move split index past any closing tag </k> or whitespace immediately following the split
     const trailingTagRegex = /^(\s*<\/\d+>)+/;
     const remainder = targetPlaceholderStr.slice(rawIdx);
     const match = remainder.match(trailingTagRegex);
@@ -197,7 +264,6 @@ function alignBlockTargetToSourceN(targetPlaceholderStr, sourceSubSegments, targ
     return rawIdx;
   });
 
-  // Slice raw target string into N segments
   const rawSegments = [];
   let startRawIdx = 0;
   for (let k = 0; k < N; k++) {
@@ -207,12 +273,15 @@ function alignBlockTargetToSourceN(targetPlaceholderStr, sourceSubSegments, targ
     startRawIdx = endRawIdx;
   }
 
-  // Re-align tag placeholders with source segment tag mapping
+  // Re-align tag placeholders and force project English source tags
   return rawSegments.map((segText, idx) => {
-    if (sourceTagMap && targetTagMap && sourceSubSegments[idx]) {
-      return alignSegmentTags(sourceSubSegments[idx].source || "", segText, sourceTagMap, targetTagMap);
+    const sourceSeg = sourceSubSegments[idx];
+    const srcText = sourceSeg ? (sourceSeg.source || "") : "";
+    let alignedTarget = segText;
+    if (sourceTagMap && targetTagMap && srcText) {
+      alignedTarget = alignSegmentTags(srcText, segText, sourceTagMap, targetTagMap);
     }
-    return segText;
+    return projectSourceTagsOntoTarget(srcText, alignedTarget);
   });
 }
 
@@ -293,5 +362,6 @@ module.exports = {
   processRelinkDualFiles,
   alignBlockTargetToSourceN,
   getLeafTextBlocks,
-  createPureTextMapping
+  createPureTextMapping,
+  projectSourceTagsOntoTarget
 };
