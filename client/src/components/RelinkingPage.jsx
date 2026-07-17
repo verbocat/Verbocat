@@ -83,11 +83,14 @@ export const RelinkingPage = ({ onNavigate, onLoadRelinkedDocument, showToast, t
     }
     if (onNavigate) {
       onNavigate("/editor");
+    } else {
+      window.history.pushState({}, "", "/editor");
+      window.dispatchEvent(new PopStateEvent("popstate"));
     }
   };
 
   return (
-    <div className="min-h-screen w-full bg-[var(--bg-app,#0b0c10)] text-[var(--text-primary,#f3f4f6)] p-6 space-y-6 flex flex-col max-w-7xl mx-auto">
+    <div className="h-screen overflow-y-auto w-full bg-[var(--bg-app,#0b0c10)] text-[var(--text-primary,#f3f4f6)] p-6 space-y-6 flex flex-col max-w-7xl mx-auto">
       
       {/* Header section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[var(--border-medium,rgba(255,255,255,0.08))] pb-6">

@@ -146,6 +146,12 @@ export default function App() {
       };
     }
 
+    if (path === "/editor" || path.startsWith("/editor")) {
+      return {
+        screen: "editor"
+      };
+    }
+
     return {
       screen: "dashboard"
     };
@@ -193,9 +199,9 @@ export default function App() {
 
   useEffect(() => {
     if (currentRoute.screen === "editor") {
-      setDocumentId(currentRoute.fileId);
-      setTargetLanguage(currentRoute.targetLang);
-    } else {
+      if (currentRoute.fileId) setDocumentId(currentRoute.fileId);
+      if (currentRoute.targetLang) setTargetLanguage(currentRoute.targetLang);
+    } else if (currentRoute.screen !== "relink") {
       setDocumentId(null);
     }
   }, [currentRoute]);
@@ -3228,6 +3234,7 @@ export default function App() {
             setFileExtension(fileExtension || ".html");
             setDocumentId("relinked_session_" + Date.now());
             showToast("Relinked document loaded into Workspace Editor!");
+            navigateTo("/editor");
           }}
         />
       )}
