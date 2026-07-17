@@ -11,6 +11,17 @@ const BLOCK_TAGS = [
   "body", "html"
 ];
 
+// Clean up extra spaces around punctuation and Devanagari danda
+function sanitizeTargetSpacing(text) {
+  if (!text) return "";
+  let clean = text
+    .replace(/[ \t]+/g, " ")
+    .replace(/\s+([.,!?।॥])/g, "$1") // Remove spaces before punctuation
+    .replace(/([.,!?।॥])(?=[^\s.,!?।॥<\d])/g, "$1 ") // Ensure space after punctuation if missing
+    .trim();
+  return clean;
+}
+
 // Wrap inline sibling nodes inside virtual leaf block wrappers
 const wrapInlineSiblings = (element, $) => {
   $(element).children().each((_, child) => {
@@ -152,7 +163,7 @@ function alignLeafBlocksDP(sourceBlockIndices, sourceGroups, targetBlockPlacehol
   if (M === 0) {
     const fallback = {};
     sourceBlockIndices.forEach(bIdx => {
-      fallback[bIdx] = (sourceGroups[bIdx] || []).map(s => s.source || "").join(" ").trim();
+      fallback[bIdx] = ""; // NEVER fallback to English source text!
     });
     return fallback;
   }
@@ -243,12 +254,12 @@ function alignLeafBlocksDP(sourceBlockIndices, sourceGroups, targetBlockPlacehol
     if (currI > 0 && currJ > 0 && Backtrack[currI][currJ] === 1) {
       const src = srcInfos[currI - 1];
       const tgt = tgtInfos[currJ - 1];
-      matchedPlaceholders[src.bIdx] = tgt.fullText || src.fullText;
+      matchedPlaceholders[src.bIdx] = tgt.fullText || "";
       currI--;
       currJ--;
     } else if (currI > 0 && (currJ === 0 || Backtrack[currI][currJ] === 2)) {
       const src = srcInfos[currI - 1];
-      matchedPlaceholders[src.bIdx] = src.fullText;
+      matchedPlaceholders[src.bIdx] = ""; // NEVER fallback to English source text!
       currI--;
     } else {
       currJ--;
@@ -260,7 +271,7 @@ function alignLeafBlocksDP(sourceBlockIndices, sourceGroups, targetBlockPlacehol
 
 // Term-aware and word-boundary safe source tag projection onto target text
 function projectSourceTagsOntoTarget(sourceText, targetText) {
-  if (!sourceText) return targetText || "";
+  if (!sourceText) return sanitizeTargetSpacing(targetText || "");
 
   const tagPairs = [];
   const tagRegex = /<(\d+)>(.*?)<\/(\d+)>/g;
@@ -276,14 +287,16 @@ function projectSourceTagsOntoTarget(sourceText, targetText) {
     }
   }
 
-  let resultTarget = targetText || "";
+  let resultTarget = sanitizeTargetSpacing(targetText || "");
+  if (!resultTarget) return "";
+
   const existingTags = resultTarget.match(/<\/?\d+>/g) || [];
   if (existingTags.length > 0) {
     return balanceSegmentTags(resultTarget);
   }
 
   const cleanTarget = resultTarget.replace(/<[^>]+>/g, "").trim();
-  if (!cleanTarget) return balanceSegmentTags(sourceText);
+  if (!cleanTarget) return "";
 
   resultTarget = cleanTarget;
 
@@ -323,15 +336,15 @@ function projectSourceTagsOntoTarget(sourceText, targetText) {
   return balanceSegmentTags(resultTarget);
 }
 
-// Aligns block target text to N source sub-segments using sentence splitting & anchors
+// Aligns block target text to N source sub-segments using sentence splitting & proportional slicing
 function alignBlockTargetToSourceN(targetPlaceholderStr, sourceSubSegments, targetTagMap, sourceTagMap) {
   const N = sourceSubSegments.length;
   if (!targetPlaceholderStr || targetPlaceholderStr.trim().length === 0) {
-    return sourceSubSegments.map(s => projectSourceTagsOntoTarget(s.source || "", ""));
+    return sourceSubSegments.map(() => "");
   }
 
   if (N <= 1) {
-    let text = targetPlaceholderStr.trim();
+    let text = sanitizeTargetSpacing(targetPlaceholderStr);
     const srcText = sourceSubSegments[0] ? (sourceSubSegments[0].source || "") : "";
     if (sourceTagMap && targetTagMap && srcText) {
       text = alignSegmentTags(srcText, text, sourceTagMap, targetTagMap);
@@ -367,19 +380,43 @@ function alignBlockTargetToSourceN(targetPlaceholderStr, sourceSubSegments, targ
       tgtIdx += takeCount;
     }
   } else {
-    let text = targetPlaceholderStr.trim();
+    // Proportional character ratio partition when target is a single continuous sentence/paragraph
+    const text = sanitizeTargetSpacing(targetPlaceholderStr);
+    const srcWeights = sourceSubSegments.map(s => Math.max(1, (s.source || "").replace(/<[^>]+>/g, "").trim().length));
+    const totalSrcLen = srcWeights.reduce((a, b) => a + b, 0);
+
+    let currPos = 0;
     for (let k = 0; k < N; k++) {
-      if (k === 0) rawSegments.push(text);
-      else rawSegments.push("");
+      if (k === N - 1) {
+        rawSegments.push(text.slice(currPos).trim());
+        break;
+      }
+      const ratio = srcWeights[k] / totalSrcLen;
+      let nextPos = Math.round(currPos + text.length * ratio);
+      nextPos = Math.max(currPos + 1, Math.min(text.length - (N - 1 - k), nextPos));
+
+      // Snap to nearest space or punctuation boundary so target words/sentences are not cut in half
+      if (nextPos < text.length && !/\s/.test(text[nextPos - 1]) && !/\s/.test(text[nextPos])) {
+        const nextSpace = text.indexOf(" ", nextPos);
+        const prevSpace = text.lastIndexOf(" ", nextPos);
+        if (nextSpace !== -1 && (prevSpace === -1 || (nextSpace - nextPos) <= (nextPos - prevSpace))) {
+          nextPos = nextSpace + 1;
+        } else if (prevSpace !== -1) {
+          nextPos = prevSpace + 1;
+        }
+      }
+
+      rawSegments.push(text.slice(currPos, nextPos).trim());
+      currPos = nextPos;
     }
   }
 
   return rawSegments.map((segText, idx) => {
     const sourceSeg = sourceSubSegments[idx];
     const srcText = sourceSeg ? (sourceSeg.source || "") : "";
-    let alignedTarget = segText;
+    let alignedTarget = sanitizeTargetSpacing(segText);
     if (sourceTagMap && targetTagMap && srcText) {
-      alignedTarget = alignSegmentTags(srcText, segText, sourceTagMap, targetTagMap);
+      alignedTarget = alignSegmentTags(srcText, alignedTarget, sourceTagMap, targetTagMap);
     }
     return projectSourceTagsOntoTarget(srcText, alignedTarget);
   });
@@ -459,6 +496,8 @@ async function processRelinkDualFiles(sourceFilePath, targetFilePath) {
     if (srcTrailing && targetText.endsWith(srcTrailing)) {
       targetText = targetText.slice(0, targetText.length - srcTrailing.length).trim();
     }
+
+    targetText = sanitizeTargetSpacing(targetText);
 
     alignedSegments.push({
       id: srcSeg.id,

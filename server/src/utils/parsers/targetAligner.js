@@ -4,6 +4,16 @@ const { extractPlaceholders, splitByPunctuation, balanceSegmentTags } = require(
 const { alignSegmentTags } = require("../tagProtection");
 const { getLeafTextBlocks, projectSourceTagsOntoTarget } = require("./relinkEngine");
 
+function sanitizeTargetSpacing(text) {
+  if (!text) return "";
+  let clean = text
+    .replace(/[ \t]+/g, " ")
+    .replace(/\s+([.,!?।॥])/g, "$1")
+    .replace(/([.,!?।॥])(?=[^\s.,!?।॥<\d])/g, "$1 ")
+    .trim();
+  return clean;
+}
+
 function extractEntityAnchors(text) {
   if (!text) return new Set();
   const clean = String(text).replace(/<\/?\d+>/g, " ");
@@ -29,7 +39,7 @@ function alignLeafBlocksDP(sourceBlockIndices, sourceGroups, targetBlockPlacehol
   if (M === 0) {
     const fallback = {};
     sourceBlockIndices.forEach(bIdx => {
-      fallback[bIdx] = (sourceGroups[bIdx] || []).map(s => s.source_text || s.source || "").join(" ").trim();
+      fallback[bIdx] = "";
     });
     return fallback;
   }
@@ -42,7 +52,7 @@ function alignLeafBlocksDP(sourceBlockIndices, sourceGroups, targetBlockPlacehol
       bIdx,
       fullText,
       cleanText,
-      tableId: sourceBlockTableIds[bIdx],
+      tableId: sourceBlockTableIds ? sourceBlockTableIds[bIdx] : undefined,
       anchors: extractEntityAnchors(fullText),
       len: cleanText.length
     };
@@ -120,12 +130,12 @@ function alignLeafBlocksDP(sourceBlockIndices, sourceGroups, targetBlockPlacehol
     if (currI > 0 && currJ > 0 && Backtrack[currI][currJ] === 1) {
       const src = srcInfos[currI - 1];
       const tgt = tgtInfos[currJ - 1];
-      matchedPlaceholders[src.bIdx] = tgt.fullText || src.fullText;
+      matchedPlaceholders[src.bIdx] = tgt.fullText || "";
       currI--;
       currJ--;
     } else if (currI > 0 && (currJ === 0 || Backtrack[currI][currJ] === 2)) {
       const src = srcInfos[currI - 1];
-      matchedPlaceholders[src.bIdx] = src.fullText;
+      matchedPlaceholders[src.bIdx] = "";
       currI--;
     } else {
       currJ--;
@@ -137,11 +147,11 @@ function alignLeafBlocksDP(sourceBlockIndices, sourceGroups, targetBlockPlacehol
 
 function splitTargetBlockToN(targetPlaceholderStr, N, sourceSubSegments, targetTagMap, sourceTagMap) {
   if (!targetPlaceholderStr || targetPlaceholderStr.trim().length === 0) {
-    return sourceSubSegments.map(s => projectSourceTagsOntoTarget(s.source_text || s.source || "", ""));
+    return sourceSubSegments.map(() => "");
   }
 
   if (N <= 1) {
-    let text = targetPlaceholderStr.trim();
+    let text = sanitizeTargetSpacing(targetPlaceholderStr);
     const srcText = sourceSubSegments[0] ? (sourceSubSegments[0].source_text || sourceSubSegments[0].source || "") : "";
     if (sourceTagMap && targetTagMap && srcText) {
       text = alignSegmentTags(srcText, text, sourceTagMap, targetTagMap);
@@ -177,19 +187,41 @@ function splitTargetBlockToN(targetPlaceholderStr, N, sourceSubSegments, targetT
       tgtIdx += takeCount;
     }
   } else {
-    let text = targetPlaceholderStr.trim();
+    const text = sanitizeTargetSpacing(targetPlaceholderStr);
+    const srcWeights = sourceSubSegments.map(s => Math.max(1, (s.source_text || s.source || "").replace(/<[^>]+>/g, "").trim().length));
+    const totalSrcLen = srcWeights.reduce((a, b) => a + b, 0);
+
+    let currPos = 0;
     for (let k = 0; k < N; k++) {
-      if (k === 0) rawSegments.push(text);
-      else rawSegments.push("");
+      if (k === N - 1) {
+        rawSegments.push(text.slice(currPos).trim());
+        break;
+      }
+      const ratio = srcWeights[k] / totalSrcLen;
+      let nextPos = Math.round(currPos + text.length * ratio);
+      nextPos = Math.max(currPos + 1, Math.min(text.length - (N - 1 - k), nextPos));
+
+      if (nextPos < text.length && !/\s/.test(text[nextPos - 1]) && !/\s/.test(text[nextPos])) {
+        const nextSpace = text.indexOf(" ", nextPos);
+        const prevSpace = text.lastIndexOf(" ", nextPos);
+        if (nextSpace !== -1 && (prevSpace === -1 || (nextSpace - nextPos) <= (nextPos - prevSpace))) {
+          nextPos = nextSpace + 1;
+        } else if (prevSpace !== -1) {
+          nextPos = prevSpace + 1;
+        }
+      }
+
+      rawSegments.push(text.slice(currPos, nextPos).trim());
+      currPos = nextPos;
     }
   }
 
   return rawSegments.map((segText, idx) => {
     const sourceSeg = sourceSubSegments[idx];
     const srcText = sourceSeg ? (sourceSeg.source_text || sourceSeg.source || "") : "";
-    let alignedTarget = segText;
+    let alignedTarget = sanitizeTargetSpacing(segText);
     if (sourceTagMap && targetTagMap && srcText) {
-      alignedTarget = alignSegmentTags(srcText, segText, sourceTagMap, targetTagMap);
+      alignedTarget = alignSegmentTags(srcText, alignedTarget, sourceTagMap, targetTagMap);
     }
     return projectSourceTagsOntoTarget(srcText, alignedTarget);
   });
@@ -217,7 +249,6 @@ async function alignTargetHtmlToSource(targetFilePath, templateHtml, sourceTagMa
   });
 
   const sourceBlockIndices = Object.keys(sourceGroups).map(Number).sort((a, b) => a - b);
-  const sourceBlockTableIds = sourceLeafBlocks => sourceLeafBlocks.map(b => b.tableId); // Dummy if needed
 
   const matchedTargetPlaceholders = alignLeafBlocksDP(
     sourceBlockIndices,
@@ -237,7 +268,7 @@ async function alignTargetHtmlToSource(targetFilePath, templateHtml, sourceTagMa
     const splitTargetSegs = splitTargetBlockToN(targetPlaceholderStr, N, blockSourceSegs, targetTagMap, sourceTagMap);
 
     blockSourceSegs.forEach((srcSeg, idx) => {
-      alignedMap.set(srcSeg.segment_index, splitTargetSegs[idx] || "");
+      alignedMap.set(srcSeg.segment_index, sanitizeTargetSpacing(splitTargetSegs[idx] || ""));
     });
   });
 

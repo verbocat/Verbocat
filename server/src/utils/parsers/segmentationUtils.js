@@ -136,12 +136,13 @@ const balanceSegmentTags = (str) => {
 const splitByPunctuation = (str, tagMap) => {
   if (!str || !str.trim()) return [];
 
-  const regex = /([^.!?।॥\n\r]+[.!?।॥\n\r]+(?:\s+|$))|([^.!?।॥\n\r]+$)/g;
+  // Match sentence punctuation followed by space, tag placeholder <N>, or end of string
+  const regex = /([^.!?।॥\n\r]+[.!?।॥\n\r]+(?=\s+|<\d+>|<\/\d+>|$))|([^.!?।॥\n\r]+$)/g;
   const rawPieces = [];
   let match;
   while ((match = regex.exec(str)) !== null) {
     const piece = match[0];
-    if (piece && piece.trim()) {
+    if (piece && piece.trim() && !/^(\s*<\/?\d+>\s*)+$/.test(piece)) {
       rawPieces.push(piece.trim());
     }
   }
@@ -161,17 +162,23 @@ const splitByPunctuation = (str, tagMap) => {
       currentAcc = p;
     }
 
-    const isDecimalOrAbbr = /\b[A-Za-z0-9]\.$/.test(currentAcc) && i < rawPieces.length - 1 && /^\d/.test(rawPieces[i+1]);
+    const isDecimalOrAbbr = /(?:^|\s|\()([A-Za-z0-9]|\d+)\.$/.test(currentAcc) && i < rawPieces.length - 1 && /^\d/.test(rawPieces[i+1]);
     const isShortWord = /\b(sr|no|v|vol|sec|art|cin|inc|ltd|co|st|dr|mr|mrs|vs|e\.g|i\.e)\.$/i.test(currentAcc);
 
     if (!isDecimalOrAbbr && !isShortWord) {
-      sentences.push(balanceSegmentTags(currentAcc));
-      currentAcc = "";
+      const balanced = balanceSegmentTags(currentAcc);
+      if (balanced && balanced.replace(/<\/?\d+>/g, "").trim().length > 0) {
+        sentences.push(balanced);
+        currentAcc = "";
+      }
     }
   }
 
   if (currentAcc) {
-    sentences.push(balanceSegmentTags(currentAcc));
+    const balanced = balanceSegmentTags(currentAcc);
+    if (balanced && balanced.replace(/<\/?\d+>/g, "").trim().length > 0) {
+      sentences.push(balanced);
+    }
   }
 
   return sentences.length ? sentences : [balanceSegmentTags(str)];
