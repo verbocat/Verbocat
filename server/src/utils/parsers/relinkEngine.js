@@ -85,6 +85,14 @@ const wrapInlineSiblings = (element, $) => {
 
 // Extracts leaf text blocks from DOM with Table-ID tagging
 const getLeafTextBlocks = ($) => {
+  $(".__temp-leaf-block__").each((_, el) => {
+    $(el).replaceWith($(el).contents());
+  });
+
+  $("td table, th table").each((_, tbl) => {
+    $(tbl).replaceWith($(tbl).contents());
+  });
+
   $("table").each((idx, el) => {
     $(el).attr("data-relink-table-id", String(idx));
   });
@@ -128,6 +136,8 @@ const getLeafTextBlocks = ($) => {
       const cellEl = $n.closest("td, th");
       const liEl = $n.closest("li");
 
+      const tagName = node.name ? node.name.toLowerCase() : "";
+      node.headingTag = ["h1","h2","h3","h4","h5","h6"].includes(tagName) ? tagName : undefined;
       node.tableId = tableEl.length ? tableEl.attr("data-relink-table-id") : undefined;
       node.rowId = trEl.length ? trEl.index() : undefined;
       node.cellId = cellEl.length ? cellEl.index() : undefined;
@@ -187,6 +197,7 @@ function alignLeafBlocksDP(sourceBlockIndices, sourceGroups, targetBlockPlacehol
       bIdx,
       fullText,
       cleanText,
+      headingTag: bNode ? bNode.headingTag : undefined,
       tableId: bNode ? bNode.tableId : sourceBlockTableIds[bIdx],
       rowId: bNode ? bNode.rowId : undefined,
       cellId: bNode ? bNode.cellId : undefined,
@@ -203,6 +214,7 @@ function alignLeafBlocksDP(sourceBlockIndices, sourceGroups, targetBlockPlacehol
       tIdx: idx,
       fullText: ph || "",
       cleanText,
+      headingTag: bNode ? bNode.headingTag : undefined,
       tableId: bNode ? bNode.tableId : targetBlockTableIds[idx],
       rowId: bNode ? bNode.rowId : undefined,
       cellId: bNode ? bNode.cellId : undefined,
@@ -238,22 +250,27 @@ function alignLeafBlocksDP(sourceBlockIndices, sourceGroups, targetBlockPlacehol
 
         const lenRatio = src.len > 0 ? tgt.len / src.len : 1.0;
         let lenCost = 5.0;
-        if (src.len <= 15 || tgt.len <= 15) {
+        if (src.len <= 6 || tgt.len <= 6) {
           lenCost = 0.0;
-        } else if (lenRatio >= 0.2 && lenRatio <= 3.0) {
+        } else if (lenRatio >= 0.33 && lenRatio <= 3.0) {
           lenCost = Math.abs(lenRatio - 1.0) * 5.0;
         } else {
-          lenCost = 15.0;
+          lenCost = 35.0;
         }
 
         let domMatchBonus = 0.0;
-        if (src.tableId !== undefined && src.tableId === tgt.tableId) {
-          if (src.rowId !== undefined && src.rowId === tgt.rowId && src.cellId !== undefined && src.cellId === tgt.cellId) {
-            domMatchBonus += 40.0;
+        if (lenRatio >= 0.4 && lenRatio <= 2.5) {
+          if (src.headingTag !== undefined && src.headingTag === tgt.headingTag) {
+            domMatchBonus += 35.0;
           }
-        }
-        if (src.itemId !== undefined && src.itemId === tgt.itemId) {
-          domMatchBonus += 20.0;
+          if (src.tableId !== undefined && src.tableId === tgt.tableId) {
+            if (src.rowId !== undefined && src.rowId === tgt.rowId && src.cellId !== undefined && src.cellId === tgt.cellId) {
+              domMatchBonus += 40.0;
+            }
+          }
+          if (src.itemId !== undefined && src.itemId === tgt.itemId) {
+            domMatchBonus += 20.0;
+          }
         }
 
         matchCost = lenCost + posPenalty - (sharedAnchors * 35.0) - domMatchBonus;
@@ -382,12 +399,35 @@ function alignBlockTargetToSourceN(targetPlaceholderStr, sourceSubSegments, targ
     return [projectSourceTagsOntoTarget(srcText, text)];
   }
 
-  const targetSentences = splitByPunctuation(targetPlaceholderStr);
   let rawSegments = [];
 
-  if (targetSentences.length === N) {
-    rawSegments = targetSentences;
-  } else if (targetSentences.length >= N && targetSentences.length > 1) {
+  // Special handler for merged Yes/No table cell blocks
+  if (N >= 2) {
+    const cleanTgtText = targetPlaceholderStr.replace(/<[^>]+>/g, "").trim();
+    if (/(?:हाँ|नहीं)/i.test(cleanTgtText)) {
+      const srcTexts = sourceSubSegments.map(s => (s.source || "").replace(/<[^>]+>/g, "").trim().toLowerCase());
+      const hasYesNoSrc = srcTexts.some(st => st === "yes" || st === "no");
+      if (hasYesNoSrc) {
+        const m = targetPlaceholderStr.match(/^(.*?)(?:<[^>]+>)*\s*(हाँ|नहीं|हाँनहीं|नहींहाँ|Yes|No)(?:<[^>]+>)*\s*(हाँ|नहीं|Yes|No)?/i);
+        if (m) {
+          const mainPart = m[1].trim();
+          const opt1 = m[2] ? m[2].trim() : "हाँ";
+          const opt2 = m[3] ? m[3].trim() : "नहीं";
+          if (N === 2) {
+            rawSegments = [opt1, opt2];
+          } else if (N === 3) {
+            rawSegments = [mainPart, opt1, opt2];
+          }
+        }
+      }
+    }
+  }
+
+  if (rawSegments.length === 0) {
+    const targetSentences = splitByPunctuation(targetPlaceholderStr);
+    if (targetSentences.length === N) {
+      rawSegments = targetSentences;
+    } else if (targetSentences.length >= N && targetSentences.length > 1) {
     const srcWeights = sourceSubSegments.map(s => Math.max(1, (s.source || "").replace(/<[^>]+>/g, "").trim().length));
     const totalSrcLen = srcWeights.reduce((a, b) => a + b, 0);
     const totalTgtLen = targetSentences.reduce((a, s) => a + s.length, 0);
@@ -448,6 +488,7 @@ function alignBlockTargetToSourceN(targetPlaceholderStr, sourceSubSegments, targ
       currPos = nextPos;
     }
   }
+}
 
   return rawSegments.map((segText, idx) => {
     const sourceSeg = sourceSubSegments[idx];
@@ -469,11 +510,21 @@ async function processRelinkDualFiles(sourceFilePath, targetFilePath) {
 
   const sourceHtmlContent = fs.readFileSync(sourceFilePath, "utf-8");
   const $source = cheerio.load(sourceHtmlContent, { decodeEntities: false });
+  $source("*").removeAttr("data-relink-table-id");
+  $source(".__temp-leaf-block__").each((_, el) => {
+    $source(el).replaceWith($source(el).contents());
+  });
+
   const sourceLeafBlocks = getLeafTextBlocks($source);
   const sourceBlockTableIds = sourceLeafBlocks.map(b => b.tableId);
 
   const targetHtmlContent = fs.readFileSync(targetFilePath, "utf-8");
   const $target = cheerio.load(targetHtmlContent, { decodeEntities: false });
+  $target("*").removeAttr("data-relink-table-id");
+  $target(".__temp-leaf-block__").each((_, el) => {
+    $target(el).replaceWith($target(el).contents());
+  });
+
   const targetTagMap = new Map();
   const tagCounter = { value: 1 };
 
@@ -551,9 +602,26 @@ async function processRelinkDualFiles(sourceFilePath, targetFilePath) {
     });
   });
 
+  let mergedTemplate = sourceResult.template;
+  try {
+    const buffer = Buffer.from(sourceResult.template, "base64");
+    const unzipped = zlib.gunzipSync(buffer).toString("utf-8");
+    const templateData = JSON.parse(unzipped);
+
+    const mergedTagMap = new Map(templateData.tagMap || []);
+    targetTagMap.forEach((val, key) => {
+      mergedTagMap.set(key, val);
+    });
+
+    templateData.tagMap = Array.from(mergedTagMap.entries());
+    mergedTemplate = zlib.gzipSync(Buffer.from(JSON.stringify(templateData), "utf-8")).toString("base64");
+  } catch (e) {
+    console.error("Failed to merge targetTagMap into template:", e);
+  }
+
   return {
     segments: alignedSegments,
-    template: sourceResult.template,
+    template: mergedTemplate,
     count: alignedSegments.length
   };
 }
@@ -561,6 +629,7 @@ async function processRelinkDualFiles(sourceFilePath, targetFilePath) {
 module.exports = {
   processRelinkDualFiles,
   alignBlockTargetToSourceN,
+  alignLeafBlocksDP,
   getLeafTextBlocks,
   projectSourceTagsOntoTarget
 };

@@ -105,63 +105,8 @@ const parseFile = async (filePath) => {
   const tagMapGlobal = new Map();
   const tagCounter = { value: 1 };
 
-  // Preprocess body to wrap inline siblings in virtual leaf blocks
-  if ($("body").length > 0) {
-    wrapInlineSiblings($("body")[0], $);
-  }
-
-  // 1. Find all leaf-most block elements in the document that contain non-empty text in linear time
-  const leafTextBlocks = [];
-  const traverse = (node) => {
-    if (!node) return false;
-    
-    if (node.type === "tag") {
-      const tagName = node.name.toLowerCase();
-      if (["script", "style", "noscript", "svg", "canvas"].includes(tagName)) {
-        return false;
-      }
-    }
-
-    if (node.type === "text") {
-      return node.data.trim().length > 0;
-    }
-
-    let hasText = false;
-    let hasDescendantBlock = false;
-
-    if (node.children) {
-      for (let i = 0; i < node.children.length; i++) {
-        const child = node.children[i];
-        const isChildBlock = child.type === "tag" && 
-          (BLOCK_TAGS.includes(child.name.toLowerCase()) || 
-           (child.attribs && child.attribs.class && child.attribs.class.includes("__temp-leaf-block__")));
-
-        const childHasText = traverse(child);
-        if (childHasText) {
-          hasText = true;
-        }
-        if (isChildBlock && childHasText) {
-          hasDescendantBlock = true;
-        }
-      }
-    }
-
-    const isThisBlock = node.type === "tag" && 
-      (BLOCK_TAGS.includes(node.name.toLowerCase()) || 
-       (node.attribs && node.attribs.class && node.attribs.class.includes("__temp-leaf-block__")));
-
-    if (isThisBlock && hasText && !hasDescendantBlock) {
-      leafTextBlocks.push(node);
-    }
-
-    return hasText;
-  };
-
-  if ($("body").length > 0) {
-    traverse($("body")[0]);
-  } else {
-    traverse($.root()[0]);
-  }
+  const { getLeafTextBlocks } = require("./relinkEngine");
+  const leafTextBlocks = getLeafTextBlocks($);
 
   // 3. Process each leaf text block
   leafTextBlocks.forEach((blockNode, blockIdx) => {
@@ -254,11 +199,16 @@ const exportFile = async (templateBase64, segments) => {
     return match;
   });
 
-  // Postprocess: unwrap virtual blocks
+  // Postprocess: unwrap virtual blocks completely and strip temporary relink attributes
   const $ = cheerio.load(html, { decodeEntities: false });
-  $(".__temp-leaf-block__").each((_, el) => {
-    $(el).replaceWith($(el).contents());
-  });
+  $("*").removeAttr("data-relink-table-id");
+  let guard = 0;
+  while ($(".__temp-leaf-block__").length > 0 && guard < 10) {
+    $(".__temp-leaf-block__").each((_, el) => {
+      $(el).replaceWith($(el).contents());
+    });
+    guard++;
+  }
 
   return Buffer.from($.html(), "utf-8");
 };

@@ -104,22 +104,27 @@ function alignLeafBlocksDP(sourceBlockIndices, sourceGroups, targetBlockPlacehol
 
         const lenRatio = src.len > 0 ? tgt.len / src.len : 1.0;
         let lenCost = 5.0;
-        if (src.len <= 15 || tgt.len <= 15) {
+        if (src.len <= 6 || tgt.len <= 6) {
           lenCost = 0.0;
-        } else if (lenRatio >= 0.2 && lenRatio <= 3.0) {
+        } else if (lenRatio >= 0.33 && lenRatio <= 3.0) {
           lenCost = Math.abs(lenRatio - 1.0) * 5.0;
         } else {
-          lenCost = 15.0;
+          lenCost = 35.0;
         }
 
         let domMatchBonus = 0.0;
-        if (src.tableId !== undefined && src.tableId === tgt.tableId) {
-          if (src.rowId !== undefined && src.rowId === tgt.rowId && src.cellId !== undefined && src.cellId === tgt.cellId) {
-            domMatchBonus += 40.0;
+        if (lenRatio >= 0.4 && lenRatio <= 2.5) {
+          if (src.headingTag !== undefined && src.headingTag === tgt.headingTag) {
+            domMatchBonus += 35.0;
           }
-        }
-        if (src.itemId !== undefined && src.itemId === tgt.itemId) {
-          domMatchBonus += 20.0;
+          if (src.tableId !== undefined && src.tableId === tgt.tableId) {
+            if (src.rowId !== undefined && src.rowId === tgt.rowId && src.cellId !== undefined && src.cellId === tgt.cellId) {
+              domMatchBonus += 40.0;
+            }
+          }
+          if (src.itemId !== undefined && src.itemId === tgt.itemId) {
+            domMatchBonus += 20.0;
+          }
         }
 
         matchCost = lenCost + posPenalty - (sharedAnchors * 35.0) - domMatchBonus;
@@ -179,12 +184,35 @@ function splitTargetBlockToN(targetPlaceholderStr, N, sourceSubSegments, targetT
     return [projectSourceTagsOntoTarget(srcText, text)];
   }
 
-  const targetSentences = splitByPunctuation(targetPlaceholderStr);
   let rawSegments = [];
 
-  if (targetSentences.length === N) {
-    rawSegments = targetSentences;
-  } else if (targetSentences.length >= N && targetSentences.length > 1) {
+  // Special handler for merged Yes/No table cell blocks
+  if (N >= 2) {
+    const cleanTgtText = targetPlaceholderStr.replace(/<[^>]+>/g, "").trim();
+    if (/(?:हाँ|नहीं)/i.test(cleanTgtText)) {
+      const srcTexts = sourceSubSegments.map(s => (s.source_text || s.source || "").replace(/<[^>]+>/g, "").trim().toLowerCase());
+      const hasYesNoSrc = srcTexts.some(st => st === "yes" || st === "no");
+      if (hasYesNoSrc) {
+        const m = targetPlaceholderStr.match(/^(.*?)(?:<[^>]+>)*\s*(हाँ|नहीं|हाँनहीं|नहींहाँ|Yes|No)(?:<[^>]+>)*\s*(हाँ|नहीं|Yes|No)?/i);
+        if (m) {
+          const mainPart = m[1].trim();
+          const opt1 = m[2] ? m[2].trim() : "हाँ";
+          const opt2 = m[3] ? m[3].trim() : "नहीं";
+          if (N === 2) {
+            rawSegments = [opt1, opt2];
+          } else if (N === 3) {
+            rawSegments = [mainPart, opt1, opt2];
+          }
+        }
+      }
+    }
+  }
+
+  if (rawSegments.length === 0) {
+    const targetSentences = splitByPunctuation(targetPlaceholderStr);
+    if (targetSentences.length === N) {
+      rawSegments = targetSentences;
+    } else if (targetSentences.length >= N && targetSentences.length > 1) {
     const srcWeights = sourceSubSegments.map(s => Math.max(1, (s.source_text || s.source || "").replace(/<[^>]+>/g, "").trim().length));
     const totalSrcLen = srcWeights.reduce((a, b) => a + b, 0);
     const totalTgtLen = targetSentences.reduce((a, s) => a + s.length, 0);

@@ -10,6 +10,12 @@ const extractPlaceholders = (element, $, tagMap, tagCounter) => {
       if (child.type === "text") {
         str += $(child).text().replace(/\s+/g, " ");
       } else if (child.type === "tag") {
+        const isTempWrapper = child.attribs && child.attribs.class && child.attribs.class.includes("__temp-leaf-block__");
+        if (isTempWrapper) {
+          str += extractPlaceholders(child, $, tagMap, tagCounter);
+          return;
+        }
+
         const id = tagCounter.value++;
 
         const clone = $(child).clone();
@@ -184,10 +190,14 @@ const splitByPunctuation = (str, tagMap) => {
   return sentences.length ? sentences : [balanceSegmentTags(str)];
 };
 
-// Replaces placeholders back with original HTML tags
+// Replaces placeholders back with original HTML tags (handles both <N> and entity-encoded &lt;N&gt;)
 const restorePlaceholders = (segmentedStr, tagMap) => {
-  return segmentedStr.replace(/<\/?\d+>/g, (match) => {
-    return tagMap.has(match) ? tagMap.get(match) : match;
+  if (!segmentedStr) return "";
+  return segmentedStr.replace(/(?:<|&lt;)\/?\d+(?:>|&gt;)/gi, (match) => {
+    const canonicalTag = match.replace(/^&lt;/i, "<").replace(/&gt;$/i, ">");
+    if (tagMap.has(canonicalTag)) return tagMap.get(canonicalTag);
+    if (tagMap.has(match)) return tagMap.get(match);
+    return match;
   });
 };
 
