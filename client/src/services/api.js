@@ -105,10 +105,10 @@ export const translateBatch = async (segments, target, source, contextSettings =
   return response.data;
 };
 
-export const exportFile = async (fileId, segments, extension = '.html', sourceLang = 'en', targetLang = 'hi', fileName = 'document', exportSource = false) => {
+export const exportFile = async (fileId, segments, extension = '.html', sourceLang = 'en', targetLang = 'hi', fileName = 'document', exportSource = false, template = null) => {
   const response = await api.post(
     "/api/export",
-    { fileId, segments, extension, sourceLang, targetLang, fileName, exportSource },
+    { fileId, template, segments, extension, sourceLang, targetLang, fileName, exportSource },
     { responseType: "blob" }
   );
 

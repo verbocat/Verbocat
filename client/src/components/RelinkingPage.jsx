@@ -78,7 +78,8 @@ export const RelinkingPage = ({ onNavigate, onLoadRelinkedDocument, showToast, t
         segments: alignedSegments,
         sourceLanguage: sourceLang,
         targetLanguage: targetLang,
-        fileExtension: ".html"
+        fileExtension: ".html",
+        template: template
       });
     }
     if (onNavigate) {

@@ -236,7 +236,7 @@ apiRouter.get("/provider-status", (request, response) => {
 
 apiRouter.post("/export", async (request, response) => {
   try {
-    const { fileId, segments, extension, sourceLang, targetLang, fileName, exportSource } = request.body;
+    const { fileId, template, segments, extension, sourceLang, targetLang, fileName, exportSource } = request.body;
     const ext = extension || ".html";
 
     let exportSegments = segments;
@@ -268,7 +268,13 @@ apiRouter.post("/export", async (request, response) => {
       return response.send(Buffer.from(tmxContent, "utf-8"));
     }
 
-    const buffer = await exportHtml(fileId, exportSegments, ext, targetLang);
+    let buffer;
+    if (template) {
+      const htmlParser = require("../utils/parsers/htmlParser");
+      buffer = await htmlParser.exportFile(template, exportSegments);
+    } else {
+      buffer = await exportHtml(fileId, exportSegments, ext, targetLang);
+    }
 
     response.setHeader(
       "Content-Disposition",

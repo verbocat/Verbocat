@@ -196,6 +196,7 @@ export default function App() {
   };
 
   const [documentId, setDocumentId] = useState(null);
+  const [relinkedTemplate, setRelinkedTemplate] = useState(null);
 
   useEffect(() => {
     if (currentRoute.screen === "editor") {
@@ -2168,7 +2169,7 @@ export default function App() {
   const handleExportDocument = async (overrideExt) => {
     try {
       const ext = overrideExt || fileExtension;
-      const blob = await exportFile(fileId, segments, ext, sourceLanguage, targetLanguage, fileName);
+      const blob = await exportFile(fileId, segments, ext, sourceLanguage, targetLanguage, fileName, false, relinkedTemplate);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -2185,7 +2186,7 @@ export default function App() {
   const handleExportSourceDocument = async (overrideExt) => {
     try {
       const ext = overrideExt || fileExtension;
-      const blob = await exportFile(fileId, segments, ext, sourceLanguage, targetLanguage, fileName, true);
+      const blob = await exportFile(fileId, segments, ext, sourceLanguage, targetLanguage, fileName, true, relinkedTemplate);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -3226,13 +3227,14 @@ export default function App() {
           onNavigate={navigateTo}
           showToast={showToast}
           theme={theme}
-          onLoadRelinkedDocument={({ fileName, segments, sourceLanguage, targetLanguage, fileExtension }) => {
+          onLoadRelinkedDocument={({ fileName, segments, sourceLanguage, targetLanguage, fileExtension, template }) => {
             setFileName(fileName);
             setSegments(segments);
             setSourceLanguage(sourceLanguage || "en");
             setTargetLanguage(targetLanguage || "hi");
             setFileExtension(fileExtension || ".html");
             setDocumentId("relinked_session_" + Date.now());
+            if (template) setRelinkedTemplate(template);
             showToast("Relinked document loaded into Workspace Editor!");
             navigateTo("/editor");
           }}
