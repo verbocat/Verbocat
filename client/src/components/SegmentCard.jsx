@@ -25,6 +25,7 @@ function projectSourceTagsOntoTarget(sourceText, targetText) {
   let pureOffset = 0;
   let lastRawIdx = 0;
 
+  let tagIndex = 0;
   while ((match = tagRegex.exec(sourceText)) !== null) {
     const rawIdx = match.index;
     const textBefore = sourceText.slice(lastRawIdx, rawIdx).replace(/<\/?\d+>/g, "");
@@ -33,7 +34,8 @@ function projectSourceTagsOntoTarget(sourceText, targetText) {
 
     tagSpecs.push({
       tag: match[0],
-      ratio: pureOffset / pureSourceLen
+      ratio: pureOffset / pureSourceLen,
+      order: tagIndex++
     });
   }
 
@@ -61,11 +63,12 @@ function projectSourceTagsOntoTarget(sourceText, targetText) {
 
     return {
       tag: spec.tag,
-      pos: pIdx
+      pos: pIdx,
+      order: spec.order
     };
   });
 
-  targetTagPositions.sort((a, b) => b.pos - a.pos);
+  targetTagPositions.sort((a, b) => (b.pos - a.pos) || (b.order - a.order));
 
   let resultTarget = cleanTarget;
   targetTagPositions.forEach(item => {

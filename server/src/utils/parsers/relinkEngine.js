@@ -178,6 +178,7 @@ function projectSourceTagsOntoTarget(sourceText, targetText) {
   let pureOffset = 0;
   let lastRawIdx = 0;
 
+  let tagIndex = 0;
   while ((match = tagRegex.exec(sourceText)) !== null) {
     const rawIdx = match.index;
     const textBefore = sourceText.slice(lastRawIdx, rawIdx).replace(/<\/?\d+>/g, "");
@@ -186,7 +187,8 @@ function projectSourceTagsOntoTarget(sourceText, targetText) {
 
     tagSpecs.push({
       tag: match[0],
-      ratio: pureOffset / pureSourceLen
+      ratio: pureOffset / pureSourceLen,
+      order: tagIndex++
     });
   }
 
@@ -215,11 +217,13 @@ function projectSourceTagsOntoTarget(sourceText, targetText) {
 
     return {
       tag: spec.tag,
-      pos: pIdx
+      pos: pIdx,
+      order: spec.order
     };
   });
 
-  targetTagPositions.sort((a, b) => b.pos - a.pos);
+  // Position descending (right to left); for equal positions, order descending (so earlier source tags insert after later source tags at same index, preserving left-to-right order)
+  targetTagPositions.sort((a, b) => (b.pos - a.pos) || (b.order - a.order));
 
   let resultTarget = cleanTarget;
   targetTagPositions.forEach(item => {
@@ -229,8 +233,24 @@ function projectSourceTagsOntoTarget(sourceText, targetText) {
   return resultTarget;
 }
 
+function splitTargetBySentence(str) {
+  const sentences = [];
+  const regex = /([^.!?।॥]+[.!?।॥]+(?:\s+|$))/g;
+  let match;
+  let lastIdx = 0;
+  while ((match = regex.exec(str)) !== null) {
+    sentences.push(match[0].trim());
+    lastIdx = regex.lastIndex;
+  }
+  if (lastIdx < str.length) {
+    const rem = str.slice(lastIdx).trim();
+    if (rem) sentences.push(rem);
+  }
+  return sentences.length ? sentences : [str];
+}
+
 /**
- * 100% Language-Agnostic Segment Partitioner with Source Tag Projection.
+ * 100% Language-Agnostic Segment Partitioner with Sentence-Aware Partitioning and Source Tag Projection.
  */
 function alignBlockTargetToSourceN(targetPlaceholderStr, sourceSubSegments, targetTagMap, sourceTagMap) {
   const N = sourceSubSegments.length;
@@ -247,42 +267,63 @@ function alignBlockTargetToSourceN(targetPlaceholderStr, sourceSubSegments, targ
     return [projectSourceTagsOntoTarget(srcText, text)];
   }
 
-  const { pureText, pureToRawPos } = createPureTextMapping(targetPlaceholderStr);
+  // Try sentence-aware splitting first
+  const targetSentences = splitTargetBySentence(targetPlaceholderStr);
+  let rawSegments = [];
 
-  const sourceWeights = sourceSubSegments.map(s => {
-    const cleanText = (s.source || "").replace(/<\/?\d+>/g, "").trim();
-    return Math.max(1, cleanText.length);
-  });
-  const totalSourceLen = sourceWeights.reduce((a, b) => a + b, 0);
+  if (targetSentences.length === N) {
+    rawSegments = targetSentences;
+  } else if (targetSentences.length > 1) {
+    const srcWeights = sourceSubSegments.map(s => Math.max(1, (s.source || "").replace(/<[^>]+>/g, "").trim().length));
+    const totalSrcLen = srcWeights.reduce((a, b) => a + b, 0);
+    const totalTgtLen = targetSentences.reduce((a, s) => a + s.length, 0);
 
-  const pureSplitIndices = [];
-  let accumulatedRatio = 0;
-
-  for (let k = 0; k < N - 1; k++) {
-    const ratio = sourceWeights[k] / totalSourceLen;
-    accumulatedRatio += ratio;
-    const pureIdx = Math.min(pureText.length - 1, Math.max(1, Math.round(pureText.length * accumulatedRatio)));
-    pureSplitIndices.push(pureIdx);
-  }
-
-  const rawSplitIndices = pureSplitIndices.map(pIdx => {
-    let rawIdx = pureToRawPos[Math.min(pIdx, pureToRawPos.length - 1)];
-    const trailingTagRegex = /^(\s*<\/\d+>)+/;
-    const remainder = targetPlaceholderStr.slice(rawIdx);
-    const match = remainder.match(trailingTagRegex);
-    if (match) {
-      rawIdx += match[0].length;
+    let tgtIdx = 0;
+    for (let k = 0; k < N; k++) {
+      if (k === N - 1) {
+        rawSegments.push(targetSentences.slice(tgtIdx).join(" "));
+        break;
+      }
+      const srcRatio = srcWeights[k] / totalSrcLen;
+      let accRatio = 0;
+      let takeCount = 1;
+      for (let j = tgtIdx; j < targetSentences.length - (N - 1 - k); j++) {
+        accRatio += targetSentences[j].length / totalTgtLen;
+        if (accRatio >= srcRatio) break;
+        takeCount++;
+      }
+      rawSegments.push(targetSentences.slice(tgtIdx, tgtIdx + takeCount).join(" "));
+      tgtIdx += takeCount;
     }
-    return rawIdx;
-  });
+  } else {
+    // Fallback to character length ratio splitting
+    const { pureText, pureToRawPos } = createPureTextMapping(targetPlaceholderStr);
+    const sourceWeights = sourceSubSegments.map(s => Math.max(1, (s.source || "").replace(/<\/?\d+>/g, "").trim().length));
+    const totalSourceLen = sourceWeights.reduce((a, b) => a + b, 0);
 
-  const rawSegments = [];
-  let startRawIdx = 0;
-  for (let k = 0; k < N; k++) {
-    const endRawIdx = (k < N - 1) ? rawSplitIndices[k] : targetPlaceholderStr.length;
-    const segStr = targetPlaceholderStr.slice(startRawIdx, endRawIdx).trim();
-    rawSegments.push(segStr);
-    startRawIdx = endRawIdx;
+    const pureSplitIndices = [];
+    let accumulatedRatio = 0;
+    for (let k = 0; k < N - 1; k++) {
+      accumulatedRatio += sourceWeights[k] / totalSourceLen;
+      const pureIdx = Math.min(pureText.length - 1, Math.max(1, Math.round(pureText.length * accumulatedRatio)));
+      pureSplitIndices.push(pureIdx);
+    }
+
+    const rawSplitIndices = pureSplitIndices.map(pIdx => {
+      let rawIdx = pureToRawPos[Math.min(pIdx, pureToRawPos.length - 1)];
+      const trailingTagRegex = /^(\s*<\/\d+>)+/;
+      const remainder = targetPlaceholderStr.slice(rawIdx);
+      const m = remainder.match(trailingTagRegex);
+      if (m) rawIdx += m[0].length;
+      return rawIdx;
+    });
+
+    let startRawIdx = 0;
+    for (let k = 0; k < N; k++) {
+      const endRawIdx = (k < N - 1) ? rawSplitIndices[k] : targetPlaceholderStr.length;
+      rawSegments.push(targetPlaceholderStr.slice(startRawIdx, endRawIdx).trim());
+      startRawIdx = endRawIdx;
+    }
   }
 
   // Re-align tag placeholders and force project English source tags
