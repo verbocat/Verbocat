@@ -72,8 +72,12 @@ const wrapInlineSiblings = (element, $) => {
   }
 };
 
-// Extracts leaf text blocks from DOM
+// Extracts leaf text blocks from DOM with Table-ID tagging
 const getLeafTextBlocks = ($) => {
+  $("table").each((idx, el) => {
+    $(el).attr("data-relink-table-id", String(idx));
+  });
+
   if ($("body").length > 0) {
     wrapInlineSiblings($("body")[0], $);
   }
@@ -107,6 +111,7 @@ const getLeafTextBlocks = ($) => {
       (BLOCK_TAGS.includes(node.name.toLowerCase()) || 
        (node.attribs && node.attribs.class && node.attribs.class.includes("__temp-leaf-block__")));
     if (isThisBlock && hasText && !hasDescendantBlock) {
+      node.tableId = $(node).closest("table").attr("data-relink-table-id");
       leafTextBlocks.push(node);
     }
     return hasText;
@@ -292,15 +297,48 @@ function alignBlockTargetToSourceN(targetPlaceholderStr, sourceSubSegments, targ
   });
 }
 
+const KEYWORD_MAP = [
+  { src: /annex\s*[a-c]/i, tgt: /अनुलग्नक|विवरण/i },
+  { src: /computation of apr|apr/i, tgt: /apr\s*गणना|वार्षिक प्रतिशत दर/i },
+  { src: /sr\.?\s*no\.?/i, tgt: /क्रमांक|क्र\.?\s*सं\.?|क्रम/i },
+  { src: /parameter/i, tgt: /ब्योरा|विवरण/i },
+  { src: /sanctioned loan amount/i, tgt: /स्वीकृत लोन/i },
+  { src: /loan term/i, tgt: /लोन\s*अवधि|लोन\s*टर्म/i },
+  { src: /rate of interest/i, tgt: /ब्याज\s*दर/i },
+  { src: /fee\/charges/i, tgt: /फीस|चार्जेस/i },
+  { src: /net disbursed/i, tgt: /नेट डिस्बर्स्ड|नेट डिस्बर्स/i }
+];
+
+function isCandidateForFutureSourceBlock(candText, currentBIdx, sourceBlockIndices, sourceGroups) {
+  if (!candText || candText.length < 2) return false;
+  const futureIndices = sourceBlockIndices.filter(idx => idx > currentBIdx).slice(0, 10);
+  for (const fIdx of futureIndices) {
+    const fSegs = sourceGroups[fIdx] || [];
+    const fText = fSegs.map(s => s.source || "").join(" ").trim();
+    if (!fText) continue;
+    for (const rule of KEYWORD_MAP) {
+      if (rule.src.test(fText) && rule.tgt.test(candText)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 /**
  * Main process function for dual source & target HTML file relinking
  */
 async function processRelinkDualFiles(sourceFilePath, targetFilePath) {
   const htmlParser = require("./htmlParser");
   
-  // 1. Parse source file
+  // 1. Parse source file & DOM
   const sourceResult = await htmlParser.parseFile(sourceFilePath);
   const sourceSegments = sourceResult.segments || [];
+
+  const sourceHtmlContent = fs.readFileSync(sourceFilePath, "utf-8");
+  const $source = cheerio.load(sourceHtmlContent, { decodeEntities: false });
+  const sourceLeafBlocks = getLeafTextBlocks($source);
+  const sourceBlockTableIds = sourceLeafBlocks.map(b => b.tableId);
 
   // 2. Parse target file DOM
   const targetHtmlContent = fs.readFileSync(targetFilePath, "utf-8");
@@ -309,6 +347,7 @@ async function processRelinkDualFiles(sourceFilePath, targetFilePath) {
   const tagCounter = { value: 1 };
 
   const targetLeafBlocks = getLeafTextBlocks($target);
+  const targetBlockTableIds = targetLeafBlocks.map(b => b.tableId);
   const targetBlockPlaceholders = targetLeafBlocks.map(blockNode => {
     return extractPlaceholders(blockNode, $target, targetTagMap, tagCounter);
   });
@@ -334,7 +373,7 @@ async function processRelinkDualFiles(sourceFilePath, targetFilePath) {
     sourceGroups[bIdx].push(seg);
   });
 
-  // Dynamically match Target leaf blocks to Source leaf blocks
+  // Dynamically match Target leaf blocks to Source leaf blocks with Table Isolation
   const sourceBlockIndices = Object.keys(sourceGroups).map(Number).sort((a, b) => a - b);
   const matchedTargetPlaceholders = {};
   
@@ -344,12 +383,30 @@ async function processRelinkDualFiles(sourceFilePath, targetFilePath) {
   sourceBlockIndices.forEach(bIdx => {
     const blockSourceSegs = sourceGroups[bIdx] || [];
     const sourceBlockText = blockSourceSegs.map(s => s.source || "").join(" ").trim();
+    const srcClean = sourceBlockText.replace(/<\/?\d+>/g, "").trim();
+    const isPureSymbol = /^[\s_\-—.*:;|=+]*$/.test(srcClean) && srcClean.length > 0;
+    const srcTableId = sourceBlockTableIds[bIdx];
+
+    // Enforce Table Isolation: align table blocks with matching target table IDs
+    if (srcTableId !== undefined) {
+      const currentTargetTableId = targetBlockTableIds[targetCursor];
+      if (currentTargetTableId !== srcTableId) {
+        const matchedIdx = targetBlockTableIds.findIndex((tid, idx) => idx >= targetCursor && tid === srcTableId);
+        if (matchedIdx !== -1) {
+          targetCursor = matchedIdx;
+        }
+      }
+    } else if (srcTableId === undefined && targetBlockTableIds[targetCursor] !== undefined) {
+      const nonTableIdx = targetBlockTableIds.findIndex((tid, idx) => idx >= targetCursor && tid === undefined);
+      if (nonTableIdx !== -1) {
+        targetCursor = nonTableIdx;
+      }
+    }
     
     while (targetCursor < numTargetBlocks - 1) {
       const candidateText = targetBlockPlaceholders[targetCursor] || "";
       const prevText = targetCursor > 0 ? (targetBlockPlaceholders[targetCursor - 1] || "") : "";
       
-      const srcClean = sourceBlockText.replace(/<\/?\d+>/g, "").trim();
       const candClean = candidateText.replace(/<\/?\d+>/g, "").trim();
 
       // Skip duplicate blocks or mismatched non-numeric text for numeric source blocks
@@ -357,15 +414,44 @@ async function processRelinkDualFiles(sourceFilePath, targetFilePath) {
         targetCursor++;
         continue;
       }
-
       if (/^\d+$/.test(srcClean) && candClean.length > 10 && !/^\d+$/.test(candClean)) {
         targetCursor++;
         continue;
       }
+
+      // Future Keyword Protection: If candidateText belongs to a future Source block, do not consume it for current block
+      if (isCandidateForFutureSourceBlock(candClean, bIdx, sourceBlockIndices, sourceGroups)) {
+        const srcMatchesRule = KEYWORD_MAP.some(rule => rule.src.test(srcClean) && rule.tgt.test(candClean));
+        if (!srcMatchesRule) {
+          targetCursor++;
+          continue;
+        }
+      }
+
+      // Symbol/Underscore protection: If source block is pure symbols/underscores (e.g. "___") and target candidate contains actual translated words, do not consume target candidate text!
+      if (isPureSymbol && candClean.length > 0 && !/^[\s_\-—.*:;|=+]*$/.test(candClean)) {
+        let foundSymbolAhead = -1;
+        for (let look = targetCursor; look < Math.min(numTargetBlocks, targetCursor + 5); look++) {
+          if (targetBlockTableIds[look] !== srcTableId) break;
+          const aheadClean = (targetBlockPlaceholders[look] || "").replace(/<\/?\d+>/g, "").trim();
+          if (/^[\s_\-—.*:;|=+]*$/.test(aheadClean) && aheadClean.length > 0) {
+            foundSymbolAhead = look;
+            break;
+          }
+        }
+
+        if (foundSymbolAhead !== -1) {
+          targetCursor = foundSymbolAhead;
+        } else {
+          matchedTargetPlaceholders[bIdx] = sourceBlockText;
+          return;
+        }
+      }
+
       break;
     }
 
-    matchedTargetPlaceholders[bIdx] = targetBlockPlaceholders[targetCursor] || "";
+    matchedTargetPlaceholders[bIdx] = targetBlockPlaceholders[targetCursor] || sourceBlockText;
     targetCursor++;
   });
 
@@ -400,7 +486,7 @@ async function processRelinkDualFiles(sourceFilePath, targetFilePath) {
       leading: srcSeg.leading || "",
       trailing: srcSeg.trailing || "",
       status: targetText ? "translated" : "draft",
-      verified: !!targetText
+      verified: false
     });
   });
 
