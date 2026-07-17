@@ -1074,11 +1074,18 @@ export default function App() {
           .toLowerCase();
       };
       
-      // Build source map from current segments
+      // Build source map from current segments - ONLY for long, non-index text
+      const isShortOrIndex = (str) => {
+        if (!str || str.length < 15) return true;
+        // Exclude single numbers, letters, roman numerals, or short bullet prefixes like "v.", "vi.", "1.", "a."
+        if (/^[a-z0-9ivxlcdm._() -]{1,14}$/i.test(str)) return true;
+        return false;
+      };
+
       const sourceMap = new Map();
       segments.forEach(seg => {
         const key = cleanText(seg.source);
-        if (key && seg.target && seg.target.trim() !== "") {
+        if (key && !isShortOrIndex(key) && seg.target && seg.target.trim() !== "") {
           if (!sourceMap.has(key)) {
             sourceMap.set(key, seg.target);
           }
@@ -1095,35 +1102,43 @@ export default function App() {
         
         let currentKey = cleanText(data.segments[i].source);
         
-        if (sourceMap.has(currentKey)) {
+        // If data.segments[i] already has a valid target from backend relinking, preserve it!
+        if (data.segments[i].target && data.segments[i].target.trim().length > 0) {
+          mappedTargets[i] = data.segments[i].target;
+          isVerifiedArr[i] = data.segments[i].verified || false;
+          continue;
+        }
+
+        if (sourceMap.has(currentKey) && !isShortOrIndex(currentKey)) {
           mappedTargets[i] = sourceMap.get(currentKey);
           isVerifiedArr[i] = false;
           mappedCount++;
           continue;
         }
         
-        // Advanced mapping: Try concatenating up to 5 adjacent segments to handle Trados merged segments
+        // Advanced mapping: Try concatenating up to 5 adjacent segments for long texts
         let combinedKey = currentKey;
         let foundMatch = false;
         
-        for (let j = 1; j <= 5 && i + j < data.segments.length; j++) {
-          combinedKey += " " + cleanText(data.segments[i + j].source);
-          if (sourceMap.has(combinedKey)) {
-            mappedTargets[i] = sourceMap.get(combinedKey);
-            isVerifiedArr[i] = false;
-            
-            // Set the merged adjacent segments to their tags or zero-width space to prevent fallback to english
-            for (let k = 1; k <= j; k++) {
-              let tags = extractTagsOnly(data.segments[i + k].source);
-              if (tags === "") tags = "\u200B"; // zero-width space
-              mappedTargets[i + k] = tags;
-              isVerifiedArr[i + k] = false;
-              isMergedArr[i + k] = true;
+        if (!isShortOrIndex(currentKey)) {
+          for (let j = 1; j <= 5 && i + j < data.segments.length; j++) {
+            combinedKey += " " + cleanText(data.segments[i + j].source);
+            if (sourceMap.has(combinedKey)) {
+              mappedTargets[i] = sourceMap.get(combinedKey);
+              isVerifiedArr[i] = false;
+              
+              for (let k = 1; k <= j; k++) {
+                let tags = extractTagsOnly(data.segments[i + k].source);
+                if (tags === "") tags = "\u200B"; // zero-width space
+                mappedTargets[i + k] = tags;
+                isVerifiedArr[i + k] = false;
+                isMergedArr[i + k] = true;
+              }
+              
+              mappedCount += (j + 1);
+              foundMatch = true;
+              break;
             }
-            
-            mappedCount += (j + 1);
-            foundMatch = true;
-            break;
           }
         }
         

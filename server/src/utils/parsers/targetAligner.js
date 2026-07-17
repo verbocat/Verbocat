@@ -224,8 +224,24 @@ function projectSourceTagsOntoTarget(sourceText, targetText) {
   return resultTarget;
 }
 
+function splitTargetBySentence(str) {
+  const sentences = [];
+  const regex = /([^.!?।॥]+[.!?।॥]+(?:\s+|$))/g;
+  let match;
+  let lastIdx = 0;
+  while ((match = regex.exec(str)) !== null) {
+    sentences.push(match[0].trim());
+    lastIdx = regex.lastIndex;
+  }
+  if (lastIdx < str.length) {
+    const rem = str.slice(lastIdx).trim();
+    if (rem) sentences.push(rem);
+  }
+  return sentences.length ? sentences : [str];
+}
+
 /**
- * 100% Language-Agnostic Segment Partitioner with Source Tag Projection.
+ * 100% Language-Agnostic Segment Partitioner with Sentence-Aware Partitioning and Source Tag Projection.
  */
 function splitTargetBlockToN(targetPlaceholderStr, N, sourceSubSegments, targetTagMap, sourceTagMap) {
   if (!targetPlaceholderStr || targetPlaceholderStr.trim().length === 0) {
@@ -241,43 +257,61 @@ function splitTargetBlockToN(targetPlaceholderStr, N, sourceSubSegments, targetT
     return [projectSourceTagsOntoTarget(srcText, text)];
   }
 
-  const { pureText, pureToRawPos } = createPureTextMapping(targetPlaceholderStr);
+  const targetSentences = splitTargetBySentence(targetPlaceholderStr);
+  let rawSegments = [];
 
-  const sourceWeights = sourceSubSegments.map(s => {
-    const text = (s.source_text || "").replace(/<\/?\d+>/g, "").trim();
-    return Math.max(1, text.length);
-  });
-  const totalSourceLen = sourceWeights.reduce((a, b) => a + b, 0);
+  if (targetSentences.length === N) {
+    rawSegments = targetSentences;
+  } else if (targetSentences.length > 1) {
+    const srcWeights = sourceSubSegments.map(s => Math.max(1, (s.source_text || "").replace(/<[^>]+>/g, "").trim().length));
+    const totalSrcLen = srcWeights.reduce((a, b) => a + b, 0);
+    const totalTgtLen = targetSentences.reduce((a, s) => a + s.length, 0);
 
-  const pureSplitIndices = [];
-  let accumulatedRatio = 0;
-
-  for (let k = 0; k < N - 1; k++) {
-    const ratio = sourceWeights[k] / totalSourceLen;
-    accumulatedRatio += ratio;
-
-    const pureIdx = Math.min(pureText.length - 1, Math.max(1, Math.round(pureText.length * accumulatedRatio)));
-    pureSplitIndices.push(pureIdx);
-  }
-
-  const rawSplitIndices = pureSplitIndices.map(pIdx => {
-    let rawIdx = pureToRawPos[Math.min(pIdx, pureToRawPos.length - 1)];
-    const trailingTagRegex = /^(\s*<\/\d+>)+/;
-    const remainder = targetPlaceholderStr.slice(rawIdx);
-    const match = remainder.match(trailingTagRegex);
-    if (match) {
-      rawIdx += match[0].length;
+    let tgtIdx = 0;
+    for (let k = 0; k < N; k++) {
+      if (k === N - 1) {
+        rawSegments.push(targetSentences.slice(tgtIdx).join(" "));
+        break;
+      }
+      const srcRatio = srcWeights[k] / totalSrcLen;
+      let accRatio = 0;
+      let takeCount = 1;
+      for (let j = tgtIdx; j < targetSentences.length - (N - 1 - k); j++) {
+        accRatio += targetSentences[j].length / totalTgtLen;
+        if (accRatio >= srcRatio) break;
+        takeCount++;
+      }
+      rawSegments.push(targetSentences.slice(tgtIdx, tgtIdx + takeCount).join(" "));
+      tgtIdx += takeCount;
     }
-    return rawIdx;
-  });
+  } else {
+    const { pureText, pureToRawPos } = createPureTextMapping(targetPlaceholderStr);
+    const sourceWeights = sourceSubSegments.map(s => Math.max(1, (s.source_text || "").replace(/<\/?\d+>/g, "").trim().length));
+    const totalSourceLen = sourceWeights.reduce((a, b) => a + b, 0);
 
-  const rawSegments = [];
-  let startRawIdx = 0;
-  for (let k = 0; k < N; k++) {
-    const endRawIdx = (k < N - 1) ? rawSplitIndices[k] : targetPlaceholderStr.length;
-    const segStr = targetPlaceholderStr.slice(startRawIdx, endRawIdx).trim();
-    rawSegments.push(segStr);
-    startRawIdx = endRawIdx;
+    const pureSplitIndices = [];
+    let accumulatedRatio = 0;
+    for (let k = 0; k < N - 1; k++) {
+      accumulatedRatio += sourceWeights[k] / totalSourceLen;
+      const pureIdx = Math.min(pureText.length - 1, Math.max(1, Math.round(pureText.length * accumulatedRatio)));
+      pureSplitIndices.push(pureIdx);
+    }
+
+    const rawSplitIndices = pureSplitIndices.map(pIdx => {
+      let rawIdx = pureToRawPos[Math.min(pIdx, pureToRawPos.length - 1)];
+      const trailingTagRegex = /^(\s*<\/\d+>)+/;
+      const remainder = targetPlaceholderStr.slice(rawIdx);
+      const m = remainder.match(trailingTagRegex);
+      if (m) rawIdx += m[0].length;
+      return rawIdx;
+    });
+
+    let startRawIdx = 0;
+    for (let k = 0; k < N; k++) {
+      const endRawIdx = (k < N - 1) ? rawSplitIndices[k] : targetPlaceholderStr.length;
+      rawSegments.push(targetPlaceholderStr.slice(startRawIdx, endRawIdx).trim());
+      startRawIdx = endRawIdx;
+    }
   }
 
   return rawSegments.map((segText, idx) => {
@@ -300,29 +334,79 @@ async function alignTargetHtmlToSource(targetFilePath, templateHtml, sourceTagMa
   const targetTagMap = new Map();
   const tagCounter = { value: 1 };
 
+  $target("table").each((idx, el) => {
+    $target(el).attr("data-relink-table-id", String(idx));
+  });
+
   const targetLeafBlocks = getLeafTextBlocks($target);
+  const targetBlockTableIds = targetLeafBlocks.map(b => $target(b).closest("table").attr("data-relink-table-id"));
   const targetBlockPlaceholders = targetLeafBlocks.map(blockNode => {
     return extractPlaceholders(blockNode, $target, targetTagMap, tagCounter);
   });
 
   const sourceGroups = {};
   sourceSegments.forEach(seg => {
-    const blockIdx = sourceSegmentToBlockMap[seg.segment_index];
-    if (blockIdx !== undefined) {
-      if (!sourceGroups[blockIdx]) {
-        sourceGroups[blockIdx] = [];
-      }
-      sourceGroups[blockIdx].push(seg);
+    const blockIdx = sourceSegmentToBlockMap[seg.segment_index] !== undefined ? sourceSegmentToBlockMap[seg.segment_index] : 0;
+    if (!sourceGroups[blockIdx]) {
+      sourceGroups[blockIdx] = [];
     }
+    sourceGroups[blockIdx].push(seg);
+  });
+
+  const sourceBlockIndices = Object.keys(sourceGroups).map(Number).sort((a, b) => a - b);
+  const matchedTargetPlaceholders = {};
+  let targetCursor = 0;
+  const numTargetBlocks = targetBlockPlaceholders.length;
+
+  sourceBlockIndices.forEach(bIdx => {
+    const blockSourceSegs = sourceGroups[bIdx] || [];
+    const sourceBlockText = blockSourceSegs.map(s => s.source_text || "").join(" ").trim();
+    const srcClean = sourceBlockText.replace(/<\/?\d+>/g, "").trim();
+    const isPureSymbol = /^[\s_\-—.*:;|=+]*$/.test(srcClean) && srcClean.length > 0;
+    
+    while (targetCursor < numTargetBlocks - 1) {
+      const candidateText = targetBlockPlaceholders[targetCursor] || "";
+      const prevText = targetCursor > 0 ? (targetBlockPlaceholders[targetCursor - 1] || "") : "";
+      const candClean = candidateText.replace(/<\/?\d+>/g, "").trim();
+
+      if (bIdx > 0 && candidateText.length > 5 && prevText.length > 5 && candidateText.replace(/\s+/g, "") === prevText.replace(/\s+/g, "")) {
+        targetCursor++;
+        continue;
+      }
+      if (/^\d+$/.test(srcClean) && candClean.length > 10 && !/^\d+$/.test(candClean)) {
+        targetCursor++;
+        continue;
+      }
+
+      if (isPureSymbol && candClean.length > 0 && !/^[\s_\-—.*:;|=+]*$/.test(candClean)) {
+        let foundSymbolAhead = -1;
+        for (let look = targetCursor; look < Math.min(numTargetBlocks, targetCursor + 5); look++) {
+          const aheadClean = (targetBlockPlaceholders[look] || "").replace(/<\/?\d+>/g, "").trim();
+          if (/^[\s_\-—.*:;|=+]*$/.test(aheadClean) && aheadClean.length > 0) {
+            foundSymbolAhead = look;
+            break;
+          }
+        }
+        if (foundSymbolAhead !== -1) {
+          targetCursor = foundSymbolAhead;
+        } else {
+          matchedTargetPlaceholders[bIdx] = sourceBlockText;
+          return;
+        }
+      }
+      break;
+    }
+
+    matchedTargetPlaceholders[bIdx] = targetBlockPlaceholders[targetCursor] || sourceBlockText;
+    targetCursor++;
   });
 
   const alignedMap = new Map();
 
-  Object.keys(sourceGroups).forEach(blockIdxStr => {
-    const blockIdx = parseInt(blockIdxStr, 10);
-    const blockSourceSegs = sourceGroups[blockIdx] || [];
+  sourceBlockIndices.forEach(bIdx => {
+    const blockSourceSegs = sourceGroups[bIdx] || [];
     const N = blockSourceSegs.length;
-    const targetPlaceholderStr = targetBlockPlaceholders[blockIdx] || "";
+    const targetPlaceholderStr = matchedTargetPlaceholders[bIdx] || "";
 
     const splitTargetSegs = splitTargetBlockToN(targetPlaceholderStr, N, blockSourceSegs, targetTagMap, sourceTagMap);
 
