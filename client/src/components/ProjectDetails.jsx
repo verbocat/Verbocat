@@ -3,7 +3,7 @@ import {
   ArrowLeft, FileText, Globe, Play, Pause, XCircle, RotateCcw,
   Download, Upload, CheckCircle2, AlertCircle, Eye, Database, BarChart3, TrendingUp, Folder, Plus, Trash2,
   Settings, List, Activity, Calendar, User, Clock, ChevronDown, Check, Edit2, Copy, FileCode, CheckSquare, Square, RefreshCw, Users, LayoutDashboard,
-  MessageCircle
+  MessageCircle, Layers
 } from "lucide-react";
 import io from "socket.io-client";
 import {
@@ -650,6 +650,17 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
               title="Chat Workspace"
             >
               <MessageCircle size={14} />
+            </button>
+
+            <button
+              onClick={() => {
+                window.history.pushState({}, "", "/relink");
+                window.dispatchEvent(new PopStateEvent("popstate"));
+              }}
+              className="project-icon-action"
+              title="Relinking Page"
+            >
+              <Layers size={14} style={{ color: "#6366f1" }} />
             </button>
 
             {isProjectOwner && (
