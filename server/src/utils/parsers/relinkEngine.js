@@ -327,13 +327,48 @@ async function processRelinkDualFiles(sourceFilePath, targetFilePath) {
     sourceGroups[bIdx].push(seg);
   });
 
+  // Dynamically match Target leaf blocks to Source leaf blocks
+  const sourceBlockIndices = Object.keys(sourceGroups).map(Number).sort((a, b) => a - b);
+  const matchedTargetPlaceholders = {};
+  
+  let targetCursor = 0;
+  const numTargetBlocks = targetBlockPlaceholders.length;
+
+  sourceBlockIndices.forEach(bIdx => {
+    const blockSourceSegs = sourceGroups[bIdx] || [];
+    const sourceBlockText = blockSourceSegs.map(s => s.source || "").join(" ").trim();
+    
+    while (targetCursor < numTargetBlocks - 1) {
+      const candidateText = targetBlockPlaceholders[targetCursor] || "";
+      const prevText = targetCursor > 0 ? (targetBlockPlaceholders[targetCursor - 1] || "") : "";
+      
+      const srcClean = sourceBlockText.replace(/<\/?\d+>/g, "").trim();
+      const candClean = candidateText.replace(/<\/?\d+>/g, "").trim();
+
+      // Skip duplicate blocks or mismatched non-numeric text for numeric source blocks
+      if (bIdx > 0 && candidateText.length > 5 && prevText.length > 5 && candidateText.replace(/\s+/g, "") === prevText.replace(/\s+/g, "")) {
+        targetCursor++;
+        continue;
+      }
+
+      if (/^\d+$/.test(srcClean) && candClean.length > 10 && !/^\d+$/.test(candClean)) {
+        targetCursor++;
+        continue;
+      }
+      break;
+    }
+
+    matchedTargetPlaceholders[bIdx] = targetBlockPlaceholders[targetCursor] || "";
+    targetCursor++;
+  });
+
   // Perform multi-strategy alignment per leaf block
   const alignedSegments = [];
 
   sourceSegments.forEach(srcSeg => {
     const bIdx = srcSeg.blockIndex !== undefined ? srcSeg.blockIndex : 0;
     const blockSourceSegs = sourceGroups[bIdx] || [srcSeg];
-    const targetPlaceholderStr = targetBlockPlaceholders[bIdx] || "";
+    const targetPlaceholderStr = matchedTargetPlaceholders[bIdx] || "";
 
     const relativeIdx = blockSourceSegs.findIndex(s => s.id === srcSeg.id);
     const splitTargetSegs = alignBlockTargetToSourceN(targetPlaceholderStr, blockSourceSegs, targetTagMap, sourceTagMap);
@@ -341,7 +376,6 @@ async function processRelinkDualFiles(sourceFilePath, targetFilePath) {
     let targetText = splitTargetSegs[relativeIdx >= 0 ? relativeIdx : 0] || "";
 
     // Strip redundant outer leading and trailing tags matching srcSeg.leading/srcSeg.trailing
-    const { extractSegmentTags } = require("./segmentationUtils");
     const srcLeading = (srcSeg.leading || "").trim();
     const srcTrailing = (srcSeg.trailing || "").trim();
 
@@ -353,7 +387,7 @@ async function processRelinkDualFiles(sourceFilePath, targetFilePath) {
     }
 
     alignedSegments.push({
-      id: srcSeg.id + 1,
+      id: srcSeg.id,
       source: srcSeg.source,
       target: targetText,
       leading: srcSeg.leading || "",
