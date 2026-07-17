@@ -182,16 +182,24 @@ function projectSourceTagsOntoTarget(sourceText, targetText) {
   }
 
   const targetLen = cleanTarget.length;
+
+  const isInsideWord = (str, idx) => {
+    if (idx <= 0 || idx >= str.length) return false;
+    const prevChar = str[idx - 1];
+    const nextChar = str[idx];
+    return !/\s/.test(prevChar) && !/\s/.test(nextChar);
+  };
+
   const targetTagPositions = tagSpecs.map(spec => {
     let pIdx = Math.round(targetLen * spec.ratio);
     pIdx = Math.max(0, Math.min(targetLen, pIdx));
 
-    if (pIdx > 0 && pIdx < targetLen) {
+    if (isInsideWord(cleanTarget, pIdx)) {
       const nextSpace = cleanTarget.indexOf(" ", pIdx);
       const prevSpace = cleanTarget.lastIndexOf(" ", pIdx);
-      if (nextSpace !== -1 && (nextSpace - pIdx) <= 4) {
+      if (nextSpace !== -1 && (prevSpace === -1 || (nextSpace - pIdx) <= (pIdx - prevSpace))) {
         pIdx = nextSpace;
-      } else if (prevSpace !== -1 && (pIdx - prevSpace) <= 4) {
+      } else if (prevSpace !== -1) {
         pIdx = prevSpace + 1;
       }
     }

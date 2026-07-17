@@ -1,11 +1,79 @@
 import { useState, useRef, useEffect } from "react";
-import { Copy, Check, ArrowRight, AlertTriangle, Lock, Sparkles, Award, UploadCloud, Trash2, Image, MessageSquare, X } from "lucide-react";
+import { Copy, Check, ArrowRight, AlertTriangle, Lock, Sparkles, Award, UploadCloud, Trash2, Image, MessageSquare, X, Tag, TagOff, Wand2 } from "lucide-react";
 import { useChatStore } from "../services/chatStore";
 
 const removeTags = (text) => {
   if (typeof text !== "string") return text;
   return text.replace(/<\/?[a-zA-Z0-9_-]+[^>]*>/g, "");
 };
+
+function projectSourceTagsOntoTarget(sourceText, targetText) {
+  if (!sourceText) return targetText || "";
+  const sourceTags = sourceText.match(/<\/?\d+>/g);
+  if (!sourceTags || sourceTags.length === 0) {
+    return (targetText || "").replace(/<[^>]+>/g, "").trim();
+  }
+  const cleanTarget = (targetText || "").replace(/<[^>]+>/g, "").trim();
+  if (!cleanTarget) return sourceText;
+
+  const pureSource = sourceText.replace(/<[^>]+>/g, "");
+  const pureSourceLen = Math.max(1, pureSource.length);
+
+  const tagSpecs = [];
+  const tagRegex = /<\/?\d+>/g;
+  let match;
+  let pureOffset = 0;
+  let lastRawIdx = 0;
+
+  while ((match = tagRegex.exec(sourceText)) !== null) {
+    const rawIdx = match.index;
+    const textBefore = sourceText.slice(lastRawIdx, rawIdx).replace(/<\/?\d+>/g, "");
+    pureOffset += textBefore.length;
+    lastRawIdx = rawIdx + match[0].length;
+
+    tagSpecs.push({
+      tag: match[0],
+      ratio: pureOffset / pureSourceLen
+    });
+  }
+
+  const targetLen = cleanTarget.length;
+  const isInsideWord = (str, idx) => {
+    if (idx <= 0 || idx >= str.length) return false;
+    const prevChar = str[idx - 1];
+    const nextChar = str[idx];
+    return !/\s/.test(prevChar) && !/\s/.test(nextChar);
+  };
+
+  const targetTagPositions = tagSpecs.map(spec => {
+    let pIdx = Math.round(targetLen * spec.ratio);
+    pIdx = Math.max(0, Math.min(targetLen, pIdx));
+
+    if (isInsideWord(cleanTarget, pIdx)) {
+      const nextSpace = cleanTarget.indexOf(" ", pIdx);
+      const prevSpace = cleanTarget.lastIndexOf(" ", pIdx);
+      if (nextSpace !== -1 && (prevSpace === -1 || (nextSpace - pIdx) <= (pIdx - prevSpace))) {
+        pIdx = nextSpace;
+      } else if (prevSpace !== -1) {
+        pIdx = prevSpace + 1;
+      }
+    }
+
+    return {
+      tag: spec.tag,
+      pos: pIdx
+    };
+  });
+
+  targetTagPositions.sort((a, b) => b.pos - a.pos);
+
+  let resultTarget = cleanTarget;
+  targetTagPositions.forEach(item => {
+    resultTarget = resultTarget.slice(0, item.pos) + item.tag + resultTarget.slice(item.pos);
+  });
+
+  return resultTarget;
+}
 
 /* ── LCS Word Diff Utility for Track Changes review ───────────────── */
 const computeWordDiff = (oldStr, newStr) => {
@@ -371,6 +439,81 @@ export const SegmentCard = ({
     }
   }, [segment.target, segment.originalTargetText]);
 
+  /* ── Tag Management & Mismatch Detection ── */
+  const sourceTags = (segment.source || "").match(/<\/?\d+>/g) || [];
+  const targetTags = (segment.target || "").match(/<\/?\d+>/g) || [];
+  const missingTags = sourceTags.filter(t => !targetTags.includes(t));
+  const extraTags = targetTags.filter(t => !sourceTags.includes(t));
+  const hasTagMismatch = sourceTags.length > 0 && (missingTags.length > 0 || extraTags.length > 0);
+
+  const handleInsertTagAtCursor = (tagText) => {
+    if (readOnly || segment.verified || !!lockInfo) return;
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && editorRef.current.contains(sel.anchorNode)) {
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      const textNode = document.createTextNode(tagText);
+      range.insertNode(textNode);
+      range.setStartAfter(textNode);
+      range.setEndAfter(textNode);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } else {
+      editorRef.current.innerText += tagText;
+    }
+
+    const updatedTarget = htmlToTarget(editorRef.current);
+    lastSaved.current = updatedTarget;
+    if (onTyping) onTyping(segment.id, updatedTarget);
+    onUpdateTranslation(segment.id, updatedTarget);
+  };
+
+  const handleImportAllSourceTags = () => {
+    if (readOnly || segment.verified || !!lockInfo) return;
+    const cleanTarget = (segment.target || "").replace(/<[^>]+>/g, "").trim();
+    if (sourceTags.length === 0) return;
+
+    let updated = cleanTarget;
+    sourceTags.forEach(tag => {
+      if (!updated.includes(tag)) {
+        updated += " " + tag;
+      }
+    });
+
+    if (editorRef.current) {
+      editorRef.current.innerHTML = targetToHtml(updated);
+    }
+    lastSaved.current = updated;
+    if (onTyping) onTyping(segment.id, updated);
+    onUpdateTranslation(segment.id, updated);
+  };
+
+  const handleClearAllTargetTags = () => {
+    if (readOnly || segment.verified || !!lockInfo) return;
+    const strippedTarget = (segment.target || "").replace(/<\/?\d+>/g, "").trim();
+    if (editorRef.current) {
+      editorRef.current.innerHTML = targetToHtml(strippedTarget);
+    }
+    lastSaved.current = strippedTarget;
+    if (onTyping) onTyping(segment.id, strippedTarget);
+    onUpdateTranslation(segment.id, strippedTarget);
+  };
+
+  const handleAutoFixTags = () => {
+    if (readOnly || segment.verified || !!lockInfo) return;
+    if (!segment.source) return;
+    const fixed = projectSourceTagsOntoTarget(segment.source, segment.target || "");
+    if (editorRef.current) {
+      editorRef.current.innerHTML = targetToHtml(fixed);
+    }
+    lastSaved.current = fixed;
+    if (onTyping) onTyping(segment.id, fixed);
+    onUpdateTranslation(segment.id, fixed);
+  };
+
   /* ── Source renderer ── */
   const renderSource = (text) => {
     if (!text) return null;
@@ -405,7 +548,20 @@ export const SegmentCard = ({
                 display = (closing ? "/" : "") + name + m[1];
               }
             }
-            return <span key={`tag-${i}`} className="seg-tag" title={inner}>{display}</span>;
+            return (
+              <span
+                key={`tag-${i}`}
+                className="seg-tag"
+                title={`Click to insert ${p} into target text box at cursor`}
+                style={{ cursor: "pointer", userSelect: "all" }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleInsertTagAtCursor(p);
+                }}
+              >
+                {display}
+              </span>
+            );
           }
           return p;
         });
@@ -662,6 +818,37 @@ export const SegmentCard = ({
                   </button>
                 )}
 
+                {/* Tag Mismatch Badge */}
+                {hasTagMismatch && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleAutoFixTags();
+                    }}
+                    style={{
+                      fontSize: "9px",
+                      fontWeight: 700,
+                      fontFamily: "'Inter', sans-serif",
+                      color: "#f59e0b",
+                      background: "rgba(245,158,11,0.12)",
+                      border: "1px solid rgba(245,158,11,0.3)",
+                      borderRadius: "6px",
+                      padding: "3px 6px",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      transition: "all 0.2s ease",
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.2)"
+                    }}
+                    title={`Tag Mismatch! Missing: ${missingTags.join(", ") || "none"}${extraTags.length ? `; Extra: ${extraTags.join(", ")}` : ""}. Click to 1-Click Auto-Fix.`}
+                  >
+                    <AlertTriangle style={{ width: 11, height: 11 }} />
+                    <span>Tag Mismatch ({missingTags.length ? `-${missingTags.length}` : `+${extraTags.length}`})</span>
+                  </button>
+                )}
+
                 {/* QA Alert Mark */}
                 {(parsedMqmReport && parsedMqmReport.errors && parsedMqmReport.errors.length > 0) && (
                   <span 
@@ -684,6 +871,84 @@ export const SegmentCard = ({
                 )}
               </div>
             ))}
+
+            {/* Tag Quick Actions Bar below/above editor */}
+            {sourceTags.length > 0 && !readOnly && !segment.verified && !lockInfo && (
+              <div 
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  marginTop: "4px",
+                  fontSize: "10px"
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={handleImportAllSourceTags}
+                  title="Import/append all source tags into target"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "3px",
+                    padding: "2px 6px",
+                    borderRadius: "4px",
+                    background: "rgba(59,130,246,0.1)",
+                    color: "#60a5fa",
+                    border: "1px solid rgba(59,130,246,0.2)",
+                    cursor: "pointer",
+                    fontSize: "9px",
+                    fontWeight: 600
+                  }}
+                >
+                  <Tag style={{ width: 9, height: 9 }} /> Import Tags
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleClearAllTargetTags}
+                  title="Remove all tag placeholders from target text"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "3px",
+                    padding: "2px 6px",
+                    borderRadius: "4px",
+                    background: "rgba(239,68,68,0.1)",
+                    color: "#f87171",
+                    border: "1px solid rgba(239,68,68,0.2)",
+                    cursor: "pointer",
+                    fontSize: "9px",
+                    fontWeight: 600
+                  }}
+                >
+                  <TagOff style={{ width: 9, height: 9 }} /> Clear Tags
+                </button>
+
+                {hasTagMismatch && (
+                  <button
+                    type="button"
+                    onClick={handleAutoFixTags}
+                    title="Automatically project and fix missing source tags onto target text"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "3px",
+                      padding: "2px 6px",
+                      borderRadius: "4px",
+                      background: "rgba(245,158,11,0.15)",
+                      color: "#fbbf24",
+                      border: "1px solid rgba(245,158,11,0.3)",
+                      cursor: "pointer",
+                      fontSize: "9px",
+                      fontWeight: 600
+                    }}
+                  >
+                    <Wand2 style={{ width: 9, height: 9 }} /> Fix Mismatch
+                  </button>
+                )}
+              </div>
+            )}
 
             {lockInfo && (
               <div className="absolute inset-0 bg-indigo-950/20 border border-indigo-500/30 rounded-lg flex items-center justify-between px-3 z-10 select-none">
