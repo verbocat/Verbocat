@@ -31,7 +31,7 @@ function extractEntityAnchors(text) {
   return anchors;
 }
 
-function alignLeafBlocksDP(sourceBlockIndices, sourceGroups, targetBlockPlaceholders, targetBlockTableIds, sourceBlockTableIds) {
+function alignLeafBlocksDP(sourceBlockIndices, sourceGroups, targetBlockPlaceholders, targetBlockTableIds, sourceBlockTableIds, sourceLeafBlocks, targetLeafBlocks) {
   const N = sourceBlockIndices.length;
   const M = targetBlockPlaceholders.length;
 
@@ -48,11 +48,15 @@ function alignLeafBlocksDP(sourceBlockIndices, sourceGroups, targetBlockPlacehol
     const segs = sourceGroups[bIdx] || [];
     const fullText = segs.map(s => s.source_text || s.source || "").join(" ").trim();
     const cleanText = fullText.replace(/<\/?\d+>/g, "").trim();
+    const bNode = sourceLeafBlocks ? sourceLeafBlocks[bIdx] : null;
     return {
       bIdx,
       fullText,
       cleanText,
-      tableId: sourceBlockTableIds ? sourceBlockTableIds[bIdx] : undefined,
+      tableId: bNode ? bNode.tableId : (sourceBlockTableIds ? sourceBlockTableIds[bIdx] : undefined),
+      rowId: bNode ? bNode.rowId : undefined,
+      cellId: bNode ? bNode.cellId : undefined,
+      itemId: bNode ? bNode.itemId : undefined,
       anchors: extractEntityAnchors(fullText),
       len: cleanText.length
     };
@@ -60,11 +64,15 @@ function alignLeafBlocksDP(sourceBlockIndices, sourceGroups, targetBlockPlacehol
 
   const tgtInfos = targetBlockPlaceholders.map((ph, idx) => {
     const cleanText = (ph || "").replace(/<\/?\d+>/g, "").trim();
+    const bNode = targetLeafBlocks ? targetLeafBlocks[idx] : null;
     return {
       tIdx: idx,
       fullText: ph || "",
       cleanText,
-      tableId: targetBlockTableIds[idx],
+      tableId: bNode ? bNode.tableId : targetBlockTableIds[idx],
+      rowId: bNode ? bNode.rowId : undefined,
+      cellId: bNode ? bNode.cellId : undefined,
+      itemId: bNode ? bNode.itemId : undefined,
       anchors: extractEntityAnchors(ph),
       len: cleanText.length
     };
@@ -95,14 +103,26 @@ function alignLeafBlocksDP(sourceBlockIndices, sourceGroups, targetBlockPlacehol
         const posPenalty = posDiff * 20.0;
 
         const lenRatio = src.len > 0 ? tgt.len / src.len : 1.0;
-        let lenCost = 10.0;
-        if (lenRatio >= 0.4 && lenRatio <= 2.2) {
-          lenCost = Math.abs(lenRatio - 1.1) * 5.0;
+        let lenCost = 5.0;
+        if (src.len <= 15 || tgt.len <= 15) {
+          lenCost = 0.0;
+        } else if (lenRatio >= 0.2 && lenRatio <= 3.0) {
+          lenCost = Math.abs(lenRatio - 1.0) * 5.0;
         } else {
-          lenCost = 35.0;
+          lenCost = 15.0;
         }
 
-        matchCost = lenCost + posPenalty - (sharedAnchors * 35.0);
+        let domMatchBonus = 0.0;
+        if (src.tableId !== undefined && src.tableId === tgt.tableId) {
+          if (src.rowId !== undefined && src.rowId === tgt.rowId && src.cellId !== undefined && src.cellId === tgt.cellId) {
+            domMatchBonus += 40.0;
+          }
+        }
+        if (src.itemId !== undefined && src.itemId === tgt.itemId) {
+          domMatchBonus += 20.0;
+        }
+
+        matchCost = lenCost + posPenalty - (sharedAnchors * 35.0) - domMatchBonus;
       }
 
       const costMatch = DP[i - 1][j - 1] + matchCost;
@@ -164,7 +184,7 @@ function splitTargetBlockToN(targetPlaceholderStr, N, sourceSubSegments, targetT
 
   if (targetSentences.length === N) {
     rawSegments = targetSentences;
-  } else if (targetSentences.length > 1) {
+  } else if (targetSentences.length >= N && targetSentences.length > 1) {
     const srcWeights = sourceSubSegments.map(s => Math.max(1, (s.source_text || s.source || "").replace(/<[^>]+>/g, "").trim().length));
     const totalSrcLen = srcWeights.reduce((a, b) => a + b, 0);
     const totalTgtLen = targetSentences.reduce((a, s) => a + s.length, 0);
@@ -176,13 +196,21 @@ function splitTargetBlockToN(targetPlaceholderStr, N, sourceSubSegments, targetT
         break;
       }
       const srcRatio = srcWeights[k] / totalSrcLen;
+      const maxAllowedTake = Math.max(1, (targetSentences.length - tgtIdx) - (N - 1 - k));
       let accRatio = 0;
       let takeCount = 1;
+
       for (let j = tgtIdx; j < targetSentences.length - (N - 1 - k); j++) {
-        accRatio += targetSentences[j].length / totalTgtLen;
-        if (accRatio >= srcRatio) break;
+        const itemRatio = targetSentences[j].length / totalTgtLen;
+        if (takeCount > 1 && (accRatio + itemRatio / 2) >= srcRatio) break;
+        accRatio += itemRatio;
+        if (accRatio >= srcRatio * 0.8 && takeCount >= 1) {
+          break;
+        }
+        if (takeCount >= maxAllowedTake) break;
         takeCount++;
       }
+      takeCount = Math.min(takeCount, maxAllowedTake);
       rawSegments.push(targetSentences.slice(tgtIdx, tgtIdx + takeCount).join(" "));
       tgtIdx += takeCount;
     }

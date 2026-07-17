@@ -163,7 +163,7 @@ const splitByPunctuation = (str, tagMap) => {
     }
 
     const isDecimalOrAbbr = /(?:^|\s|\()([A-Za-z0-9]|\d+)\.$/.test(currentAcc) && i < rawPieces.length - 1 && /^\d/.test(rawPieces[i+1]);
-    const isShortWord = /\b(sr|no|v|vol|sec|art|cin|inc|ltd|co|st|dr|mr|mrs|vs|e\.g|i\.e)\.$/i.test(currentAcc);
+    const isShortWord = /(?:\b(?:sr|no|nos|v|vol|sec|art|cin|inc|ltd|pvt|corp|co|st|dr|mr|mrs|ms|prof|vs|e\.?\s*g|i\.?\s*e|etc|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|approx|max|min|fig|paras?|dept|assn|bldg|rs|re|inr|opp|ref|par|cl|ch|ver|sub|cl|para)\.|\b[a-z]\.)$/i.test(currentAcc);
 
     if (!isDecimalOrAbbr && !isShortWord) {
       const balanced = balanceSegmentTags(currentAcc);

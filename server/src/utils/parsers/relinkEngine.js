@@ -122,7 +122,17 @@ const getLeafTextBlocks = ($) => {
       (BLOCK_TAGS.includes(node.name.toLowerCase()) || 
        (node.attribs && node.attribs.class && node.attribs.class.includes("__temp-leaf-block__")));
     if (isThisBlock && hasText && !hasDescendantBlock) {
-      node.tableId = $(node).closest("table").attr("data-relink-table-id");
+      const $n = $(node);
+      const tableEl = $n.closest("table");
+      const trEl = $n.closest("tr");
+      const cellEl = $n.closest("td, th");
+      const liEl = $n.closest("li");
+
+      node.tableId = tableEl.length ? tableEl.attr("data-relink-table-id") : undefined;
+      node.rowId = trEl.length ? trEl.index() : undefined;
+      node.cellId = cellEl.length ? cellEl.index() : undefined;
+      node.itemId = liEl.length ? liEl.index() : undefined;
+
       leafTextBlocks.push(node);
     }
     return hasText;
@@ -155,7 +165,7 @@ function extractEntityAnchors(text) {
 }
 
 // Global Dynamic Programming Sequence Aligner for Source & Target Leaf Blocks
-function alignLeafBlocksDP(sourceBlockIndices, sourceGroups, targetBlockPlaceholders, targetBlockTableIds, sourceBlockTableIds) {
+function alignLeafBlocksDP(sourceBlockIndices, sourceGroups, targetBlockPlaceholders, targetBlockTableIds, sourceBlockTableIds, sourceLeafBlocks, targetLeafBlocks) {
   const N = sourceBlockIndices.length;
   const M = targetBlockPlaceholders.length;
 
@@ -163,7 +173,7 @@ function alignLeafBlocksDP(sourceBlockIndices, sourceGroups, targetBlockPlacehol
   if (M === 0) {
     const fallback = {};
     sourceBlockIndices.forEach(bIdx => {
-      fallback[bIdx] = ""; // NEVER fallback to English source text!
+      fallback[bIdx] = "";
     });
     return fallback;
   }
@@ -172,11 +182,15 @@ function alignLeafBlocksDP(sourceBlockIndices, sourceGroups, targetBlockPlacehol
     const segs = sourceGroups[bIdx] || [];
     const fullText = segs.map(s => s.source || "").join(" ").trim();
     const cleanText = fullText.replace(/<\/?\d+>/g, "").trim();
+    const bNode = sourceLeafBlocks ? sourceLeafBlocks[bIdx] : null;
     return {
       bIdx,
       fullText,
       cleanText,
-      tableId: sourceBlockTableIds[bIdx],
+      tableId: bNode ? bNode.tableId : sourceBlockTableIds[bIdx],
+      rowId: bNode ? bNode.rowId : undefined,
+      cellId: bNode ? bNode.cellId : undefined,
+      itemId: bNode ? bNode.itemId : undefined,
       anchors: extractEntityAnchors(fullText),
       len: cleanText.length
     };
@@ -184,11 +198,15 @@ function alignLeafBlocksDP(sourceBlockIndices, sourceGroups, targetBlockPlacehol
 
   const tgtInfos = targetBlockPlaceholders.map((ph, idx) => {
     const cleanText = (ph || "").replace(/<\/?\d+>/g, "").trim();
+    const bNode = targetLeafBlocks ? targetLeafBlocks[idx] : null;
     return {
       tIdx: idx,
       fullText: ph || "",
       cleanText,
-      tableId: targetBlockTableIds[idx],
+      tableId: bNode ? bNode.tableId : targetBlockTableIds[idx],
+      rowId: bNode ? bNode.rowId : undefined,
+      cellId: bNode ? bNode.cellId : undefined,
+      itemId: bNode ? bNode.itemId : undefined,
       anchors: extractEntityAnchors(ph),
       len: cleanText.length
     };
@@ -219,14 +237,26 @@ function alignLeafBlocksDP(sourceBlockIndices, sourceGroups, targetBlockPlacehol
         const posPenalty = posDiff * 20.0;
 
         const lenRatio = src.len > 0 ? tgt.len / src.len : 1.0;
-        let lenCost = 10.0;
-        if (lenRatio >= 0.4 && lenRatio <= 2.2) {
-          lenCost = Math.abs(lenRatio - 1.1) * 5.0;
+        let lenCost = 5.0;
+        if (src.len <= 15 || tgt.len <= 15) {
+          lenCost = 0.0;
+        } else if (lenRatio >= 0.2 && lenRatio <= 3.0) {
+          lenCost = Math.abs(lenRatio - 1.0) * 5.0;
         } else {
-          lenCost = 35.0;
+          lenCost = 15.0;
         }
 
-        matchCost = lenCost + posPenalty - (sharedAnchors * 35.0);
+        let domMatchBonus = 0.0;
+        if (src.tableId !== undefined && src.tableId === tgt.tableId) {
+          if (src.rowId !== undefined && src.rowId === tgt.rowId && src.cellId !== undefined && src.cellId === tgt.cellId) {
+            domMatchBonus += 40.0;
+          }
+        }
+        if (src.itemId !== undefined && src.itemId === tgt.itemId) {
+          domMatchBonus += 20.0;
+        }
+
+        matchCost = lenCost + posPenalty - (sharedAnchors * 35.0) - domMatchBonus;
       }
 
       const costMatch = DP[i - 1][j - 1] + matchCost;
@@ -357,7 +387,7 @@ function alignBlockTargetToSourceN(targetPlaceholderStr, sourceSubSegments, targ
 
   if (targetSentences.length === N) {
     rawSegments = targetSentences;
-  } else if (targetSentences.length > 1) {
+  } else if (targetSentences.length >= N && targetSentences.length > 1) {
     const srcWeights = sourceSubSegments.map(s => Math.max(1, (s.source || "").replace(/<[^>]+>/g, "").trim().length));
     const totalSrcLen = srcWeights.reduce((a, b) => a + b, 0);
     const totalTgtLen = targetSentences.reduce((a, s) => a + s.length, 0);
@@ -369,18 +399,26 @@ function alignBlockTargetToSourceN(targetPlaceholderStr, sourceSubSegments, targ
         break;
       }
       const srcRatio = srcWeights[k] / totalSrcLen;
+      const maxAllowedTake = Math.max(1, (targetSentences.length - tgtIdx) - (N - 1 - k));
       let accRatio = 0;
       let takeCount = 1;
+
       for (let j = tgtIdx; j < targetSentences.length - (N - 1 - k); j++) {
-        accRatio += targetSentences[j].length / totalTgtLen;
-        if (accRatio >= srcRatio) break;
+        const itemRatio = targetSentences[j].length / totalTgtLen;
+        if (takeCount > 1 && (accRatio + itemRatio / 2) >= srcRatio) break;
+        accRatio += itemRatio;
+        if (accRatio >= srcRatio * 0.8 && takeCount >= 1) {
+          break;
+        }
+        if (takeCount >= maxAllowedTake) break;
         takeCount++;
       }
+      takeCount = Math.min(takeCount, maxAllowedTake);
       rawSegments.push(targetSentences.slice(tgtIdx, tgtIdx + takeCount).join(" "));
       tgtIdx += takeCount;
     }
   } else {
-    // Proportional character ratio partition when target is a single continuous sentence/paragraph
+    // Proportional character ratio partition when target has fewer sentences than source subsegments
     const text = sanitizeTargetSpacing(targetPlaceholderStr);
     const srcWeights = sourceSubSegments.map(s => Math.max(1, (s.source || "").replace(/<[^>]+>/g, "").trim().length));
     const totalSrcLen = srcWeights.reduce((a, b) => a + b, 0);
@@ -466,13 +504,15 @@ async function processRelinkDualFiles(sourceFilePath, targetFilePath) {
 
   const sourceBlockIndices = Object.keys(sourceGroups).map(Number).sort((a, b) => a - b);
   
-  // Use Global DP Sequence Aligner
+  // Use Global DP Sequence Aligner with DOM structural cell matching
   const matchedTargetPlaceholders = alignLeafBlocksDP(
     sourceBlockIndices,
     sourceGroups,
     targetBlockPlaceholders,
     targetBlockTableIds,
-    sourceBlockTableIds
+    sourceBlockTableIds,
+    sourceLeafBlocks,
+    targetLeafBlocks
   );
 
   const alignedSegments = [];
@@ -505,6 +545,7 @@ async function processRelinkDualFiles(sourceFilePath, targetFilePath) {
       target: targetText,
       leading: srcSeg.leading || "",
       trailing: srcSeg.trailing || "",
+      blockIndex: srcSeg.blockIndex,
       status: targetText ? "translated" : "draft",
       verified: false
     });
