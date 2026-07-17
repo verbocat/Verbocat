@@ -338,7 +338,19 @@ async function processRelinkDualFiles(sourceFilePath, targetFilePath) {
     const relativeIdx = blockSourceSegs.findIndex(s => s.id === srcSeg.id);
     const splitTargetSegs = alignBlockTargetToSourceN(targetPlaceholderStr, blockSourceSegs, targetTagMap, sourceTagMap);
 
-    const targetText = splitTargetSegs[relativeIdx >= 0 ? relativeIdx : 0] || "";
+    let targetText = splitTargetSegs[relativeIdx >= 0 ? relativeIdx : 0] || "";
+
+    // Strip redundant outer leading and trailing tags matching srcSeg.leading/srcSeg.trailing
+    const { extractSegmentTags } = require("./segmentationUtils");
+    const srcLeading = (srcSeg.leading || "").trim();
+    const srcTrailing = (srcSeg.trailing || "").trim();
+
+    if (srcLeading && targetText.startsWith(srcLeading)) {
+      targetText = targetText.slice(srcLeading.length).trim();
+    }
+    if (srcTrailing && targetText.endsWith(srcTrailing)) {
+      targetText = targetText.slice(0, targetText.length - srcTrailing.length).trim();
+    }
 
     alignedSegments.push({
       id: srcSeg.id + 1,

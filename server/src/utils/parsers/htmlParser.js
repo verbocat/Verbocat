@@ -229,10 +229,22 @@ const exportFile = async (templateBase64, segments) => {
     const savedTags = segmentTagsMap.get(segment.id) || {};
     const leading = savedTags.leading || segment.leading || "";
     const trailing = savedTags.trailing || segment.trailing || "";
-    // If the target is empty, fallback to source
-    const targetText = leading + (segment.target || segment.source) + trailing;
+    
+    let rawTarget = (segment.target !== undefined && segment.target !== null && segment.target.trim() !== "") 
+      ? segment.target.trim() 
+      : (segment.source || "");
+
+    // Guard against double-tagging: strip leading/trailing tags if rawTarget already has them
+    if (leading && rawTarget.startsWith(leading.trim())) {
+      rawTarget = rawTarget.slice(leading.trim().length).trim();
+    }
+    if (trailing && rawTarget.endsWith(trailing.trim())) {
+      rawTarget = rawTarget.slice(0, rawTarget.length - trailing.trim().length).trim();
+    }
+
+    const fullTarget = leading + rawTarget + trailing;
     // Restore the tags using the global tag map
-    const restoredText = restorePlaceholders(targetText, tagMapGlobal);
+    const restoredText = restorePlaceholders(fullTarget, tagMapGlobal);
     segmentMap.set(segment.id, restoredText);
   });
 
