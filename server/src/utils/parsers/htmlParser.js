@@ -96,9 +96,111 @@ const wrapInlineSiblings = (element, $) => {
   }
 };
 
+const isValidXml = (str) => {
+  if (!str || typeof str !== "string") return false;
+
+  const stack = [];
+  let i = 0;
+  const len = str.length;
+
+  while (i < len) {
+    const nextTag = str.indexOf("<", i);
+    if (nextTag === -1) {
+      break;
+    }
+    i = nextTag;
+
+    // CDATA
+    if (str.startsWith("<![CDATA[", i)) {
+      const closeCdata = str.indexOf("]]>", i + 9);
+      if (closeCdata === -1) return false;
+      i = closeCdata + 3;
+      continue;
+    }
+
+    // Comment
+    if (str.startsWith("<!--", i)) {
+      const closeComment = str.indexOf("-->", i + 4);
+      if (closeComment === -1) return false;
+      i = closeComment + 3;
+      continue;
+    }
+
+    // Processing instruction / XML declaration
+    if (str.startsWith("<?", i)) {
+      const closePI = str.indexOf("?>", i + 2);
+      if (closePI === -1) return false;
+      i = closePI + 2;
+      continue;
+    }
+
+    // Doctype
+    if (str.startsWith("<!", i)) {
+      const closeDoc = str.indexOf(">", i + 2);
+      if (closeDoc === -1) return false;
+      i = closeDoc + 1;
+      continue;
+    }
+
+    // Tag: find close tag, ignoring '>' inside quotes
+    let closeTag = -1;
+    let insideQuotes = false;
+    let quoteChar = null;
+    for (let k = i + 1; k < len; k++) {
+      const char = str[k];
+      if (insideQuotes) {
+        if (char === quoteChar) {
+          insideQuotes = false;
+          quoteChar = null;
+        }
+      } else {
+        if (char === '"' || char === "'") {
+          insideQuotes = true;
+          quoteChar = char;
+        } else if (char === ">") {
+          closeTag = k;
+          break;
+        }
+      }
+    }
+
+    if (closeTag === -1) return false;
+
+    let tagContent = str.slice(i + 1, closeTag).trim();
+    i = closeTag + 1;
+
+    // Self-closing tag
+    if (tagContent.endsWith("/")) {
+      tagContent = tagContent.slice(0, -1).trim();
+      const tagNameMatch = tagContent.match(/^([a-zA-Z0-9:-]+)/);
+      if (!tagNameMatch) return false;
+      continue;
+    }
+
+    // End tag
+    if (tagContent.startsWith("/")) {
+      const tagName = tagContent.slice(1).trim();
+      if (stack.length === 0) return false;
+      const lastOpen = stack.pop();
+      if (lastOpen !== tagName) return false;
+      continue;
+    }
+
+    // Start tag
+    const tagNameMatch = tagContent.match(/^([a-zA-Z0-9:-]+)/);
+    if (!tagNameMatch) return false;
+    const tagName = tagNameMatch[1];
+
+    stack.push(tagName);
+  }
+
+  return stack.length === 0;
+};
+
 const parseFile = async (filePath) => {
   const html = fs.readFileSync(filePath, "utf-8");
-  const $ = cheerio.load(html, { decodeEntities: false });
+  const isXml = isValidXml(html);
+  const $ = cheerio.load(html, isXml ? { xmlMode: true, decodeEntities: false } : { decodeEntities: false });
   const segments = [];
   let segmentIndex = 0;
 
@@ -130,11 +232,12 @@ const parseFile = async (filePath) => {
     });
   });
 
-  const htmlString = $.html();
+  const htmlString = isXml ? $.xml() : $.html();
   const templateData = {
     html: htmlString,
     tagMap: Array.from(tagMapGlobal.entries()),
-    segmentTags: segments.map(seg => ({ id: seg.id, leading: seg.leading, trailing: seg.trailing }))
+    segmentTags: segments.map(seg => ({ id: seg.id, leading: seg.leading, trailing: seg.trailing })),
+    isXml: isXml
   };
   const template = zlib
     .gzipSync(Buffer.from(JSON.stringify(templateData), "utf-8"))
@@ -147,6 +250,7 @@ const exportFile = async (templateBase64, segments) => {
   let html = "";
   let tagMapGlobal = new Map();
   let segmentTagsMap = new Map();
+  let isXml = false;
 
   try {
     const buffer = Buffer.from(templateBase64, "base64");
@@ -159,6 +263,7 @@ const exportFile = async (templateBase64, segments) => {
         html = templateData.html;
         tagMapGlobal = new Map(templateData.tagMap || []);
         segmentTagsMap = new Map((templateData.segmentTags || []).map(t => [t.id, t]));
+        isXml = !!templateData.isXml;
       } else {
         html = unzipped;
       }
@@ -200,7 +305,7 @@ const exportFile = async (templateBase64, segments) => {
   });
 
   // Postprocess: unwrap virtual blocks completely and strip temporary relink attributes
-  const $ = cheerio.load(html, { decodeEntities: false });
+  const $ = cheerio.load(html, isXml ? { xmlMode: true, decodeEntities: false } : { decodeEntities: false });
   $("*").removeAttr("data-relink-table-id");
   let guard = 0;
   while ($(".__temp-leaf-block__").length > 0 && guard < 10) {
@@ -210,7 +315,7 @@ const exportFile = async (templateBase64, segments) => {
     guard++;
   }
 
-  return Buffer.from($.html(), "utf-8");
+  return Buffer.from(isXml ? $.xml() : $.html(), "utf-8");
 };
 
 module.exports = { parseFile, exportFile };
