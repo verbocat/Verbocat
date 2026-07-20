@@ -325,6 +325,11 @@ const parseFile = async (filePath) => {
   return { segments, template };
 };
 
+const escapeRawAmpersands = (str) => {
+  if (typeof str !== "string") return str;
+  return str.replace(/&(?!(amp|lt|gt|quot|apos|#[0-9]+|#x[0-9a-fA-F]+);)/gi, "&amp;");
+};
+
 const exportFile = async (templateBase64, segments) => {
   let html = "";
   let tagMapGlobal = new Map();
@@ -359,6 +364,9 @@ const exportFile = async (templateBase64, segments) => {
       ? segment.target.trim() 
       : (segment.source || "");
 
+    // Escape raw ampersands inside translation text (excluding tag placeholders)
+    rawTarget = escapeRawAmpersands(rawTarget);
+
     // Guard against double-tagging: strip leading/trailing tags if rawTarget already has them
     if (leading && rawTarget.startsWith(leading.trim())) {
       rawTarget = rawTarget.slice(leading.trim().length).trim();
@@ -378,6 +386,18 @@ const exportFile = async (templateBase64, segments) => {
     if (segmentMap.has(id)) return segmentMap.get(id);
     return match;
   });
+
+  // Backward compatibility: Remove temporary data-relink-table-id attributes if present
+  html = html.replace(/\s*data-relink-table-id="[^"]*"/g, "");
+
+  // Backward compatibility: Unwrap virtual __temp-leaf-block__ div wrappers if present
+  let prev;
+  let guard = 0;
+  do {
+    prev = html;
+    html = html.replace(/<div\s+class=["']__temp-leaf-block__["']\s*>([\s\S]*?)<\/div>/g, "$1");
+    guard++;
+  } while (html !== prev && guard < 10);
 
   return Buffer.from(html, "utf-8");
 };

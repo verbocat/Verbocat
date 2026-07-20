@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Copy, Check, ArrowRight, AlertTriangle, Lock, Sparkles, Award, UploadCloud, Trash2, Image, MessageSquare, X, Tag, TagOff, Wand2 } from "lucide-react";
+import { Copy, Check, ArrowRight, AlertTriangle, Lock, Sparkles, Award, UploadCloud, Trash2, Image, MessageSquare, X, Tag, Wand2 } from "lucide-react";
 import { useChatStore } from "../services/chatStore";
 
 const removeTags = (text) => {
@@ -925,7 +925,7 @@ export const SegmentCard = ({
                     fontWeight: 600
                   }}
                 >
-                  <TagOff style={{ width: 9, height: 9 }} /> Clear Tags
+                  <X style={{ width: 9, height: 9 }} /> Clear Tags
                 </button>
 
                 {hasTagMismatch && (

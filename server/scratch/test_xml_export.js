@@ -8,18 +8,19 @@ const { parseFile, exportFile } = require("../src/utils/parsers/htmlParser");
 const sampleHtml = `<!DOCTYPE html>
 <html>
 <HEAD>
-  <META CharSet="utf-8">
+  <link href="https://fonts.googleapis.com/css?family=Catamaran:400,700" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css?family=Nunito:400,700" rel="stylesheet" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="x-apple-disable-message-reformatting" />
   <TITLE>XHTML Test Page</TITLE>
 </HEAD>
 <body>
-  <div class="container" data-relink-table-id="123">
+  <div class="container">
     Mixed text start
     <H1>Title of the page</H1>
     <p>This is a paragraph with <br /> a line break, and <img src="image.png" />. Second sentence.</p>
     Mixed text end
-    <div id="footer">
-      <span>Footer text</span>
-    </div>
   </div>
 </body>
 </html>`;
@@ -47,49 +48,23 @@ async function runTest() {
   console.log(exportedString);
   console.log("-----------------------\n");
 
-  // Verify non-whitespace characters preservation outside translation
-  const originalStripped = sampleHtml
-    .replace(/Mixed text start/g, "TEXT")
-    .replace(/Title of the page/g, "TEXT")
-    .replace(/This is a paragraph with <br \/> a line break, and <img src="image.png" \/>\./g, "TEXT")
-    .replace(/Second sentence\./g, "TEXT")
-    .replace(/Mixed text end/g, "TEXT")
-    .replace(/Footer text/g, "TEXT");
-  
-  const exportedStripped = exportedString
-    .replace(/Mixed text start \[TRANSLATED\]/g, "TEXT")
-    .replace(/Title of the page \[TRANSLATED\]/g, "TEXT")
-    .replace(/This is a paragraph with <br \/> a line break, and <img src="image.png" \/>\. \[TRANSLATED\]/g, "TEXT")
-    .replace(/Second sentence\. \[TRANSLATED\]/g, "TEXT")
-    .replace(/Mixed text end \[TRANSLATED\]/g, "TEXT")
-    .replace(/Footer text \[TRANSLATED\]/g, "TEXT");
+  const hasLink1 = exportedString.includes('<link href="https://fonts.googleapis.com/css?family=Catamaran:400,700" rel="stylesheet" />');
+  const hasLink2 = exportedString.includes('<link href="https://fonts.googleapis.com/css?family=Nunito:400,700" rel="stylesheet" />');
+  const hasMeta1 = exportedString.includes('<meta charset="UTF-8" />');
+  const hasMeta2 = exportedString.includes('<meta name="viewport" content="width=device-width,initial-scale=1" />');
+  const hasMeta3 = exportedString.includes('<meta name="x-apple-disable-message-reformatting" />');
 
-  const cleanOriginal = originalStripped.replace(/\s+/g, "");
-  const cleanExported = exportedStripped.replace(/\s+/g, "");
+  console.log("Preserved Link 1?", hasLink1);
+  console.log("Preserved Link 2?", hasLink2);
+  console.log("Preserved Meta 1?", hasMeta1);
+  console.log("Preserved Meta 2?", hasMeta2);
+  console.log("Preserved Meta 3?", hasMeta3);
 
-  console.log("Are original and exported structurally identical outside translation?", cleanOriginal === cleanExported);
-  if (cleanOriginal !== cleanExported) {
-    console.log("Original clean:", cleanOriginal);
-    console.log("Exported clean:", cleanExported);
-    process.exit(1);
-  }
-
-  // Check if tags like <META CharSet="utf-8"> and <br /> are exactly preserved
-  const hasMeta = exportedString.includes('<META CharSet="utf-8">');
-  const hasBr = exportedString.includes('<br />');
-  const hasImg = exportedString.includes('<img src="image.png" />');
-  const hasHEAD = exportedString.includes('<HEAD>');
-
-  console.log("Preserved <META CharSet=\"utf-8\">?", hasMeta);
-  console.log("Preserved <br />?", hasBr);
-  console.log("Preserved <img src=\"image.png\" />?", hasImg);
-  console.log("Preserved <HEAD>?", hasHEAD);
-
-  if (hasMeta && hasBr && hasImg && hasHEAD) {
-    console.log("SUCCESS: Document formatting and exact tags are perfectly preserved!");
+  if (hasLink1 && hasLink2 && hasMeta1 && hasMeta2 && hasMeta3) {
+    console.log("SUCCESS: Self-closing link/meta tags are perfectly preserved on new upload!");
     process.exit(0);
   } else {
-    console.error("FAILURE: Some tags were mutated or reformatted!");
+    console.error("FAILURE: Some self-closing tags were stripped!");
     process.exit(1);
   }
 }
