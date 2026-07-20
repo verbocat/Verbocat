@@ -132,9 +132,15 @@ const getRawTags = (node, sourceHtml) => {
 
   let closingTag = "";
   if (!isSelfClosing && node.endIndex !== null && node.endIndex !== undefined) {
-    const lastOpenIndex = sourceHtml.lastIndexOf("</", node.endIndex);
-    if (lastOpenIndex !== -1 && lastOpenIndex >= openTagEnd) {
-      closingTag = sourceHtml.substring(lastOpenIndex, node.endIndex + 1);
+    const tagName = node.name;
+    const searchStartLimit = Math.max(node.startIndex, node.endIndex - (tagName ? tagName.length : 10) - 15);
+    const subStr = sourceHtml.substring(searchStartLimit, node.endIndex + 1);
+    const lastOpenIndexInSub = subStr.lastIndexOf("</");
+    if (lastOpenIndexInSub !== -1) {
+      const lastOpenIndex = searchStartLimit + lastOpenIndexInSub;
+      if (lastOpenIndex >= openTagEnd) {
+        closingTag = sourceHtml.substring(lastOpenIndex, node.endIndex + 1);
+      }
     }
   }
 
@@ -209,9 +215,15 @@ const getBlockRange = (node, html) => {
   const isSelfClosing = openingTag.trim().endsWith("/>");
 
   if (!isSelfClosing) {
-    const lastOpenIndex = html.lastIndexOf("</", endIndex);
-    if (lastOpenIndex !== -1 && lastOpenIndex >= openTagEnd) {
-      endTagStart = lastOpenIndex;
+    const tagName = node.name;
+    const searchStartLimit = Math.max(startIndex, endIndex - (tagName ? tagName.length : 10) - 15);
+    const subStr = html.substring(searchStartLimit, endIndex + 1);
+    const lastOpenIndexInSub = subStr.lastIndexOf("</");
+    if (lastOpenIndexInSub !== -1) {
+      const lastOpenIndex = searchStartLimit + lastOpenIndexInSub;
+      if (lastOpenIndex >= openTagEnd) {
+        endTagStart = lastOpenIndex;
+      }
     }
   }
 
