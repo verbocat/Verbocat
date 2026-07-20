@@ -30,7 +30,15 @@ const restoreProtectedTags = (translated, tags) => {
     }
   });
 
-  // 2. Fallback: If there are still __TAG_n__ placeholders in the output,
+  // 2. Fallback check: If the original tag is already present in the output (e.g. fallback to source text),
+  // mark it as used to prevent duplicate appendages at the end of the text.
+  tags.forEach((tag, index) => {
+    if (!usedTags.has(index) && output.includes(tag)) {
+      usedTags.add(index);
+    }
+  });
+
+  // 3. Fallback: If there are still __TAG_n__ placeholders in the output,
   // replace them with the unused tags in order.
   const remainingPlaceholderRegex = /__TAG_\d+__/g;
   
@@ -53,11 +61,14 @@ const restoreProtectedTags = (translated, tags) => {
     return "";
   });
 
-  // 3. Absolute safety fallback: If any tag index is still not used (e.g. model completely omitted it),
-  // append it at the end of the string to ensure all tags are perfectly preserved.
+  // 4. Absolute safety fallback: If any tag index is still not used (e.g. model completely omitted it),
+  // append it at the end of the string. To prevent malformed XML/HTML, do not append closing tags (like </1> or </b>)
+  // at the end of the segment if they don't have active opening counterparts.
   tags.forEach((tag, index) => {
     if (!usedTags.has(index)) {
-      output = output + tag;
+      if (!tag.startsWith("</")) {
+        output = output + tag;
+      }
       usedTags.add(index);
     }
   });
