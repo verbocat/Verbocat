@@ -12,7 +12,8 @@ const SKIP_SELECTOR = "script,style,noscript,svg,canvas";
 const BLOCK_TAGS = [
   "p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "th", "blockquote", 
   "section", "article", "nav", "header", "footer", "figcaption", "address", "main",
-  "ul", "ol", "table", "tbody", "thead", "tr", "dl", "dt", "dd", "form", "fieldset",
+  "ul", "ol", "table", "tbody", "thead", "tfoot", "tr", "colgroup", "col", "caption",
+  "dl", "dt", "dd", "form", "fieldset",
   "body", "html"
 ];
 
