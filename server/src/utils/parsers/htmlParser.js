@@ -96,111 +96,176 @@ const wrapInlineSiblings = (element, $) => {
   }
 };
 
-const isValidXml = (str) => {
-  if (!str || typeof str !== "string") return false;
+const getRawTags = (node, sourceHtml) => {
+  if (node.startIndex === null || node.startIndex === undefined) {
+    return null;
+  }
 
-  const stack = [];
-  let i = 0;
-  const len = str.length;
-
-  while (i < len) {
-    const nextTag = str.indexOf("<", i);
-    if (nextTag === -1) {
-      break;
+  // Find the end of the opening tag starting from node.startIndex
+  let openTagEnd = -1;
+  let insideQuotes = false;
+  let quoteChar = null;
+  const len = sourceHtml.length;
+  for (let k = node.startIndex + 1; k < len; k++) {
+    const char = sourceHtml[k];
+    if (insideQuotes) {
+      if (char === quoteChar) {
+        insideQuotes = false;
+        quoteChar = null;
+      }
+    } else {
+      if (char === '"' || char === "'") {
+        insideQuotes = true;
+        quoteChar = char;
+      } else if (char === ">") {
+        openTagEnd = k;
+        break;
+      }
     }
-    i = nextTag;
+  }
 
-    // CDATA
-    if (str.startsWith("<![CDATA[", i)) {
-      const closeCdata = str.indexOf("]]>", i + 9);
-      if (closeCdata === -1) return false;
-      i = closeCdata + 3;
-      continue;
+  if (openTagEnd === -1) return null;
+
+  const openingTag = sourceHtml.substring(node.startIndex, openTagEnd + 1);
+  const isSelfClosing = openingTag.trim().endsWith("/>");
+
+  let closingTag = "";
+  if (!isSelfClosing && node.endIndex !== null && node.endIndex !== undefined) {
+    const lastOpenIndex = sourceHtml.lastIndexOf("</", node.endIndex);
+    if (lastOpenIndex !== -1 && lastOpenIndex >= openTagEnd) {
+      closingTag = sourceHtml.substring(lastOpenIndex, node.endIndex + 1);
     }
+  }
 
-    // Comment
-    if (str.startsWith("<!--", i)) {
-      const closeComment = str.indexOf("-->", i + 4);
-      if (closeComment === -1) return false;
-      i = closeComment + 3;
-      continue;
-    }
+  return { openingTag, closingTag };
+};
 
-    // Processing instruction / XML declaration
-    if (str.startsWith("<?", i)) {
-      const closePI = str.indexOf("?>", i + 2);
-      if (closePI === -1) return false;
-      i = closePI + 2;
-      continue;
-    }
+const getBlockRange = (node, html) => {
+  let startIndex = node.startIndex;
+  let endIndex = node.endIndex;
 
-    // Doctype
-    if (str.startsWith("<!", i)) {
-      const closeDoc = str.indexOf(">", i + 2);
-      if (closeDoc === -1) return false;
-      i = closeDoc + 1;
-      continue;
-    }
-
-    // Tag: find close tag, ignoring '>' inside quotes
-    let closeTag = -1;
-    let insideQuotes = false;
-    let quoteChar = null;
-    for (let k = i + 1; k < len; k++) {
-      const char = str[k];
-      if (insideQuotes) {
-        if (char === quoteChar) {
-          insideQuotes = false;
-          quoteChar = null;
-        }
-      } else {
-        if (char === '"' || char === "'") {
-          insideQuotes = true;
-          quoteChar = char;
-        } else if (char === ">") {
-          closeTag = k;
+  if (node.attribs && node.attribs.class && node.attribs.class.includes("__temp-leaf-block__")) {
+    if (node.children && node.children.length > 0) {
+      let firstChild = null;
+      let lastChild = null;
+      for (let i = 0; i < node.children.length; i++) {
+        if (node.children[i].startIndex !== null && node.children[i].startIndex !== undefined) {
+          firstChild = node.children[i];
           break;
         }
       }
+      for (let i = node.children.length - 1; i >= 0; i--) {
+        if (node.children[i].endIndex !== null && node.children[i].endIndex !== undefined) {
+          lastChild = node.children[i];
+          break;
+        }
+      }
+      if (firstChild && lastChild) {
+        startIndex = firstChild.startIndex;
+        endIndex = lastChild.endIndex;
+      }
     }
-
-    if (closeTag === -1) return false;
-
-    let tagContent = str.slice(i + 1, closeTag).trim();
-    i = closeTag + 1;
-
-    // Self-closing tag
-    if (tagContent.endsWith("/")) {
-      tagContent = tagContent.slice(0, -1).trim();
-      const tagNameMatch = tagContent.match(/^([a-zA-Z0-9:-]+)/);
-      if (!tagNameMatch) return false;
-      continue;
-    }
-
-    // End tag
-    if (tagContent.startsWith("/")) {
-      const tagName = tagContent.slice(1).trim();
-      if (stack.length === 0) return false;
-      const lastOpen = stack.pop();
-      if (lastOpen !== tagName) return false;
-      continue;
-    }
-
-    // Start tag
-    const tagNameMatch = tagContent.match(/^([a-zA-Z0-9:-]+)/);
-    if (!tagNameMatch) return false;
-    const tagName = tagNameMatch[1];
-
-    stack.push(tagName);
   }
 
-  return stack.length === 0;
+  if (startIndex === null || startIndex === undefined || endIndex === null || endIndex === undefined) {
+    return null;
+  }
+
+  const isVirtual = node.attribs && node.attribs.class && node.attribs.class.includes("__temp-leaf-block__");
+  if (isVirtual) {
+    return {
+      start: startIndex,
+      end: endIndex + 1
+    };
+  }
+
+  let openTagEnd = -1;
+  let insideQuotes = false;
+  let quoteChar = null;
+  const len = html.length;
+  for (let k = startIndex + 1; k < len; k++) {
+    const char = html[k];
+    if (insideQuotes) {
+      if (char === quoteChar) {
+        insideQuotes = false;
+        quoteChar = null;
+      }
+    } else {
+      if (char === '"' || char === "'") {
+        insideQuotes = true;
+        quoteChar = char;
+      } else if (char === ">") {
+        openTagEnd = k;
+        break;
+      }
+    }
+  }
+
+  if (openTagEnd === -1) return null;
+
+  let endTagStart = -1;
+  const openingTag = html.substring(startIndex, openTagEnd + 1);
+  const isSelfClosing = openingTag.trim().endsWith("/>");
+
+  if (!isSelfClosing) {
+    const lastOpenIndex = html.lastIndexOf("</", endIndex);
+    if (lastOpenIndex !== -1 && lastOpenIndex >= openTagEnd) {
+      endTagStart = lastOpenIndex;
+    }
+  }
+
+  return {
+    start: openTagEnd + 1,
+    end: endTagStart === -1 ? openTagEnd + 1 : endTagStart
+  };
+};
+
+const extractPlaceholdersRaw = (element, $, tagMap, tagCounter, sourceHtml) => {
+  let str = "";
+  $(element)
+    .contents()
+    .each((_, child) => {
+      if (child.type === "text") {
+        str += $(child).text().replace(/\s+/g, " ");
+      } else if (child.type === "tag") {
+        const id = tagCounter.value++;
+        const raw = getRawTags(child, sourceHtml);
+        const openingTag = raw ? raw.openingTag : "";
+        const closingTag = raw ? raw.closingTag : "";
+
+        tagMap.set(`<${id}>`, openingTag);
+        tagMap.set(`</${id}>`, closingTag);
+
+        str += `<${id}>`;
+        str += extractPlaceholdersRaw(child, $, tagMap, tagCounter, sourceHtml);
+        if (closingTag !== "") {
+          str += `</${id}>`;
+        }
+      } else if (child.type === "comment") {
+        const id = tagCounter.value++;
+        if (child.startIndex !== null && child.endIndex !== null) {
+          const rawComment = sourceHtml.substring(child.startIndex, child.endIndex + 1);
+          tagMap.set(`<${id}>`, rawComment);
+        } else {
+          tagMap.set(`<${id}>`, `<!--${child.data}-->`);
+        }
+        tagMap.set(`</${id}>`, "");
+        str += `<${id}></${id}>`;
+      }
+    });
+  return str;
 };
 
 const parseFile = async (filePath) => {
   const html = fs.readFileSync(filePath, "utf-8");
-  const isXml = isValidXml(html);
-  const $ = cheerio.load(html, isXml ? { xmlMode: true, decodeEntities: false } : { decodeEntities: false });
+  
+  // We use _useHtmlParser2 to track character indices and perform raw template generation
+  const $ = cheerio.load(html, {
+    _useHtmlParser2: true,
+    withStartIndices: true,
+    withEndIndices: true,
+    decodeEntities: false
+  });
   const segments = [];
   let segmentIndex = 0;
 
@@ -210,34 +275,48 @@ const parseFile = async (filePath) => {
   const { getLeafTextBlocks } = require("./relinkEngine");
   const leafTextBlocks = getLeafTextBlocks($);
 
-  // 3. Process each leaf text block
+  const replacements = [];
   leafTextBlocks.forEach((blockNode, blockIdx) => {
-    const placeholderStr = extractPlaceholders(blockNode, $, tagMapGlobal, tagCounter);
-    const subSegments = splitByPunctuation(placeholderStr, tagMapGlobal);
+    const range = getBlockRange(blockNode, html);
+    if (range) {
+      const placeholderStr = extractPlaceholdersRaw(blockNode, $, tagMapGlobal, tagCounter, html);
+      const subSegments = splitByPunctuation(placeholderStr, tagMapGlobal);
 
-    $(blockNode).empty();
-
-    subSegments.forEach((subSeg) => {
-      const segmentId = segmentIndex++;
-      $(blockNode).append(`__SEG_${segmentId}__`);
-      const { leading, body, trailing } = extractSegmentTags(subSeg);
-      segments.push({
-        id: segmentId,
-        source: body,
-        target: "",
-        leading,
-        trailing,
-        blockIndex: blockIdx
+      let replacementPlaceholder = "";
+      subSegments.forEach((subSeg) => {
+        const segmentId = segmentIndex++;
+        replacementPlaceholder += `__SEG_${segmentId}__`;
+        const { leading, body, trailing } = extractSegmentTags(subSeg);
+        segments.push({
+          id: segmentId,
+          source: body,
+          target: "",
+          leading,
+          trailing,
+          blockIndex: blockIdx
+        });
       });
-    });
+
+      replacements.push({
+        start: range.start,
+        end: range.end,
+        text: replacementPlaceholder
+      });
+    }
   });
 
-  const htmlString = isXml ? $.xml() : $.html();
+  // Perform segment replacements in reverse order of indices to avoid index shifting
+  replacements.sort((a, b) => b.start - a.start);
+  let templateHtml = html;
+  replacements.forEach((rep) => {
+    templateHtml = templateHtml.substring(0, rep.start) + rep.text + templateHtml.substring(rep.end);
+  });
+
   const templateData = {
-    html: htmlString,
+    html: templateHtml,
     tagMap: Array.from(tagMapGlobal.entries()),
     segmentTags: segments.map(seg => ({ id: seg.id, leading: seg.leading, trailing: seg.trailing })),
-    isXml: isXml
+    isXml: false
   };
   const template = zlib
     .gzipSync(Buffer.from(JSON.stringify(templateData), "utf-8"))
@@ -250,20 +329,16 @@ const exportFile = async (templateBase64, segments) => {
   let html = "";
   let tagMapGlobal = new Map();
   let segmentTagsMap = new Map();
-  let isXml = false;
 
   try {
     const buffer = Buffer.from(templateBase64, "base64");
     const unzipped = zlib.gunzipSync(buffer).toString("utf-8");
     try {
       const templateData = JSON.parse(unzipped);
-      // Guard: if this JSON doesn't contain an 'html' key it's a non-HTML template
-      // (e.g. a PDF template routed here by mistake) — treat the raw string as HTML.
       if (templateData.html !== undefined) {
         html = templateData.html;
         tagMapGlobal = new Map(templateData.tagMap || []);
         segmentTagsMap = new Map((templateData.segmentTags || []).map(t => [t.id, t]));
-        isXml = !!templateData.isXml;
       } else {
         html = unzipped;
       }
@@ -304,18 +379,7 @@ const exportFile = async (templateBase64, segments) => {
     return match;
   });
 
-  // Postprocess: unwrap virtual blocks completely and strip temporary relink attributes
-  const $ = cheerio.load(html, isXml ? { xmlMode: true, decodeEntities: false } : { decodeEntities: false });
-  $("*").removeAttr("data-relink-table-id");
-  let guard = 0;
-  while ($(".__temp-leaf-block__").length > 0 && guard < 10) {
-    $(".__temp-leaf-block__").each((_, el) => {
-      $(el).replaceWith($(el).contents());
-    });
-    guard++;
-  }
-
-  return Buffer.from(isXml ? $.xml() : $.html(), "utf-8");
+  return Buffer.from(html, "utf-8");
 };
 
 module.exports = { parseFile, exportFile };
