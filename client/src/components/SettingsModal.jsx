@@ -50,6 +50,7 @@ export const SettingsModal = ({
   const [localClientName, setLocalClientName] = useState("");
   const [localDescription, setLocalDescription] = useState("");
   const [localSourceLang, setLocalSourceLang] = useState("");
+  const [localDeadline, setLocalDeadline] = useState("");
   const [localTranslationPrompt, setLocalTranslationPrompt] = useState("");
   const [localAutoSave, setLocalAutoSave] = useState(true);
   const [localNotifications, setLocalNotifications] = useState(true);
@@ -74,7 +75,7 @@ export const SettingsModal = ({
 
   useEffect(() => {
     if (show && projectId && projectSettings) {
-      const isOwner = projectSettings.owner_id === userId;
+      const isOwner = !projectSettings.isShared || projectSettings.owner_id === userId || !userId;
       if (!isOwner && activeTab === "project") {
         setActiveTab("preferences");
       }
@@ -90,7 +91,8 @@ export const SettingsModal = ({
         setLocalProjectName(data.project.name || "");
         setLocalClientName(data.project.client || "");
         setLocalDescription(data.project.description || "");
-        setLocalSourceLang(data.project.source_language || "en");
+        setLocalSourceLang(data.project.source_lang || data.project.source_language || "en");
+        setLocalDeadline(data.project.dueDate || data.project.deadline || data.project.settings?.dueDate || data.project.settings?.deadline || "");
         const settings = data.project.settings || {};
         setLocalTranslationPrompt(settings.translationPrompt || "");
         setLocalAutoSave(settings.autoSave !== undefined ? settings.autoSave : true);
@@ -122,10 +124,14 @@ export const SettingsModal = ({
           description: localDescription,
           sourceLanguage: localSourceLang,
           targetLanguages: projectSettings.target_languages || [],
+          dueDate: localDeadline || null,
+          deadline: localDeadline || null,
           settings: {
             translationPrompt: localTranslationPrompt,
             autoSave: localAutoSave,
-            notifications: localNotifications
+            notifications: localNotifications,
+            dueDate: localDeadline || null,
+            deadline: localDeadline || null
           }
         });
         if (onProjectUpdated) {
@@ -499,6 +505,27 @@ export const SettingsModal = ({
                       color: "var(--text-primary)",
                       outline: "none",
                       resize: "none"
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: "block", fontSize: 10, fontWeight: 700, textTransform: "uppercase", tracking: "0.05em", color: "var(--text-muted)", marginBottom: 6 }}>
+                    Project Deadline / Due Date
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={localDeadline}
+                    onChange={(e) => setLocalDeadline(e.target.value)}
+                    style={{
+                      width: "100%",
+                      background: "var(--bg-active)",
+                      border: "1px solid var(--border-medium)",
+                      borderRadius: 8,
+                      padding: "8px 12px",
+                      fontSize: 12.5,
+                      color: "var(--text-primary)",
+                      outline: "none"
                     }}
                   />
                 </div>

@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Folder, User, Calendar, Trash2, Search, Filter, Globe, BookOpen, Settings, ChevronRight, LayoutDashboard, MessageCircle, Layers } from "lucide-react";
-import { fetchProjects, createProject, deleteProject } from "../services/api";
+import { Plus, Folder, User, Calendar, Trash2, Search, Filter, Globe, BookOpen, Settings, ChevronRight, LayoutDashboard, Users, Share2, MoreVertical, Copy, StickyNote } from "lucide-react";
+import { fetchProjects, createProject, deleteProject, duplicateProject } from "../services/api";
 import { LANGUAGES } from "../constants/languages";
+import { ShareModal } from "./ShareModal";
+import { ProjectNotesModal } from "./ProjectNotesModal";
+import { SettingsModal } from "./SettingsModal";
 
 export default function ProjectDashboard({ onOpenProject, showToast, theme, userRole, onOpenAdmin, onOpenSettings }) {
   const [projects, setProjects] = useState([]);
@@ -9,6 +12,11 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
   const [searchQuery, setSearchQuery] = useState("");
   const [filterClient, setFilterClient] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [activeTab, setActiveTab] = useState("all"); // "all", "my", "shared"
+  const [shareModalProject, setShareModalProject] = useState(null);
+  const [notesModalProject, setNotesModalProject] = useState(null);
+  const [settingsModalProjectId, setSettingsModalProjectId] = useState(null);
+  const [openMenuProjectId, setOpenMenuProjectId] = useState(null);
 
   // Form states
   const [projName, setProjName] = useState("");
@@ -17,9 +25,17 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
   const [sourceLang, setSourceLang] = useState("en");
   const [selectedLangs, setSelectedLangs] = useState([]);
   const [langSearch, setLangSearch] = useState("");
+  const [dueDate, setDueDate] = useState("");
 
   useEffect(() => {
     loadProjects();
+  }, []);
+
+  // Click outside to close 3-dots dropdown
+  useEffect(() => {
+    const handleGlobalClick = () => setOpenMenuProjectId(null);
+    window.addEventListener("click", handleGlobalClick);
+    return () => window.removeEventListener("click", handleGlobalClick);
   }, []);
 
   const loadProjects = async () => {
@@ -48,20 +64,33 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
         clientName,
         description,
         sourceLang,
-        selectedLangs
+        selectedLangs,
+        dueDate || null
       );
       showToast("Project created successfully!");
       setShowCreateModal(false);
-      // Reset form
       setProjName("");
       setClientName("");
       setDescription("");
       setSourceLang("en");
       setSelectedLangs([]);
+      setDueDate("");
       loadProjects();
     } catch (err) {
       console.error(err);
       showToast(err.response?.data?.error || "Failed to create project", "error");
+    }
+  };
+
+  const handleDuplicateProject = async (id) => {
+    try {
+      const res = await duplicateProject(id);
+      showToast(`Project duplicated as "${res.project.name}"!`);
+      setOpenMenuProjectId(null);
+      loadProjects();
+    } catch (err) {
+      console.error(err);
+      showToast(err.response?.data?.error || "Failed to duplicate project", "error");
     }
   };
 
@@ -90,13 +119,19 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
     const matchesSearch = proj.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           (proj.description && proj.description.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesClient = !filterClient || (proj.client && proj.client.toLowerCase().includes(filterClient.toLowerCase()));
-    return matchesSearch && matchesClient;
+    const matchesTab = activeTab === "all" ||
+                       (activeTab === "my" && !proj.isShared) ||
+                       (activeTab === "shared" && proj.isShared);
+    return matchesSearch && matchesClient && matchesTab;
   });
+
+  const myProjectsCount = projects.filter(p => !p.isShared).length;
+  const sharedProjectsCount = projects.filter(p => p.isShared).length;
 
   return (
     <div className="h-screen overflow-y-auto bg-[var(--bg-base)] text-[var(--text-primary)] p-8">
       {/* Dashboard Header */}
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+      <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
             Project Dashboard
@@ -143,46 +178,6 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
           </button>
 
           <button
-            onClick={() => {
-              window.history.pushState({}, "", "/chat");
-              window.dispatchEvent(new PopStateEvent("popstate"));
-            }}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 36, height: 36, borderRadius: 12,
-              background: "var(--bg-surface)",
-              border: "1px solid var(--border-subtle)",
-              color: "var(--text-secondary)",
-              cursor: "pointer", transition: "all 0.2s ease"
-            }}
-            onMouseOver={(e) => e.currentTarget.style.background = "var(--bg-elevated)"}
-            onMouseOut={(e) => e.currentTarget.style.background = "var(--bg-surface)"}
-            title="Chat Workspace"
-          >
-            <MessageCircle size={15} />
-          </button>
-
-          <button
-            onClick={() => {
-              window.history.pushState({}, "", "/relink");
-              window.dispatchEvent(new PopStateEvent("popstate"));
-            }}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 36, height: 36, borderRadius: 12,
-              background: "var(--bg-surface)",
-              border: "1px solid var(--border-subtle)",
-              color: "var(--text-secondary)",
-              cursor: "pointer", transition: "all 0.2s ease"
-            }}
-            onMouseOver={(e) => e.currentTarget.style.background = "var(--bg-elevated)"}
-            onMouseOut={(e) => e.currentTarget.style.background = "var(--bg-surface)"}
-            title="Relinking Page"
-          >
-            <Layers size={15} style={{ color: "#6366f1" }} />
-          </button>
-
-          <button
             onClick={() => setShowCreateModal(true)}
             className="flex items-center gap-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold px-4 py-2.5 rounded-xl cursor-pointer shadow-md transition-all"
           >
@@ -191,27 +186,63 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="max-w-7xl mx-auto bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-4 flex flex-col md:flex-row gap-4 mb-8">
-        <div className="flex-1 relative">
-          <Search size={16} className="absolute left-3.5 top-3.5 text-[var(--text-muted)]" />
-          <input
-            type="text"
-            placeholder="Search projects by name or description..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl pl-10 pr-4 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-all"
-          />
+      {/* Tabs & Search Bar */}
+      <div className="max-w-7xl mx-auto flex flex-col gap-4 mb-8">
+        <div className="flex items-center gap-2 bg-[var(--bg-panel)] border border-[var(--border-subtle)] p-1.5 rounded-2xl w-fit">
+          <button
+            onClick={() => setActiveTab("all")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === "all"
+                ? "bg-[var(--accent)] text-white shadow-sm"
+                : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+            }`}
+          >
+            All Projects ({projects.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("my")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === "my"
+                ? "bg-[var(--accent)] text-white shadow-sm"
+                : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+            }`}
+          >
+            My Projects ({myProjectsCount})
+          </button>
+          <button
+            onClick={() => setActiveTab("shared")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === "shared"
+                ? "bg-[var(--accent)] text-white shadow-sm"
+                : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+            }`}
+          >
+            <Users size={13} />
+            Shared with Me ({sharedProjectsCount})
+          </button>
         </div>
-        <div className="w-full md:w-64 relative">
-          <Filter size={16} className="absolute left-3.5 top-3.5 text-[var(--text-muted)]" />
-          <input
-            type="text"
-            placeholder="Filter by Client..."
-            value={filterClient}
-            onChange={(e) => setFilterClient(e.target.value)}
-            className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl pl-10 pr-4 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-all"
-          />
+
+        <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-4 flex flex-col md:flex-row gap-4">
+          <div className="flex-1 relative">
+            <Search size={16} className="absolute left-3.5 top-3.5 text-[var(--text-muted)]" />
+            <input
+              type="text"
+              placeholder="Search projects by name or description..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl pl-10 pr-4 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-all"
+            />
+          </div>
+          <div className="w-full md:w-64 relative">
+            <Filter size={16} className="absolute left-3.5 top-3.5 text-[var(--text-muted)]" />
+            <input
+              type="text"
+              placeholder="Filter by Client..."
+              value={filterClient}
+              onChange={(e) => setFilterClient(e.target.value)}
+              className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl pl-10 pr-4 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-all"
+            />
+          </div>
         </div>
       </div>
 
@@ -229,7 +260,9 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
             <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto mt-2">
               {searchQuery || filterClient 
                 ? "Try adjusting your search queries or filters." 
-                : "Get started by creating your first localization project."}
+                : activeTab === "shared"
+                  ? "No projects have been shared with you yet."
+                  : "Get started by creating your first localization project."}
             </p>
           </div>
         ) : (
@@ -238,35 +271,146 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
               const totalJobs = proj.jobStats?.total || 0;
               const completedJobs = proj.jobStats?.completed || 0;
               const completionPercent = totalJobs > 0 ? Math.round((completedJobs / totalJobs) * 100) : 0;
+              const notesCount = proj.settings?.notes?.length || 0;
 
               return (
                 <div 
                   key={proj.id}
-                  className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] hover:border-zinc-700/80 rounded-2xl p-5 flex flex-col justify-between shadow-lg transition-all group"
+                  className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] hover:border-zinc-700/80 rounded-2xl p-5 flex flex-col justify-between shadow-lg transition-all group relative"
                 >
                   <div>
-                    {/* Card Header */}
-                    <div className="flex justify-between items-start gap-2">
-                      <div className="flex items-center gap-2">
-                        <Folder size={18} className="text-indigo-400" />
-                        <h3 className="text-sm font-bold text-[var(--text-primary)] group-hover:text-indigo-400 transition-colors">
+                    {/* Card Header with 3-Dots Menu */}
+                    <div className="flex justify-between items-start gap-2 relative">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Folder size={18} className="text-indigo-400 flex-shrink-0" />
+                        <h3 className="text-sm font-bold text-[var(--text-primary)] group-hover:text-indigo-400 transition-colors truncate">
                           {proj.name}
                         </h3>
                       </div>
-                      <button
-                        onClick={() => handleDeleteProject(proj.id, proj.name)}
-                        className="text-[var(--text-muted)] hover:text-[var(--text-rose)] p-1.5 rounded-lg hover:bg-[var(--bg-hover)] transition-all cursor-pointer"
-                        title="Delete Project"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+
+                      {/* 3 Dots Menu Button */}
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenMenuProjectId(openMenuProjectId === proj.id ? null : proj.id);
+                          }}
+                          className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer"
+                          title="Project Options"
+                        >
+                          <MoreVertical size={16} />
+                        </button>
+
+                        {/* Dropdown Popover */}
+                        {openMenuProjectId === proj.id && (
+                          <div 
+                            className="absolute right-0 mt-1 w-48 bg-[var(--bg-elevated)] border border-[var(--border-medium)] rounded-xl shadow-2xl z-50 py-1 flex flex-col divide-y divide-[var(--border-subtle)] text-xs select-none"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="py-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSettingsModalProjectId(proj.id);
+                                  setOpenMenuProjectId(null);
+                                }}
+                                className="w-full text-left px-3.5 py-2 hover:bg-[var(--bg-hover)] flex items-center gap-2.5 font-bold text-[var(--text-primary)] cursor-pointer"
+                              >
+                                <Settings size={14} className="text-blue-400" /> Project Settings
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShareModalProject(proj);
+                                  setOpenMenuProjectId(null);
+                                }}
+                                className="w-full text-left px-3.5 py-2 hover:bg-[var(--bg-hover)] flex items-center gap-2.5 font-bold text-[var(--text-primary)] cursor-pointer"
+                              >
+                                <Users size={14} className="text-indigo-400" /> Share Project
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setNotesModalProject(proj);
+                                  setOpenMenuProjectId(null);
+                                }}
+                                className="w-full text-left px-3.5 py-2 hover:bg-[var(--bg-hover)] flex items-center gap-2.5 font-bold text-[var(--text-primary)] cursor-pointer"
+                              >
+                                <StickyNote size={14} className="text-amber-400" /> Project Notes
+                                {notesCount > 0 && (
+                                  <span className="ml-auto bg-amber-500/20 text-amber-300 text-[10px] px-1.5 py-0.5 rounded-full font-extrabold">
+                                    {notesCount}
+                                  </span>
+                                )}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDuplicateProject(proj.id)}
+                                className="w-full text-left px-3.5 py-2 hover:bg-[var(--bg-hover)] flex items-center gap-2.5 font-bold text-[var(--text-primary)] cursor-pointer"
+                              >
+                                <Copy size={14} className="text-emerald-400" /> Duplicate Project
+                              </button>
+                            </div>
+
+                            {!proj.isShared && (
+                              <div className="py-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenMenuProjectId(null);
+                                    handleDeleteProject(proj.id, proj.name);
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 hover:bg-[var(--rose)]/10 text-[var(--text-rose)] hover:text-rose-400 flex items-center gap-2.5 font-bold cursor-pointer"
+                                >
+                                  <Trash2 size={14} /> Delete Project
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
 
-                    {proj.client && (
-                      <span className="inline-block bg-indigo-500/10 text-indigo-400 text-[10px] font-bold px-2 py-0.5 rounded-md mt-2">
-                        Client: {proj.client}
-                      </span>
-                    )}
+                    {/* Shared / Client / Due Date Badges */}
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                      {proj.isShared ? (
+                        <span className="inline-flex items-center gap-1 bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                          <Users size={11} /> Shared by {proj.sharedBy || "Owner"}
+                        </span>
+                      ) : (
+                        proj.client && (
+                          <span className="inline-block bg-indigo-500/10 text-indigo-400 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                            Client: {proj.client}
+                          </span>
+                        )
+                      )}
+
+                      {(() => {
+                        const rawDueDate = proj.dueDate || proj.deadline || proj.settings?.dueDate;
+                        if (!rawDueDate) return null;
+                        const dueDateFormatted = new Date(rawDueDate).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+                        return (
+                          <span className="inline-flex items-center gap-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold px-2 py-0.5 rounded-md" title="Project Due Date">
+                            <Calendar size={11} /> Due: {dueDateFormatted}
+                          </span>
+                        );
+                      })()}
+
+                      {notesCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setNotesModalProject(proj)}
+                          className="inline-flex items-center gap-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold px-2 py-0.5 rounded-md hover:bg-amber-500/20 transition-all cursor-pointer"
+                          title="Open Project Notes"
+                        >
+                          <StickyNote size={10} /> {notesCount} Note(s)
+                        </button>
+                      )}
+                    </div>
 
                     <p className="text-xs text-[var(--text-secondary)] mt-3 line-clamp-2 leading-relaxed">
                       {proj.description || "No project description provided."}
@@ -317,6 +461,41 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
         )}
       </div>
 
+      {/* Share Project Modal */}
+      {shareModalProject && (
+        <ShareModal
+          isOpen={!!shareModalProject}
+          onClose={() => setShareModalProject(null)}
+          projectId={shareModalProject.id}
+          docName={shareModalProject.name}
+          isOwner={!shareModalProject.isShared}
+        />
+      )}
+
+      {/* Collaborative Project Notes Modal */}
+      {notesModalProject && (
+        <ProjectNotesModal
+          isOpen={!!notesModalProject}
+          onClose={() => setNotesModalProject(null)}
+          projectId={notesModalProject.id}
+          projectName={notesModalProject.name}
+          isOwner={!notesModalProject.isShared}
+        />
+      )}
+
+      {/* Existing Settings Modal (Opened on Project Settings tab) */}
+      {settingsModalProjectId && (
+        <SettingsModal
+          show={!!settingsModalProjectId}
+          onClose={() => setSettingsModalProjectId(null)}
+          projectId={settingsModalProjectId}
+          userRole={userRole}
+          theme={theme}
+          onApplySettings={() => {}}
+          onProjectUpdated={loadProjects}
+        />
+      )}
+
       {/* Create Project Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
@@ -353,10 +532,10 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-3 gap-3">
                     <div>
                       <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
-                        Client Name (Optional)
+                        Client Name
                       </label>
                       <input
                         type="text"
@@ -368,19 +547,30 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
-                        Source Language
+                        Source Lang
                       </label>
                       <select
                         value={sourceLang}
                         onChange={(e) => setSourceLang(e.target.value)}
                         className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-all"
                       >
-                        {LANGUAGES.filter(lang => !lang.hidden).map(lang => (
+                        {LANGUAGES.map(lang => (
                           <option key={lang.code} value={lang.code}>
                             {lang.flag} {lang.name} ({lang.code.toUpperCase()})
                           </option>
                         ))}
                       </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
+                        Due Date
+                      </label>
+                      <input
+                        type="date"
+                        value={dueDate}
+                        onChange={(e) => setDueDate(e.target.value)}
+                        className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-all cursor-pointer"
+                      />
                     </div>
                   </div>
 
@@ -414,10 +604,8 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
                   
                   <div className="flex-1 min-h-0 bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl p-3 overflow-y-auto grid grid-cols-2 gap-2 max-h-56">
                     {LANGUAGES.filter(lang => 
-                      !lang.hidden && (
-                        lang.name.toLowerCase().includes(langSearch.toLowerCase()) || 
-                        lang.code.toLowerCase().includes(langSearch.toLowerCase())
-                      )
+                      lang.name.toLowerCase().includes(langSearch.toLowerCase()) || 
+                      lang.code.toLowerCase().includes(langSearch.toLowerCase())
                     ).map((lang) => {
                       const isSelected = selectedLangs.includes(lang.code);
                       return (

@@ -1,115 +1,174 @@
 const fs = require('fs');
 const JSZip = require('jszip');
 const cheerio = require('cheerio');
-const {
-  extractPlaceholders,
-  splitByPunctuation,
-  restorePlaceholders,
-  extractSegmentTags,
-} = require('./segmentationUtils');
+
+// Helper to escape XML special characters
+const escapeXml = (text) => {
+  if (!text) return "";
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+};
+
+// Helper to strip any raw tag markers or placeholders if present in text
+const stripTagMarkers = (text) => {
+  if (!text) return "";
+  return String(text)
+    .replace(/<\/?\d+>/g, "") // Strip <1>, </1>, <2>
+    .replace(/__TAG_\d+__/gi, "") // Strip __TAG_0__
+    .replace(/__SEG_\d+__/gi, "") // Strip __SEG_0__
+    .trim();
+};
+
+// Helper to unescape XML special characters
+const unescapeXml = (text) => {
+  if (!text) return "";
+  return String(text)
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&');
+};
 
 const parseFile = async (filePath) => {
   const fileData = fs.readFileSync(filePath);
-  const zip = await JSZip.loadAsync(fileData);
-  
-  if (!zip.file('word/document.xml')) {
+  let zip;
+  try {
+    zip = await JSZip.loadAsync(fileData);
+  } catch (err) {
+    throw new Error('Invalid DOCX file or legacy .doc format. Please save/convert your file as .docx (Word Document) before uploading.');
+  }
+
+  const docXmlFiles = Object.keys(zip.files).filter(name => 
+    name === 'word/document.xml' || 
+    name.match(/^word\/(header|footer)\d+\.xml$/)
+  );
+
+  if (docXmlFiles.length === 0) {
     throw new Error('Invalid DOCX file: missing word/document.xml');
   }
 
-  const xmlContent = await zip.file('word/document.xml').async('string');
-  const $ = cheerio.load(xmlContent, { xmlMode: true });
   const segments = [];
-  let segmentIndex = 0;
+  let segmentId = 0;
 
-  const tagMapGlobal = new Map();
-  const tagCounter = { value: 1 };
+  for (const xmlFile of docXmlFiles) {
+    let xmlContent = await zip.file(xmlFile).async('string');
 
-  $('w\\:p').each((_, element) => {
-    const rawText = $(element).text().trim();
-    if (!rawText) return;
+    xmlContent = xmlContent.replace(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/gi, (pBlock) => {
+      const textTagRegex = /<w:t\b([^>]*)>([\s\S]*?)<\/w:t>|<w:t\b([^>]*)\/>/gi;
+      let fullText = "";
+      let hasTextTag = false;
+      let match;
 
-    const placeholderStr = extractPlaceholders(element, $, tagMapGlobal, tagCounter);
-    const subSegments = splitByPunctuation(placeholderStr);
+      while ((match = textTagRegex.exec(pBlock)) !== null) {
+        hasTextTag = true;
+        const rawText = match[2] !== undefined ? match[2] : "";
+        fullText += unescapeXml(rawText);
+      }
 
-    $(element).empty();
+      const cleanText = fullText.trim();
+      if (!cleanText || !hasTextTag) {
+        return pBlock;
+      }
 
-    subSegments.forEach((subSeg) => {
-      const segmentId = segmentIndex++;
-      
-      // In DOCX, raw text shouldn't just be dumped into <w:p>. 
-      // But we are replacing __SEG_X__ later. 
-      // We wrap it in a minimal run and text tag to ensure XML stays valid if needed, 
-      // or we can just append it because Cheerio allows raw text.
-      // Since later we replace __SEG_X__ with valid XML (which includes the restored <w:r> tags), 
-      // just appending __SEG_X__ is fine, as long as Cheerio serializes it correctly.
-      
-      $(element).append(`__SEG_${segmentId}__`);
-      
-      const { leading, body, trailing } = extractSegmentTags(subSeg);
-      
+      const currentSegId = segmentId++;
       segments.push({
-        id: segmentId,
-        source: body,
+        id: currentSegId,
+        source: cleanText,
         target: "",
-        leading,
-        trailing,
+        leading: "",
+        trailing: ""
+      });
+
+      let matchIdx = 0;
+      return pBlock.replace(/<w:t\b[^>]*>[\s\S]*?<\/w:t>|<w:t\b[^>]*\/>/gi, () => {
+        if (matchIdx === 0) {
+          matchIdx++;
+          return `<w:t xml:space="preserve">__SEG_${currentSegId}__</w:t>`;
+        }
+        matchIdx++;
+        return `<w:t></w:t>`;
       });
     });
-  });
 
-  zip.file('word/document.xml', $.xml());
+    zip.file(xmlFile, xmlContent);
+  }
+
   const modifiedZipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
   
-  const templateData = {
-    zipBase64: modifiedZipBuffer.toString('base64'),
-    tagMap: Array.from(tagMapGlobal.entries()),
-    segmentTags: segments.map(seg => ({ id: seg.id, leading: seg.leading, trailing: seg.trailing }))
-  };
+  // Package template inside JSZip without redundant outer DEFLATE compression
+  const packageZip = new JSZip();
+  packageZip.file('template.zip', modifiedZipBuffer);
   
-  // We stringify and encode to base64, but no gzip needed since zip is already compressed, 
-  // but let's just base64 encode the JSON to maintain string format for the template variable
-  const template = Buffer.from(JSON.stringify(templateData)).toString('base64');
-
+  const meta = {
+    segmentCount: segments.length
+  };
+  packageZip.file('meta.json', JSON.stringify(meta));
+  
+  const packageBuffer = await packageZip.generateAsync({ type: 'nodebuffer', compression: 'STORE' });
+  const template = packageBuffer.toString('base64');
+  
   return { segments, template };
 };
 
 const exportFile = async (templateBase64, segments) => {
   let zipBase64 = "";
-  let tagMapGlobal = new Map();
-  let segmentTagsMap = new Map();
 
   try {
-    const templateData = JSON.parse(Buffer.from(templateBase64, 'base64').toString('utf-8'));
-    zipBase64 = templateData.zipBase64;
-    tagMapGlobal = new Map(templateData.tagMap || []);
-    segmentTagsMap = new Map((templateData.segmentTags || []).map(t => [t.id, t]));
+    const rawBuffer = Buffer.from(templateBase64, 'base64');
+    
+    // Check for binary template package ZIP (starts with PK 0x50 0x4b)
+    if (rawBuffer.length >= 2 && rawBuffer[0] === 0x50 && rawBuffer[1] === 0x4b) {
+      const packageZip = await JSZip.loadAsync(rawBuffer);
+      const modifiedZipBuffer = await packageZip.file('template.zip').async('nodebuffer');
+      zipBase64 = modifiedZipBuffer.toString('base64');
+    } else {
+      const templateData = JSON.parse(rawBuffer.toString('utf-8'));
+      zipBase64 = templateData.zipBase64 || templateBase64;
+    }
   } catch (e) {
-    // Fallback for old templates
     zipBase64 = templateBase64;
   }
 
   const zipBuffer = Buffer.from(zipBase64, 'base64');
   const zip = await JSZip.loadAsync(zipBuffer);
-  let xmlContent = await zip.file('word/document.xml').async('string');
+  
+  const docXmlFiles = Object.keys(zip.files).filter(name => 
+    name === 'word/document.xml' || 
+    name.match(/^word\/(header|footer)\d+\.xml$/)
+  );
 
   const segmentMap = new Map();
-  segments.forEach((segment) => {
-    const savedTags = segmentTagsMap.get(segment.id) || {};
-    const leading = savedTags.leading || segment.leading || "";
-    const trailing = savedTags.trailing || segment.trailing || "";
-    const targetText = leading + (segment.target || segment.source) + trailing;
-    const restoredText = restorePlaceholders(targetText, tagMapGlobal);
-    segmentMap.set(segment.id, restoredText);
+  segments.forEach((seg) => {
+    const rawText = seg.target || seg.source;
+    // Strip any residual tag markers from text and XML-escape for valid Word XML
+    const cleanText = stripTagMarkers(rawText);
+    segmentMap.set(seg.id, escapeXml(cleanText));
   });
 
-  xmlContent = xmlContent.replace(/__SEG_(\d+)__/g, (match, idStr) => {
-    const id = parseInt(idStr, 10);
-    if (segmentMap.has(id)) return segmentMap.get(id);
-    return match;
-  });
+  for (const xmlFile of docXmlFiles) {
+    let xmlContent = await zip.file(xmlFile).async('string');
+    
+    xmlContent = xmlContent.replace(/__SEG_(\d+)__/g, (match, idStr) => {
+      const id = parseInt(idStr, 10);
+      if (segmentMap.has(id)) {
+        return segmentMap.get(id);
+      }
+      return match;
+    });
 
-  zip.file('word/document.xml', xmlContent);
+    zip.file(xmlFile, xmlContent);
+  }
+
   return await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
 };
 
-module.exports = { parseFile, exportFile };
+module.exports = {
+  parseFile,
+  exportFile
+};

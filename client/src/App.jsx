@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { Header } from "./components/Header.jsx";
-import { TmAnalysisModal } from "./components/TmAnalysisModal.jsx";
 import { LoginScreen } from "./components/LoginScreen.jsx";
 import { AdminDashboard } from "./components/AdminDashboard.jsx";
 import { DragOverlay } from "./components/DragOverlay.jsx";
@@ -16,7 +15,6 @@ import { LoadingOverlay } from "./components/LoadingOverlay.jsx";
 import { ContextSettingsModal } from "./components/ContextSettingsModal.jsx";
 import { SearchReplaceModal } from "./components/SearchReplaceModal.jsx";
 import { SettingsModal } from "./components/SettingsModal.jsx";
-import { RelinkingPage } from "./components/RelinkingPage.jsx";
 import { LANGUAGES } from "./constants/languages.js";
 import { useGlossaryManager } from "./hooks/useGlossaryManager.js";
 import { useUserStore } from "./services/userStore.js";
@@ -26,8 +24,6 @@ import {
   uploadFile,
   importXliff,
   importTmx,
-  importTargetHtml,
-  bulkActionSegments,
   exportGlobalTm,
   fetchDocument,
   deleteDocument,
@@ -56,17 +52,13 @@ import { ShareModal } from "./components/ShareModal.jsx";
 import { io } from "socket.io-client";
 import { applyGlossaryTerms } from "./utils/glossary.js";
 import { getTheme } from "./utils/theme.js";
-import { Globe, Check, Sparkles, Trash2, X, Sliders } from "lucide-react";
+import { Globe } from "lucide-react";
 import ProjectDashboard from "./components/ProjectDashboard.jsx";
 import ProjectDetails from "./components/ProjectDetails.jsx";
-import { ChatBubble } from "./components/chat/ChatBubble.jsx";
-import { useChatStore } from "./services/chatStore.js";
 
 
 export default function App() {
   const virtuosoRef = useRef(null);
-  const pendingFocusSegmentIdRef = useRef(null);
-  const pendingSavesRef = useRef(new Map());
   
   // Zustand Session Store hook
   const { isAuth, fetchProfile, token, logout, user, loading } = useUserStore();
@@ -76,10 +68,6 @@ export default function App() {
   }, [user]);
 
   const [segments, setSegments] = useState([]);
-  const segmentsRef = useRef(segments);
-  useEffect(() => {
-    segmentsRef.current = segments;
-  }, [segments]);
   const [history, setHistory] = useState([]);
   const [future, setFuture] = useState([]);
   const [fileId, setFileId] = useState(null);
@@ -113,13 +101,10 @@ export default function App() {
   const [isUploading, setIsUploading] = useState(false);
   const [resetMode, setResetMode] = useState(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
-  const [showTmAnalysis, setShowTmAnalysis] = useState(false);
 
   const [collaborators, setCollaborators] = useState([]);
   const [cellLocks, setCellLocks] = useState(new Map());
   const [showShareModal, setShowShareModal] = useState(false);
-  const [selectedSegmentIds, setSelectedSegmentIds] = useState(new Set());
-  const [isPerformingBulk, setIsPerformingBulk] = useState(false);
   const parseUrlRoute = () => {
     const path = window.location.pathname;
     const jobMatch = path.match(/^\/project\/([^\/]+)\/file\/([^\/]+)\/lang\/([^\/]+)/);
@@ -140,18 +125,6 @@ export default function App() {
       };
     }
 
-    if (path === "/relink" || path.startsWith("/relink")) {
-      return {
-        screen: "relink"
-      };
-    }
-
-    if (path === "/editor" || path.startsWith("/editor")) {
-      return {
-        screen: "editor"
-      };
-    }
-
     return {
       screen: "dashboard"
     };
@@ -168,10 +141,6 @@ export default function App() {
   }, []);
 
   const navigateTo = (path) => {
-    if (path === "/chat" || path.startsWith("/chat")) {
-      useChatStore.getState().setOpen(true);
-      return;
-    }
     window.history.pushState(null, "", path);
     setCurrentRoute(parseUrlRoute());
   };
@@ -196,13 +165,12 @@ export default function App() {
   };
 
   const [documentId, setDocumentId] = useState(null);
-  const [relinkedTemplate, setRelinkedTemplate] = useState(null);
 
   useEffect(() => {
     if (currentRoute.screen === "editor") {
-      if (currentRoute.fileId) setDocumentId(currentRoute.fileId);
-      if (currentRoute.targetLang) setTargetLanguage(currentRoute.targetLang);
-    } else if (currentRoute.screen !== "relink") {
+      setDocumentId(currentRoute.fileId);
+      setTargetLanguage(currentRoute.targetLang);
+    } else {
       setDocumentId(null);
     }
   }, [currentRoute]);
@@ -212,7 +180,6 @@ export default function App() {
   const [trackChangesEnabled, setTrackChangesEnabled] = useState(false);
   const [hasNoAccess, setHasNoAccess] = useState(false);
   const [hasPendingAccessRequest, setHasPendingAccessRequest] = useState(false);
-  const [requestedPermission, setRequestedPermission] = useState("write");
   const [accessRequestMessage, setAccessRequestMessage] = useState("");
   const [pendingAccessRequests, setPendingAccessRequests] = useState([]);
 
@@ -293,7 +260,7 @@ export default function App() {
 
   // Load collaborative document from DB on startup/change
   const loadCollaborativeDocument = useCallback(async () => {
-    if (!documentId || !token || String(documentId).startsWith("relinked_session_")) return;
+    if (!documentId || !token) return;
     setIsUploading(true);
     setHasNoAccess(false);
     setAccessRequestMessage("");
@@ -380,11 +347,9 @@ export default function App() {
 
   const socketRef = useRef(null);
 
-  // ── Unified Socket Connection (always connected when authenticated) ──
-  const chatSocketRef = useRef(null);
-
+  // Initialize socket connection
   useEffect(() => {
-    if (!isAuth || !token || !user) return;
+    if (!documentId || !token) return;
 
     const socketUrl = import.meta.env.VITE_API_URL || window.location.origin;
     const socket = io(socketUrl, {
@@ -392,57 +357,12 @@ export default function App() {
     });
 
     socketRef.current = socket;
-    chatSocketRef.current = socket; // Unified socket reference
-
-    const store = useChatStore.getState();
-    store.setSocket(socket);
 
     socket.on("connect", () => {
-      console.log("[Socket] Unified socket connected, socketId:", socket.id);
-      
-      // Auto-join collaborative room on connect if in document view
-      if (documentId && !String(documentId).startsWith("relinked_session_")) {
-        console.log("[Socket] Auto-joining document room:", documentId);
-        socket.emit("join-document", { documentId, targetLang: currentRoute.targetLang });
-      }
+      console.log("Connected to collaborative workspace socket");
+      socket.emit("join-document", { documentId, targetLang: currentRoute.targetLang });
     });
 
-    socket.on("disconnect", (reason) => {
-      console.warn("[Socket] Unified socket disconnected, reason:", reason);
-    });
-
-    // Support Chat listeners
-    socket.on("support:query-created", (query) => {
-      console.log("[Socket] Received support:query-created:", query);
-      store.handleNewQuery(query);
-    });
-
-    socket.on("support:new-message", (msg) => {
-      console.log("[Socket] Received support:new-message:", msg);
-      store.handleNewMessage({ queryId: msg.query_id, message: msg });
-    });
-
-    socket.on("support:message-notification", ({ queryId, message }) => {
-      console.log("[Socket] Received support:message-notification:", { queryId, message });
-      store.handleNewMessage({ queryId, message });
-    });
-
-    socket.on("support:query-updated", ({ query, message }) => {
-      console.log("[Socket] Received support:query-updated:", { query, message });
-      store.handleQueryUpdated({ query, message });
-    });
-
-    socket.on("support:message-deleted", ({ queryId, messageId, lastMessage }) => {
-      console.log("[Socket] Received support:message-deleted:", { queryId, messageId, lastMessage });
-      store.handleMessageDeleted({ queryId, messageId, lastMessage });
-    });
-
-    socket.on("support:message-updated", (message) => {
-      console.log("[Socket] Received support:message-updated:", message);
-      store.handleMessageUpdated(message);
-    });
-
-    // Collaborative editor listeners
     socket.on("translation-queue-update", ({ position }) => {
       setTranslationQueuePosition(position);
     });
@@ -468,8 +388,8 @@ export default function App() {
         prev.map((seg, idx) => {
           if (idx === segmentIndex) {
             const updatedSeg = { ...seg };
-            if (targetText !== undefined) updatedSeg.target = targetText;
-            if (status !== undefined) {
+            if (targetText !== undefined) {
+              updatedSeg.target = targetText;
               updatedSeg.status = status;
               updatedSeg.verified = status === "approved";
             }
@@ -488,24 +408,62 @@ export default function App() {
 
     socket.on("track-changes-toggled", ({ enabled }) => {
       setTrackChangesEnabled(enabled);
+      showToast(`Track Changes was toggled ${enabled ? "ON" : "OFF"} by the creator.`, "info");
     });
 
     socket.on("typing-update", ({ segmentIndex, targetText, originalTargetText, trackedBy, targetLang }) => {
       if (targetLang && currentRoute.screen === "editor" && currentRoute.targetLang && targetLang !== currentRoute.targetLang) {
         return;
       }
-      setSegments((prev) =>
-        prev.map((seg, idx) => {
+      setSegments((prev) => {
+        const sourceSeg = prev[segmentIndex];
+        if (!sourceSeg) return prev;
+
+        const cleanString = (str) => {
+          if (!str) return "";
+          return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+        };
+
+        const propagateTranslation = (targetA, sourceB) => {
+          if (!targetA) return "";
+          const tagsInSourceB = sourceB.match(/<[^>]+>/g) || [];
+          let tagIdx = 0;
+          let propagated = targetA.replace(/<[^>]+>/g, () => {
+            if (tagIdx < tagsInSourceB.length) {
+              return tagsInSourceB[tagIdx++];
+            }
+            return "";
+          });
+          while (tagIdx < tagsInSourceB.length) {
+            propagated += tagsInSourceB[tagIdx++];
+          }
+          return propagated;
+        };
+
+        const cleanedSource = cleanString(sourceSeg.source);
+
+        return prev.map((seg, idx) => {
           if (idx === segmentIndex) {
-            const updatedSeg = { ...seg };
-            if (targetText !== undefined) updatedSeg.target = targetText;
-            if (originalTargetText !== undefined) updatedSeg.originalTargetText = originalTargetText;
-            if (trackedBy !== undefined) updatedSeg.trackedBy = trackedBy;
-            return updatedSeg;
+            const updated = { ...seg, target: targetText };
+            if (originalTargetText !== undefined) updated.originalTargetText = originalTargetText;
+            if (trackedBy !== undefined) updated.trackedBy = trackedBy;
+            return updated;
+          }
+          if (autoPropagateEnabled && cleanedSource && cleanString(seg.source) === cleanedSource) {
+            const updated = { ...seg, target: propagateTranslation(targetText, seg.source) };
+            if (originalTargetText !== undefined) {
+              if (originalTargetText === null) {
+                updated.originalTargetText = null;
+              } else if (!seg.originalTargetText) {
+                updated.originalTargetText = seg.target || "";
+              }
+            }
+            if (trackedBy !== undefined) updated.trackedBy = trackedBy;
+            return updated;
           }
           return seg;
-        })
-      );
+        });
+      });
     });
 
     socket.on("all-changes-accepted", ({ targetLang }) => {
@@ -513,30 +471,38 @@ export default function App() {
         return;
       }
       setSegments((prev) =>
-        prev.map((seg) => ({
-          ...seg,
-          originalTargetText: null,
-          trackedBy: null
-        }))
+        prev.map((seg) => ({ ...seg, originalTargetText: null, trackedBy: null }))
       );
+      showToast("All changes accepted by the creator.", "info");
     });
 
     socket.on("access-request-received", (data) => {
+      if (document.hidden) {
+        if (Notification.permission === "granted") {
+          new Notification("Access Request Received", {
+            body: `${data.userName} (${data.userEmail}) is requesting Edit Access to ${data.docName}.`
+          });
+        }
+      }
       setPendingAccessRequests((prev) => {
         if (prev.some((r) => r.id === data.id)) return prev;
-        return [...prev, data];
+        return [...prev, {
+          id: data.id,
+          document_id: data.documentId,
+          user_id: data.userId,
+          profiles: { email: data.userEmail }
+        }];
       });
-      showToast(`${data.profiles?.email.split("@")[0]} is requesting access to this document.`, "info");
     });
 
     socket.on("access-request-responded", ({ documentId: docId, action, userId }) => {
-      if (docId === documentId && userId === user?.id) {
+      if (userId === userRef.current?.id && docId === documentId) {
+        showToast(`Your edit access request has been ${action === "approve" ? "approved" : "declined"}.`);
         if (action === "approve") {
           setPermission("write");
-          showToast("You have been granted edit access to this document.", "success");
-        } else {
-          setPermission("read");
-          showToast("Your edit access request was declined.", "warning");
+          setHasNoAccess(false);
+          setHasPendingAccessRequest(false);
+          loadCollaborativeDocument();
         }
       }
     });
@@ -550,8 +516,14 @@ export default function App() {
         showToast("Your access to this workspace has been revoked.");
         setPermission("read");
         setHasNoAccess(true);
+        if (socketRef.current) {
+          socketRef.current.disconnect();
+          socketRef.current = null;
+        }
       }
     });
+
+
 
     socket.on("document-audit-completed", ({ documentId: docId }) => {
       if (docId === documentId) {
@@ -564,30 +536,11 @@ export default function App() {
       showToast(err.message || "Collaboration error.", "error");
     });
 
-    store.fetchQueries();
-
     return () => {
-      console.log("[Socket] Cleaning up unified socket connection...");
       socket.disconnect();
       socketRef.current = null;
-      chatSocketRef.current = null;
-      store.setSocket(null);
     };
-  }, [isAuth, token, user, documentId, currentRoute.targetLang]);
-
-  // Handle joining collaborative document room dynamically on navigation
-  useEffect(() => {
-    const socket = socketRef.current;
-    if (!socket || !socket.connected) return;
-
-    if (documentId) {
-      console.log("[Socket] Navigated to document, joining rooms:", documentId);
-      socket.emit("join-document", { documentId, targetLang: currentRoute.targetLang });
-    } else {
-      console.log("[Socket] Navigated to dashboard, leaving document rooms");
-      socket.emit("leave-document");
-    }
-  }, [documentId, currentRoute.targetLang]);
+    }, [documentId, token, loadCollaborativeDocument, currentRoute.targetLang]);
 
   const handleFocusSegment = (index) => {
     if (socketRef.current) {
@@ -603,7 +556,7 @@ export default function App() {
 
   const handleRequestEditAccess = async () => {
     try {
-      await requestAccess(documentId, requestedPermission);
+      await requestAccess(documentId);
       setHasPendingAccessRequest(true);
       setAccessRequestMessage("Access request submitted successfully!");
       showToast("Access request submitted successfully!");
@@ -624,44 +577,15 @@ export default function App() {
     }
   };
 
-  const handleTeleport = (segmentIdVal) => {
-    const targetSegmentId = parseInt(segmentIdVal);
-    if (isNaN(targetSegmentId) || !virtuosoRef.current || !filteredSegments) {
-      return;
+  const handleTeleport = (segmentIndex) => {
+    const elements = document.querySelectorAll(".seg-row");
+    if (elements && elements[segmentIndex]) {
+      elements[segmentIndex].scrollIntoView({ behavior: "smooth", block: "center" });
+      elements[segmentIndex].classList.add("teleport-highlight");
+      setTimeout(() => {
+        elements[segmentIndex].classList.remove("teleport-highlight");
+      }, 2000);
     }
-
-    const itemIndex = filteredSegments.findIndex((s) => s.id === targetSegmentId);
-    if (itemIndex === -1) {
-      console.warn(`[Teleport] Segment ID ${targetSegmentId} not found in filtered segments.`);
-      return;
-    }
-
-    const elementId = `segment-${targetSegmentId}`;
-
-    // Scroll virtuoso to the item index
-    virtuosoRef.current.scrollToIndex({
-      index: itemIndex,
-      align: "center",
-      behavior: "smooth"
-    });
-
-    // Poll for the element to appear in DOM and highlight it
-    let attempts = 0;
-    const interval = setInterval(() => {
-      const el = document.getElementById(elementId);
-      if (el) {
-        clearInterval(interval);
-        el.classList.add("teleport-highlight");
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-        setTimeout(() => {
-          el.classList.remove("teleport-highlight");
-        }, 2000);
-      }
-      attempts++;
-      if (attempts > 30) {
-        clearInterval(interval);
-      }
-    }, 100);
   };
 
   // Request notification permission on mount
@@ -725,9 +649,7 @@ export default function App() {
     tone: "General",
     formality: "Neutral",
     terminologyStrictness: "Flexible",
-    seoOptimization: "Off",
-    customPrompt: "",
-    contextFiles: []
+    seoOptimization: "Off"
   });
 
   const glossaryManager = useGlossaryManager({
@@ -915,47 +837,6 @@ export default function App() {
   const filteredSegmentsRef = useRef([]);
   filteredSegmentsRef.current = filteredSegments;
 
-  useEffect(() => {
-    if (pendingFocusSegmentIdRef.current !== null) {
-      const nextId = pendingFocusSegmentIdRef.current;
-      const nextIndex = filteredSegments.findIndex((s) => s.id === nextId);
-      if (nextIndex !== -1) {
-        pendingFocusSegmentIdRef.current = null;
-        if (virtuosoRef.current) {
-          virtuosoRef.current.scrollToIndex({ index: nextIndex, align: 'center', behavior: 'smooth' });
-        }
-        
-        // Polling focus helper to handle virtualized rendering delay
-        const tryFocus = (attempts = 0) => {
-          const nextTa = document.getElementById(`target-${nextId}`);
-          if (nextTa) {
-            const nextElement = document.getElementById(`segment-${nextId}`);
-            if (nextElement) {
-              nextElement.classList.add("ring-2", "ring-teal-500");
-              setTimeout(() => nextElement.classList.remove("ring-2", "ring-teal-500"), 1000);
-            }
-            nextTa.focus();
-          } else if (attempts < 15) {
-            setTimeout(() => tryFocus(attempts + 1), 50);
-          }
-        };
-        tryFocus();
-      }
-    }
-  }, [filteredSegments]);
-
-  useEffect(() => {
-    const handleBeforeUnload = (e) => {
-      if (pendingSavesRef.current.size > 0) {
-        e.preventDefault();
-        e.returnValue = "You have unsaved translation changes. Are you sure you want to leave?";
-        return e.returnValue;
-      }
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, []);
-
   const qaIssuesList = useMemo(
     () =>
       segments.flatMap((segment) => {
@@ -1074,18 +955,11 @@ export default function App() {
           .toLowerCase();
       };
       
-      // Build source map from current segments - ONLY for long, non-index text
-      const isShortOrIndex = (str) => {
-        if (!str || str.length < 15) return true;
-        // Exclude single numbers, letters, roman numerals, or short bullet prefixes like "v.", "vi.", "1.", "a."
-        if (/^[a-z0-9ivxlcdm._() -]{1,14}$/i.test(str)) return true;
-        return false;
-      };
-
+      // Build source map from current segments
       const sourceMap = new Map();
       segments.forEach(seg => {
         const key = cleanText(seg.source);
-        if (key && !isShortOrIndex(key) && seg.target && seg.target.trim() !== "") {
+        if (key && seg.target && seg.target.trim() !== "") {
           if (!sourceMap.has(key)) {
             sourceMap.set(key, seg.target);
           }
@@ -1102,43 +976,35 @@ export default function App() {
         
         let currentKey = cleanText(data.segments[i].source);
         
-        // If data.segments[i] already has a valid target from backend relinking, preserve it!
-        if (data.segments[i].target && data.segments[i].target.trim().length > 0) {
-          mappedTargets[i] = data.segments[i].target;
-          isVerifiedArr[i] = data.segments[i].verified || false;
-          continue;
-        }
-
-        if (sourceMap.has(currentKey) && !isShortOrIndex(currentKey)) {
+        if (sourceMap.has(currentKey)) {
           mappedTargets[i] = sourceMap.get(currentKey);
           isVerifiedArr[i] = false;
           mappedCount++;
           continue;
         }
         
-        // Advanced mapping: Try concatenating up to 5 adjacent segments for long texts
+        // Advanced mapping: Try concatenating up to 5 adjacent segments to handle Trados merged segments
         let combinedKey = currentKey;
         let foundMatch = false;
         
-        if (!isShortOrIndex(currentKey)) {
-          for (let j = 1; j <= 5 && i + j < data.segments.length; j++) {
-            combinedKey += " " + cleanText(data.segments[i + j].source);
-            if (sourceMap.has(combinedKey)) {
-              mappedTargets[i] = sourceMap.get(combinedKey);
-              isVerifiedArr[i] = false;
-              
-              for (let k = 1; k <= j; k++) {
-                let tags = extractTagsOnly(data.segments[i + k].source);
-                if (tags === "") tags = "\u200B"; // zero-width space
-                mappedTargets[i + k] = tags;
-                isVerifiedArr[i + k] = false;
-                isMergedArr[i + k] = true;
-              }
-              
-              mappedCount += (j + 1);
-              foundMatch = true;
-              break;
+        for (let j = 1; j <= 5 && i + j < data.segments.length; j++) {
+          combinedKey += " " + cleanText(data.segments[i + j].source);
+          if (sourceMap.has(combinedKey)) {
+            mappedTargets[i] = sourceMap.get(combinedKey);
+            isVerifiedArr[i] = false;
+            
+            // Set the merged adjacent segments to their tags or zero-width space to prevent fallback to english
+            for (let k = 1; k <= j; k++) {
+              let tags = extractTagsOnly(data.segments[i + k].source);
+              if (tags === "") tags = "\u200B"; // zero-width space
+              mappedTargets[i + k] = tags;
+              isVerifiedArr[i + k] = false;
+              isMergedArr[i + k] = true;
             }
+            
+            mappedCount += (j + 1);
+            foundMatch = true;
+            break;
           }
         }
         
@@ -1790,33 +1656,6 @@ export default function App() {
     }
   };
 
-
-
-  const flushPendingSave = async (id) => {
-    if (!pendingSavesRef.current.has(id)) return;
-    const pending = pendingSavesRef.current.get(id);
-    clearTimeout(pending.timeoutId);
-    pendingSavesRef.current.delete(id);
-
-    if (documentId) {
-      const segmentIndex = segmentsRef.current.findIndex((s) => s.id === id);
-      if (segmentIndex !== -1) {
-        // Read the current state of this segment from our ref to avoid stale closures
-        const currentSegmentState = segmentsRef.current[segmentIndex];
-        const finalStatus = (currentSegmentState && currentSegmentState.verified) 
-          ? "approved" 
-          : pending.status;
-
-        try {
-          await updateSegment(documentId, segmentIndex, pending.value, finalStatus, undefined, undefined, autoPropagateEnabled);
-        } catch (err) {
-          console.error("Failed to save translation to database via queue:", err);
-          showToast(`Failed to save translation to database: ${err.message || err}`, "error");
-        }
-      }
-    }
-  };
-
   const updateTranslation = async (id, value) => {
     let sourceText = "";
     setSegments((previous) => {
@@ -1860,45 +1699,38 @@ export default function App() {
     });
 
     if (documentId) {
-      if (pendingSavesRef.current.has(id)) {
-        const pending = pendingSavesRef.current.get(id);
-        clearTimeout(pending.timeoutId);
+      const segmentIndex = segments.findIndex((s) => s.id === id);
+      if (segmentIndex !== -1) {
+        try {
+          await updateSegment(documentId, segmentIndex, value, "draft", undefined, undefined, autoPropagateEnabled);
+        } catch (err) {
+          console.error("Failed to update segment in database:", err);
+          showToast(`Failed to save translation to database: ${err.message || err}`, "error");
+        }
       }
-      
-      const timeoutId = setTimeout(async () => {
-        await flushPendingSave(id);
-      }, 1000);
-      
-      pendingSavesRef.current.set(id, { timeoutId, value, status: "draft" });
     }
   };
 
   const toggleVerify = async (id) => {
     let nextVerified = false;
     let sourceText = "";
-    const targetSeg = segments.find((s) => s.id === id);
-    if (!targetSeg) return;
-
-    sourceText = targetSeg.source;
-    nextVerified = !targetSeg.verified;
-
-    // Immediately flush or cancel any pending saves for this segment
-    if (pendingSavesRef.current.has(id)) {
-      const pending = pendingSavesRef.current.get(id);
-      clearTimeout(pending.timeoutId);
-      pendingSavesRef.current.delete(id);
-    }
-
-    const cleanString = (str) => {
-      if (!str) return "";
-      return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
-    };
-    const cleanedSource = cleanString(sourceText);
-
     setSegments((previous) => {
+      const targetSeg = previous.find((s) => s.id === id);
+      if (targetSeg) {
+        sourceText = targetSeg.source;
+        nextVerified = !targetSeg.verified;
+      }
+      
+      const cleanString = (str) => {
+        if (!str) return "";
+        return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+      };
+
+      const cleanedSource = cleanString(sourceText);
+
       return previous.map((segment) => {
-        if (segment.id === id) {
-          return { ...segment, verified: nextVerified, status: nextVerified ? "approved" : "draft" };
+        if (segment.id === id || (autoPropagateEnabled && cleanedSource && cleanString(segment.source) === cleanedSource)) {
+          return { ...segment, verified: nextVerified };
         }
         return segment;
       });
@@ -1913,109 +1745,72 @@ export default function App() {
         } catch (err) {
           console.error("Failed to update verification in database:", err);
           showToast(`Failed to save verification state: ${err.message || err}`, "error");
-          // Revert frontend state on database save failure
-          setSegments((previous) => {
-            return previous.map((segment) => {
-              if (segment.id === id) {
-                return { ...segment, verified: !nextVerified, status: !nextVerified ? "approved" : "draft" };
-              }
-              return segment;
-            });
-          });
         }
       }
     }
   };
 
-  const verifyAndNextSegment = async (id, updatedTargetText) => {
-    const targetSeg = segments.find((s) => s.id === id);
-    if (!targetSeg) return;
-
-    const sourceText = targetSeg.source;
-    let finalTargetText = updatedTargetText !== undefined ? updatedTargetText : targetSeg.target;
-
-    // Immediately cancel any pending saves for this segment
-    if (pendingSavesRef.current.has(id)) {
-      const pending = pendingSavesRef.current.get(id);
-      clearTimeout(pending.timeoutId);
-      pendingSavesRef.current.delete(id);
-    }
-
-    const cleanString = (str) => {
-      if (!str) return "";
-      return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
-    };
-
-    const propagateTranslation = (targetA, sourceB) => {
-      if (!targetA) return "";
-      const tagsInSourceB = sourceB.match(/<[^>]+>/g) || [];
-      let tagIdx = 0;
-      let propagated = targetA.replace(/<[^>]+>/g, () => {
-        if (tagIdx < tagsInSourceB.length) {
-          return tagsInSourceB[tagIdx++];
-        }
-        return "";
-      });
-      while (tagIdx < tagsInSourceB.length) {
-        propagated += tagsInSourceB[tagIdx++];
-      }
-      return propagated;
-    };
-
-    const cleanedSource = cleanString(sourceText);
-
-    // Optimistic update
+  const verifyAndNextSegment = async (id) => {
+    let sourceText = "";
     setSegments((previous) => {
-      return previous.map((segment) => {
-        if (segment.id === id) {
-          return { ...segment, target: finalTargetText, verified: true, status: "approved" };
-        }
-        if (autoPropagateEnabled && cleanedSource && cleanString(segment.source) === cleanedSource) {
-          return { ...segment, target: propagateTranslation(finalTargetText, segment.source) };
-        }
-        return segment;
-      });
+      const targetSeg = previous.find((s) => s.id === id);
+      if (targetSeg) {
+        sourceText = targetSeg.source;
+      }
+
+      const cleanString = (str) => {
+        if (!str) return "";
+        return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+      };
+
+      const cleanedSource = cleanString(sourceText);
+
+      return previous.map((segment) =>
+        (segment.id === id || (autoPropagateEnabled && cleanedSource && cleanString(segment.source) === cleanedSource))
+          ? { ...segment, verified: true }
+          : segment
+      );
     });
-
-    // Move focus to next segment (do this synchronously before awaiting network call!)
-    const currentIndex = filteredSegments.findIndex((s) => s.id === id);
-    if (currentIndex !== -1) {
-      let nextIndex = currentIndex + 1;
-      let foundNext = false;
-
-      while (nextIndex < filteredSegments.length) {
-        const seg = filteredSegments[nextIndex];
-        if (!seg.verified) {
-          pendingFocusSegmentIdRef.current = seg.id;
-          foundNext = true;
-          break;
-        }
-        nextIndex++;
-      }
-
-      if (!foundNext) {
-        pendingFocusSegmentIdRef.current = null;
-      }
-    }
 
     if (documentId) {
       const segmentIndex = segments.findIndex((s) => s.id === id);
       if (segmentIndex !== -1) {
         try {
-          await updateSegment(documentId, segmentIndex, finalTargetText, "approved", undefined, undefined, autoPropagateEnabled);
+          const targetText = segments[segmentIndex].target;
+          await updateSegment(documentId, segmentIndex, targetText, "approved", undefined, undefined, autoPropagateEnabled);
         } catch (err) {
           console.error("Failed to verify in database:", err);
           showToast(`Failed to save verification state: ${err.message || err}`, "error");
-          // Revert state
-          setSegments((previous) => {
-            return previous.map((segment) => {
-              if (segment.id === id) {
-                return { ...segment, verified: false, status: "draft" };
-              }
-              return segment;
-            });
-          });
         }
+      }
+    }
+
+    // Move focus to next segment
+    const currentIndex = filteredSegments.findIndex((s) => s.id === id);
+    if (currentIndex !== -1) {
+      let nextIndex = currentIndex + 1;
+      
+      while (nextIndex < filteredSegments.length) {
+        if (!filteredSegments[nextIndex].verified) {
+          const nextId = filteredSegments[nextIndex].id;
+          
+          setTimeout(() => {
+            if (virtuosoRef.current) {
+              virtuosoRef.current.scrollToIndex({ index: nextIndex, align: 'center', behavior: 'smooth' });
+            }
+            setTimeout(() => {
+              const nextElement = document.getElementById(`segment-${nextId}`);
+              if (nextElement) {
+                nextElement.classList.add("ring-2", "ring-teal-500");
+                setTimeout(() => nextElement.classList.remove("ring-2", "ring-teal-500"), 1000);
+              }
+              const nextTa = document.getElementById(`target-${nextId}`);
+              if (nextTa) nextTa.focus();
+            }, 300);
+          }, 50);
+          break;
+        }
+        nextIndex++;
       }
     }
   };
@@ -2184,7 +1979,8 @@ export default function App() {
   const handleExportDocument = async (overrideExt) => {
     try {
       const ext = overrideExt || fileExtension;
-      const blob = await exportFile(fileId, segments, ext, sourceLanguage, targetLanguage, fileName, false, relinkedTemplate);
+      const targetId = fileId || documentId;
+      const blob = await exportFile(targetId, segments, ext, sourceLanguage, targetLanguage, fileName);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -2201,7 +1997,8 @@ export default function App() {
   const handleExportSourceDocument = async (overrideExt) => {
     try {
       const ext = overrideExt || fileExtension;
-      const blob = await exportFile(fileId, segments, ext, sourceLanguage, targetLanguage, fileName, true, relinkedTemplate);
+      const targetId = fileId || documentId;
+      const blob = await exportFile(targetId, segments, ext, sourceLanguage, targetLanguage, fileName, true);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -2215,17 +2012,17 @@ export default function App() {
     }
   };
 
-  const handleExportXliff = async (exportSource = false) => {
+  const handleExportXliff = async () => {
     try {
-      const blob = await exportFile(fileId, segments, ".xlf", sourceLanguage, targetLanguage, fileName, exportSource);
+      const targetId = fileId || documentId;
+      const blob = await exportFile(targetId, segments, ".xlf", sourceLanguage, targetLanguage, fileName);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      const suffix = exportSource ? "_source" : `_${targetLanguage}`;
-      link.setAttribute("download", `${fileName}${suffix}.xlf`);
+      link.setAttribute("download", `${fileName}_${targetLanguage}.xlf`);
       document.body.appendChild(link);
       link.click();
-      showToast(`${exportSource ? "Source" : "Target"} XLIFF exported successfully!`);
+      showToast("XLIFF exported successfully!");
     } catch (error) {
       console.log(error);
       showToast(`XLIFF export failed: ${error.message}`, "error");
@@ -2234,7 +2031,8 @@ export default function App() {
 
   const handleExportTmx = async () => {
     try {
-      const blob = await exportFile(fileId, segments, ".tmx", sourceLanguage, targetLanguage, fileName);
+      const targetId = fileId || documentId;
+      const blob = await exportFile(targetId, segments, ".tmx", sourceLanguage, targetLanguage, fileName);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -2785,139 +2583,6 @@ export default function App() {
     }
   };
 
-  const handleImportTargetHtml = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    try {
-      showToast("Importing target HTML translations...");
-      const data = await importTargetHtml(documentId, targetLanguage, file);
-      if (data.segments && data.segments.length > 0) {
-        const newSegments = segments.map((seg) => {
-          const match = data.segments.find(
-            (s) => s.id === seg.id
-          );
-          if (match) {
-            return {
-              ...seg,
-              target: match.target,
-              verified: match.verified || false,
-              status: match.status || seg.status
-            };
-          }
-          return seg;
-        });
-        setSegments(newSegments);
-        showToast(`Successfully imported ${data.count} segments from Target HTML!`);
-      } else {
-        showToast("No matching segments aligned", "warn");
-      }
-    } catch (error) {
-      console.error(error);
-      showToast(`Target HTML import failed: ${error.response?.data?.error || error.message}`, "error");
-    } finally {
-      if (event.target) event.target.value = "";
-    }
-  };
-
-  const handleToggleSelect = (segmentId, checked) => {
-    setSelectedSegmentIds((prev) => {
-      const next = new Set(prev);
-      if (checked) {
-        next.add(segmentId);
-      } else {
-        next.delete(segmentId);
-      }
-      return next;
-    });
-  };
-
-  const handleToggleSelectAll = (checked) => {
-    if (checked) {
-      const allIds = filteredSegments.map((s) => s.id);
-      setSelectedSegmentIds(new Set(allIds));
-    } else {
-      setSelectedSegmentIds(new Set());
-    }
-  };
-
-  const handleClearSelection = () => {
-    setSelectedSegmentIds(new Set());
-  };
-
-  const handleBulkAction = async (action) => {
-    if (selectedSegmentIds.size === 0) return;
-    try {
-      setIsPerformingBulk(true);
-      showToast(`Performing bulk ${action}...`);
-
-      const segmentIndices = Array.from(selectedSegmentIds).map((id) => id - 1);
-      const data = await bulkActionSegments(documentId, targetLanguage, segmentIndices, action);
-
-      if (data.segments) {
-        const newSegments = segments.map((seg) => {
-          const match = data.segments.find((s) => s.id === seg.id);
-          if (match) {
-            return {
-              ...seg,
-              target: match.target,
-              status: match.status,
-              verified: match.verified
-            };
-          }
-          return seg;
-        });
-        setSegments(newSegments);
-        setSelectedSegmentIds(new Set());
-        showToast(`Successfully updated ${data.count} segments!`);
-      }
-    } catch (error) {
-      console.error(error);
-      showToast(`Bulk action failed: ${error.response?.data?.error || error.message}`, "error");
-    } finally {
-      setIsPerformingBulk(false);
-    }
-  };
-
-  const handleBulkTranslate = async () => {
-    if (selectedSegmentIds.size === 0) return;
-    try {
-      setIsPerformingBulk(true);
-      showToast("Translating selected segments...");
-
-      const selectedSegs = segments.filter((s) => selectedSegmentIds.has(s.id));
-      const batch = selectedSegs.map((s) => ({
-        id: s.id,
-        source: s.source
-      }));
-
-      const data = await translateBatch(batch, targetLanguage, sourceLanguage, { ...contextSettings }, documentId);
-      if (data.results && data.results.length > 0) {
-        const newSegments = segments.map((seg) => {
-          const match = data.results.find((item) => item.id === seg.id);
-          if (match) {
-            return {
-              ...seg,
-              target: match.translated,
-              status: "translated",
-              verified: false,
-              mqmAccuracyScore: match.mqmAccuracyScore !== undefined ? match.mqmAccuracyScore : 100,
-              mqmReport: match.mqmReport || null
-            };
-          }
-          return seg;
-        });
-        setSegments(newSegments);
-        setSelectedSegmentIds(new Set());
-        showToast(`Successfully translated ${data.results.length} segments!`);
-      }
-    } catch (error) {
-      console.error(error);
-      showToast(`Bulk translation failed: ${error.response?.data?.error || error.message}`, "error");
-    } finally {
-      setIsPerformingBulk(false);
-    }
-  };
-
   const handleImportTmx = async (file) => {
     try {
       showToast("Importing TMX to database...");
@@ -3072,21 +2737,7 @@ export default function App() {
               You do not have permission to access this document workspace. Please request access from the owner or administrator to participate.
             </p>
           </div>
-          <div className="flex flex-col gap-3 pt-2">
-            {!hasPendingAccessRequest && (
-              <div className="flex flex-col gap-1.5 text-left">
-                <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">Choose requested role</label>
-                <select
-                  value={requestedPermission}
-                  onChange={(e) => setRequestedPermission(e.target.value)}
-                  className="w-full rounded-xl border border-[var(--border-medium)] bg-[var(--bg-input)] px-3 py-2.5 text-xs text-[var(--text-primary)] outline-none transition-all focus:border-[var(--accent)] font-semibold cursor-pointer"
-                >
-                  <option value="read">Viewer</option>
-                  <option value="comment">Commenter</option>
-                  <option value="write">Editor</option>
-                </select>
-              </div>
-            )}
+          <div className="flex flex-col gap-2 pt-2">
             <button
               onClick={handleRequestEditAccess}
               disabled={hasPendingAccessRequest}
@@ -3116,63 +2767,6 @@ export default function App() {
       <DragOverlay isDragging={isDragging} />
       <LoadingOverlay isUploading={isUploading} theme={theme} />
       <Toast toast={toast} />
-
-      {/* ── Floating Bulk Actions Bar ── */}
-      {selectedSegmentIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 px-6 py-3 rounded-2xl shadow-2xl animate-fade-in-up"
-             style={{ boxShadow: "0 20px 40px rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.08)" }}>
-          <span className="text-xs font-bold text-slate-300">
-            {selectedSegmentIds.size} segment{selectedSegmentIds.size > 1 ? "s" : ""} selected
-          </span>
-          <div className="w-px h-4 bg-slate-700/50" />
-          
-          <button
-            onClick={() => handleBulkAction("approve")}
-            disabled={isPerformingBulk}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-400 hover:bg-emerald-500/10 active:scale-95 transition-all cursor-pointer"
-          >
-            <Check style={{ width: 13, height: 13 }} />
-            Approve
-          </button>
-
-          <button
-            onClick={() => handleBulkAction("draft")}
-            disabled={isPerformingBulk}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:bg-slate-500/10 active:scale-95 transition-all cursor-pointer"
-          >
-            <Sliders style={{ width: 13, height: 13 }} />
-            Mark Draft
-          </button>
-
-          <button
-            onClick={handleBulkTranslate}
-            disabled={isPerformingBulk}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-indigo-400 hover:bg-indigo-500/10 active:scale-95 transition-all cursor-pointer"
-          >
-            <Sparkles style={{ width: 13, height: 13 }} />
-            AI Translate
-          </button>
-
-          <button
-            onClick={() => handleBulkAction("delete")}
-            disabled={isPerformingBulk}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-rose-400 hover:bg-rose-500/10 active:scale-95 transition-all cursor-pointer"
-          >
-            <Trash2 style={{ width: 13, height: 13 }} />
-            Delete
-          </button>
-
-          <div className="w-px h-4 bg-slate-700/50" />
-
-          <button
-            onClick={handleClearSelection}
-            className="p-1 rounded-lg text-slate-400 hover:bg-slate-500/10 active:scale-95 transition-all cursor-pointer"
-            title="Clear selection"
-          >
-            <X style={{ width: 14, height: 14 }} />
-          </button>
-        </div>
-      )}
 
       <SettingsModal
         show={showSettingsModal}
@@ -3206,8 +2800,6 @@ export default function App() {
         />
       )}
 
-
-
       {currentRoute.screen === "dashboard" && (
         <ProjectDashboard
           onOpenProject={(projId) => navigateTo(`/project/${projId}`)}
@@ -3234,25 +2826,6 @@ export default function App() {
           userRole={user ? user.role : ""}
           userId={user ? user.id : null}
           onOpenAdmin={() => setShowAdminDashboard(true)}
-        />
-      )}
-
-      {currentRoute.screen === "relink" && (
-        <RelinkingPage
-          onNavigate={navigateTo}
-          showToast={showToast}
-          theme={theme}
-          onLoadRelinkedDocument={({ fileName, segments, sourceLanguage, targetLanguage, fileExtension, template }) => {
-            setFileName(fileName);
-            setSegments(segments);
-            setSourceLanguage(sourceLanguage || "en");
-            setTargetLanguage(targetLanguage || "hi");
-            setFileExtension(fileExtension || ".html");
-            setDocumentId("relinked_session_" + Date.now());
-            if (template) setRelinkedTemplate(template);
-            showToast("Relinked document loaded into Workspace Editor!");
-            navigateTo("/editor");
-          }}
         />
       )}
 
@@ -3316,14 +2889,6 @@ export default function App() {
             documentId={documentId}
           />
 
-          <TmAnalysisModal
-            show={showTmAnalysis}
-            onClose={() => setShowTmAnalysis(false)}
-            documentId={documentId}
-            targetLanguage={targetLanguage}
-            showToast={showToast}
-          />
-
           <SearchReplaceModal
             show={showSearchReplace}
             onClose={() => setShowSearchReplace(false)}
@@ -3363,7 +2928,6 @@ export default function App() {
             onOpenAdmin={() => setShowAdminDashboard(true)}
             onUpload={handleUpload}
             onOpenSettings={() => setShowSettingsModal(true)}
-            onOpenAnalysis={() => setShowTmAnalysis(true)}
             collaborators={collaborators}
             onOpenShare={ownerId && (ownerId === user?.id || ["admin", "verbolabs_staff"].includes(user?.role)) ? () => setShowShareModal(true) : null}
             onTeleport={handleTeleport}
@@ -3388,7 +2952,6 @@ export default function App() {
                 onSaveProject={saveProject}
                 onRelinkHtml={permission === "write" ? handleRelinkHtml : null}
                 onImportXliff={permission === "write" ? handleImportXliff : null}
-                onImportTargetHtml={permission === "write" ? handleImportTargetHtml : null}
                 onTranslate={permission === "write" ? handleTranslateSegments : null}
                 onToggleQa={() => setShowQaPanel((value) => !value)}
                 onRunQc={permission === "write" ? handleRunQc : null}
@@ -3416,9 +2979,6 @@ export default function App() {
                 onAcceptAllChanges={handleAcceptAllChanges}
                 hasTrackedChanges={segments.some(s => s.originalTargetText && s.originalTargetText !== s.target)}
                 onApplyGlossary={permission === "write" ? handleApplyGlossary : null}
-                isAllSelected={filteredSegments.length > 0 && selectedSegmentIds.size === filteredSegments.length}
-                onToggleSelectAll={handleToggleSelectAll}
-                selectedCount={selectedSegmentIds.size}
               />
 
               {/* QA panel (collapsible modal) */}
@@ -3434,7 +2994,7 @@ export default function App() {
               {/* Zone 3: Segment editor */}
               <div className="segment-table">
 
-                {["read", "comment"].includes(permission) && (
+                {permission === "read" && (
                   <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl px-4 py-3 text-xs font-bold mb-3 shadow-lg mx-1 select-none">
                     <div className="flex items-center gap-2">
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 flex-shrink-0">
@@ -3442,7 +3002,7 @@ export default function App() {
                         <line x1="12" x2="12" y1="8" y2="12" />
                         <line x1="12" x2="12.01" y1="16" y2="16" />
                       </svg>
-                      {permission === "comment" ? "Commenter (Read-Only) Workspace" : "Read-Only Workspace"}
+                      Read-Only Workspace
                     </div>
                   </div>
                 )}
@@ -3463,7 +3023,7 @@ export default function App() {
                       onCopy={copyToClipboard}
                       onUpdateTranslation={updateTranslation}
                       onToggleVerify={() => toggleVerify(item.id)}
-                      onVerifyAndNext={(updatedText) => verifyAndNextSegment(item.id, updatedText)}
+                      onVerifyAndNext={() => verifyAndNextSegment(item.id)}
                       lockInfo={
                         cellLocks.has(item.id - 1) && cellLocks.get(item.id - 1).userId !== user?.id
                           ? cellLocks.get(item.id - 1)
@@ -3471,8 +3031,7 @@ export default function App() {
                       }
                       onFocusSegment={handleFocusSegment}
                       onBlurSegment={handleBlurSegment}
-                      readOnly={permission === "read" || permission === "comment"}
-                      permission={permission}
+                      readOnly={permission === "read"}
                       onSaveContext={saveSegmentContext}
                       onTranslateWithContext={handleTranslateSegmentWithContext}
                       onTyping={handleSegmentTyping}
@@ -3480,8 +3039,6 @@ export default function App() {
                       onAcceptChange={handleAcceptChange}
                       onRejectChange={handleRejectChange}
                       autocompleteEnabled={autocompleteEnabled}
-                      isSelected={selectedSegmentIds.has(item.id)}
-                      onToggleSelect={permission === "write" ? handleToggleSelect : null}
                     />
                   )}
                 />
@@ -3736,7 +3293,7 @@ export default function App() {
             </span>
           </div>
           <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-            <strong>{pendingAccessRequests[0].profiles?.email.split("@")[0]}</strong> ({pendingAccessRequests[0].profiles?.email}) is requesting <strong>{pendingAccessRequests[0].requestedPermission === "write" ? "Editor" : pendingAccessRequests[0].requestedPermission === "comment" ? "Commenter" : "Viewer"} Access</strong> to this document workspace.
+            <strong>{pendingAccessRequests[0].profiles?.email.split("@")[0]}</strong> ({pendingAccessRequests[0].profiles?.email}) is requesting <strong>Edit Access</strong> to this document workspace.
           </p>
           <div className="flex gap-2 justify-end">
             <button
@@ -3749,15 +3306,10 @@ export default function App() {
               onClick={() => handleRespondToAccessRequest(pendingAccessRequests[0].id, "approve")}
               className="rounded-xl px-4 py-2 text-xs font-bold bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white border border-[var(--accent)] transition-all cursor-pointer shadow-md"
             >
-              Grant {pendingAccessRequests[0].requestedPermission === "write" ? "Editor" : pendingAccessRequests[0].requestedPermission === "comment" ? "Commenter" : "Viewer"} Access
+              Grant Edit Access
             </button>
           </div>
         </div>
-      )}
-
-      {/* ── Chat System ── */}
-      {isAuth && user && permission !== "read" && (
-        <ChatBubble user={user} chatSocketRef={chatSocketRef} onTeleport={handleTeleport} />
       )}
     </div>
   );

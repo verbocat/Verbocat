@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useRef } from "react";
 import { X, Copy, Check, Lock, Globe, Shield, Link, Users, ChevronDown } from "lucide-react";
-import { fetchDocumentAccess, grantDocumentAccess, revokeDocumentAccess, searchUsers, fetchPublicAccess, updatePublicAccess } from "../services/api.js";
+import { 
+  fetchDocumentAccess, grantDocumentAccess, revokeDocumentAccess, 
+  fetchProjectShares, shareProject, revokeProjectShare,
+  searchUsers, fetchPublicAccess, updatePublicAccess 
+} from "../services/api.js";
 
-export function ShareModal({ isOpen, onClose, documentId, docName, projectId, targetLang }) {
+export function ShareModal({ isOpen, onClose, documentId, docName, projectId, targetLang, isOwner = true }) {
   const [email, setEmail] = useState("");
-  const [permission, setPermission] = useState("read");
+  const [permission, setPermission] = useState("write");
   const [accessList, setAccessList] = useState([]);
   const [owner, setOwner] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -36,10 +40,10 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
 
   // Fetch access list when modal is opened
   useEffect(() => {
-    if (isOpen && documentId) {
+    if (isOpen && (documentId || projectId)) {
       loadAccessList();
     }
-  }, [isOpen, documentId]);
+  }, [isOpen, documentId, projectId]);
 
   // Click outside listener for suggestions dropdown
   useEffect(() => {
@@ -58,17 +62,28 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
     setLoading(true);
     setError("");
     try {
-      const res = await fetchDocumentAccess(documentId);
-      if (res && res.owner) {
-        setOwner(res.owner);
-        setAccessList(res.collaborators || []);
-      } else {
-        setAccessList(res || []);
-        setOwner(null);
-      }
+      if (projectId && !documentId) {
+        const res = await fetchProjectShares(projectId);
+        if (res && res.owner) {
+          setOwner(res.owner);
+          setAccessList(res.collaborators || []);
+        } else {
+          setAccessList(res || []);
+          setOwner(null);
+        }
+      } else if (documentId) {
+        const res = await fetchDocumentAccess(documentId);
+        if (res && res.owner) {
+          setOwner(res.owner);
+          setAccessList(res.collaborators || []);
+        } else {
+          setAccessList(res || []);
+          setOwner(null);
+        }
 
-      const pubRes = await fetchPublicAccess(documentId);
-      setPublicAccess(pubRes.publicAccess || "none");
+        const pubRes = await fetchPublicAccess(documentId);
+        setPublicAccess(pubRes.publicAccess || "none");
+      }
     } catch (err) {
       console.error(err);
       setError("Failed to load access list.");
@@ -78,6 +93,7 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
   };
 
   const handlePublicAccessChange = async (value) => {
+    if (!documentId) return;
     setError("");
     try {
       const res = await updatePublicAccess(documentId, value);
@@ -115,10 +131,18 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
   const handleGrant = async (e) => {
     e.preventDefault();
     if (!email) return;
+    if (!isOwner) {
+      setError("Only the project owner can invite users.");
+      return;
+    }
     setSubmitting(true);
     setError("");
     try {
-      await grantDocumentAccess(documentId, email, permission);
+      if (projectId && !documentId) {
+        await shareProject(projectId, email, "editor");
+      } else if (documentId) {
+        await grantDocumentAccess(documentId, email, "write");
+      }
       setEmail("");
       setEmailSuggestions([]);
       setShowSuggestions(false);
@@ -131,21 +155,18 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
     }
   };
 
-  const handleUpdatePermission = async (userEmail, perm) => {
-    setError("");
-    try {
-      await grantDocumentAccess(documentId, userEmail, perm);
-      loadAccessList();
-    } catch (err) {
-      console.error(err);
-      setError("Failed to update permission.");
+  const handleRevoke = async (targetId) => {
+    if (!isOwner) {
+      setError("Only the project owner can revoke access.");
+      return;
     }
-  };
-
-  const handleRevoke = async (userId) => {
     setError("");
     try {
-      await revokeDocumentAccess(documentId, userId);
+      if (projectId && !documentId) {
+        await revokeProjectShare(projectId, targetId);
+      } else if (documentId) {
+        await revokeDocumentAccess(documentId, targetId);
+      }
       loadAccessList();
     } catch (err) {
       console.error(err);
@@ -188,7 +209,7 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
         <div className="flex justify-between items-start">
           <div>
             <h3 className="text-lg font-bold text-[var(--text-primary)] leading-snug">
-              Share "{docName || "Untitled Document"}"
+              Share {projectId && !documentId ? "Project" : "Document"} "{docName || (projectId ? "Project" : "Untitled Document")}"
             </h3>
           </div>
           <button 
@@ -200,56 +221,50 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
           </button>
         </div>
 
-        {/* Form to Add Collaborators */}
-        <form onSubmit={handleGrant} className="flex gap-2 relative z-50 h-[42px]">
-          <div className="flex-1 relative h-full" ref={dropdownRef}>
-            <input
-              type="email"
-              required
-              placeholder="Add people by email..."
-              value={email}
-              onChange={handleEmailChange}
-              className="w-full h-full rounded-xl border border-[var(--border-medium)] bg-[var(--bg-input)] px-4 text-[var(--text-primary)] outline-none transition-all focus:border-[var(--accent)] text-xs font-semibold placeholder-[var(--text-muted)]"
-            />
-            
-            {/* Email Suggestions Dropdown */}
-            {showSuggestions && emailSuggestions.length > 0 && (
-              <div className="absolute left-0 right-0 mt-2 z-50 max-h-[160px] overflow-y-auto bg-[var(--bg-elevated)] border border-[var(--border-medium)] rounded-xl shadow-2xl divide-y divide-[var(--border-subtle)]">
-                {emailSuggestions.map((user) => (
-                  <button
-                    key={user.email}
-                    type="button"
-                    onClick={() => selectSuggestion(user.email)}
-                    className="w-full text-left px-4 py-3 hover:bg-[var(--bg-hover)] transition-colors flex flex-col justify-center cursor-pointer"
-                  >
-                    <span className="text-xs font-bold text-[var(--text-primary)] truncate">{user.email.split("@")[0]}</span>
-                    <span className="text-[10px] text-[var(--text-secondary)] truncate mt-0.5">{user.email}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+        {/* Form to Add Collaborators (Only visible to Owner) */}
+        {isOwner ? (
+          <form onSubmit={handleGrant} className="flex gap-2 relative z-50 h-[42px]">
+            <div className="flex-1 relative h-full" ref={dropdownRef}>
+              <input
+                type="email"
+                required
+                placeholder="Add people by email..."
+                value={email}
+                onChange={handleEmailChange}
+                className="w-full h-full rounded-xl border border-[var(--border-medium)] bg-[var(--bg-input)] px-4 text-[var(--text-primary)] outline-none transition-all focus:border-[var(--accent)] text-xs font-semibold placeholder-[var(--text-muted)]"
+              />
+              
+              {/* Email Suggestions Dropdown */}
+              {showSuggestions && emailSuggestions.length > 0 && (
+                <div className="absolute left-0 right-0 mt-2 z-50 max-h-[160px] overflow-y-auto bg-[var(--bg-elevated)] border border-[var(--border-medium)] rounded-xl shadow-2xl divide-y divide-[var(--border-subtle)]">
+                  {emailSuggestions.map((user) => (
+                    <button
+                      key={user.email}
+                      type="button"
+                      onClick={() => selectSuggestion(user.email)}
+                      className="w-full text-left px-4 py-3 hover:bg-[var(--bg-hover)] transition-colors flex flex-col justify-center cursor-pointer"
+                    >
+                      <span className="text-xs font-bold text-[var(--text-primary)] truncate">{user.email.split("@")[0]}</span>
+                      <span className="text-[10px] text-[var(--text-secondary)] truncate mt-0.5">{user.email}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
-          <div className="w-[120px] h-full">
-            <select
-              value={permission}
-              onChange={(e) => setPermission(e.target.value)}
-              className="w-full h-full rounded-xl border border-[var(--border-medium)] bg-[var(--bg-input)] px-3 text-[var(--text-primary)] outline-none transition-all focus:border-[var(--accent)] text-xs font-semibold cursor-pointer"
+            <button
+              type="submit"
+              disabled={submitting || !email}
+              className="flex items-center justify-center bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold px-6 rounded-xl transition-all cursor-pointer shadow-sm disabled:opacity-50 h-full"
             >
-              <option value="read">Viewer</option>
-              <option value="comment">Commenter</option>
-              <option value="write">Editor</option>
-            </select>
+              Add
+            </button>
+          </form>
+        ) : (
+          <div className="text-xs text-[var(--text-secondary)] bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl p-3 font-medium">
+            Only the project owner can invite new collaborators or manage sharing access.
           </div>
-
-          <button
-            type="submit"
-            disabled={submitting || !email}
-            className="flex items-center justify-center bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold px-6 rounded-xl transition-all cursor-pointer shadow-sm disabled:opacity-50 h-full"
-          >
-            Add
-          </button>
-        </form>
+        )}
 
         {/* Error Message */}
         {error && (
@@ -268,7 +283,7 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
               <div className="py-4 text-center text-xs text-[var(--text-muted)] font-bold">Loading members...</div>
             ) : (
               <>
-                {/* Render Owner */}
+                {/* Render Owner - Permanent access, no remove button */}
                 {owner && (
                   <div className="flex items-center justify-between py-1">
                     <div className="flex items-center gap-3 min-w-0">
@@ -280,7 +295,7 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
                         <p className="text-[10px] text-[var(--text-secondary)] truncate mt-0.5">{owner.email}</p>
                       </div>
                     </div>
-                    <span className="text-[10px] font-bold text-[var(--text-muted)] pr-4 select-none">
+                    <span className="text-[10px] font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded-md select-none">
                       Owner
                     </span>
                   </div>
@@ -288,7 +303,7 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
 
                 {/* Render Collaborators */}
                 {accessList.map((item) => (
-                  <div key={item.userId} className="flex items-center justify-between py-1">
+                  <div key={item.userId || item.shareId || item.email} className="flex items-center justify-between py-1">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 ${getAvatarColor(item.email)}`}>
                         {getAvatarInitials(item.email)}
@@ -298,24 +313,19 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
                         <p className="text-[10px] text-[var(--text-secondary)] truncate mt-0.5">{item.email}</p>
                       </div>
                     </div>
-                    <div>
-                      <select
-                        value={item.permission}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val === "remove") {
-                            handleRevoke(item.userId);
-                          } else {
-                            handleUpdatePermission(item.email, val);
-                          }
-                        }}
-                        className="bg-transparent border-none outline-none text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer pr-2 py-1 rounded transition-colors"
-                      >
-                        <option value="read">Viewer</option>
-                        <option value="comment">Commenter</option>
-                        <option value="write">Editor</option>
-                        <option value="remove">Remove access</option>
-                      </select>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] font-bold text-purple-400 bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 rounded-md">
+                        Editor
+                      </span>
+                      {isOwner && (
+                        <button
+                          type="button"
+                          onClick={() => handleRevoke(item.userId || item.shareId)}
+                          className="text-xs font-bold text-[var(--text-rose)] hover:text-red-400 cursor-pointer transition-colors"
+                        >
+                          Remove
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}

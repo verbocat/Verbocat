@@ -78,7 +78,8 @@ const xliffParser = {
 const getParser = (ext) => {
   switch (ext) {
     case '.html': return htmlParser;
-    case '.docx': return docxParser;
+    case '.docx':
+    case '.doc': return docxParser;
     case '.pptx': return pptxParser;
     case '.xlsx': return xlsxParser;
     case '.txt': return txtParser;
@@ -169,27 +170,54 @@ const processUploadedFile = async (file) => {
   }
 };
 
-const exportHtml = async (fileId, segments, ext = '.html', targetLang = 'hi') => {
-  if (!fileId) {
-    const error = new Error("Cannot export: No file ID found.");
+const exportHtml = async (fileId, segments, ext = '.html', targetLang = 'hi', templateOverride = null) => {
+  if (!fileId && !templateOverride) {
+    const error = new Error("Cannot export: No file ID or template found.");
     error.status = 400;
     throw error;
   }
 
-  const { data, error: fetchError } = await supabase
-    .from("html_files")
-    .select("content")
-    .eq("id", fileId)
-    .single();
+  let templateContent = templateOverride;
 
-  if (fetchError || !data || !data.content) {
-    const error = new Error(`File template not found. Did you load an old project file?`);
-    error.status = 404;
-    throw error;
+  if (!templateContent) {
+    // 1. Try finding template in html_files where id = fileId
+    let { data } = await supabase
+      .from("html_files")
+      .select("content")
+      .eq("id", fileId)
+      .single();
+
+    // 2. Fallback: If fileId is a document ID from documents table, lookup documents.file_id
+    if (!data || !data.content) {
+      const { data: docData } = await supabase
+        .from("documents")
+        .select("file_id")
+        .eq("id", fileId)
+        .single();
+
+      if (docData && docData.file_id) {
+        const { data: htmlData } = await supabase
+          .from("html_files")
+          .select("content")
+          .eq("id", docData.file_id)
+          .single();
+
+        if (htmlData && htmlData.content) {
+          data = htmlData;
+        }
+      }
+    }
+
+    if (!data || !data.content) {
+      const error = new Error(`File template not found for document ${fileId}. Did you load an old project file?`);
+      error.status = 404;
+      throw error;
+    }
+
+    templateContent = data.content;
   }
 
   let parser = getParser(ext);
-  let templateContent = data.content;
 
   // ── Combined Template Detection & Routing ────────────────────────────────
   try {

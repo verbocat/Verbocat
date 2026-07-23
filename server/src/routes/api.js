@@ -68,15 +68,19 @@ apiRouter.post("/upload", checkAuth, upload.single("file"), async (request, resp
       status: "draft"
     }));
 
-    const { error: segError } = await supabase
-      .from("document_segments")
-      .insert(segmentInserts);
+    // 2. Persist parsed segments to the database in batches of 500 for maximum throughput
+    const BATCH_SIZE = 500;
+    for (let i = 0; i < segmentInserts.length; i += BATCH_SIZE) {
+      const batch = segmentInserts.slice(i, i + BATCH_SIZE);
+      const { error: segError } = await supabase
+        .from("document_segments")
+        .insert(batch);
 
-    if (segError) {
-      console.error("Failed to insert document segments:", segError);
-      // Rollback document creation on segment insertion error
-      await supabase.from("documents").delete().eq("id", documentId);
-      return response.status(500).json({ error: "Failed to persist document segments." });
+      if (segError) {
+        console.error("Failed to insert document segments batch:", segError);
+        await supabase.from("documents").delete().eq("id", documentId);
+        return response.status(500).json({ error: "Failed to persist document segments." });
+      }
     }
 
     response.json({
@@ -268,13 +272,7 @@ apiRouter.post("/export", async (request, response) => {
       return response.send(Buffer.from(tmxContent, "utf-8"));
     }
 
-    let buffer;
-    if (template) {
-      const htmlParser = require("../utils/parsers/htmlParser");
-      buffer = await htmlParser.exportFile(template, exportSegments);
-    } else {
-      buffer = await exportHtml(fileId, exportSegments, ext, targetLang);
-    }
+    const buffer = await exportHtml(fileId, exportSegments, ext, targetLang, template);
 
     response.setHeader(
       "Content-Disposition",
@@ -609,7 +607,7 @@ apiRouter.get("/documents/:id", checkAuth, async (request, response) => {
     // Fetch segments
     let segments;
     try {
-      segments = await fetchAllSegments(doc.id, "*", doc.target_lang);
+      segments = await fetchAllSegments(doc.id);
     } catch (segError) {
       console.error("Failed to load document segments:", segError);
       return response.status(500).json({ error: "Failed to load document segments." });
@@ -644,7 +642,6 @@ apiRouter.get("/documents/:id", checkAuth, async (request, response) => {
       source: seg.source_text,
       target: seg.target_text || "",
       status: seg.status,
-      verified: seg.status === "approved",
       contextJira: seg.context_jira || "",
       contextDescription: seg.context_description || "",
       mqmAccuracyScore: seg.mqm_accuracy_score !== undefined && seg.mqm_accuracy_score !== null ? seg.mqm_accuracy_score : 100,
@@ -880,7 +877,7 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
     if (sourceText && autoPropagate !== false) {
       let allSegs;
       try {
-        allSegs = await fetchAllSegments(doc.id, "segment_index, source_text, target_text, original_target_text, tracked_by", dbSegment.target_lang);
+        allSegs = await fetchAllSegments(doc.id, "segment_index, source_text, target_text, original_target_text, tracked_by");
       } catch (err) {
         console.error("Failed to fetch all segments for propagation:", err);
       }
@@ -941,7 +938,6 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
         .from("document_segments")
         .update(segmentFields)
         .eq("document_id", doc.id)
-        .eq("target_lang", dbSegment.target_lang)
         .eq("segment_index", idx);
     });
 
@@ -1364,7 +1360,7 @@ apiRouter.post("/documents/:id/audit/estimate", checkAuth, async (request, respo
 
     let segments;
     try {
-      segments = await fetchAllSegments(documentId, "source_text", "source");
+      segments = await fetchAllSegments(documentId, "source_text");
     } catch (fetchErr) {
       console.error("Failed to fetch document segments:", fetchErr);
       return response.status(500).json({ error: "Failed to fetch document segments." });
@@ -1426,7 +1422,7 @@ apiRouter.post("/documents/:id/audit/start", checkAuth, async (request, response
     // Fetch segments to count words
     let segments;
     try {
-      segments = await fetchAllSegments(documentId, "source_text", "source");
+      segments = await fetchAllSegments(documentId, "source_text");
     } catch (fetchErr) {
       console.error("Failed to fetch document segments for audit check:", fetchErr);
       return response.status(500).json({ error: "Failed to fetch document segments for credit check." });
@@ -1677,22 +1673,7 @@ apiRouter.get("/documents/:id/access", checkAuth, async (request, response) => {
       name: acc.profiles?.email ? acc.profiles.email.split("@")[0] : "Unknown"
     }));
 
-    // Fetch owner profile to include in the share modal list
-    const { data: ownerProfile } = await supabase
-      .from("profiles")
-      .select("email")
-      .eq("id", doc.owner_id)
-      .single();
-
-    response.json({
-      owner: {
-        userId: doc.owner_id,
-        email: ownerProfile?.email || "Unknown",
-        name: ownerProfile?.email ? ownerProfile.email.split("@")[0] : "Owner",
-        permission: "owner"
-      },
-      collaborators: list
-    });
+    response.json(list);
   } catch (error) {
     console.error(error);
     response.status(500).json({ error: "Internal server error." });
@@ -1806,6 +1787,9 @@ apiRouter.delete("/documents/:id/access/:userId", checkAuth, async (request, res
     }
 
     const targetUserId = request.params.userId;
+    if (targetUserId === doc.owner_id) {
+      return response.status(400).json({ error: "Cannot remove access from the document owner." });
+    }
 
     const { error: deleteError } = await supabase
       .from("document_access")
@@ -1871,7 +1855,7 @@ apiRouter.get("/documents/:id/request-status", checkAuth, async (request, respon
       .select("status")
       .eq("document_id", documentId)
       .eq("user_id", userId)
-      .ilike("status", "pending%")
+      .eq("status", "pending")
       .maybeSingle();
 
     if (error) {
@@ -1893,10 +1877,10 @@ apiRouter.post("/documents/:id/request-access", checkAuth, async (request, respo
     const userEmail = request.user.email;
     const userName = request.profile.full_name || userEmail.split("@")[0];
 
-    // Fetch document details to get owner_id, name, project_id, and target_lang
+    // Fetch document details to get owner_id and name
     const { data: doc, error: docError } = await supabase
       .from("documents")
-      .select("owner_id, name, project_id, target_lang")
+      .select("owner_id, name")
       .eq("id", documentId)
       .single();
 
@@ -1904,16 +1888,13 @@ apiRouter.post("/documents/:id/request-access", checkAuth, async (request, respo
       return response.status(404).json({ error: "Document not found." });
     }
 
-    const { permission } = request.body;
-    const requestedPermission = ["write", "read", "comment"].includes(permission) ? permission : "write";
-
     // Insert or update access request
     const { error: insertError } = await supabase
       .from("document_access_requests")
       .upsert({
         document_id: documentId,
         user_id: userId,
-        status: `pending:${requestedPermission}`,
+        status: "pending",
         created_at: new Date().toISOString()
       }, { onConflict: "document_id,user_id" });
 
@@ -1921,60 +1902,7 @@ apiRouter.post("/documents/:id/request-access", checkAuth, async (request, respo
       return handleDatabaseError(insertError, response, "Failed to submit access request.");
     }
 
-    // Fetch owner profile to get their email address
-    const { data: ownerProfile } = await supabase
-      .from("profiles")
-      .select("email")
-      .eq("id", doc.owner_id)
-      .single();
-
-    if (ownerProfile && ownerProfile.email) {
-      const { sendEmail } = require("../utils/mailer");
-      const clientUrl = process.env.CLIENT_URL || request.headers.origin || "http://localhost:5173";
-      const docLink = doc.project_id && doc.target_lang
-        ? `${clientUrl}/project/${doc.project_id}/file/${documentId}/lang/${doc.target_lang}`
-        : `${clientUrl}`;
-
-      const ownerName = ownerProfile.email.split("@")[0];
-      const permLabel = requestedPermission === "write" ? "Edit" : requestedPermission === "comment" ? "Comment" : "View";
-
-      // Send the email in the background without blocking the HTTP response
-      sendEmail({
-        to: ownerProfile.email,
-        subject: `🔑 Access Request for "${doc.name}"`,
-        text: `${userName} (${userEmail}) is requesting ${permLabel} Access to "${doc.name}". Review at: ${docLink}`,
-        html: `
-<!DOCTYPE html>
-<html>
-<head>
-  <style>
-    body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f8fafc; color: #0f172a; margin: 0; padding: 20px; }
-    .card { background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; max-width: 500px; margin: 0 auto; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); }
-    .header { font-size: 18px; font-weight: bold; margin-bottom: 16px; color: #1e293b; }
-    .details { font-size: 14px; line-height: 1.5; color: #475569; margin-bottom: 24px; }
-    .btn { display: inline-block; background-color: #3b82f6; color: #ffffff !important; font-weight: bold; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-size: 14px; }
-    .footer { font-size: 12px; color: #94a3b8; margin-top: 24px; border-top: 1px solid #f1f5f9; padding-top: 16px; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="header">🔑 Document Access Request</div>
-    <div class="details">
-      <p>Hello <strong>${ownerName}</strong>,</p>
-      <p><strong>${userName}</strong> (${userEmail}) has requested <strong>${permLabel} Access</strong> to your document: <strong>${doc.name}</strong>.</p>
-    </div>
-    <a href="${docLink}" class="btn" style="color: #ffffff;">View Workspace</a>
-    <div class="footer">
-      This is an automated notification from your Centroid Collaborative Translation Workspace.
-    </div>
-  </div>
-</body>
-</html>
-        `
-      }).catch(err => console.error("Error sending access request email:", err));
-    }
-
-    // Broadcast to room via Socket.io (strictly only to the owner)
+    // Broadcast to room via Socket.io
     const { getIo } = require("../services/socket");
     const io = getIo();
     if (io) {
@@ -1998,8 +1926,10 @@ apiRouter.post("/documents/:id/request-access", checkAuth, async (request, respo
         payload.id = accessReq.id;
       }
 
-      // Send to owner's personal room only
+      // Send to owner's personal room
       io.to(`user:${doc.owner_id}`).emit("access-request-received", payload);
+      // Send to staff group room
+      io.to("verbolabs_staff").emit("access-request-received", payload);
     }
 
     response.json({ success: true });
@@ -2033,22 +1963,13 @@ apiRouter.get("/documents/:id/access-requests", checkAuth, async (request, respo
         )
       `)
       .eq("document_id", doc.id)
-      .ilike("status", "pending%");
+      .eq("status", "pending");
 
     if (error) {
       return handleDatabaseError(error, response, "Failed to load access requests.");
     }
 
-    const mappedRequests = (requests || []).map(r => {
-      const parts = (r.status || "").split(":");
-      return {
-        ...r,
-        status: parts[0] || "pending",
-        requestedPermission: parts[1] || "write"
-      };
-    });
-
-    response.json(mappedRequests);
+    response.json(requests || []);
   } catch (err) {
     console.error(err);
     response.status(500).json({ error: "Server error." });
@@ -2089,11 +2010,6 @@ apiRouter.post("/documents/:id/access-requests/:requestId/respond", checkAuth, a
 
     const targetUserId = accessReq.user_id;
 
-    // Security check: ensure request document matches URL document context
-    if (accessReq.document_id !== doc.id) {
-      return response.status(400).json({ error: "Access request does not match this document workspace." });
-    }
-
     // Update request status
     const newStatus = action === "approve" ? "approved" : "rejected";
     const { error: updateReqError } = await supabase
@@ -2106,14 +2022,13 @@ apiRouter.post("/documents/:id/access-requests/:requestId/respond", checkAuth, a
     }
 
     if (action === "approve") {
-      const requestedPerm = (accessReq.status || "").split(":")[1] || "write";
-      // Grant access with user's requested permission
+      // Grant write access to the user
       const { error: grantError } = await supabase
         .from("document_access")
         .upsert({
-          document_id: accessReq.document_id,
+          document_id: doc.id,
           user_id: targetUserId,
-          permission: requestedPerm
+          permission: "write"
         }, { onConflict: "document_id,user_id" });
 
       if (grantError) {
@@ -2421,9 +2336,14 @@ const JSZip = require("jszip");
 // 1. Create a Project
 apiRouter.post("/projects", checkAuth, async (request, response) => {
   try {
-    const { name, client, description, sourceLanguage, targetLanguages, settings } = request.body;
+    const { name, client, description, sourceLanguage, targetLanguages, dueDate, settings } = request.body;
     if (!name) {
       return response.status(400).json({ error: "Project name is required" });
+    }
+
+    const finalSettings = { ...(settings || {}) };
+    if (dueDate) {
+      finalSettings.dueDate = dueDate;
     }
 
     const { data: project, error } = await supabase
@@ -2435,7 +2355,7 @@ apiRouter.post("/projects", checkAuth, async (request, response) => {
         source_lang: sourceLanguage || "en",
         target_languages: targetLanguages || [],
         owner_id: request.user.id,
-        settings: settings || {}
+        settings: finalSettings
       })
       .select()
       .single();
@@ -2451,21 +2371,128 @@ apiRouter.post("/projects", checkAuth, async (request, response) => {
   }
 });
 
-// 2. List Projects
+// Helper to verify project access permissions
+async function verifyProjectAccess(request, response, requiredPermission = "read") {
+  const { projectId } = request.params;
+  const userId = request.user.id;
+  const userEmail = request.user.email;
+  const isStaff = ["admin", "verbolabs_staff"].includes(request.profile?.role);
+
+  const { data: project, error: projErr } = await supabase
+    .from("projects")
+    .select("*")
+    .eq("id", projectId)
+    .single();
+
+  if (projErr || !project) {
+    response.status(404).json({ error: "Project not found." });
+    return null;
+  }
+
+  // Owner & staff have full access
+  if (isStaff || project.owner_id === userId) {
+    return { project, isOwner: project.owner_id === userId, accessLevel: "owner" };
+  }
+
+  // Check project_shares table
+  const { data: share } = await supabase
+    .from("project_shares")
+    .select("*")
+    .eq("project_id", projectId)
+    .or(`user_id.eq.${userId},email.eq.${userEmail}`)
+    .maybeSingle();
+
+  if (!share) {
+    response.status(403).json({ error: "Access denied to this project." });
+    return null;
+  }
+
+  if (requiredPermission === "write" && share.access_level === "viewer") {
+    response.status(403).json({ error: "Editor permission required for this project." });
+    return null;
+  }
+
+  return { project, isOwner: false, accessLevel: share.access_level, shareId: share.id };
+}
+
+// 2. List Projects (Owned & Shared)
 apiRouter.get("/projects", checkAuth, async (request, response) => {
   try {
-    const { data: projects, error } = await supabase
+    const userId = request.user.id;
+    const userEmail = request.user.email;
+
+    // Fetch owned projects
+    const { data: ownedProjects, error: ownedErr } = await supabase
       .from("projects")
       .select("*")
-      .eq("owner_id", request.user.id)
+      .eq("owner_id", userId)
       .order("created_at", { ascending: false });
 
-    if (error) {
-      return response.status(500).json({ error: error.message });
+    if (ownedErr) {
+      return response.status(500).json({ error: ownedErr.message });
+    }
+
+    // Fetch shared project IDs
+    let sharedProjects = [];
+    const shareMap = new Map();
+    try {
+      const { data: shares } = await supabase
+        .from("project_shares")
+        .select("project_id, access_level, created_at")
+        .or(`user_id.eq.${userId},email.eq.${userEmail}`);
+
+      if (shares && shares.length > 0) {
+        shares.forEach(s => shareMap.set(s.project_id, s));
+        const sharedProjectIds = shares.map(s => s.project_id);
+
+        const { data: sharedProjs } = await supabase
+          .from("projects")
+          .select("*")
+          .in("id", sharedProjectIds);
+
+        if (sharedProjs) {
+          sharedProjects = sharedProjs;
+        }
+      }
+    } catch (sErr) {
+      console.log("No project_shares query error:", sErr);
+    }
+
+    // Merge and flag projects
+    const ownedList = (ownedProjects || []).map(p => ({
+      ...p,
+      isShared: false,
+      accessLevel: "owner"
+    }));
+
+    const sharedList = sharedProjects
+      .filter(p => p.owner_id !== userId)
+      .map(p => {
+        const s = shareMap.get(p.id);
+        return {
+          ...p,
+          isShared: true,
+          accessLevel: s ? s.access_level : "editor"
+        };
+      });
+
+    const allProjects = [...ownedList, ...sharedList];
+
+    // Get owner profile emails for shared projects
+    const ownerIds = [...new Set(sharedList.map(p => p.owner_id))];
+    const ownerEmailMap = new Map();
+    if (ownerIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, email")
+        .in("id", ownerIds);
+      if (profiles) {
+        profiles.forEach(pr => ownerEmailMap.set(pr.id, pr.email));
+      }
     }
 
     // Enhance project stats
-    const enhancedProjects = await Promise.all(projects.map(async (proj) => {
+    const enhancedProjects = await Promise.all(allProjects.map(async (proj) => {
       // Get document count
       const { count: fileCount } = await supabase
         .from("documents")
@@ -2489,6 +2516,8 @@ apiRouter.get("/projects", checkAuth, async (request, response) => {
 
       return {
         ...proj,
+        dueDate: proj.settings?.dueDate || proj.dueDate || null,
+        sharedBy: ownerEmailMap.get(proj.owner_id) || null,
         fileCount: fileCount || 0,
         jobStats
       };
@@ -2504,83 +2533,425 @@ apiRouter.get("/projects", checkAuth, async (request, response) => {
 // 3. Get Project Details
 apiRouter.get("/projects/:projectId", checkAuth, async (request, response) => {
   try {
-    const { projectId } = request.params;
+    const access = await verifyProjectAccess(request, response, "read");
+    if (!access) return;
 
-    // Fetch project metadata
-    const { data: project, error: projErr } = await supabase
-      .from("projects")
-      .select("*")
-      .eq("id", projectId)
-      .eq("owner_id", request.user.id)
-      .single();
-
-    if (projErr || !project) {
-      return response.status(404).json({ error: "Project not found." });
-    }
+    const { project } = access;
 
     // Fetch project documents (files)
-    const { data: documents, error: docsErr } = await supabase
+    const { data: documents } = await supabase
       .from("documents")
       .select("*")
-      .eq("project_id", projectId);
+      .eq("project_id", project.id);
 
     // Fetch project translation jobs
-    const { data: jobs, error: jobsErr } = await supabase
+    const { data: jobs } = await supabase
       .from("translation_jobs")
       .select("*, documents(name)")
-      .eq("project_id", projectId);
-
-    // Calculate verified progress for each job on the fly
-    const docIds = (documents || []).map(d => d.id);
-    let verifiedProgressMap = {};
-
-    if (docIds.length > 0) {
-      const { data: segmentStats } = await supabase
-        .from("document_segments")
-        .select("document_id, target_lang, status, source_text")
-        .in("document_id", docIds);
-
-      if (segmentStats) {
-        // Group segments by document_id and target_lang
-        const grouped = {};
-        segmentStats.forEach(seg => {
-          const key = `${seg.document_id}:${seg.target_lang}`;
-          if (!grouped[key]) {
-            grouped[key] = [];
-          }
-          grouped[key].push(seg);
-        });
-
-        const { isCountableSourceText } = require("../utils/segmentProgress");
-        for (const [key, segs] of Object.entries(grouped)) {
-          const countable = segs.filter(s => isCountableSourceText(s.source_text));
-          if (countable.length > 0) {
-            const verifiedCount = countable.filter(s => s.status === "approved").length;
-            const verifiedPercent = Math.round((verifiedCount / countable.length) * 100);
-            verifiedProgressMap[key] = verifiedPercent;
-          } else {
-            verifiedProgressMap[key] = 0;
-          }
-        }
-      }
-    }
-
-    const enrichedJobs = (jobs || []).map(job => {
-      const key = `${job.document_id}:${job.target_lang}`;
-      return {
-        ...job,
-        verified_progress: verifiedProgressMap[key] || 0
-      };
-    });
+      .eq("project_id", project.id);
 
     response.json({
-      project,
+      project: {
+        ...project,
+        isShared: !access.isOwner,
+        accessLevel: access.accessLevel
+      },
       files: documents || [],
-      jobs: enrichedJobs
+      jobs: jobs || []
     });
   } catch (err) {
     console.error(err);
     response.status(500).json({ error: "Failed to fetch project details." });
+  }
+});
+
+// 3a. Get Project Access Shares List
+apiRouter.get("/projects/:projectId/shares", checkAuth, async (request, response) => {
+  try {
+    const access = await verifyProjectAccess(request, response, "read");
+    if (!access) return;
+
+    const { project } = access;
+
+    // Fetch owner info
+    const { data: ownerProfile } = await supabase
+      .from("profiles")
+      .select("id, email")
+      .eq("id", project.owner_id)
+      .single();
+
+    const owner = ownerProfile ? {
+      userId: ownerProfile.id,
+      email: ownerProfile.email,
+      name: ownerProfile.email ? ownerProfile.email.split("@")[0] : "Owner",
+      role: "owner"
+    } : null;
+
+    // Fetch shares
+    const { data: shares, error } = await supabase
+      .from("project_shares")
+      .select("*")
+      .eq("project_id", project.id);
+
+    if (error) {
+      return response.status(500).json({ error: error.message });
+    }
+
+    const collaborators = (shares || []).map(s => ({
+      shareId: s.id,
+      userId: s.user_id,
+      email: s.email,
+      name: s.email ? s.email.split("@")[0] : "Collaborator",
+      permission: s.access_level === "viewer" ? "read" : "write",
+      accessLevel: s.access_level,
+      createdAt: s.created_at
+    }));
+
+    response.json({ owner, collaborators });
+  } catch (err) {
+    console.error(err);
+    response.status(500).json({ error: "Failed to fetch project access list." });
+  }
+});
+
+// 3b. Grant Project Share to User
+apiRouter.post("/projects/:projectId/share", checkAuth, async (request, response) => {
+  try {
+    const access = await verifyProjectAccess(request, response, "write");
+    if (!access) return;
+
+    if (!access.isOwner && !["admin", "verbolabs_staff"].includes(request.profile?.role)) {
+      return response.status(403).json({ error: "Only the project owner can share this project." });
+    }
+
+    const { project } = access;
+    const { email } = request.body;
+    const targetLevel = "editor";
+
+    if (!email || !email.trim()) {
+      return response.status(400).json({ error: "User email is required to share project." });
+    }
+
+    const targetEmail = email.trim().toLowerCase();
+
+    // Find recipient user profile
+    const { data: recipient, error: recErr } = await supabase
+      .from("profiles")
+      .select("id, email")
+      .ilike("email", targetEmail)
+      .single();
+
+    if (recErr || !recipient) {
+      return response.status(404).json({ error: `User with email "${targetEmail}" was not found.` });
+    }
+
+    if (recipient.id === project.owner_id) {
+      return response.status(400).json({ error: "Cannot share project with its owner." });
+    }
+
+    // Check if share record already exists
+    const { data: existingShare } = await supabase
+      .from("project_shares")
+      .select("id")
+      .eq("project_id", project.id)
+      .or(`user_id.eq.${recipient.id},email.eq.${recipient.email}`)
+      .maybeSingle();
+
+    let share = null;
+    if (existingShare) {
+      const { data: updated, error: updateErr } = await supabase
+        .from("project_shares")
+        .update({
+          access_level: targetLevel,
+          user_id: recipient.id,
+          email: recipient.email
+        })
+        .eq("id", existingShare.id)
+        .select()
+        .single();
+
+      if (updateErr) {
+        console.error("project_shares update error:", updateErr);
+        return response.status(500).json({ error: "Failed to update project share." });
+      }
+      share = updated;
+    } else {
+      const { data: inserted, error: insertErr } = await supabase
+        .from("project_shares")
+        .insert({
+          project_id: project.id,
+          user_id: recipient.id,
+          email: recipient.email,
+          access_level: targetLevel,
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (insertErr) {
+        console.error("project_shares insert error:", insertErr);
+        return response.status(500).json({ error: "Failed to save project share." });
+      }
+      share = inserted;
+    }
+
+    // Automatically grant access to all existing documents in this project
+    const { data: projectDocs } = await supabase
+      .from("documents")
+      .select("id")
+      .eq("project_id", project.id);
+
+    if (projectDocs && projectDocs.length > 0) {
+      const docAccessInserts = projectDocs.map(doc => ({
+        document_id: doc.id,
+        user_id: recipient.id,
+        permission: targetLevel === "viewer" ? "read" : "write"
+      }));
+
+      await supabase
+        .from("document_access")
+        .upsert(docAccessInserts, { onConflict: "document_id,user_id" });
+    }
+
+    // Socket notification to recipient
+    const { getIo } = require("../services/socket");
+    const io = getIo();
+    if (io) {
+      io.to(`user:${recipient.id}`).emit("project-shared", {
+        projectId: project.id,
+        projectName: project.name,
+        sharedBy: request.user.email,
+        accessLevel: targetLevel
+      });
+    }
+
+    response.json({ success: true, share });
+  } catch (err) {
+    console.error(err);
+    response.status(500).json({ error: "Failed to share project." });
+  }
+});
+
+// 3c. Revoke Project Share
+apiRouter.delete("/projects/:projectId/shares/:targetId", checkAuth, async (request, response) => {
+  try {
+    const access = await verifyProjectAccess(request, response, "write");
+    if (!access) return;
+
+    if (!access.isOwner && !["admin", "verbolabs_staff"].includes(request.profile?.role)) {
+      return response.status(403).json({ error: "Only the project owner can manage or revoke access." });
+    }
+
+    const { project } = access;
+    const { targetId } = request.params;
+
+    if (targetId === project.owner_id) {
+      return response.status(400).json({ error: "Cannot remove access from the project owner." });
+    }
+
+    // Delete share record
+    const { error: delErr } = await supabase
+      .from("project_shares")
+      .delete()
+      .eq("project_id", project.id)
+      .or(`id.eq.${targetId},user_id.eq.${targetId}`);
+
+    if (delErr) {
+      console.error(delErr);
+      return response.status(500).json({ error: "Failed to revoke project share." });
+    }
+
+    // Clean up document_access for project files
+    const { data: projectDocs } = await supabase
+      .from("documents")
+      .select("id")
+      .eq("project_id", project.id);
+
+    if (projectDocs && projectDocs.length > 0) {
+      const docIds = projectDocs.map(d => d.id);
+      await supabase
+        .from("document_access")
+        .delete()
+        .in("document_id", docIds)
+        .eq("user_id", targetId);
+    }
+
+    response.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    response.status(500).json({ error: "Failed to revoke project share." });
+  }
+});
+
+// Helper functions for project notes
+function getNotesFromSettings(settings) {
+  if (!settings || typeof settings !== "object") return [];
+  return Array.isArray(settings.notes) ? settings.notes : [];
+}
+
+async function updateNotesInSettings(projectId, currentSettings, newNotes) {
+  const updatedSettings = { ...(currentSettings || {}), notes: newNotes };
+  const { error } = await supabase
+    .from("projects")
+    .update({ settings: updatedSettings, updated_at: new Date().toISOString() })
+    .eq("id", projectId);
+  if (error) throw error;
+  return updatedSettings;
+}
+
+// 3d. Duplicate Project
+apiRouter.post("/projects/:projectId/duplicate", checkAuth, async (request, response) => {
+  try {
+    const access = await verifyProjectAccess(request, response, "read");
+    if (!access) return;
+
+    const { project } = access;
+    const newName = `${project.name} (Copy)`;
+
+    const { data: newProj, error: createErr } = await supabase
+      .from("projects")
+      .insert({
+        name: newName,
+        client: project.client || null,
+        description: project.description || null,
+        source_lang: project.source_lang,
+        target_languages: project.target_languages || [],
+        owner_id: request.user.id,
+        settings: project.settings || {}
+      })
+      .select()
+      .single();
+
+    if (createErr || !newProj) {
+      console.error("Failed to duplicate project:", createErr);
+      return response.status(500).json({ error: "Failed to duplicate project." });
+    }
+
+    response.json({ success: true, project: newProj });
+  } catch (err) {
+    console.error(err);
+    response.status(500).json({ error: "Failed to duplicate project." });
+  }
+});
+
+// 3e. Fetch Project Notes
+apiRouter.get("/projects/:projectId/notes", checkAuth, async (request, response) => {
+  try {
+    const access = await verifyProjectAccess(request, response, "read");
+    if (!access) return;
+
+    const notes = getNotesFromSettings(access.project.settings);
+    response.json({ notes, isOwner: access.isOwner });
+  } catch (err) {
+    console.error(err);
+    response.status(500).json({ error: "Failed to fetch project notes." });
+  }
+});
+
+// 3f. Create Project Note
+apiRouter.post("/projects/:projectId/notes", checkAuth, async (request, response) => {
+  try {
+    const access = await verifyProjectAccess(request, response, "write");
+    if (!access) return;
+
+    const { content, isPinned } = request.body;
+    if (!content || !content.trim()) {
+      return response.status(400).json({ error: "Note content cannot be empty." });
+    }
+
+    const currentNotes = getNotesFromSettings(access.project.settings);
+    const authorName = request.profile?.display_name || request.user.email.split("@")[0];
+
+    const newNote = {
+      id: require("crypto").randomUUID(),
+      content: content.trim(),
+      author_id: request.user.id,
+      author_name: authorName,
+      author_email: request.user.email,
+      is_pinned: !!isPinned,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    const updatedNotes = [newNote, ...currentNotes];
+    await updateNotesInSettings(access.project.id, access.project.settings, updatedNotes);
+
+    response.json({ success: true, note: newNote, notes: updatedNotes });
+  } catch (err) {
+    console.error(err);
+    response.status(500).json({ error: "Failed to save project note." });
+  }
+});
+
+// 3g. Edit Project Note
+apiRouter.put("/projects/:projectId/notes/:noteId", checkAuth, async (request, response) => {
+  try {
+    const access = await verifyProjectAccess(request, response, "write");
+    if (!access) return;
+
+    const { noteId } = request.params;
+    const { content, isPinned } = request.body;
+
+    const currentNotes = getNotesFromSettings(access.project.settings);
+    const targetIdx = currentNotes.findIndex(n => n.id === noteId);
+
+    if (targetIdx === -1) {
+      return response.status(404).json({ error: "Note not found." });
+    }
+
+    const targetNote = currentNotes[targetIdx];
+    const isStaff = ["admin", "verbolabs_staff"].includes(request.profile?.role);
+    const isCreator = targetNote.author_id === request.user.id || targetNote.author_email === request.user.email;
+
+    if (!access.isOwner && !isStaff && !isCreator) {
+      return response.status(403).json({ error: "You can only edit your own notes unless you are the project owner." });
+    }
+
+    const updatedNote = {
+      ...targetNote,
+      content: content !== undefined ? content.trim() : targetNote.content,
+      is_pinned: isPinned !== undefined ? !!isPinned : targetNote.is_pinned,
+      updated_at: new Date().toISOString()
+    };
+
+    currentNotes[targetIdx] = updatedNote;
+    await updateNotesInSettings(access.project.id, access.project.settings, currentNotes);
+
+    response.json({ success: true, note: updatedNote, notes: currentNotes });
+  } catch (err) {
+    console.error(err);
+    response.status(500).json({ error: "Failed to update project note." });
+  }
+});
+
+// 3h. Delete Project Note
+apiRouter.delete("/projects/:projectId/notes/:noteId", checkAuth, async (request, response) => {
+  try {
+    const access = await verifyProjectAccess(request, response, "write");
+    if (!access) return;
+
+    const { noteId } = request.params;
+    const currentNotes = getNotesFromSettings(access.project.settings);
+    const targetNote = currentNotes.find(n => n.id === noteId);
+
+    if (!targetNote) {
+      return response.status(404).json({ error: "Note not found." });
+    }
+
+    const isStaff = ["admin", "verbolabs_staff"].includes(request.profile?.role);
+    const isCreator = targetNote.author_id === request.user.id || targetNote.author_email === request.user.email;
+
+    if (!access.isOwner && !isStaff && !isCreator) {
+      return response.status(403).json({ error: "You can only delete your own notes unless you are the project owner." });
+    }
+
+    const updatedNotes = currentNotes.filter(n => n.id !== noteId);
+    await updateNotesInSettings(access.project.id, access.project.settings, updatedNotes);
+
+    response.json({ success: true, notes: updatedNotes });
+  } catch (err) {
+    console.error(err);
+    response.status(500).json({ error: "Failed to delete project note." });
   }
 });
 
@@ -2620,7 +2991,7 @@ apiRouter.delete("/projects/:projectId", checkAuth, async (request, response) =>
 apiRouter.put("/projects/:projectId", checkAuth, async (request, response) => {
   try {
     const { projectId } = request.params;
-    const { name, client, status, description, sourceLanguage, targetLanguages, settings } = request.body;
+    const { name, client, status, description, sourceLanguage, targetLanguages, dueDate, settings } = request.body;
 
     // Check project ownership
     const { data: existingProject, error: checkErr } = await supabase
@@ -2641,8 +3012,12 @@ apiRouter.put("/projects/:projectId", checkAuth, async (request, response) => {
     if (description !== undefined) updateData.description = description;
     if (sourceLanguage !== undefined) updateData.source_lang = sourceLanguage;
     if (targetLanguages !== undefined) updateData.target_languages = targetLanguages;
-    if (settings !== undefined) {
-      updateData.settings = { ...existingProject.settings, ...settings };
+    if (settings !== undefined || dueDate !== undefined) {
+      updateData.settings = { 
+        ...existingProject.settings, 
+        ...(settings || {}),
+        ...(dueDate !== undefined ? { dueDate } : {}) 
+      };
     }
     updateData.updated_at = new Date().toISOString();
 
@@ -2754,17 +3129,11 @@ apiRouter.post("/projects/:projectId/upload", checkAuth, upload.single("file"), 
   try {
     const { projectId } = request.params;
 
-    // Verify project exists and belongs to user
-    const { data: project, error: checkErr } = await supabase
-      .from("projects")
-      .select("source_lang, target_languages")
-      .eq("id", projectId)
-      .eq("owner_id", request.user.id)
-      .single();
+    // Verify project access
+    const access = await verifyProjectAccess(request, response, "write");
+    if (!access) return;
 
-    if (checkErr || !project) {
-      return response.status(404).json({ error: "Project not found or unauthorized." });
-    }
+    const project = access.project;
 
     // Process file extraction
     const result = await processUploadedFile(request.file);
@@ -2797,6 +3166,28 @@ apiRouter.post("/projects/:projectId/upload", checkAuth, upload.single("file"), 
       return response.status(500).json({ error: "Failed to create document record." });
     }
 
+    // Sync document_access for all shared project members
+    try {
+      const { data: projectShares } = await supabase
+        .from("project_shares")
+        .select("user_id, access_level")
+        .eq("project_id", projectId);
+
+      if (projectShares && projectShares.length > 0) {
+        const docAccessInserts = projectShares.map(share => ({
+          document_id: documentId,
+          user_id: share.user_id,
+          permission: share.access_level === "viewer" ? "read" : "write"
+        }));
+
+        await supabase
+          .from("document_access")
+          .upsert(docAccessInserts, { onConflict: "document_id,user_id" });
+      }
+    } catch (syncErr) {
+      console.error("Failed to sync document_access for shared members:", syncErr);
+    }
+
     // 2. Persist parsed source template segments to the database (target_lang = NULL)
     const segmentInserts = result.segments.map((seg, idx) => ({
       document_id: documentId,
@@ -2807,14 +3198,19 @@ apiRouter.post("/projects/:projectId/upload", checkAuth, upload.single("file"), 
       status: "draft"
     }));
 
-    const { error: segError } = await supabase
-      .from("document_segments")
-      .insert(segmentInserts);
+    // 2. Persist parsed source template segments to the database in batches of 500
+    const BATCH_SIZE = 500;
+    for (let i = 0; i < segmentInserts.length; i += BATCH_SIZE) {
+      const batch = segmentInserts.slice(i, i + BATCH_SIZE);
+      const { error: segError } = await supabase
+        .from("document_segments")
+        .insert(batch);
 
-    if (segError) {
-      console.error("Failed to insert document segments:", segError);
-      await supabase.from("documents").delete().eq("id", documentId);
-      return response.status(500).json({ error: "Failed to persist document segments." });
+      if (segError) {
+        console.error("Failed to insert document segments batch:", segError);
+        await supabase.from("documents").delete().eq("id", documentId);
+        return response.status(500).json({ error: "Failed to persist document segments." });
+      }
     }
 
     // 3. Auto-initialize translation jobs for target languages already selected in the project
@@ -2838,7 +3234,7 @@ apiRouter.post("/projects/:projectId/upload", checkAuth, upload.single("file"), 
             document_id: documentId,
             target_lang: targetLang,
             segment_index: idx,
-            source_text: "",
+            source_text: seg.source || "",
             target_text: "",
             status: "draft"
           });
@@ -2929,7 +3325,7 @@ apiRouter.post("/projects/:projectId/languages", checkAuth, async (request, resp
                 document_id: doc.id,
                 target_lang: targetLang,
                 segment_index: seg.segment_index,
-                source_text: "",
+                source_text: seg.source_text,
                 target_text: "",
                 status: "draft"
               }));
@@ -3687,161 +4083,10 @@ apiRouter.get("/documents/:documentId/lang/:lang/segments", checkAuth, async (re
   }
 });
 
-// 15.5. Translation Memory (TM) Analysis for a document + lang
-apiRouter.get("/documents/:documentId/lang/:lang/tm-analysis", checkAuth, async (request, response) => {
-  try {
-    const { documentId, lang } = request.params;
-    request.params.id = documentId;
-    const doc = await verifyDocumentAccess(request, response, "read");
-    if (!doc) {
-      try {
-        const fs = require("fs");
-        fs.writeFileSync("c:/Users/divya/Desktop/matecat/server/scratch/api-error.log", "verifyDocumentAccess returned null for docId: " + documentId + ", params: " + JSON.stringify(request.params));
-      } catch (fsErr) {}
-      return;
-    }
-
-    // 1. Fetch all segments for this document + lang
-    let templateRows;
-    try {
-      templateRows = await fetchAllSegments(doc.id, "segment_index, source_text", lang);
-    } catch (templErr) {
-      console.error("Failed to fetch segments for TM Analysis:", templErr);
-      try {
-        const fs = require("fs");
-        fs.writeFileSync("c:/Users/divya/Desktop/matecat/server/scratch/api-error.log", "fetchAllSegments failed: " + (templErr.stack || String(templErr)));
-      } catch (fsErr) {}
-      return response.status(500).json({ error: "Failed to fetch document segments." });
-    }
-
-    if (!templateRows) {
-      try {
-        const fs = require("fs");
-        fs.writeFileSync("c:/Users/divya/Desktop/matecat/server/scratch/api-error.log", "templateRows is empty or null");
-      } catch (fsErr) {}
-      return response.status(500).json({ error: "Failed to fetch document segments." });
-    }
-
-    // 2. Fetch all translations for this target language to compute matches
-    const { data: allTmList, error: tmErr } = await supabase
-      .from("translation_memory")
-      .select("source_text, target_text, provider")
-      .eq("target_lang", lang);
-
-    if (tmErr || !allTmList) {
-      console.error("Failed to fetch TM entries for TM Analysis:", tmErr);
-      try {
-        const fs = require("fs");
-        fs.writeFileSync("c:/Users/divya/Desktop/matecat/server/scratch/api-error.log", "translation_memory fetch failed: " + (tmErr?.message || String(tmErr)));
-      } catch (fsErr) {}
-      return response.status(500).json({ error: "Failed to fetch TM database entries." });
-    }
-
-    // Build TM maps for quick O(1) exact matching
-    const tmMap = {};
-    allTmList.forEach((item) => {
-      const existing = tmMap[item.source_text];
-      if (!existing || item.provider.startsWith("Linguist (ICE)") || (!existing.provider.startsWith("Linguist (ICE)"))) {
-        tmMap[item.source_text] = item;
-      }
-    });
-
-    // Keep statistics
-    let totalSegments = templateRows.length;
-    let totalWords = 0;
-    let totalCharacters = 0;
-    
-    // Breakdown categories
-    const categories = {
-      ice: { count: 0, words: 0, percentage: 0, billingWeight: 0.1, weightedWords: 0, name: "ICE Match (101%)" },
-      exact: { count: 0, words: 0, percentage: 0, billingWeight: 0.2, weightedWords: 0, name: "Exact Match (100%)" },
-      fuzzy95: { count: 0, words: 0, percentage: 0, billingWeight: 0.3, weightedWords: 0, name: "Fuzzy Match (95%-99%)" },
-      fuzzy85: { count: 0, words: 0, percentage: 0, billingWeight: 0.4, weightedWords: 0, name: "Fuzzy Match (85%-94%)" },
-      fuzzy75: { count: 0, words: 0, percentage: 0, billingWeight: 0.6, weightedWords: 0, name: "Fuzzy Match (75%-84%)" },
-      fuzzy50: { count: 0, words: 0, percentage: 0, billingWeight: 0.8, weightedWords: 0, name: "Fuzzy Match (50%-74%)" },
-      new: { count: 0, words: 0, percentage: 0, billingWeight: 1.0, weightedWords: 0, name: "New Words / No Match (<50%)" }
-    };
-
-    const stringSimilarity = require("string-similarity");
-    const matchSources = allTmList.map(x => x.source_text).filter(Boolean);
-
-    templateRows.forEach((row) => {
-      const source = row.source_text || "";
-      const wordCount = countWords(source);
-      const charCount = source.length;
-
-      totalWords += wordCount;
-      totalCharacters += charCount;
-
-      let categoryKey = "new";
-
-      // 1. Exact match check
-      if (tmMap[source]) {
-        const entry = tmMap[source];
-        const isIce = entry.provider && entry.provider.startsWith("Linguist (ICE)");
-        categoryKey = isIce ? "ice" : "exact";
-      } else if (matchSources.length > 0) {
-        // 2. Fuzzy match calculation
-        const matches = stringSimilarity.findBestMatch(source, matchSources);
-        const bestMatch = matches.bestMatch;
-        const score = Math.round(bestMatch.rating * 100);
-
-        if (score >= 50) {
-          if (score >= 95) categoryKey = "fuzzy95";
-          else if (score >= 85) categoryKey = "fuzzy85";
-          else if (score >= 75) categoryKey = "fuzzy75";
-          else categoryKey = "fuzzy50";
-        }
-      }
-
-      categories[categoryKey].count += 1;
-      categories[categoryKey].words += wordCount;
-    });
-
-    // Compute percentages and weighted totals
-    let totalWeightedWords = 0;
-    Object.keys(categories).forEach((key) => {
-      const cat = categories[key];
-      cat.percentage = totalWords > 0 ? parseFloat(((cat.words / totalWords) * 100).toFixed(2)) : 0;
-      cat.weightedWords = Math.round(cat.words * cat.billingWeight);
-      totalWeightedWords += cat.weightedWords;
-    });
-
-    const savingsPercentage = totalWords > 0 
-      ? parseFloat(((1 - (totalWeightedWords / totalWords)) * 100).toFixed(2)) 
-      : 0;
-
-    response.json({
-      documentId: doc.id,
-      fileName: doc.name,
-      targetLang: lang,
-      totalSegments,
-      totalWords,
-      totalCharacters,
-      totalWeightedWords,
-      savingsPercentage,
-      categories
-    });
-  } catch (err) {
-    console.error("TM Analysis error:", err);
-    try {
-      const fs = require("fs");
-      fs.writeFileSync("c:/Users/divya/Desktop/matecat/server/scratch/api-error.log", "Outer catch block error: " + (err.stack || String(err)));
-    } catch (fsErr) {}
-    response.status(500).json({ error: "Failed to perform TM Analysis." });
-  }
-});
-
 // 16. Update segment for a document + lang
 apiRouter.put("/documents/:documentId/lang/:lang/segments/:index", checkAuth, async (request, response) => {
   try {
     const { documentId, lang, index } = request.params;
-    
-    // Map parameter id for verifyDocumentAccess
-    request.params.id = documentId;
-    const doc = await verifyDocumentAccess(request, response, "write");
-    if (!doc) return;
-
     const segmentIndex = parseInt(index, 10);
     const { targetText, status, contextJira, contextDescription, autoPropagate } = request.body;
 
@@ -3853,237 +4098,59 @@ apiRouter.put("/documents/:documentId/lang/:lang/segments/:index", checkAuth, as
     if (contextJira !== undefined) updateFields.context_jira = contextJira;
     if (contextDescription !== undefined) updateFields.context_description = contextDescription;
 
-    // Fetch the segment details to find source text and tracking information
-    const { data: dbSegment, error: segErr } = await supabase
+    const { error: updateErr } = await supabase
       .from("document_segments")
-      .select("source_text, target_lang, context_jira, context_description, target_text, original_target_text, tracked_by")
-      .eq("document_id", doc.id)
+      .update(updateFields)
+      .eq("document_id", documentId)
       .eq("target_lang", lang)
-      .eq("segment_index", segmentIndex)
-      .single();
+      .eq("segment_index", segmentIndex);
 
-    if (segErr || !dbSegment) {
-      return response.status(404).json({ error: "Segment not found." });
-    }
-
-    let sourceText = dbSegment.source_text;
-    if (!sourceText) {
-      const { data: templateSeg } = await supabase
-        .from("document_segments")
-        .select("source_text")
-        .eq("document_id", doc.id)
-        .is("target_lang", null)
-        .eq("segment_index", segmentIndex)
-        .single();
-      if (templateSeg) {
-        sourceText = templateSeg.source_text;
-      }
-    }
-
-    // Clean string helper (ignores tags, normalizes whitespace)
-    const cleanString = (str) => {
-      if (!str) return "";
-      return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
-    };
-
-    // Propagate translation helper
-    const propagateTranslation = (targetA, sourceB) => {
-      if (!targetA) return "";
-      const tagsInSourceB = sourceB.match(/<[^>]+>/g) || [];
-      let tagIdx = 0;
-      let propagated = targetA.replace(/<[^>]+>/g, () => {
-        if (tagIdx < tagsInSourceB.length) {
-          return tagsInSourceB[tagIdx++];
-        }
-        return "";
-      });
-      while (tagIdx < tagsInSourceB.length) {
-        propagated += tagsInSourceB[tagIdx++];
-      }
-      return propagated;
-    };
-
-    // Find all duplicate segment indices and their source/target texts in the document
-    let matchingSegs = [{ segment_index: segmentIndex, source_text: sourceText, target_text: dbSegment.target_text, status: dbSegment.status, original_target_text: dbSegment.original_target_text, tracked_by: dbSegment.tracked_by }];
-    if (sourceText && autoPropagate !== false) {
-      try {
-        // Direct query to fetch all template segments for this document
-        const { data: templateRows } = await supabase
-          .from("document_segments")
-          .select("segment_index, source_text")
-          .eq("document_id", doc.id)
-          .is("target_lang", null);
-
-        // Direct query to fetch all target language segments for this document
-        const { data: targetRows } = await supabase
-          .from("document_segments")
-          .select("segment_index, target_text, status, original_target_text, tracked_by")
-          .eq("document_id", doc.id)
-          .eq("target_lang", lang);
-
-        if (templateRows && targetRows) {
-          const sourceMap = {};
-          templateRows.forEach((row) => {
-            sourceMap[row.segment_index] = row.source_text || "";
-          });
-
-          const cleanedSource = cleanString(sourceText);
-          matchingSegs = targetRows
-            .map((row) => ({
-              segment_index: row.segment_index,
-              source_text: sourceMap[row.segment_index] || "",
-              target_text: row.target_text,
-              status: row.status,
-              original_target_text: row.original_target_text,
-              tracked_by: row.tracked_by
-            }))
-            .filter((row) => cleanString(row.source_text) === cleanedSource);
-        }
-      } catch (err) {
-        console.error("Failed to fetch duplicate segments directly:", err);
-      }
-    }
-
-    const isOwner = doc.owner_id === request.user.id;
-    const isTracking = doc.track_changes_enabled && !isOwner;
-
-    // Perform individual updates for each duplicate segment in parallel
-    const updatePromises = matchingSegs.map(async (seg) => {
-      const idx = seg.segment_index;
-      const segmentFields = { ...updateFields };
-      
-      // If we are updating a duplicate segment (idx !== segmentIndex), 
-      // we must NOT modify its status (delete status from segmentFields so it remains unchanged in DB!)
-      if (idx !== segmentIndex) {
-        delete segmentFields.status;
-      }
-
-      if (targetText !== undefined) {
-        const newTarget = idx === segmentIndex 
-          ? targetText 
-          : propagateTranslation(targetText, seg.source_text);
-          
-        if (isTracking) {
-          if (!seg.original_target_text) {
-            if (newTarget !== (seg.target_text || "")) {
-              segmentFields.original_target_text = seg.target_text || "";
-              segmentFields.tracked_by = request.user.email;
-            } else {
-              segmentFields.original_target_text = null;
-              segmentFields.tracked_by = null;
-            }
-          } else {
-            if (newTarget === seg.original_target_text) {
-              segmentFields.original_target_text = null;
-              segmentFields.tracked_by = null;
-            } else {
-              segmentFields.original_target_text = seg.original_target_text;
-              segmentFields.tracked_by = request.user.email;
-            }
-          }
-          segmentFields.target_text = newTarget;
-        } else {
-          // Owner edit or tracking disabled: commit directly, clear tracked state
-          segmentFields.target_text = newTarget;
-          segmentFields.original_target_text = null;
-          segmentFields.tracked_by = null;
-        }
-      }
-
-      // If owner approves the segment, clear tracked changes
-      if (isOwner && status === "approved" && idx === segmentIndex) {
-        segmentFields.original_target_text = null;
-        segmentFields.tracked_by = null;
-      }
-
-      return supabase
-        .from("document_segments")
-        .update(segmentFields)
-        .eq("document_id", doc.id)
-        .eq("target_lang", lang)
-        .eq("segment_index", idx);
-    });
-
-    const updateResults = await Promise.all(updatePromises);
-    const failedUpdate = updateResults.find((r) => r.error);
-    if (failedUpdate) {
-      console.error("Segment update error in lang PUT:", failedUpdate.error);
-      return response.status(500).json({ error: "Failed to update segment." });
+    if (updateErr) {
+      return response.status(500).json({ error: updateErr.message });
     }
 
     // Save/Update human correction in Translation Memory as an ICE match
     if (targetText !== undefined && targetText !== null && String(targetText).trim() !== "") {
       try {
-        const { upsertLinguistIceMatch } = require("../services/translationService");
-        await upsertLinguistIceMatch(sourceText, targetText, doc.source_lang || "en", lang);
-      } catch (tmErr) {
-        console.error("Failed to save segment human correction to TM:", tmErr);
+        const { data: dbSegment } = await supabase
+          .from("document_segments")
+          .select("source_text")
+          .eq("document_id", documentId)
+          .eq("target_lang", lang)
+          .eq("segment_index", segmentIndex)
+          .maybeSingle();
+
+        const { data: doc } = await supabase
+          .from("documents")
+          .select("source_lang")
+          .eq("id", documentId)
+          .maybeSingle();
+
+        if (dbSegment && doc) {
+          const { upsertLinguistIceMatch } = require("../services/translationService");
+          await upsertLinguistIceMatch(dbSegment.source_text, targetText, doc.source_lang || "en", lang);
+        }
+      } catch (err) {
+        console.error("Failed to save segment human correction to TM:", err);
       }
     }
 
-    // Broadcast manual save update immediately via Socket.io
+    // Broadcast update via Socket.io
     const { getIo } = require("../services/socket");
     const io = getIo();
     if (io) {
-      matchingSegs.forEach((seg) => {
-        const idx = seg.segment_index;
-        const propagatedTarget = (idx === segmentIndex || targetText === undefined)
-          ? targetText 
-          : propagateTranslation(targetText, seg.source_text);
-
-        // Compute resulting fields for broadcast
-        let finalOriginal = seg.original_target_text;
-        let finalTrackedBy = seg.tracked_by;
-        if (targetText !== undefined) {
-          if (isTracking) {
-            if (!seg.original_target_text) {
-              if (propagatedTarget !== (seg.target_text || "")) {
-                finalOriginal = seg.target_text || "";
-                finalTrackedBy = request.user.email;
-              } else {
-                finalOriginal = null;
-                finalTrackedBy = null;
-              }
-            } else {
-              if (propagatedTarget === seg.original_target_text) {
-                finalOriginal = null;
-                finalTrackedBy = null;
-              } else {
-                finalOriginal = seg.original_target_text;
-                finalTrackedBy = request.user.email;
-              }
-            }
-          } else {
-            finalOriginal = null;
-            finalTrackedBy = null;
-          }
-        }
-        if (isOwner && status === "approved" && idx === segmentIndex) {
-          finalOriginal = null;
-          finalTrackedBy = null;
-        }
-
-        const finalStatus = idx === segmentIndex ? (status || "translated") : (seg.status || "draft");
-
-        io.to(getDocumentRoomId(doc.id, lang)).emit("segment-updated", {
-          segmentIndex: idx,
-          targetText: propagatedTarget,
-          status: finalStatus,
-          contextJira,
-          contextDescription,
-          mqmAccuracyScore: undefined,
-          mqmReport: null,
-          originalTargetText: finalOriginal,
-          trackedBy: finalTrackedBy,
-          updatedBy: request.user.email,
-          targetLang: lang
-        });
+      io.to(getDocumentRoomId(documentId, lang)).emit("segment-updated", {
+        segmentIndex,
+        targetText: updateFields.target_text,
+        status: updateFields.status,
+        updatedBy: request.user.email,
+        targetLang: lang
       });
     }
 
     // Update job progress
-    const progressSegments = await fetchAllSegments(doc.id, "source_text, status, target_text", lang);
-    const progress = calculateProgress(progressSegments).progress;
+    const segments = await fetchAllSegments(documentId, "source_text, status, target_text", lang);
+    const progress = calculateProgress(segments).progress;
 
     const { broadcastJobStatus } = require("../services/jobQueue");
     
@@ -4091,7 +4158,7 @@ apiRouter.put("/documents/:documentId/lang/:lang/segments/:index", checkAuth, as
     const { data: job } = await supabase
       .from("translation_jobs")
       .select("id")
-      .eq("document_id", doc.id)
+      .eq("document_id", documentId)
       .eq("target_lang", lang)
       .single();
 
@@ -4102,7 +4169,7 @@ apiRouter.put("/documents/:documentId/lang/:lang/segments/:index", checkAuth, as
         .update({ progress, status: newStatus })
         .eq("id", job.id);
 
-      broadcastJobStatus(job.id, doc.id, newStatus, progress);
+      broadcastJobStatus(job.id, documentId, newStatus, progress);
     }
 
     response.json({ success: true });
@@ -4143,19 +4210,17 @@ apiRouter.post("/documents/:documentId/lang/:lang/segments/:index/translate-cont
       screenshotMimeType = request.file.mimetype;
     }
 
-    const [templateSeg, targetSeg] = await Promise.all([
-      supabase.from("document_segments").select("source_text").eq("document_id", documentId).is("target_lang", null).eq("segment_index", segmentIndex).maybeSingle(),
-      supabase.from("document_segments").select("target_text").eq("document_id", documentId).eq("target_lang", lang).eq("segment_index", segmentIndex).maybeSingle()
-    ]);
+    const { data: segment } = await supabase
+      .from("document_segments")
+      .select("source_text, target_text")
+      .eq("document_id", documentId)
+      .eq("target_lang", lang)
+      .eq("segment_index", segmentIndex)
+      .single();
 
-    if (!templateSeg.data || !targetSeg.data) {
+    if (!segment) {
       return response.status(404).json({ error: "Segment not found." });
     }
-
-    const segment = {
-      source_text: templateSeg.data.source_text,
-      target_text: targetSeg.data.target_text
-    };
 
     const { translateSegmentWithContext } = require("../services/translationService");
     const translationResult = await translateSegmentWithContext({
@@ -4214,357 +4279,6 @@ apiRouter.post("/documents/:documentId/lang/:lang/segments/:index/translate-cont
     if (tempPath && fs.existsSync(tempPath)) {
       fs.unlinkSync(tempPath);
     }
-  }
-});
-
-// 15.5 Dual Source & Target Relinking Endpoint
-apiRouter.post("/relink-files", checkAuth, upload.fields([{ name: "sourceFile", maxCount: 1 }, { name: "targetFile", maxCount: 1 }]), async (request, response) => {
-  try {
-    const files = request.files;
-    if (!files || !files.sourceFile || !files.sourceFile[0] || !files.targetFile || !files.targetFile[0]) {
-      return response.status(400).json({ error: "Both sourceFile and targetFile are required for relinking." });
-    }
-
-    const sourceFilePath = files.sourceFile[0].path;
-    const targetFilePath = files.targetFile[0].path;
-
-    const { processRelinkDualFiles } = require("../utils/parsers/relinkEngine");
-    const result = await processRelinkDualFiles(sourceFilePath, targetFilePath);
-
-    // Clean up temporary files
-    try {
-      const fs = require("fs");
-      if (fs.existsSync(sourceFilePath)) fs.unlinkSync(sourceFilePath);
-      if (fs.existsSync(targetFilePath)) fs.unlinkSync(targetFilePath);
-    } catch (cleanupErr) {
-      console.error("Temp file cleanup failed:", cleanupErr);
-    }
-
-    response.json({
-      success: true,
-      count: result.count,
-      segments: result.segments,
-      template: result.template
-    });
-  } catch (err) {
-    console.error("Relink processing error:", err);
-    response.status(500).json({ error: err.message || "Failed to process relinking files." });
-  }
-});
-
-// 16. Import Target HTML and Align Segments
-apiRouter.post("/documents/:documentId/lang/:lang/import-target-html", checkAuth, upload.single("file"), async (request, response) => {
-  try {
-    const { documentId, lang } = request.params;
-
-    // 1. Verify write access
-    request.params.id = documentId;
-    const doc = await verifyDocumentAccess(request, response, "write");
-    if (!doc) return;
-
-    if (!request.file) {
-      return response.status(400).json({ error: "No file uploaded." });
-    }
-
-    const targetFilePath = request.file.path;
-
-    // 2. Parse target HTML file
-    const htmlParser = require("../utils/parsers/htmlParser");
-    const targetResult = await htmlParser.parseFile(targetFilePath);
-    const targetSegments = targetResult.segments || [];
-
-    // 3. Fetch source template segments
-    const sourceSegments = await fetchAllSegments(documentId, "*", "source");
-    if (!sourceSegments || sourceSegments.length === 0) {
-      return response.status(400).json({ error: "Source segments not found for this document." });
-    }
-
-    // 4. Retrieve tag maps for both source and target HTML
-    const zlib = require("zlib");
-    let targetTagMap = new Map();
-    try {
-      const buffer = Buffer.from(targetResult.template, "base64");
-      const unzipped = zlib.gunzipSync(buffer).toString("utf-8");
-      const templateData = JSON.parse(unzipped);
-      targetTagMap = new Map(templateData.tagMap || []);
-    } catch (e) {
-      console.error("Failed to decode target tag map:", e);
-    }
-
-    const BLOCK_TAGS = [
-      "p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "th", "blockquote", 
-      "section", "article", "nav", "header", "footer", "figcaption", "address", "main",
-      "ul", "ol", "table", "tbody", "thead", "tfoot", "tr", "colgroup", "col", "caption",
-      "dl", "dt", "dd", "form", "fieldset",
-      "body", "html"
-    ];
-
-    const getSourceSegmentBlockIndices = (html) => {
-      const cheerio = require("cheerio");
-      const $ = cheerio.load(html, { decodeEntities: false });
-      const segmentToBlockMap = {};
-      const leafTextBlocks = [];
-
-      const traverse = (node) => {
-        if (!node) return false;
-        if (node.type === "tag") {
-          const tagName = node.name.toLowerCase();
-          if (["script", "style", "noscript", "svg", "canvas"].includes(tagName)) {
-            return false;
-          }
-        }
-        if (node.type === "text") {
-          return node.data.trim().length > 0;
-        }
-        let hasText = false;
-        let hasDescendantBlock = false;
-        if (node.children) {
-          for (let i = 0; i < node.children.length; i++) {
-            const child = node.children[i];
-            const isChildBlock = child.type === "tag" && 
-              (BLOCK_TAGS.includes(child.name.toLowerCase()) || 
-               (child.attribs && child.attribs.class && child.attribs.class.includes("__temp-leaf-block__")));
-            const childHasText = traverse(child);
-            if (childHasText) hasText = true;
-            if (isChildBlock && childHasText) hasDescendantBlock = true;
-          }
-        }
-        const isThisBlock = node.type === "tag" && 
-          (BLOCK_TAGS.includes(node.name.toLowerCase()) || 
-           (node.attribs && node.attribs.class && node.attribs.class.includes("__temp-leaf-block__")));
-        if (isThisBlock && hasText && !hasDescendantBlock) {
-          leafTextBlocks.push(node);
-        }
-        return hasText;
-      };
-
-      if ($("body").length > 0) {
-        traverse($("body")[0]);
-      } else {
-        traverse($.root()[0]);
-      }
-
-      leafTextBlocks.forEach((blockNode, blockIdx) => {
-        const blockHtml = $(blockNode).html() || "";
-        const matches = blockHtml.match(/__SEG_(\d+)__/g) || [];
-        matches.forEach(m => {
-          const segId = parseInt(m.replace(/\D/g, ""), 10);
-          segmentToBlockMap[segId] = blockIdx;
-        });
-      });
-
-      return segmentToBlockMap;
-    };
-
-    let templateHtml = "";
-    let sourceTagMap = new Map();
-    const { data: fileData, error: fileErr } = await supabase
-      .from("html_files")
-      .select("content")
-      .eq("id", doc.file_id)
-      .single();
-
-    if (!fileErr && fileData && fileData.content) {
-      try {
-        const buffer = Buffer.from(fileData.content, "base64");
-        const unzipped = zlib.gunzipSync(buffer).toString("utf-8");
-        const templateData = JSON.parse(unzipped);
-        templateHtml = templateData.html || "";
-        sourceTagMap = new Map(templateData.tagMap || []);
-      } catch (e) {
-        console.error("Failed to decode source tag map:", e);
-      }
-    }
-
-    const sourceSegmentToBlockMap = getSourceSegmentBlockIndices(templateHtml);
-
-    // 5. Align target HTML segments to source segments using structure & tag-aware targetAligner
-    const { alignTargetHtmlToSource } = require("../utils/parsers/targetAligner");
-    const alignedTargetMap = await alignTargetHtmlToSource(
-      targetFilePath,
-      templateHtml,
-      sourceTagMap,
-      sourceSegments,
-      sourceSegmentToBlockMap
-    );
-
-    const N = sourceSegments.length;
-    const updatePromises = [];
-    const alignedResults = [];
-
-    for (let i = 0; i < N; i++) {
-      const sourceSeg = sourceSegments[i];
-      const targetText = alignedTargetMap.get(sourceSeg.segment_index) || "";
-      const finalTargetText = targetText;
-      const status = finalTargetText ? "translated" : "draft";
-
-      alignedResults.push({
-        segment_index: sourceSeg.segment_index,
-        target_text: finalTargetText,
-        status
-      });
-
-      // Update in DB
-      updatePromises.push(
-        supabase
-          .from("document_segments")
-          .update({
-            target_text: finalTargetText,
-            status: status,
-            updated_at: new Date().toISOString()
-          })
-          .eq("document_id", documentId)
-          .eq("target_lang", lang)
-          .eq("segment_index", sourceSeg.segment_index)
-      );
-    }
-
-    // Run parallel DB updates
-    const updateResults = await Promise.all(updatePromises);
-    const updateErrors = updateResults.filter(r => r.error);
-    if (updateErrors.length > 0) {
-      console.error("Errors updating segments during target import:", updateErrors.map(e => e.error));
-      return response.status(500).json({ error: "Failed to save some segment translations to the database." });
-    }
-
-    // 6. Broadcast socket update for each segment
-    const { getIo } = require("../services/socket");
-    const io = getIo();
-    if (io) {
-      alignedResults.forEach(res => {
-        io.to(getDocumentRoomId(documentId, lang)).emit("segment-updated", {
-          segmentIndex: res.segment_index,
-          targetText: res.target_text,
-          status: res.status,
-          updatedBy: request.user.email || "System Import",
-          targetLang: lang
-        });
-      });
-    }
-
-    // 7. Clean up the temp uploaded file
-    try {
-      const fs = require("fs");
-      if (fs.existsSync(targetFilePath)) {
-        fs.unlinkSync(targetFilePath);
-      }
-    } catch (cleanupErr) {
-      console.error("Failed to delete temp file:", cleanupErr);
-    }
-
-    // 8. Fetch updated segments list to return to client
-    const updatedSegments = await fetchAllSegments(documentId, "*", lang);
-    const clientSegments = updatedSegments.map(seg => ({
-      id: seg.segment_index + 1,
-      source: seg.source_text,
-      target: seg.target_text || "",
-      status: seg.status,
-      verified: seg.status === "approved",
-      mqmAccuracyScore: seg.mqm_accuracy_score,
-      mqmReport: seg.mqm_report,
-      contextJira: seg.context_jira,
-      contextDescription: seg.context_description,
-      originalTargetText: seg.original_target_text,
-      trackedBy: seg.tracked_by
-    }));
-
-    response.json({
-      success: true,
-      count: N,
-      segments: clientSegments
-    });
-
-  } catch (err) {
-    console.error(err);
-    response.status(500).json({ error: err.message });
-  }
-});
-
-// 17. Bulk action on segments (delete, approve, draft)
-apiRouter.post("/documents/:documentId/lang/:lang/segments/bulk-action", checkAuth, async (request, response) => {
-  try {
-    const { documentId, lang } = request.params;
-    const { segmentIndices, action } = request.body;
-
-    if (!segmentIndices || !Array.isArray(segmentIndices) || segmentIndices.length === 0) {
-      return response.status(400).json({ error: "segmentIndices array is required and must not be empty." });
-    }
-
-    if (!["delete", "approve", "draft"].includes(action)) {
-      return response.status(400).json({ error: "Invalid action. Allowed values: delete, approve, draft." });
-    }
-
-    // 1. Verify write access
-    request.params.id = documentId;
-    const doc = await verifyDocumentAccess(request, response, "write");
-    if (!doc) return;
-
-    // 2. Perform updates
-    const updateFields = {
-      updated_at: new Date().toISOString()
-    };
-
-    if (action === "delete") {
-      updateFields.target_text = "";
-      updateFields.status = "draft";
-    } else if (action === "approve") {
-      updateFields.status = "approved";
-    } else if (action === "draft") {
-      updateFields.status = "draft";
-    }
-
-    const { error } = await supabase
-      .from("document_segments")
-      .update(updateFields)
-      .eq("document_id", documentId)
-      .eq("target_lang", lang)
-      .in("segment_index", segmentIndices);
-
-    if (error) {
-      console.error("Bulk action failed in DB update:", error);
-      return response.status(500).json({ error: "Failed to update segment translations." });
-    }
-
-    // 3. Broadcast updates to document room via WebSocket
-    const { getIo } = require("../services/socket");
-    const io = getIo();
-    if (io) {
-      segmentIndices.forEach(idx => {
-        io.to(getDocumentRoomId(documentId, lang)).emit("segment-updated", {
-          segmentIndex: idx,
-          targetText: action === "delete" ? "" : undefined,
-          status: action === "delete" || action === "draft" ? "draft" : "approved",
-          updatedBy: request.user.email || "System Bulk",
-          targetLang: lang
-        });
-      });
-    }
-
-    // 4. Return updated segments
-    const updatedSegments = await fetchAllSegments(documentId, "*", lang);
-    const clientSegments = updatedSegments.map(seg => ({
-      id: seg.segment_index + 1,
-      source: seg.source_text,
-      target: seg.target_text || "",
-      status: seg.status,
-      verified: seg.status === "approved",
-      mqmAccuracyScore: seg.mqm_accuracy_score,
-      mqmReport: seg.mqm_report,
-      contextJira: seg.context_jira,
-      contextDescription: seg.context_description,
-      originalTargetText: seg.original_target_text,
-      trackedBy: seg.tracked_by
-    }));
-
-    response.json({
-      success: true,
-      count: segmentIndices.length,
-      segments: clientSegments
-    });
-
-  } catch (err) {
-    console.error(err);
-    response.status(500).json({ error: err.message });
   }
 });
 

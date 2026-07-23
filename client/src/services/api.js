@@ -85,12 +85,19 @@ api.interceptors.response.use(
   }
 );
 
-export const uploadFile = async (file, sourceLang, targetLang) => {
+export const uploadFile = async (file, sourceLang, targetLang, onProgress = null) => {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("source", sourceLang);
   formData.append("target", targetLang);
-  const response = await api.post("/api/upload", formData);
+  const response = await api.post("/api/upload", formData, {
+    onUploadProgress: (progressEvent) => {
+      if (onProgress && progressEvent.total) {
+        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+        onProgress(percentCompleted);
+      }
+    }
+  });
   return response.data;
 };
 
@@ -106,13 +113,29 @@ export const translateBatch = async (segments, target, source, contextSettings =
 };
 
 export const exportFile = async (fileId, segments, extension = '.html', sourceLang = 'en', targetLang = 'hi', fileName = 'document', exportSource = false, template = null) => {
-  const response = await api.post(
-    "/api/export",
-    { fileId, template, segments, extension, sourceLang, targetLang, fileName, exportSource },
-    { responseType: "blob" }
-  );
-
-  return new Blob([response.data]);
+  try {
+    const response = await api.post(
+      "/api/export",
+      { fileId, template, segments, extension, sourceLang, targetLang, fileName, exportSource },
+      { responseType: "blob" }
+    );
+    return new Blob([response.data]);
+  } catch (err) {
+    if (err.response && err.response.data instanceof Blob) {
+      try {
+        const text = await err.response.data.text();
+        const parsed = JSON.parse(text);
+        if (parsed.error) {
+          throw new Error(parsed.error);
+        }
+      } catch (parseErr) {
+        if (parseErr.message && parseErr.message !== err.message && !parseErr.message.includes("JSON")) {
+          throw parseErr;
+        }
+      }
+    }
+    throw err;
+  }
 };
 
 export const exportGlobalTm = async (sourceLang, targetLang) => {
@@ -231,6 +254,49 @@ export const revokeDocumentAccess = async (documentId, userId) => {
   return response.data;
 };
 
+export const fetchProjectShares = async (projectId) => {
+  const response = await api.get(`/api/projects/${projectId}/shares`);
+  return response.data;
+};
+
+export const shareProject = async (projectId, email, accessLevel = "editor") => {
+  const response = await api.post(`/api/projects/${projectId}/share`, {
+    email,
+    accessLevel
+  });
+  return response.data;
+};
+
+export const revokeProjectShare = async (projectId, targetId) => {
+  const response = await api.delete(`/api/projects/${projectId}/shares/${targetId}`);
+  return response.data;
+};
+
+export const duplicateProject = async (projectId) => {
+  const response = await api.post(`/api/projects/${projectId}/duplicate`);
+  return response.data;
+};
+
+export const fetchProjectNotes = async (projectId) => {
+  const response = await api.get(`/api/projects/${projectId}/notes`);
+  return response.data;
+};
+
+export const createProjectNote = async (projectId, content, isPinned = false) => {
+  const response = await api.post(`/api/projects/${projectId}/notes`, { content, isPinned });
+  return response.data;
+};
+
+export const updateProjectNote = async (projectId, noteId, data) => {
+  const response = await api.put(`/api/projects/${projectId}/notes/${noteId}`, data);
+  return response.data;
+};
+
+export const deleteProjectNote = async (projectId, noteId) => {
+  const response = await api.delete(`/api/projects/${projectId}/notes/${noteId}`);
+  return response.data;
+};
+
 export const searchUsers = async (query) => {
   const response = await api.get(`/api/users/search?query=${query}`);
   return response.data;
@@ -340,13 +406,15 @@ export const deleteDocument = async (documentId) => {
 
 // ── PROJECT-BASED TRANSLATION MANAGEMENT SYSTEM CLIENT API ────────────────
 
-export const createProject = async (name, client, description, sourceLanguage, targetLanguages, settings = {}) => {
+export const createProject = async (name, client, description, sourceLanguage, targetLanguages, deadline = null, settings = {}) => {
   const response = await api.post("/api/projects", {
     name,
     client,
     description,
     sourceLanguage,
     targetLanguages,
+    deadline,
+    dueDate: deadline,
     settings
   });
   return response.data;
@@ -367,10 +435,17 @@ export const deleteProject = async (projectId) => {
   return response.data;
 };
 
-export const uploadFileToProject = async (projectId, file) => {
+export const uploadFileToProject = async (projectId, file, onProgress = null) => {
   const formData = new FormData();
   formData.append("file", file);
-  const response = await api.post(`/api/projects/${projectId}/upload`, formData);
+  const response = await api.post(`/api/projects/${projectId}/upload`, formData, {
+    onUploadProgress: (progressEvent) => {
+      if (onProgress && progressEvent.total) {
+        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+        onProgress(percentCompleted);
+      }
+    }
+  });
   return response.data;
 };
 
