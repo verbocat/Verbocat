@@ -23,12 +23,17 @@ const isCountableSourceText = (text) => {
 const calculateProgress = (segments) => {
   const countableSegments = (segments || []).filter((segment) => isCountableSourceText(segment.source_text));
   const completedSegments = countableSegments.filter((segment) => String(segment.target_text || "").trim() !== "").length;
+  const verifiedSegments = countableSegments.filter((segment) => segment.status === "approved" || segment.status === "verified").length;
+
   const progress = countableSegments.length > 0 ? Math.round((completedSegments / countableSegments.length) * 100) : 0;
+  const verifiedProgress = countableSegments.length > 0 ? Math.round((verifiedSegments / countableSegments.length) * 100) : 0;
 
   return {
     progress,
+    verifiedProgress,
     totalSegments: countableSegments.length,
-    completedSegments
+    completedSegments,
+    verifiedSegments
   };
 };
 

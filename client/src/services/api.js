@@ -425,6 +425,16 @@ export const fetchProjects = async () => {
   return response.data;
 };
 
+export const fetchGlobalHistory = async () => {
+  const response = await api.get("/api/projects/history");
+  return response.data;
+};
+
+export const fetchProjectActivities = async (projectId) => {
+  const response = await api.get(`/api/projects/${projectId}/activities`);
+  return response.data;
+};
+
 export const fetchProjectDetails = async (projectId) => {
   const response = await api.get(`/api/projects/${projectId}`);
   return response.data;
@@ -487,6 +497,11 @@ export const translateJobSegmentContext = async (jobId, segmentIndex, { contextJ
 
 export const controlJobQueue = async (jobId, action) => {
   const response = await api.post(`/api/jobs/${jobId}/${action}`);
+  return response.data;
+};
+
+export const fetchJobStatus = async (jobId) => {
+  const response = await api.get(`/api/jobs/${jobId}/status`);
   return response.data;
 };
 
@@ -569,11 +584,6 @@ export const translateJobSegmentContextByPath = async (documentId, lang, segment
 
 export const updateProjectDetails = async (projectId, updatedData) => {
   const response = await api.put(`/api/projects/${projectId}`, updatedData);
-  return response.data;
-};
-
-export const fetchProjectActivities = async (projectId) => {
-  const response = await api.get(`/api/projects/${projectId}/activities`);
   return response.data;
 };
 

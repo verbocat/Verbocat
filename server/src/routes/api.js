@@ -2364,6 +2364,8 @@ apiRouter.post("/projects", checkAuth, async (request, response) => {
       return response.status(500).json({ error: error.message });
     }
 
+    await logProjectActivity(project.id, "PROJECT_CREATED", { projectName: project.name }, request.user.email);
+
     response.json(project);
   } catch (err) {
     console.error(err);
@@ -2530,6 +2532,80 @@ apiRouter.get("/projects", checkAuth, async (request, response) => {
   }
 });
 
+// 2b. Get Global Workspace History Timeline (MUST be placed before /projects/:projectId)
+apiRouter.get("/projects/history", checkAuth, async (request, response) => {
+  try {
+    const userId = request.user.id;
+    const userEmail = request.user.email;
+
+    // Fetch all accessible projects (owned + shared)
+    const { data: ownedProjects } = await supabase
+      .from("projects")
+      .select("id, name, settings, owner_id")
+      .eq("owner_id", userId);
+
+    const { data: sharedEntries } = await supabase
+      .from("project_shares")
+      .select("project_id")
+      .or(`user_id.eq.${userId},email.eq.${userEmail}`);
+
+    const sharedProjectIds = (sharedEntries || []).map(s => s.project_id);
+    let sharedProjects = [];
+    if (sharedProjectIds.length > 0) {
+      const { data: sp } = await supabase
+        .from("projects")
+        .select("id, name, settings, owner_id")
+        .in("id", sharedProjectIds);
+      sharedProjects = sp || [];
+    }
+
+    const allProjectsMap = new Map();
+    (ownedProjects || []).forEach(p => allProjectsMap.set(p.id, p));
+    (sharedProjects || []).forEach(p => allProjectsMap.set(p.id, p));
+
+    const projectIds = Array.from(allProjectsMap.keys());
+    if (projectIds.length === 0) {
+      return response.json([]);
+    }
+
+    let globalActivities = [];
+
+    // Try fetching from project_activities table
+    const { data: tableActivities, error: actErr } = await supabase
+      .from("project_activities")
+      .select("*")
+      .in("project_id", projectIds)
+      .order("created_at", { ascending: false })
+      .limit(200);
+
+    if (!actErr && tableActivities && tableActivities.length > 0) {
+      globalActivities = tableActivities.map(act => ({
+        ...act,
+        projectName: allProjectsMap.get(act.project_id)?.name || "Project"
+      }));
+    } else {
+      // Fallback: gather from project settings JSONB
+      allProjectsMap.forEach((proj) => {
+        const settingsActivities = proj.settings?.activities || [];
+        settingsActivities.forEach(act => {
+          globalActivities.push({
+            ...act,
+            project_id: proj.id,
+            projectName: proj.name
+          });
+        });
+      });
+
+      globalActivities.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    }
+
+    response.json(globalActivities.slice(0, 100));
+  } catch (err) {
+    console.error(err);
+    response.status(500).json({ error: "Failed to fetch workspace history." });
+  }
+});
+
 // 3. Get Project Details
 apiRouter.get("/projects/:projectId", checkAuth, async (request, response) => {
   try {
@@ -2545,10 +2621,32 @@ apiRouter.get("/projects/:projectId", checkAuth, async (request, response) => {
       .eq("project_id", project.id);
 
     // Fetch project translation jobs
-    const { data: jobs } = await supabase
+    const { data: rawJobs } = await supabase
       .from("translation_jobs")
       .select("*, documents(name)")
       .eq("project_id", project.id);
+
+    const jobs = await Promise.all((rawJobs || []).map(async (j) => {
+      try {
+        const segs = await fetchAllSegments(j.document_id, "source_text, status, target_text", j.target_lang);
+        const stats = calculateProgress(segs);
+        const newStatus = stats.progress === 100 ? "completed" : j.status;
+        if (stats.progress !== j.progress && j.status !== "running") {
+          await supabase.from("translation_jobs").update({ progress: stats.progress, status: newStatus }).eq("id", j.id);
+        }
+        return {
+          ...j,
+          progress: stats.progress,
+          verifiedProgress: stats.verifiedProgress,
+          completedSegments: stats.completedSegments,
+          verifiedSegments: stats.verifiedSegments,
+          totalSegments: stats.totalSegments,
+          status: newStatus
+        };
+      } catch (e) {
+        return j;
+      }
+    }));
 
     response.json({
       project: {
@@ -2725,6 +2823,8 @@ apiRouter.post("/projects/:projectId/share", checkAuth, async (request, response
       });
     }
 
+    await logProjectActivity(project.id, "PROJECT_SHARED", { sharedWith: recipient.email, accessLevel: targetLevel }, request.user.email);
+
     response.json({ success: true, share });
   } catch (err) {
     console.error(err);
@@ -2775,6 +2875,8 @@ apiRouter.delete("/projects/:projectId/shares/:targetId", checkAuth, async (requ
         .in("document_id", docIds)
         .eq("user_id", targetId);
     }
+
+    await logProjectActivity(project.id, "ACCESS_REVOKED", { targetId }, request.user.email);
 
     response.json({ success: true });
   } catch (err) {
@@ -3087,25 +3189,16 @@ apiRouter.put("/projects/:projectId", checkAuth, async (request, response) => {
 // 4b. Get Project Activity Timeline
 apiRouter.get("/projects/:projectId/activities", checkAuth, async (request, response) => {
   try {
-    const { projectId } = request.params;
+    const access = await verifyProjectAccess(request, response, "read");
+    if (!access) return;
 
-    // Check project ownership
-    const { data: project, error: projErr } = await supabase
-      .from("projects")
-      .select("id, settings")
-      .eq("id", projectId)
-      .eq("owner_id", request.user.id)
-      .single();
-
-    if (projErr || !project) {
-      return response.status(404).json({ error: "Project not found or unauthorized." });
-    }
+    const { project } = access;
 
     // Try fetching from project_activities table
     const { data: activities, error: actErr } = await supabase
       .from("project_activities")
       .select("*")
-      .eq("project_id", projectId)
+      .eq("project_id", project.id)
       .order("created_at", { ascending: false });
 
     if (actErr) {
@@ -3198,22 +3291,22 @@ apiRouter.post("/projects/:projectId/upload", checkAuth, upload.single("file"), 
       status: "draft"
     }));
 
-    // 2. Persist parsed source template segments to the database in batches of 500
-    const BATCH_SIZE = 500;
+    // 2. Persist parsed source template segments to the database in fast parallel batches of 1000
+    const BATCH_SIZE = 1000;
+    const batchPromises = [];
     for (let i = 0; i < segmentInserts.length; i += BATCH_SIZE) {
       const batch = segmentInserts.slice(i, i + BATCH_SIZE);
-      const { error: segError } = await supabase
-        .from("document_segments")
-        .insert(batch);
-
-      if (segError) {
-        console.error("Failed to insert document segments batch:", segError);
-        await supabase.from("documents").delete().eq("id", documentId);
-        return response.status(500).json({ error: "Failed to persist document segments." });
-      }
+      batchPromises.push(supabase.from("document_segments").insert(batch));
+    }
+    const batchResults = await Promise.all(batchPromises);
+    const hasBatchError = batchResults.some(r => r.error);
+    if (hasBatchError) {
+      console.error("Failed to insert document segments batch");
+      await supabase.from("documents").delete().eq("id", documentId);
+      return response.status(500).json({ error: "Failed to persist document segments." });
     }
 
-    // 3. Auto-initialize translation jobs for target languages already selected in the project
+    // 3. Auto-initialize translation jobs for target languages selected in the project
     if (project.target_languages && project.target_languages.length > 0) {
       const jobInserts = project.target_languages.map(targetLang => ({
         project_id: projectId,
@@ -3225,25 +3318,6 @@ apiRouter.post("/projects/:projectId/upload", checkAuth, upload.single("file"), 
       }));
 
       await supabase.from("translation_jobs").insert(jobInserts);
-
-      // Copy template segments for target languages
-      const targetSegments = [];
-      project.target_languages.forEach(targetLang => {
-        result.segments.forEach((seg, idx) => {
-          targetSegments.push({
-            document_id: documentId,
-            target_lang: targetLang,
-            segment_index: idx,
-            source_text: seg.source || "",
-            target_text: "",
-            status: "draft"
-          });
-        });
-      });
-
-      if (targetSegments.length > 0) {
-        await supabase.from("document_segments").insert(targetSegments);
-      }
     }
 
     await logProjectActivity(projectId, "file_uploaded", {
@@ -3622,10 +3696,10 @@ apiRouter.post("/jobs/:jobId/:action", checkAuth, async (request, response) => {
       newStatus = "pending";
     }
 
-    const { broadcastJobStatus } = require("../services/jobQueue");
+    const { broadcastJobStatus, runJob } = require("../services/jobQueue");
     await supabase
       .from("translation_jobs")
-      .update({ status: newStatus })
+      .update({ status: newStatus, error_message: null })
       .eq("id", jobId);
 
     broadcastJobStatus(jobId, job.document_id, newStatus, job.progress);
@@ -3636,12 +3710,49 @@ apiRouter.post("/jobs/:jobId/:action", checkAuth, async (request, response) => {
         fileName: job.documents?.name || "Document",
         targetLang: job.target_lang
       }, request.user.email);
+
+      // Trigger AI translation job worker asynchronously
+      runJob(job).catch(err => console.error(`[JobWorker] Error executing job ${jobId}:`, err));
     }
 
     response.json({ success: true, status: newStatus });
   } catch (err) {
     console.error(err);
     response.status(500).json({ error: "Failed to perform queue action." });
+  }
+});
+
+// Get individual job status & progress
+apiRouter.get("/jobs/:jobId/status", checkAuth, async (request, response) => {
+  try {
+    const { jobId } = request.params;
+    const { data: job, error } = await supabase
+      .from("translation_jobs")
+      .select("id, document_id, status, progress, target_lang, word_count, error_message, updated_at")
+      .eq("id", jobId)
+      .single();
+
+    if (error || !job) {
+      return response.status(404).json({ error: "Job not found." });
+    }
+
+    try {
+      const segs = await fetchAllSegments(job.document_id, "source_text, status, target_text", job.target_lang);
+      const stats = calculateProgress(segs);
+      return response.json({
+        ...job,
+        progress: stats.progress,
+        verifiedProgress: stats.verifiedProgress,
+        completedSegments: stats.completedSegments,
+        verifiedSegments: stats.verifiedSegments,
+        totalSegments: stats.totalSegments
+      });
+    } catch (e) {
+      return response.json(job);
+    }
+  } catch (err) {
+    console.error(err);
+    response.status(500).json({ error: "Failed to fetch job status." });
   }
 });
 

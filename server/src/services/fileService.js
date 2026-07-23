@@ -28,15 +28,19 @@ function getPythonCommand() {
   return 'python';
 }
 
+let isPdf2DocxVerified = false;
 function ensurePdf2DocxInstalled() {
+  if (isPdf2DocxVerified) return;
   try {
     const pythonCmd = getPythonCommand();
     execSync(`"${pythonCmd}" -c "import pdf2docx"`, { stdio: 'ignore' });
+    isPdf2DocxVerified = true;
   } catch (e) {
     console.log("pdf2docx is not installed on system. Attempting auto-installation...");
     try {
       const pythonCmd = getPythonCommand();
       execSync(`"${pythonCmd}" -m pip install pdf2docx --break-system-packages`, { stdio: 'ignore' });
+      isPdf2DocxVerified = true;
       console.log("pdf2docx installed successfully!");
     } catch (installErr) {
       console.error("Failed to auto-install pdf2docx via pip:", installErr.message);

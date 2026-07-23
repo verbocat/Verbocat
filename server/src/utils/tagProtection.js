@@ -1,7 +1,9 @@
+const { STRICT_TAG_REGEX, validateTags, autoFixTags } = require("./tagValidation");
+
 const protectTags = (text) => {
   const tags = [];
 
-  const protectedText = String(text || "").replace(/<[^>]+>/g, (match) => {
+  const protectedText = String(text || "").replace(STRICT_TAG_REGEX, (match) => {
     const token = `__TAG_${tags.length}__`;
     tags.push(match);
     return token;
@@ -133,5 +135,7 @@ module.exports = {
   protectTags,
   restoreProtectedTags,
   getTagName,
-  alignSegmentTags
+  alignSegmentTags,
+  validateTags,
+  autoFixTags
 };

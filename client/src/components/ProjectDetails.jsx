@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   ArrowLeft, FileText, Globe, Play, Pause, XCircle, RotateCcw, 
   Download, Upload, CheckCircle2, AlertCircle, Eye, Database, BarChart3, TrendingUp, Folder, Plus, Trash2, 
-  Settings, List, Activity, Calendar, User, Clock, ChevronDown, Check, Edit2, Copy, FileCode, CheckSquare, Square, RefreshCw, Users, LayoutDashboard, StickyNote
+  Settings, List, Activity, Calendar, User, Clock, ChevronDown, Check, Edit2, Copy, FileCode, CheckSquare, Square, RefreshCw, Users, LayoutDashboard, StickyNote, History, Sparkles
 } from "lucide-react";
 import io from "socket.io-client";
 import { 
@@ -13,6 +13,8 @@ import {
 import { LANGUAGES } from "../constants/languages";
 import { ShareModal } from "./ShareModal";
 import { ProjectNotesModal } from "./ProjectNotesModal";
+import { ProjectHistoryModal } from "./ProjectHistoryModal";
+import { BatchTranslateModal } from "./BatchTranslateModal";
 
 export default function ProjectDetails({ projectId, onBack, onOpenEditor, showToast, theme, token, onOpenSettings, userId, userRole, onOpenAdmin }) {
   const [project, setProject] = useState(null);
@@ -29,6 +31,8 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
   const [replacingFileId, setReplacingFileId] = useState(null);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showNotesModal, setShowNotesModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showBatchTranslateModal, setShowBatchTranslateModal] = useState(false);
   
   // Navigation Tabs state: "overview", "files", "languages", "analytics", "settings"
   const [activeTab, setActiveTab] = useState("overview");
@@ -478,6 +482,10 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
     ? Math.round(jobs.reduce((sum, j) => sum + (j.progress || 0), 0) / jobs.length) 
     : 0;
 
+  const overallVerifiedPercent = jobs.length > 0
+    ? Math.round(jobs.reduce((sum, j) => sum + (j.verifiedProgress || 0), 0) / jobs.length)
+    : 0;
+
   const projectStatus = project?.status || project?.settings?.status || "Active";
   const isProjectOwner = project && project.owner_id === userId;
 
@@ -580,6 +588,20 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
           </button>
 
           <button
+            onClick={() => setShowBatchTranslateModal(true)}
+            className="project-primary-action bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500"
+            title="Batch Auto-Translate Files & Languages"
+          >
+            <span className="project-action-icon">
+              <Sparkles size={14} />
+            </span>
+            <span className="flex flex-col items-start leading-none">
+              <span className="text-[11px] font-black tracking-wide uppercase">Translate Files</span>
+              <span className="text-[10px] font-medium text-white/70">Auto-translate selected jobs</span>
+            </span>
+          </button>
+
+          <button
             onClick={() => {
               setSelectedAddLangs(project.target_languages || []);
               setShowAddLangModal(true);
@@ -593,6 +615,20 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
             <span className="flex flex-col items-start leading-none">
               <span className="text-[11px] font-bold tracking-wide uppercase">Add Language</span>
               <span className="text-[10px] font-medium text-[var(--text-muted)]">Create more target variants</span>
+            </span>
+          </button>
+
+          <button
+            onClick={() => setShowHistoryModal(true)}
+            className="project-secondary-action"
+            title="Project Audit History"
+          >
+            <span className="project-action-icon subtle">
+              <History size={14} className="text-indigo-400" />
+            </span>
+            <span className="flex flex-col items-start leading-none">
+              <span className="text-[11px] font-bold tracking-wide uppercase">History</span>
+              <span className="text-[10px] font-medium text-[var(--text-muted)]">Audit trail & logs</span>
             </span>
           </button>
 
@@ -675,14 +711,26 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
           <span>Words: <strong className="text-[var(--text-primary)]">{analytics?.totalWordCount?.toLocaleString() || 0}</strong></span>
         </div>
         
-        {/* Overall Progress Mini Bar */}
-        <div className="flex items-center gap-3 ml-auto flex-1 max-w-xs min-w-[150px]">
-          <span className="font-semibold text-[var(--text-primary)]">{overallProgressPercent}% Progress</span>
-          <div className="flex-1 bg-[var(--bg-input)] h-1.5 rounded-full overflow-hidden border border-[var(--border-subtle)]">
-            <div 
-              className="bg-indigo-500 h-full rounded-full transition-all duration-500"
-              style={{ width: `${overallProgressPercent}%` }}
-            ></div>
+        {/* Overall Progress Dual Bars */}
+        <div className="flex items-center gap-6 ml-auto">
+          <div className="flex items-center gap-2 min-w-[130px]">
+            <span className="text-[11px] font-bold text-indigo-500">Translated {overallProgressPercent}%</span>
+            <div className="w-20 bg-[var(--bg-input)] h-2 rounded-full overflow-hidden border border-[var(--border-subtle)]">
+              <div 
+                className="bg-indigo-500 h-full rounded-full transition-all duration-500"
+                style={{ width: `${overallProgressPercent}%` }}
+              ></div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 min-w-[130px]">
+            <span className="text-[11px] font-bold text-emerald-500">Verified {overallVerifiedPercent}%</span>
+            <div className="w-20 bg-[var(--bg-input)] h-2 rounded-full overflow-hidden border border-[var(--border-subtle)]">
+              <div 
+                className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                style={{ width: `${overallVerifiedPercent}%` }}
+              ></div>
+            </div>
           </div>
         </div>
       </section>
@@ -927,15 +975,30 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                           const isSelected = selectedFiles.includes(file.id);
                           const fileJobs = jobs.filter(j => j.document_id === file.id);
                           
-                          // File Status
-                          const hasRunning = fileJobs.some(j => j.status === "running");
-                          const allCompleted = fileJobs.length > 0 && fileJobs.every(j => j.status === "completed");
-                          const fileStatus = hasRunning ? "translating" : (allCompleted ? "completed" : "pending");
-
-                          // File Progress average
+                          // File Progress average (Translated & Verified)
                           const avgProgress = fileJobs.length > 0
                             ? Math.round(fileJobs.reduce((sum, j) => sum + (j.progress || 0), 0) / fileJobs.length)
                             : 0;
+
+                          const avgVerified = fileJobs.length > 0
+                            ? Math.round(fileJobs.reduce((sum, j) => sum + (j.verifiedProgress || 0), 0) / fileJobs.length)
+                            : 0;
+
+                          // File Status accurate logic
+                          const hasRunning = fileJobs.some(j => j.status === "running");
+                          const allCompleted = fileJobs.length > 0 && fileJobs.every(j => j.status === "completed" || j.progress === 100 || avgProgress === 100);
+                          const hasCancelled = fileJobs.some(j => j.status === "cancelled");
+                          const hasFailed = fileJobs.some(j => j.status === "failed");
+
+                          const fileStatus = hasRunning 
+                            ? "translating" 
+                            : (allCompleted 
+                              ? "completed" 
+                              : (hasCancelled 
+                                ? "cancelled" 
+                                : (hasFailed 
+                                  ? "failed" 
+                                  : (avgProgress > 0 ? "in progress" : "pending"))));
 
                           const extIndex = file.name.lastIndexOf(".");
                           const ext = extIndex !== -1 ? file.name.substring(extIndex).toUpperCase() : "UNKNOWN";
@@ -1004,7 +1067,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                                       className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase border ${
                                         j.status === "completed" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-zinc-800 text-zinc-400 border-zinc-700"
                                       }`}
-                                      title={`${getLanguageName(j.target_lang)}: ${j.progress}%`}
+                                      title={`${getLanguageName(j.target_lang)}: Translated ${j.progress}%, Verified ${j.verifiedProgress || 0}%`}
                                     >
                                       {j.target_lang}
                                     </span>
@@ -1012,12 +1075,20 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                                 </div>
                               </td>
 
-                              {/* File Progress bar */}
+                              {/* File Progress bars (Translated & Verified) */}
                               <td className="py-4 px-4">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-bold text-[11px] w-8 shrink-0">{avgProgress}%</span>
-                                  <div className="w-16 bg-[var(--bg-input)] h-1 rounded-full overflow-hidden">
-                                    <div className="bg-indigo-500 h-full" style={{ width: `${avgProgress}%` }}></div>
+                                <div className="flex flex-col gap-1 text-[10px]">
+                                  <div className="flex items-center gap-1.5" title={`Translated: ${avgProgress}%`}>
+                                    <span className="font-bold text-indigo-500 text-[9px] w-6 shrink-0">{avgProgress}%</span>
+                                    <div className="w-14 bg-[var(--bg-input)] h-1.5 rounded-full overflow-hidden border border-[var(--border-subtle)]">
+                                      <div className="bg-indigo-500 h-full rounded-full transition-all duration-300" style={{ width: `${avgProgress}%` }}></div>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-1.5" title={`Verified: ${avgVerified}%`}>
+                                    <span className="font-bold text-emerald-500 text-[9px] w-6 shrink-0">{avgVerified}%</span>
+                                    <div className="w-14 bg-[var(--bg-input)] h-1.5 rounded-full overflow-hidden border border-[var(--border-subtle)]">
+                                      <div className="bg-emerald-500 h-full rounded-full transition-all duration-300" style={{ width: `${avgVerified}%` }}></div>
+                                    </div>
                                   </div>
                                 </div>
                               </td>
@@ -1027,6 +1098,9 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                                 <span className={`text-[9px] font-bold px-2 py-0.5 rounded border ${
                                   fileStatus === "completed" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
                                   fileStatus === "translating" ? "bg-indigo-500/10 text-indigo-500 border-indigo-500/20 animate-pulse" :
+                                  fileStatus === "in progress" ? "bg-blue-500/10 text-blue-500 border-blue-500/20" :
+                                  fileStatus === "cancelled" ? "bg-amber-500/10 text-amber-500 border-amber-500/20" :
+                                  fileStatus === "failed" ? "bg-rose-500/10 text-rose-500 border-rose-500/20" :
                                   "bg-zinc-800 text-zinc-400 border-zinc-700"
                                 }`}>
                                   {fileStatus}
@@ -1488,6 +1562,28 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
           projectId={projectId}
           projectName={project?.name}
           isOwner={isProjectOwner}
+        />
+      )}
+
+      {showHistoryModal && (
+        <ProjectHistoryModal
+          isOpen={showHistoryModal}
+          onClose={() => setShowHistoryModal(false)}
+          projectId={projectId}
+          projectName={project?.name}
+          showToast={showToast}
+        />
+      )}
+
+      {showBatchTranslateModal && (
+        <BatchTranslateModal
+          isOpen={showBatchTranslateModal}
+          onClose={() => setShowBatchTranslateModal(false)}
+          files={files}
+          jobs={jobs}
+          project={project}
+          showToast={showToast}
+          onReloadProject={loadProjectDetails}
         />
       )}
 

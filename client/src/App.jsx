@@ -99,6 +99,7 @@ export default function App() {
   const [showQaPanel, setShowQaPanel] = useState(false);
   const [fileName, setFileName] = useState("document");
   const [isUploading, setIsUploading] = useState(false);
+  const [isLoadingDocument, setIsLoadingDocument] = useState(false);
   const [resetMode, setResetMode] = useState(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
 
@@ -261,7 +262,7 @@ export default function App() {
   // Load collaborative document from DB on startup/change
   const loadCollaborativeDocument = useCallback(async () => {
     if (!documentId || !token) return;
-    setIsUploading(true);
+    setIsLoadingDocument(true);
     setHasNoAccess(false);
     setAccessRequestMessage("");
     try {
@@ -335,7 +336,7 @@ export default function App() {
         setDocumentId(null);
       }
     } finally {
-      setIsUploading(false);
+      setIsLoadingDocument(false);
     }
   }, [documentId, token, currentRoute]);
 
@@ -2765,7 +2766,7 @@ export default function App() {
 
       {/* ── Global overlays & modals ── */}
       <DragOverlay isDragging={isDragging} />
-      <LoadingOverlay isUploading={isUploading} theme={theme} />
+      <LoadingOverlay isUploading={isUploading} isLoadingDocument={isLoadingDocument} theme={theme} />
       <Toast toast={toast} />
 
       <SettingsModal

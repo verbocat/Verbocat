@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Folder, User, Calendar, Trash2, Search, Filter, Globe, BookOpen, Settings, ChevronRight, LayoutDashboard, Users, Share2, MoreVertical, Copy, StickyNote } from "lucide-react";
+import { Plus, Folder, User, Calendar, Trash2, Search, Filter, Globe, BookOpen, Settings, ChevronRight, LayoutDashboard, Users, Share2, MoreVertical, Copy, StickyNote, History } from "lucide-react";
 import { fetchProjects, createProject, deleteProject, duplicateProject } from "../services/api";
 import { LANGUAGES } from "../constants/languages";
 import { ShareModal } from "./ShareModal";
 import { ProjectNotesModal } from "./ProjectNotesModal";
 import { SettingsModal } from "./SettingsModal";
+import { ProjectHistoryModal } from "./ProjectHistoryModal";
 
 export default function ProjectDashboard({ onOpenProject, showToast, theme, userRole, onOpenAdmin, onOpenSettings }) {
   const [projects, setProjects] = useState([]);
@@ -16,6 +17,7 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
   const [shareModalProject, setShareModalProject] = useState(null);
   const [notesModalProject, setNotesModalProject] = useState(null);
   const [settingsModalProjectId, setSettingsModalProjectId] = useState(null);
+  const [showGlobalHistoryModal, setShowGlobalHistoryModal] = useState(false);
   const [openMenuProjectId, setOpenMenuProjectId] = useState(null);
 
   // Form states
@@ -159,6 +161,25 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
               <LayoutDashboard size={15} />
             </button>
           )}
+
+          <button
+            onClick={() => setShowGlobalHistoryModal(true)}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              gap: 6, padding: "0 12px", height: 36, borderRadius: 12,
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-subtle)",
+              color: "var(--text-primary)",
+              fontSize: 12, fontWeight: 700,
+              cursor: "pointer", transition: "all 0.2s ease"
+            }}
+            onMouseOver={(e) => e.currentTarget.style.background = "var(--bg-elevated)"}
+            onMouseOut={(e) => e.currentTarget.style.background = "var(--bg-surface)"}
+            title="Workspace Audit History"
+          >
+            <History size={15} className="text-indigo-400" />
+            <span>History</span>
+          </button>
 
           <button
             onClick={onOpenSettings}
@@ -493,6 +514,16 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
           theme={theme}
           onApplySettings={() => {}}
           onProjectUpdated={loadProjects}
+        />
+      )}
+
+      {/* Workspace Global History Modal */}
+      {showGlobalHistoryModal && (
+        <ProjectHistoryModal
+          isOpen={showGlobalHistoryModal}
+          onClose={() => setShowGlobalHistoryModal(false)}
+          projectId={null}
+          showToast={showToast}
         />
       )}
 

@@ -150,15 +150,20 @@ async function runJob(job) {
         status: "draft"
       }));
 
-      const { error: insertErr } = await supabase
-        .from("document_segments")
-        .insert(segmentInserts);
+      // Batch insert target language segments in 1000 chunks
+      const BATCH_SIZE = 1000;
+      for (let i = 0; i < segmentInserts.length; i += BATCH_SIZE) {
+        const batch = segmentInserts.slice(i, i + BATCH_SIZE);
+        const { error: insertErr } = await supabase
+          .from("document_segments")
+          .insert(batch);
 
-      if (insertErr) {
-        throw new Error(`Failed to initialize job segments: ${insertErr.message}`);
+        if (insertErr) {
+          throw new Error(`Failed to initialize job segments: ${insertErr.message}`);
+        }
       }
 
-      // Re-fetch
+      // Re-fetch initialized segments
       dbSegments.push(...segmentInserts);
     }
 
@@ -393,5 +398,6 @@ async function broadcastJobStatus(jobId, documentId, status, progress, errorMess
 
 module.exports = {
   startQueueWorker,
-  broadcastJobStatus
+  broadcastJobStatus,
+  runJob
 };

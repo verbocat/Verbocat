@@ -1254,16 +1254,27 @@ code, .font-mono { font-family: "IBM Plex Mono", monospace; }
 .seg-tag {
   display: inline-flex;
   align-items: center;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-accent);
-  padding: 0 4px;
-  margin: 0 1px;
-  border-radius: 3px;
-  font-size: 9px;
+  justify-content: center;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: #a5b4fc;
+  padding: 1px 6px;
+  margin: 0 2px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 700;
   font-family: "IBM Plex Mono", monospace;
-  user-select: none;
-  cursor: default;
+  user-select: all;
+  -webkit-user-select: all;
+  cursor: text;
+  vertical-align: middle;
+  transition: all 0.15s ease;
+}
+
+.seg-tag:hover {
+  background: rgba(99, 102, 241, 0.25);
+  border-color: rgba(99, 102, 241, 0.5);
+  color: #c7d2fe;
 }
 
 /* Glossary highlight in source */

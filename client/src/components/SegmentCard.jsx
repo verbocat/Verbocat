@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
-import { Copy, Check, ArrowRight, AlertTriangle, Lock, Sparkles, Award, UploadCloud, Trash2, Image, MessageSquare, X, Tag, Wand2 } from "lucide-react";
+import { Copy, Check, ArrowRight, AlertTriangle, Lock, Sparkles, Award, UploadCloud, Trash2, Image, MessageSquare, X, Tag, Wand2, ChevronDown } from "lucide-react";
 import { useChatStore } from "../services/chatStore";
+import { autoFixSegmentTags, validateSegmentTags } from "../utils/tagValidation.js";
 
 const removeTags = (text) => {
   if (typeof text !== "string") return text;
@@ -187,31 +188,41 @@ const targetToHtml = (str) => {
   let html = str.replace(/</g, "&lt;").replace(/>/g, "&gt;");
   html = html.replace(/&lt;(\/?[^&>]*)\&gt;/gi, (match, inner) => {
     if (!inner) return match;
-    let display = inner;
+    let display = `&lt;${inner}&gt;`;
     if (!/^\/?\d+$/.test(inner)) {
       const m = inner.match(/id=(?:&quot;|"|')([^"']+)("|&quot;|')/i);
       if (m) {
         const closing = inner.startsWith("/");
         const name = inner.replace(/^\//, "").split(/[\s/]/)[0];
-        display = (closing ? "/" : "") + name + m[1];
+        display = `&lt;${(closing ? "/" : "") + name + m[1]}&gt;`;
       }
     }
     const esc = inner.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-    return `<span class="seg-tag" contenteditable="false" data-tag="${esc}">${display}</span>`;
+    return `<span class="seg-tag" contenteditable="true" data-tag="${esc}">${display}</span>`;
   });
   return html.replace(/\n/g, "<br>");
 };
 
 const htmlToTarget = (el) => {
+  if (!el) return "";
   let r = "";
   const walk = (n) => {
-    if (n.nodeType === Node.TEXT_NODE) { r += n.textContent; }
-    else if (n.nodeType === Node.ELEMENT_NODE) {
+    if (n.nodeType === Node.TEXT_NODE) {
+      r += n.textContent;
+    } else if (n.nodeType === Node.ELEMENT_NODE) {
       const tag = n.tagName.toLowerCase();
-      if (tag === "br") r += "\n";
-      else if (tag === "div") { r += "\n"; n.childNodes.forEach(walk); }
-      else if (n.hasAttribute("data-tag")) r += `<${n.getAttribute("data-tag")}>`;
-      else n.childNodes.forEach(walk);
+      if (tag === "br") {
+        r += "\n";
+      } else if (n.hasAttribute("data-tag")) {
+        const rawTag = n.getAttribute("data-tag");
+        const formatted = rawTag.startsWith("<") ? rawTag : `<${rawTag}>`;
+        r += formatted;
+      } else if (tag === "div" || tag === "p") {
+        r += "\n";
+        n.childNodes.forEach(walk);
+      } else {
+        n.childNodes.forEach(walk);
+      }
     }
   };
   el.childNodes.forEach(walk);
@@ -241,6 +252,7 @@ export const SegmentCard = ({
   const [activeTab, setActiveTab] = useState("screenshot");
   const [translatingLocal, setTranslatingLocal] = useState(false);
   const [showComments, setShowComments] = useState(false);
+  const [showTagsMenu, setShowTagsMenu] = useState(false);
 
   const chatStore = useChatStore();
   const existingQuery = chatStore.queries.find(
@@ -468,7 +480,43 @@ export const SegmentCard = ({
       editorRef.current.innerText += tagText;
     }
 
+    handleInput();
+  };
+
+  const handleEditorPaste = (e) => {
+    if (readOnly || segment.verified || !!lockInfo) return;
+    e.preventDefault();
+    let pastedText = e.clipboardData.getData("text/plain");
+    if (!pastedText) return;
+
+    // Smart tag recovery: if user pasted plain number like "101" or "/101" matching source tags
+    const trimmed = pastedText.trim();
+    if (/^\/?\d+$/.test(trimmed)) {
+      const potentialTag = `<${trimmed}>`;
+      if (sourceTags.includes(potentialTag)) {
+        pastedText = potentialTag;
+      }
+    }
+
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && editorRef.current && editorRef.current.contains(sel.anchorNode)) {
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      const textNode = document.createTextNode(pastedText);
+      range.insertNode(textNode);
+      range.setStartAfter(textNode);
+      range.setEndAfter(textNode);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } else if (editorRef.current) {
+      editorRef.current.innerText += pastedText;
+    }
+
+    // Immediately morph raw tag strings into styled pill badges
     const updatedTarget = htmlToTarget(editorRef.current);
+    if (editorRef.current) {
+      editorRef.current.innerHTML = targetToHtml(updatedTarget);
+    }
     lastSaved.current = updatedTarget;
     if (onTyping) onTyping(segment.id, updatedTarget);
     onUpdateTranslation(segment.id, updatedTarget);
@@ -476,13 +524,12 @@ export const SegmentCard = ({
 
   const handleImportAllSourceTags = () => {
     if (readOnly || segment.verified || !!lockInfo) return;
-    const cleanTarget = (segment.target || "").replace(/<[^>]+>/g, "").trim();
     if (sourceTags.length === 0) return;
 
-    let updated = cleanTarget;
+    let updated = segment.target || "";
     sourceTags.forEach(tag => {
       if (!updated.includes(tag)) {
-        updated += " " + tag;
+        updated += (updated ? " " : "") + tag;
       }
     });
 
@@ -496,7 +543,7 @@ export const SegmentCard = ({
 
   const handleClearAllTargetTags = () => {
     if (readOnly || segment.verified || !!lockInfo) return;
-    const strippedTarget = (segment.target || "").replace(/<\/?\d+>/g, "").trim();
+    const strippedTarget = (segment.target || "").replace(/<\/?(?:[a-zA-Z][a-zA-Z0-9:\-_]*|\d+)(?:\s+[^>]*?)?\/?>/g, "").trim();
     if (editorRef.current) {
       editorRef.current.innerHTML = targetToHtml(strippedTarget);
     }
@@ -508,7 +555,7 @@ export const SegmentCard = ({
   const handleAutoFixTags = () => {
     if (readOnly || segment.verified || !!lockInfo) return;
     if (!segment.source) return;
-    const fixed = projectSourceTagsOntoTarget(segment.source, segment.target || "");
+    const fixed = autoFixSegmentTags(segment.source, segment.target || "");
     if (editorRef.current) {
       editorRef.current.innerHTML = targetToHtml(fixed);
     }
@@ -542,7 +589,7 @@ export const SegmentCard = ({
         return parts.map((p, i) => {
           if (/^<\/?[\d]+>$/.test(p) || /^<\/?(?:g|ph|x|bpt|ept|it)[^>]*>$/i.test(p)) {
             const inner = p.replace(/[<>]/g, "");
-            let display = inner;
+            let display = p;
             if (!/^\/?\d+$/.test(inner)) {
               const m = inner.match(/id=(?:&quot;|"|')([^"']+)("|&quot;|')/i);
               if (m) {
@@ -751,6 +798,7 @@ export const SegmentCard = ({
               onBlur={handleBlur}
               onInput={handleInput}
               onKeyDown={handleKeyDown}
+              onPaste={handleEditorPaste}
               className="seg-editor"
               style={{
                 ...((readOnly || segment.verified || lockInfo)
@@ -875,80 +923,132 @@ export const SegmentCard = ({
               </div>
             ))}
 
-            {/* Tag Quick Actions Bar below/above editor */}
             {sourceTags.length > 0 && !readOnly && !segment.verified && !lockInfo && (
-              <div 
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  marginTop: "4px",
-                  fontSize: "10px"
-                }}
-              >
+              <div style={{ position: "relative", marginTop: "4px" }}>
                 <button
                   type="button"
-                  onClick={handleImportAllSourceTags}
-                  title="Import/append all source tags into target"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowTagsMenu(prev => !prev);
+                  }}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: "3px",
-                    padding: "2px 6px",
-                    borderRadius: "4px",
-                    background: "rgba(59,130,246,0.1)",
-                    color: "#60a5fa",
-                    border: "1px solid rgba(59,130,246,0.2)",
+                    gap: "4px",
+                    padding: "3px 8px",
+                    borderRadius: "6px",
+                    background: hasTagMismatch ? "rgba(245,158,11,0.15)" : "rgba(99,102,241,0.1)",
+                    color: hasTagMismatch ? "#fbbf24" : "#818cf8",
+                    border: hasTagMismatch ? "1px solid rgba(245,158,11,0.3)" : "1px solid rgba(99,102,241,0.2)",
                     cursor: "pointer",
-                    fontSize: "9px",
-                    fontWeight: 600
+                    fontSize: "10px",
+                    fontWeight: 700
                   }}
+                  title="Tags operations: Auto-fix, Import, or Delete tags"
                 >
-                  <Tag style={{ width: 9, height: 9 }} /> Import Tags
+                  <Tag style={{ width: 11, height: 11 }} />
+                  <span>Tags</span>
+                  {hasTagMismatch && (
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#fbbf24" }} title="Tag Mismatch Detected" />
+                  )}
+                  <ChevronDown style={{ width: 10, height: 10 }} />
                 </button>
 
-                <button
-                  type="button"
-                  onClick={handleClearAllTargetTags}
-                  title="Remove all tag placeholders from target text"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "3px",
-                    padding: "2px 6px",
-                    borderRadius: "4px",
-                    background: "rgba(239,68,68,0.1)",
-                    color: "#f87171",
-                    border: "1px solid rgba(239,68,68,0.2)",
-                    cursor: "pointer",
-                    fontSize: "9px",
-                    fontWeight: 600
-                  }}
-                >
-                  <X style={{ width: 9, height: 9 }} /> Clear Tags
-                </button>
-
-                {hasTagMismatch && (
-                  <button
-                    type="button"
-                    onClick={handleAutoFixTags}
-                    title="Automatically project and fix missing source tags onto target text"
+                {showTagsMenu && (
+                  <div 
                     style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "3px",
-                      padding: "2px 6px",
-                      borderRadius: "4px",
-                      background: "rgba(245,158,11,0.15)",
-                      color: "#fbbf24",
-                      border: "1px solid rgba(245,158,11,0.3)",
-                      cursor: "pointer",
-                      fontSize: "9px",
-                      fontWeight: 600
+                      position: "absolute",
+                      left: 0,
+                      top: "100%",
+                      marginTop: "4px",
+                      width: "160px",
+                      background: "var(--bg-surface)",
+                      border: "1px solid var(--border-medium)",
+                      borderRadius: "10px",
+                      boxShadow: "0 10px 25px rgba(0,0,0,0.5)",
+                      zIndex: 50,
+                      padding: "4px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "2px"
                     }}
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <Wand2 style={{ width: 9, height: 9 }} /> Fix Mismatch
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowTagsMenu(false);
+                        handleAutoFixTags();
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "6px 8px",
+                        borderRadius: "6px",
+                        border: "none",
+                        background: "transparent",
+                        color: "#fbbf24",
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        textAlign: "left"
+                      }}
+                      className="hover:bg-[var(--bg-hover)]"
+                    >
+                      <Wand2 style={{ width: 12, height: 12 }} /> Auto-Fix Tags
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowTagsMenu(false);
+                        handleImportAllSourceTags();
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "6px 8px",
+                        borderRadius: "6px",
+                        border: "none",
+                        background: "transparent",
+                        color: "#818cf8",
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        textAlign: "left"
+                      }}
+                      className="hover:bg-[var(--bg-hover)]"
+                    >
+                      <Tag style={{ width: 12, height: 12 }} /> Import Source Tags
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowTagsMenu(false);
+                        handleClearAllTargetTags();
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "6px 8px",
+                        borderRadius: "6px",
+                        border: "none",
+                        background: "transparent",
+                        color: "#f87171",
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        textAlign: "left"
+                      }}
+                      className="hover:bg-[var(--bg-hover)]"
+                    >
+                      <Trash2 style={{ width: 12, height: 12 }} /> Delete Target Tags
+                    </button>
+                  </div>
                 )}
               </div>
             )}
