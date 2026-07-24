@@ -612,6 +612,20 @@ export const scanProtectedContent = async (projectId, options = {}) => {
   return response.data;
 };
 
+export const fetchDocumentPreview = async (documentId, segments = null, targetLang = "hi") => {
+  const response = await api.post(
+    `/api/documents/${documentId}/preview`,
+    { segments, targetLang },
+    { responseType: "arraybuffer" }
+  );
+  return {
+    data: response.data,
+    contentType: response.headers["content-type"],
+    documentType: response.headers["x-document-type"]
+  };
+};
+
+
 
 
 

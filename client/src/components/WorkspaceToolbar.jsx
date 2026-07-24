@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { LANGUAGES } from "../constants/languages.js";
 import {
-  FileText, ArrowRight, Search, Filter, Sparkles,
+  FileText, ArrowRight, Search, Filter, Sparkles, Eye,
   Save, Upload, Download, Trash2, RefreshCw, ChevronDown, Plus, Link2,
   FolderOpen, Sliders, GitBranch, Check, BookOpen, ShieldAlert
 } from "lucide-react";
@@ -18,8 +18,10 @@ export const WorkspaceToolbar = ({
   lengthRestrictionEnabled, onToggleLengthRestriction,
   forbiddenTermsCount = 0, forbiddenTermsEnabled = true, onOpenForbiddenTerms,
   onAcceptAllChanges, hasTrackedChanges, onApplyGlossary,
-  isAllSelected, onToggleSelectAll, selectedCount
+  isAllSelected, onToggleSelectAll, selectedCount,
+  showLivePreview = false, onToggleLivePreview, isPreviewLoading = false
 }) => {
+
   const [showDocMenu, setShowDocMenu] = useState(false);
   const docMenuRef = useRef(null);
   const selectAllRef = useRef(null);
@@ -93,6 +95,25 @@ export const WorkspaceToolbar = ({
           />
           <span>{isAuditing ? "Auditing…" : "Run QC"}</span>
         </button>
+
+        {/* Live Preview Toggle */}
+        <button
+          onClick={onToggleLivePreview}
+          disabled={!canAct}
+          className={`ab ${showLivePreview ? "ab-preview-active" : ""}`}
+          style={showLivePreview ? {
+            background: "rgba(99,102,241,0.2)",
+            color: "#818cf8",
+            border: "1px solid rgba(99,102,241,0.4)"
+          } : undefined}
+        >
+          <Eye
+            style={{ width: 12, height: 12, color: showLivePreview ? "#818cf8" : "var(--text-muted)", flexShrink: 0 }}
+            className={isPreviewLoading ? "animate-spin" : ""}
+          />
+          <span>Live Preview</span>
+        </button>
+
 
         {/* Track Changes (Owner Only) */}
         {isOwner && (

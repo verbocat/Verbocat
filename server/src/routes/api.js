@@ -3845,6 +3845,59 @@ apiRouter.get("/jobs/:jobId/download", checkAuth, async (request, response) => {
   }
 });
 
+// 11b. Live Preview Document Buffer Endpoint
+apiRouter.post("/documents/:id/preview", checkAuth, async (request, response) => {
+  try {
+    const { id } = request.params;
+    const { segments: customSegments, targetLang } = request.body || {};
+
+    const { data: doc, error: docErr } = await supabase
+      .from("documents")
+      .select("*, file_id, name")
+      .eq("id", id)
+      .single();
+
+    if (docErr || !doc) {
+      return response.status(404).json({ error: "Document not found." });
+    }
+
+    let segmentsList = customSegments;
+    if (!segmentsList || !Array.isArray(segmentsList)) {
+      const activeLang = targetLang || doc.target_lang || "hi";
+      const dbSegments = await fetchAllSegments(id, "segment_index, source_text, target_text", activeLang);
+      segmentsList = dbSegments.map(s => ({
+        id: s.segment_index,
+        source: s.source_text,
+        target: s.target_text || s.source_text
+      }));
+    }
+
+    const extIndex = doc.name.lastIndexOf(".");
+    const ext = extIndex !== -1 ? doc.name.substring(extIndex).toLowerCase() : ".docx";
+
+    const buffer = await exportHtml(doc.file_id || id, segmentsList, ext, targetLang || doc.target_lang || "hi");
+
+    let mimeType = "application/octet-stream";
+    if (ext === ".docx" || ext === ".doc") {
+      mimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    } else if (ext === ".pptx" || ext === ".ppt") {
+      mimeType = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+    } else if (ext === ".html" || ext === ".htm") {
+      mimeType = "text/html";
+    } else if (ext === ".pdf") {
+      mimeType = "application/pdf";
+    }
+
+    response.setHeader("Content-Type", mimeType);
+    response.setHeader("X-Document-Type", ext.replace(".", ""));
+    response.send(buffer);
+  } catch (err) {
+    console.error("Preview endpoint error:", err);
+    response.status(500).json({ error: "Failed to generate document preview." });
+  }
+});
+
+
 // 12. Download ZIP of all files for a target language in the project
 apiRouter.get("/projects/:projectId/download/lang/:lang", checkAuth, async (request, response) => {
   try {

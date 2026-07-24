@@ -17,11 +17,13 @@ import { ContextSettingsModal } from "./components/ContextSettingsModal.jsx";
 import { SearchReplaceModal } from "./components/SearchReplaceModal.jsx";
 import { ForbiddenTermsModal } from "./components/ForbiddenTermsModal.jsx";
 import { SettingsModal } from "./components/SettingsModal.jsx";
+import { DocumentLivePreview } from "./components/DocumentLivePreview.jsx";
 import { LANGUAGES } from "./constants/languages.js";
 import { useGlossaryManager } from "./hooks/useGlossaryManager.js";
 import { useUserStore } from "./services/userStore.js";
 import {
   exportFile,
+  fetchDocumentPreview,
   translateBatch,
   uploadFile,
   importXliff,
@@ -30,6 +32,7 @@ import {
   fetchDocument,
   deleteDocument,
   updateSegment as apiUpdateSegment,
+
   fetchRequestStatus,
   requestAccess,
   fetchAccessRequests,
@@ -108,6 +111,48 @@ export default function App() {
   const [collaborators, setCollaborators] = useState([]);
   const [cellLocks, setCellLocks] = useState(new Map());
   const [showShareModal, setShowShareModal] = useState(false);
+
+  // Live Preview states & handlers
+  const [showLivePreview, setShowLivePreview] = useState(false);
+  const [previewBuffer, setPreviewBuffer] = useState(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const previewDebounceRef = useRef(null);
+
+  const handleFetchLivePreview = useCallback(async (customSegs = null) => {
+    const activeDocId = documentId || (currentRoute.screen === "editor" ? currentRoute.fileId : null);
+    if (!activeDocId) return;
+    setIsPreviewLoading(true);
+    try {
+      const res = await fetchDocumentPreview(activeDocId, customSegs || segments, targetLanguage);
+      setPreviewBuffer(res.data);
+    } catch (err) {
+      console.error("Failed to load live document preview:", err);
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  }, [documentId, currentRoute, segments, targetLanguage]);
+
+  const handleToggleLivePreview = () => {
+    setShowLivePreview((prev) => {
+      const next = !prev;
+      if (next) {
+        handleFetchLivePreview();
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (!showLivePreview) return;
+    if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
+    previewDebounceRef.current = setTimeout(() => {
+      handleFetchLivePreview(segments);
+    }, 700);
+    return () => {
+      if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
+    };
+  }, [segments, showLivePreview, handleFetchLivePreview]);
+
 
   const [lengthRestrictionEnabled, setLengthRestrictionEnabled] = useState(() => {
     const saved = localStorage.getItem("centroid_length_restriction_enabled");
@@ -3100,6 +3145,9 @@ export default function App() {
                 onAcceptAllChanges={handleAcceptAllChanges}
                 hasTrackedChanges={segments.some(s => s.originalTargetText && s.originalTargetText !== s.target)}
                 onApplyGlossary={permission === "write" ? handleApplyGlossary : null}
+                showLivePreview={showLivePreview}
+                onToggleLivePreview={handleToggleLivePreview}
+                isPreviewLoading={isPreviewLoading}
               />
 
               {/* QA panel (collapsible modal) */}
@@ -3112,65 +3160,85 @@ export default function App() {
                 onClose={() => setShowQaPanel(false)}
               />
 
-              {/* Zone 3: Segment editor */}
-              <div className="segment-table">
+              {/* Zone 3: Segment editor & Live Preview Split Container */}
+              <div className={`w-full flex flex-1 overflow-hidden min-h-0 ${showLivePreview ? "flex-row gap-0" : "flex-col"}`}>
+                <div className={`segment-table ${showLivePreview ? "w-1/2 flex-shrink-0 border-r border-slate-800" : "w-full"}`}>
 
-                {permission === "read" && (
-                  <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl px-4 py-3 text-xs font-bold mb-3 shadow-lg mx-1 select-none">
-                    <div className="flex items-center gap-2">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 flex-shrink-0">
-                        <path d="M2 12a10 10 0 1 0 20 0 10 10 0 1 0-20 0Z" />
-                        <line x1="12" x2="12" y1="8" y2="12" />
-                        <line x1="12" x2="12.01" y1="16" y2="16" />
-                      </svg>
-                      Read-Only Workspace
+                  {permission === "read" && (
+                    <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl px-4 py-3 text-xs font-bold mb-3 shadow-lg mx-1 select-none">
+                      <div className="flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 flex-shrink-0">
+                          <path d="M2 12a10 10 0 1 0 20 0 10 10 0 1 0-20 0Z" />
+                          <line x1="12" x2="12" y1="8" y2="12" />
+                          <line x1="12" x2="12.01" y1="16" y2="16" />
+                        </svg>
+                        Read-Only Workspace
+                      </div>
                     </div>
+                  )}
+
+                  <Virtuoso
+                    ref={virtuosoRef}
+                    style={{ flex: 1 }}
+                    data={filteredSegments}
+                    computeItemKey={(index, item) => item.uniqueKey || `seg-${item.id}-${index}`}
+                    itemContent={(index, item) => (
+                      <SegmentCard
+                        key={item.uniqueKey || `seg-${item.id}-${index}`}
+                        darkMode={darkMode}
+                        index={index}
+                        segment={item}
+                        theme={theme}
+                        translationGlossary={translationGlossary}
+                        onCopy={copyToClipboard}
+                        onUpdateTranslation={updateTranslation}
+                        onToggleVerify={() => toggleVerify(item.id)}
+                        onVerifyAndNext={() => verifyAndNextSegment(item.id)}
+                        lockInfo={
+                          cellLocks.has(item.id - 1) && cellLocks.get(item.id - 1).userId !== user?.id
+                            ? cellLocks.get(item.id - 1)
+                            : null
+                        }
+                        onFocusSegment={handleFocusSegment}
+                        onBlurSegment={handleBlurSegment}
+                        readOnly={permission === "read"}
+                        onSaveContext={saveSegmentContext}
+                        onTranslateWithContext={handleTranslateSegmentWithContext}
+                        onTyping={handleSegmentTyping}
+                        isOwner={ownerId === user?.id}
+                        onAcceptChange={handleAcceptChange}
+                        onRejectChange={handleRejectChange}
+                        autocompleteEnabled={autocompleteEnabled}
+                        lengthRestrictionEnabled={lengthRestrictionEnabled}
+                        onUpdateSegmentMaxWords={handleUpdateSegmentMaxWords}
+                        forbiddenTerms={forbiddenTerms}
+                        forbiddenTermsEnabled={forbiddenTermsEnabled}
+                        onOpenForbiddenTerms={() => setShowForbiddenTermsModal(true)}
+                      />
+                    )}
+                  />
+                </div>
+
+                {/* Live Preview Panel Side-by-Side */}
+                {showLivePreview && (
+                  <div className="w-1/2 h-full flex-shrink-0 flex flex-col overflow-hidden">
+                    <DocumentLivePreview
+                      documentId={documentId || currentRoute.fileId}
+                      fileName={fileName}
+                      arrayBuffer={previewBuffer}
+                      documentType={fileExtension || "docx"}
+                      isLoading={isPreviewLoading}
+                      onRefresh={() => handleFetchLivePreview()}
+                      onClose={() => setShowLivePreview(false)}
+                      darkMode={darkMode}
+                      isSplitView={true}
+                    />
                   </div>
                 )}
-
-                <Virtuoso
-                  ref={virtuosoRef}
-                  style={{ flex: 1 }}
-                  data={filteredSegments}
-                  computeItemKey={(index, item) => item.uniqueKey || `seg-${item.id}-${index}`}
-                  itemContent={(index, item) => (
-                    <SegmentCard
-                      key={item.uniqueKey || `seg-${item.id}-${index}`}
-                      darkMode={darkMode}
-                      index={index}
-                      segment={item}
-                      theme={theme}
-                      translationGlossary={translationGlossary}
-                      onCopy={copyToClipboard}
-                      onUpdateTranslation={updateTranslation}
-                      onToggleVerify={() => toggleVerify(item.id)}
-                      onVerifyAndNext={() => verifyAndNextSegment(item.id)}
-                      lockInfo={
-                        cellLocks.has(item.id - 1) && cellLocks.get(item.id - 1).userId !== user?.id
-                          ? cellLocks.get(item.id - 1)
-                          : null
-                      }
-                      onFocusSegment={handleFocusSegment}
-                      onBlurSegment={handleBlurSegment}
-                      readOnly={permission === "read"}
-                      onSaveContext={saveSegmentContext}
-                      onTranslateWithContext={handleTranslateSegmentWithContext}
-                      onTyping={handleSegmentTyping}
-                      isOwner={ownerId === user?.id}
-                      onAcceptChange={handleAcceptChange}
-                      onRejectChange={handleRejectChange}
-                      autocompleteEnabled={autocompleteEnabled}
-                      lengthRestrictionEnabled={lengthRestrictionEnabled}
-                      onUpdateSegmentMaxWords={handleUpdateSegmentMaxWords}
-                      forbiddenTerms={forbiddenTerms}
-                      forbiddenTermsEnabled={forbiddenTermsEnabled}
-                      onOpenForbiddenTerms={() => setShowForbiddenTermsModal(true)}
-                    />
-                  )}
-                />
               </div>
             </>
           )}
+
 
           {/* ── QC Audit Pre-Flight Check overlay ── */}
           {showEstimateModal && (
