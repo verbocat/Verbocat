@@ -112,46 +112,12 @@ export default function App() {
   const [cellLocks, setCellLocks] = useState(new Map());
   const [showShareModal, setShowShareModal] = useState(false);
 
-  // Live Preview states & handlers
+  // Live Preview states
   const [showLivePreview, setShowLivePreview] = useState(false);
   const [previewBuffer, setPreviewBuffer] = useState(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const previewDebounceRef = useRef(null);
 
-  const handleFetchLivePreview = useCallback(async (customSegs = null) => {
-    const activeDocId = documentId || (currentRoute.screen === "editor" ? currentRoute.fileId : null);
-    if (!activeDocId) return;
-    setIsPreviewLoading(true);
-    try {
-      const res = await fetchDocumentPreview(activeDocId, customSegs || segments, targetLanguage);
-      setPreviewBuffer(res.data);
-    } catch (err) {
-      console.error("Failed to load live document preview:", err);
-    } finally {
-      setIsPreviewLoading(false);
-    }
-  }, [documentId, currentRoute, segments, targetLanguage]);
-
-  const handleToggleLivePreview = () => {
-    setShowLivePreview((prev) => {
-      const next = !prev;
-      if (next) {
-        handleFetchLivePreview();
-      }
-      return next;
-    });
-  };
-
-  useEffect(() => {
-    if (!showLivePreview) return;
-    if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
-    previewDebounceRef.current = setTimeout(() => {
-      handleFetchLivePreview(segments);
-    }, 700);
-    return () => {
-      if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
-    };
-  }, [segments, showLivePreview, handleFetchLivePreview]);
 
 
   const [lengthRestrictionEnabled, setLengthRestrictionEnabled] = useState(() => {
@@ -311,6 +277,43 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("centroid_autopropagate_enabled", String(autoPropagateEnabled));
   }, [autoPropagateEnabled]);
+
+  // Live Preview fetch & toggle handlers (placed after documentId and currentRoute initialization)
+  const handleFetchLivePreview = useCallback(async (customSegs = null) => {
+    const activeDocId = documentId || (currentRoute.screen === "editor" ? currentRoute.fileId : null);
+    if (!activeDocId) return;
+    setIsPreviewLoading(true);
+    try {
+      const res = await fetchDocumentPreview(activeDocId, customSegs || segments, targetLanguage);
+      setPreviewBuffer(res.data);
+    } catch (err) {
+      console.error("Failed to load live document preview:", err);
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  }, [documentId, currentRoute, segments, targetLanguage]);
+
+  const handleToggleLivePreview = () => {
+    setShowLivePreview((prev) => {
+      const next = !prev;
+      if (next) {
+        handleFetchLivePreview();
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (!showLivePreview) return;
+    if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
+    previewDebounceRef.current = setTimeout(() => {
+      handleFetchLivePreview(segments);
+    }, 700);
+    return () => {
+      if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
+    };
+  }, [segments, showLivePreview, handleFetchLivePreview]);
+
 
   useEffect(() => {
     if (isAuth) {
