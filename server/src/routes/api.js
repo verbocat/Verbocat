@@ -3872,16 +3872,42 @@ apiRouter.post("/documents/:id/preview", checkAuth, async (request, response) =>
     const docName = doc ? doc.name : "document.docx";
     const fileIdToUse = doc ? doc.file_id : id;
 
-    let segmentsList = customSegments;
-    if (!segmentsList || !Array.isArray(segmentsList)) {
-      const activeLang = targetLang || (doc ? doc.target_lang : "hi");
-      const dbSegments = await fetchAllSegments(id, "segment_index, source_text, target_text", activeLang);
-      segmentsList = dbSegments.map(s => ({
-        id: s.segment_index,
+    // Always fetch complete document segments from database
+    const activeLang = targetLang || (doc ? doc.target_lang : "hi");
+    const dbSegments = await fetchAllSegments(id, "segment_index, source_text, target_text", activeLang);
+
+    const fullSegmentsMap = new Map();
+    dbSegments.forEach(s => {
+      const idx = Number(s.segment_index);
+      fullSegmentsMap.set(idx, {
+        id: idx,
         source: s.source_text,
         target: s.target_text || s.source_text
-      }));
+      });
+    });
+
+    // Overlay live target text updates from editor state if provided
+    if (Array.isArray(customSegments)) {
+      customSegments.forEach(s => {
+        const segId = Number(s.id);
+        if (fullSegmentsMap.has(segId)) {
+          const existing = fullSegmentsMap.get(segId);
+          fullSegmentsMap.set(segId, {
+            ...existing,
+            target: s.target !== undefined ? s.target : existing.target
+          });
+        } else {
+          fullSegmentsMap.set(segId, {
+            id: segId,
+            source: s.source || "",
+            target: s.target || s.source || ""
+          });
+        }
+      });
     }
+
+    const segmentsList = Array.from(fullSegmentsMap.values()).sort((a, b) => a.id - b.id);
+
 
     const extIndex = docName.lastIndexOf(".");
     const ext = extIndex !== -1 ? docName.substring(extIndex).toLowerCase() : ".docx";

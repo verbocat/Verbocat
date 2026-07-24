@@ -154,10 +154,12 @@ const exportFile = async (templateBase64, segments) => {
 
   const segmentMap = new Map();
   segments.forEach((seg) => {
-    const rawText = seg.target || seg.source;
-    // Strip any residual tag markers from text and XML-escape for valid Word XML
+    const rawText = seg.target !== undefined && seg.target !== null && seg.target !== "" 
+      ? seg.target 
+      : (seg.source || "");
     const cleanText = stripTagMarkers(rawText);
-    segmentMap.set(seg.id, escapeXml(cleanText));
+    const numericId = Number(seg.id);
+    segmentMap.set(numericId, escapeXml(cleanText));
   });
 
   for (const xmlFile of docXmlFiles) {
@@ -168,7 +170,7 @@ const exportFile = async (templateBase64, segments) => {
       if (segmentMap.has(id)) {
         return segmentMap.get(id);
       }
-      return match;
+      return "";
     });
 
     zip.file(xmlFile, xmlContent);

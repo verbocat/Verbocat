@@ -258,11 +258,9 @@ const exportHtml = async (fileId, segments, ext = '.html', targetLang = 'hi', te
     throw error;
   }
 
-  // Normalize segment IDs to match 0-based indexing if they are 1-based
-  const hasZero = segments.some(seg => Number(seg.id) === 0);
-  const normalizedSegments = (!hasZero && segments.length > 0)
-    ? segments.map(seg => ({ ...seg, id: Number(seg.id) - 1 }))
-    : segments.map(seg => ({ ...seg, id: Number(seg.id) }));
+  // Normalize segment IDs as numbers
+  const normalizedSegments = segments.map(seg => ({ ...seg, id: Number(seg.id) }));
+
 
   const buffer = await parser.exportFile(templateContent, normalizedSegments, targetLang);
   return buffer;
