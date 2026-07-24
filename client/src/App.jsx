@@ -225,8 +225,10 @@ export default function App() {
       setTargetLanguage(currentRoute.targetLang);
     } else {
       setDocumentId(null);
+      setShowLivePreview(false);
     }
   }, [currentRoute]);
+
 
   const [permission, setPermission] = useState("write");
   const [ownerId, setOwnerId] = useState(null);

@@ -111,8 +111,9 @@ export const WorkspaceToolbar = ({
             style={{ width: 12, height: 12, color: showLivePreview ? "#818cf8" : "var(--text-muted)", flexShrink: 0 }}
             className={isPreviewLoading ? "animate-spin" : ""}
           />
-          <span>Live Preview</span>
+          <span>{showLivePreview ? "Hide Preview" : "Live Preview"}</span>
         </button>
+
 
 
         {/* Track Changes (Owner Only) */}
