@@ -175,13 +175,22 @@ async function runJob(job) {
     let progress = initialProgress.progress;
     await updateJobProgress(job.id, progress);
 
-    // Filter segments that still need translation
-    const pendingSegments = dbSegments.filter(
-      s => isCountableSourceText(s.source_text) && (!s.target_text || s.target_text.replace(/<\/?\d+>/g, "").trim() === "")
-    );
+    const { isLegitimatelyIdentical } = require("./translationProviders");
 
-    // Group pending segments into chunks of 15 for execution
-    const CHUNK_SIZE = 15;
+    // Filter segments that still need translation (empty target OR target equals source text)
+    const pendingSegments = dbSegments.filter(s => {
+      if (!isCountableSourceText(s.source_text)) return false;
+      const cleanSource = String(s.source_text || "").replace(/<[^>]+>/g, "").trim();
+      const cleanTarget = String(s.target_text || "").replace(/<[^>]+>/g, "").trim();
+      
+      const isEmpty = !cleanTarget;
+      const isIdenticalSource = cleanSource.toLowerCase() === cleanTarget.toLowerCase() && !isLegitimatelyIdentical(cleanSource);
+
+      return isEmpty || isIdenticalSource;
+    });
+
+    // Group pending segments into chunks of 6 for execution
+    const CHUNK_SIZE = 6;
     const chunks = [];
     for (let i = 0; i < pendingSegments.length; i += CHUNK_SIZE) {
       chunks.push(pendingSegments.slice(i, i + CHUNK_SIZE));

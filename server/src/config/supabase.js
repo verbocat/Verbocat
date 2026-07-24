@@ -63,39 +63,119 @@ const fetchAllSegmentsRaw = async (documentId, select = "*", targetLang = null) 
   return allSegments;
 };
 
+const { splitTextIntoSentences } = require("../utils/sentenceSplitter");
+
+const resegmentDocumentInDb = async (documentId, sourceSegments) => {
+  if (!sourceSegments || sourceSegments.length === 0) return false;
+
+  let needsResegmenting = false;
+  const newSourceSegments = [];
+  let segIdx = 0;
+
+  for (const seg of sourceSegments) {
+    const text = String(seg.source_text || "").trim();
+    const sentences = splitTextIntoSentences(text, 35);
+    
+    if (sentences.length > 1) {
+      needsResegmenting = true;
+      sentences.forEach(s => {
+        newSourceSegments.push({
+          document_id: documentId,
+          target_lang: null,
+          segment_index: segIdx++,
+          source_text: s,
+          target_text: "",
+          status: "draft"
+        });
+      });
+    } else {
+      newSourceSegments.push({
+        document_id: documentId,
+        target_lang: null,
+        segment_index: segIdx++,
+        source_text: text,
+        target_text: "",
+        status: "draft"
+      });
+    }
+  }
+
+  if (needsResegmenting && newSourceSegments.length > 0) {
+    console.log(`[AutoResegment] Resegmenting document ${documentId} into ${newSourceSegments.length} sentence-level segments...`);
+    try {
+      // Wipe ALL existing segment rows for documentId across all target languages
+      await supabase.from("document_segments").delete().eq("document_id", documentId);
+      
+      const BATCH_SIZE = 500;
+      for (let i = 0; i < newSourceSegments.length; i += BATCH_SIZE) {
+        await supabase.from("document_segments").insert(newSourceSegments.slice(i, i + BATCH_SIZE));
+      }
+      return true;
+    } catch (err) {
+      console.error("[AutoResegment] Failed to resegment document:", err);
+    }
+  }
+
+  return false;
+};
+
 const fetchAllSegments = async (documentId, select = "*", targetLang = null) => {
   if (targetLang && targetLang !== "source") {
-    // 1. Fetch the target language segments (with source_text potentially = "")
-    const targetSegments = await fetchAllSegmentsRaw(documentId, select, targetLang);
-    
-    // Check if we need to map source_text (e.g. if select is "*" or includes "source_text")
-    const needsSourceText = select === "*" || select.includes("source_text");
-    if (needsSourceText) {
-      // 2. Fetch the template segments (target_lang IS NULL), selecting index and source_text
-      const sourceSegments = await fetchAllSegmentsRaw(documentId, "segment_index, source_text", "source");
+    // 1. Fetch template segments (target_lang IS NULL)
+    let sourceSegments = await fetchAllSegmentsRaw(documentId, select, "source");
 
-      // 3. Map source texts by segment_index
+    // Auto-resegment oversized paragraph documents in database
+    const didResegment = await resegmentDocumentInDb(documentId, sourceSegments);
+    if (didResegment) {
+      sourceSegments = await fetchAllSegmentsRaw(documentId, select, "source");
+    }
+
+    // 2. Fetch target language segments
+    let targetSegments = await fetchAllSegmentsRaw(documentId, select, targetLang);
+
+    // 3. If targetSegments is EMPTY or didResegment is true, clone/initialize fresh sentence segments
+    if ((!targetSegments || targetSegments.length === 0 || didResegment || targetSegments.length !== sourceSegments.length) && sourceSegments && sourceSegments.length > 0) {
+      targetSegments = sourceSegments.map(src => ({
+        ...src,
+        target_lang: targetLang,
+        target_text: "",
+        status: "draft"
+      }));
+
+      try {
+        const seedInserts = sourceSegments.map(src => ({
+          document_id: documentId,
+          target_lang: targetLang,
+          segment_index: src.segment_index,
+          source_text: src.source_text || "",
+          target_text: "",
+          status: "draft"
+        }));
+        await supabase.from("document_segments").insert(seedInserts);
+      } catch (seedErr) {
+        console.error("Failed to seed target segments:", seedErr);
+      }
+    } else {
       const sourceMap = {};
       sourceSegments.forEach(seg => {
         sourceMap[seg.segment_index] = seg.source_text;
       });
 
-      // 4. Merge source_text into targetSegments
-      return targetSegments.map(seg => {
-        const mappedSourceText = sourceMap[seg.segment_index];
-        if (mappedSourceText !== undefined) {
-          return {
-            ...seg,
-            source_text: mappedSourceText
-          };
-        }
-        return seg;
-      });
+      targetSegments = targetSegments.map(seg => ({
+        ...seg,
+        source_text: sourceMap[seg.segment_index] || seg.source_text || ""
+      }));
     }
+
     return targetSegments;
-  } else {
-    return fetchAllSegmentsRaw(documentId, select, targetLang);
   }
+
+  let sourceSegments = await fetchAllSegmentsRaw(documentId, select, targetLang);
+  const didResegment = await resegmentDocumentInDb(documentId, sourceSegments);
+  if (didResegment) {
+    sourceSegments = await fetchAllSegmentsRaw(documentId, select, targetLang);
+  }
+  return sourceSegments;
 };
 
 module.exports = {

@@ -3677,13 +3677,57 @@ apiRouter.post("/jobs/:jobId/:action", checkAuth, async (request, response) => {
       return response.status(400).json({ error: "Invalid action." });
     }
 
-    const { data: job, error: fetchErr } = await supabase
+    const { data: jobs } = await supabase
       .from("translation_jobs")
       .select("id, status, document_id, progress, project_id, target_lang, documents(name)")
       .eq("id", jobId)
-      .single();
+      .limit(1);
 
-    if (fetchErr || !job) {
+    let job = jobs && jobs.length > 0 ? jobs[0] : null;
+
+    if (!job && jobId.includes("_")) {
+      const parts = jobId.split("_");
+      const docId = parts[0];
+      const targetLang = parts[1];
+
+      const { data: existingJobs } = await supabase
+        .from("translation_jobs")
+        .select("id, status, document_id, progress, project_id, target_lang, documents(name)")
+        .eq("document_id", docId)
+        .eq("target_lang", targetLang)
+        .limit(1);
+
+      if (existingJobs && existingJobs.length > 0) {
+        job = existingJobs[0];
+      } else {
+        const { data: doc } = await supabase
+          .from("documents")
+          .select("project_id, name, word_count")
+          .eq("id", docId)
+          .maybeSingle();
+
+        if (doc) {
+          const { data: newJob } = await supabase
+            .from("translation_jobs")
+            .insert({
+              project_id: doc.project_id,
+              document_id: docId,
+              target_lang: targetLang,
+              status: "pending",
+              progress: 0,
+              word_count: doc.word_count || 0
+            })
+            .select("id, status, document_id, progress, project_id, target_lang")
+            .maybeSingle();
+
+          if (newJob) {
+            job = { ...newJob, documents: { name: doc.name } };
+          }
+        }
+      }
+    }
+
+    if (!job) {
       return response.status(404).json({ error: "Job not found." });
     }
 
@@ -4065,19 +4109,31 @@ apiRouter.get("/documents/:documentId/lang/:lang/segments", checkAuth, async (re
     const { documentId, lang } = request.params;
 
     // Fetch job details by document_id and target_lang
-    const { data: job, error: jobErr } = await supabase
+    const { data: jobs } = await supabase
       .from("translation_jobs")
       .select("*, documents(name, file_id, source_lang, owner_id, track_changes_enabled), projects(name, settings)")
       .eq("document_id", documentId)
       .eq("target_lang", lang)
-      .single();
+      .order("created_at", { ascending: false })
+      .limit(1);
 
-    if (jobErr || !job) {
-      return response.status(404).json({ error: "Translation job not found." });
+    let job = jobs && jobs.length > 0 ? jobs[0] : null;
+    let doc = job?.documents;
+    let project = job?.projects;
+
+    if (!doc) {
+      const { data: directDoc } = await supabase
+        .from("documents")
+        .select("*, projects(name, settings)")
+        .eq("id", documentId)
+        .maybeSingle();
+
+      if (!directDoc) {
+        return response.status(404).json({ error: "Document not found." });
+      }
+      doc = directDoc;
+      project = directDoc.projects;
     }
-
-    const doc = job.documents;
-    const project = job.projects;
 
     // Verify access permission
     let permission = "read";
@@ -4172,9 +4228,9 @@ apiRouter.get("/documents/:documentId/lang/:lang/segments", checkAuth, async (re
     });
 
     response.json({
-      jobId: job.id,
+      jobId: job?.id || documentId,
       documentId,
-      projectId: job.project_id,
+      projectId: job?.project_id || doc.project_id,
       targetLang: lang,
       sourceLang: doc.source_lang,
       fileName: doc.name,
@@ -4182,10 +4238,10 @@ apiRouter.get("/documents/:documentId/lang/:lang/segments", checkAuth, async (re
       permission,
       ownerId: doc.owner_id,
       trackChangesEnabled: doc.track_changes_enabled,
-      contextSettings: project.settings || {},
-      projectName: project.name,
-      jobStatus: job.status,
-      jobProgress: job.progress,
+      contextSettings: project?.settings || {},
+      projectName: project?.name || "",
+      jobStatus: job?.status || "Active",
+      jobProgress: job?.progress || 0,
       segments: mappedSegments
     });
   } catch (err) {
@@ -4390,6 +4446,113 @@ apiRouter.post("/documents/:documentId/lang/:lang/segments/:index/translate-cont
     if (tempPath && fs.existsSync(tempPath)) {
       fs.unlinkSync(tempPath);
     }
+  }
+});
+// ═══════════════════════════════════════════════════════════
+// PROTECTED CONTENT MANAGEMENT ROUTES
+// ═══════════════════════════════════════════════════════════
+
+const { 
+  scanTextForProtectedContent, 
+  PRESET_PATTERNS 
+} = require("../utils/protectedContentEngine");
+
+// 1. Scan project text for protected content
+apiRouter.post("/projects/:projectId/protected-content/scan", checkAuth, async (request, response) => {
+  try {
+    const { projectId } = request.params;
+    const { options } = request.body;
+
+    // Fetch all document IDs under project
+    const { data: docs } = await supabase
+      .from("documents")
+      .select("id")
+      .eq("project_id", projectId);
+
+    if (!docs || docs.length === 0) {
+      return response.json({ categories: {}, totalProtectedItems: 0, allProtectedList: [] });
+    }
+
+    const docIds = docs.map(d => d.id);
+
+    // Fetch all source template segments for these documents
+    const { data: sourceSegments } = await supabase
+      .from("document_segments")
+      .select("source_text")
+      .in("document_id", docIds)
+      .is("target_lang", null);
+
+    const scanResults = scanTextForProtectedContent(sourceSegments || [], options || {});
+    response.json(scanResults);
+  } catch (err) {
+    console.error("Protected content scan error:", err);
+    response.status(500).json({ error: "Failed to scan project for protected content." });
+  }
+});
+
+// 2. Get protected content rules for a project
+apiRouter.get("/projects/:projectId/protected-content/rules", checkAuth, async (request, response) => {
+  try {
+    const { projectId } = request.params;
+    const { data: project, error } = await supabase
+      .from("projects")
+      .select("settings")
+      .eq("id", projectId)
+      .single();
+
+    if (error || !project) {
+      return response.status(404).json({ error: "Project not found." });
+    }
+
+    const settings = project.settings || {};
+    const protectedRules = settings.protectedContentRules || {
+      activeCategories: Object.keys(PRESET_PATTERNS),
+      manualTerms: [],
+      customRegexRules: [],
+      protectedMatches: []
+    };
+
+    response.json(protectedRules);
+  } catch (err) {
+    console.error("Failed to fetch protected content rules:", err);
+    response.status(500).json({ error: "Failed to fetch protected rules." });
+  }
+});
+
+// 3. Save protected content rules for a project
+apiRouter.put("/projects/:projectId/protected-content/rules", checkAuth, async (request, response) => {
+  try {
+    const { projectId } = request.params;
+    const { rules } = request.body;
+
+    const { data: project, error: fetchErr } = await supabase
+      .from("projects")
+      .select("settings")
+      .eq("id", projectId)
+      .single();
+
+    if (fetchErr || !project) {
+      return response.status(404).json({ error: "Project not found." });
+    }
+
+    const updatedSettings = {
+      ...(project.settings || {}),
+      protectedContentRules: rules || {}
+    };
+
+    const { error: updateErr } = await supabase
+      .from("projects")
+      .update({ settings: updatedSettings, updated_at: new Date().toISOString() })
+      .eq("id", projectId);
+
+    if (updateErr) {
+      return response.status(500).json({ error: "Failed to save protected rules." });
+    }
+
+    response.json({ success: true, rules: updatedSettings.protectedContentRules });
+  } catch (err) {
+    console.error("Failed to save protected content rules:", err);
+    response.status(500).json({ error: "Failed to save protected content rules." });
   }
 });
 

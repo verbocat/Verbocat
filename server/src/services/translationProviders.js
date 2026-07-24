@@ -464,13 +464,14 @@ const isLegitimatelyIdentical = (source) => {
   const clean = String(source || "")
     .replace(/<[^>]+>/g, "")
     .replace(/__TAG_\d+__/g, "")
+    .replace(/<ph id="\d+"\/>/g, "")
     .trim();
   if (!clean) return true;
 
   // No letters at all (just numbers, punctuation, symbols)
   if (!/\p{L}/u.test(clean)) return true;
 
-  // Split into tokens by whitespace and common punctuation (excluding dots/hyphens/slashes inside tokens)
+  // Split into tokens by whitespace and common punctuation
   const tokens = clean.split(/[\s,()\[\]{}":;!|?।]+/g).filter(t => t.trim().length > 0);
   if (tokens.length === 0) return true;
 
@@ -484,16 +485,11 @@ const isLegitimatelyIdentical = (source) => {
     if (/^www\.[^\s]+$/i.test(token)) return true;
     if (/\.[a-z]{2,4}$/i.test(token)) return true; // domain suffix
 
-    // 3. Roman numerals
-    if (/^(i+v*|v*i+|x|v)$/i.test(token)) return true;
+    // 3. Single list pointer like "1." or "a)"
+    if (/^\(?[a-zA-Z0-9]\)[\.\)]?$/.test(token)) return true;
 
-    // 4. Uppercase acronyms / codes (at least 50% uppercase/digits)
-    const upperCount = (token.match(/[A-Z0-9]/g) || []).length;
-    const totalAlpha = (token.match(/[a-zA-Z]/g) || []).length;
-    if (totalAlpha > 0 && upperCount / totalAlpha >= 0.5) return true;
-
-    // 5. Short tokens (length <= 3) e.g. list pointers or standard abbreviations
-    if (token.length <= 3) return true;
+    // 4. Uppercase acronyms / codes (length >= 2, all uppercase/digits)
+    if (token.length >= 2 && /^[A-Z0-9_-]+$/.test(token)) return true;
 
     return false;
   };

@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Folder, User, Calendar, Trash2, Search, Filter, Globe, BookOpen, Settings, ChevronRight, LayoutDashboard, Users, Share2, MoreVertical, Copy, StickyNote, History } from "lucide-react";
+import { Plus, Folder, User, Calendar, Trash2, Search, Filter, Globe, BookOpen, Settings, ChevronRight, LayoutDashboard, Users, Share2, MoreVertical, Copy, StickyNote, History, Check, XCircle, Sparkles, Layers, FileText, CheckCircle2, TrendingUp } from "lucide-react";
 import { fetchProjects, createProject, deleteProject, duplicateProject } from "../services/api";
 import { LANGUAGES } from "../constants/languages";
 import { ShareModal } from "./ShareModal";
 import { ProjectNotesModal } from "./ProjectNotesModal";
 import { SettingsModal } from "./SettingsModal";
 import { ProjectHistoryModal } from "./ProjectHistoryModal";
+import { CardGridSkeleton } from "./SkeletonLoader";
+
+import io from "socket.io-client";
 
 export default function ProjectDashboard({ onOpenProject, showToast, theme, userRole, onOpenAdmin, onOpenSettings }) {
   const [projects, setProjects] = useState([]);
@@ -20,7 +23,7 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
   const [showGlobalHistoryModal, setShowGlobalHistoryModal] = useState(false);
   const [openMenuProjectId, setOpenMenuProjectId] = useState(null);
 
-  // Form states
+  // Form states for Create Project
   const [projName, setProjName] = useState("");
   const [clientName, setClientName] = useState("");
   const [description, setDescription] = useState("");
@@ -31,6 +34,17 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
 
   useEffect(() => {
     loadProjects();
+
+    const socketUrl = import.meta.env.VITE_API_URL || window.location.origin;
+    const socket = io(socketUrl, { auth: { token: localStorage.getItem("centroid_token") } });
+
+    socket.on("global-job-update", () => {
+      fetchProjects().then(data => setProjects(data || [])).catch(() => {});
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, []);
 
   // Click outside to close 3-dots dropdown
@@ -100,389 +114,593 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
     if (!window.confirm(`Are you sure you want to delete project "${name}"? This deletes all files, translation jobs, and segments.`)) {
       return;
     }
-
     try {
       await deleteProject(id);
-      showToast("Project deleted successfully");
+      showToast(`Project "${name}" deleted`);
       loadProjects();
     } catch (err) {
       console.error(err);
-      showToast("Failed to delete project", "error");
+      showToast(err.response?.data?.error || "Failed to delete project", "error");
     }
   };
 
-  const toggleLanguage = (code) => {
-    setSelectedLangs(prev => 
-      prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]
-    );
+  const toggleLanguageSelection = (langCode) => {
+    if (selectedLangs.includes(langCode)) {
+      setSelectedLangs(selectedLangs.filter((l) => l !== langCode));
+    } else {
+      setSelectedLangs([...selectedLangs, langCode]);
+    }
   };
 
-  const filteredProjects = projects.filter(proj => {
-    const matchesSearch = proj.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          (proj.description && proj.description.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesClient = !filterClient || (proj.client && proj.client.toLowerCase().includes(filterClient.toLowerCase()));
-    const matchesTab = activeTab === "all" ||
-                       (activeTab === "my" && !proj.isShared) ||
-                       (activeTab === "shared" && proj.isShared);
-    return matchesSearch && matchesClient && matchesTab;
+  const filteredLanguages = LANGUAGES.filter(
+    (l) =>
+      l.name.toLowerCase().includes(langSearch.toLowerCase()) ||
+      l.code.toLowerCase().includes(langSearch.toLowerCase())
+  );
+
+  // Filter projects by Tab and Search/Client queries
+  const filteredProjects = projects.filter((p) => {
+    if (activeTab === "my" && p.isShared) return false;
+    if (activeTab === "shared" && !p.isShared) return false;
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchName = p.name.toLowerCase().includes(q);
+      const matchDesc = (p.description || "").toLowerCase().includes(q);
+      if (!matchName && !matchDesc) return false;
+    }
+
+    if (filterClient.trim()) {
+      const c = filterClient.toLowerCase();
+      const matchClient = (p.client || "").toLowerCase().includes(c);
+      if (!matchClient) return false;
+    }
+
+    return true;
   });
 
-  const myProjectsCount = projects.filter(p => !p.isShared).length;
-  const sharedProjectsCount = projects.filter(p => p.isShared).length;
+  const myProjectsCount = projects.filter((p) => !p.isShared).length;
+  const sharedProjectsCount = projects.filter((p) => p.isShared).length;
+  const totalFilesCount = projects.reduce((sum, p) => sum + (p.fileCount || (p.documents?.length || 0)), 0);
 
   return (
-    <div className="h-screen overflow-y-auto bg-[var(--bg-base)] text-[var(--text-primary)] p-8">
-      {/* Dashboard Header */}
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-            Project Dashboard
-          </h1>
-          <p className="text-xs text-[var(--text-secondary)] mt-1">
-            Manage your translations with collaborative project workflows.
-          </p>
+    <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] font-sans antialiased flex flex-col">
+      
+      {/* ── TOP HEADER NAVBAR ── */}
+      <header className="sticky top-0 z-30 border-b border-[var(--border-subtle)] bg-[var(--bg-panel)]/90 backdrop-blur-md px-8 py-4 flex items-center justify-between shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+            <Sparkles className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-base font-extrabold bg-gradient-to-r from-indigo-400 via-purple-300 to-emerald-400 bg-clip-text text-transparent leading-none">
+              Centroid Studio
+            </h1>
+            <p className="text-[11px] font-semibold text-[var(--text-muted)] mt-1 tracking-wide">
+              Enterprise Translation Workspace
+            </p>
+          </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+
+        {/* Header Right Actions */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowGlobalHistoryModal(true)}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
+            title="Global Workspace Activity Log"
+          >
+            <History size={14} className="text-indigo-400" />
+            <span>Activity Log</span>
+          </button>
+
           {userRole === "admin" && (
             <button
               onClick={onOpenAdmin}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                width: 36, height: 36, borderRadius: 12,
-                background: "var(--bg-surface)",
-                border: "1px solid var(--border-subtle)",
-                color: "var(--text-secondary)",
-                cursor: "pointer", transition: "all 0.2s ease"
-              }}
-              onMouseOver={(e) => e.currentTarget.style.background = "var(--bg-elevated)"}
-              onMouseOut={(e) => e.currentTarget.style.background = "var(--bg-surface)"}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 text-xs font-bold text-indigo-400 transition-all cursor-pointer shadow-xs"
               title="Admin Panel"
             >
-              <LayoutDashboard size={15} />
+              <LayoutDashboard size={14} />
+              <span>Admin Panel</span>
             </button>
           )}
 
           <button
-            onClick={() => setShowGlobalHistoryModal(true)}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              gap: 6, padding: "0 12px", height: 36, borderRadius: 12,
-              background: "var(--bg-surface)",
-              border: "1px solid var(--border-subtle)",
-              color: "var(--text-primary)",
-              fontSize: 12, fontWeight: 700,
-              cursor: "pointer", transition: "all 0.2s ease"
-            }}
-            onMouseOver={(e) => e.currentTarget.style.background = "var(--bg-elevated)"}
-            onMouseOut={(e) => e.currentTarget.style.background = "var(--bg-surface)"}
-            title="Workspace Audit History"
-          >
-            <History size={15} className="text-indigo-400" />
-            <span>History</span>
-          </button>
-
-          <button
             onClick={onOpenSettings}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 36, height: 36, borderRadius: 12,
-              background: "var(--bg-surface)",
-              border: "1px solid var(--border-subtle)",
-              color: "var(--text-secondary)",
-              cursor: "pointer", transition: "all 0.2s ease"
-            }}
-            onMouseOver={(e) => e.currentTarget.style.background = "var(--bg-elevated)"}
-            onMouseOut={(e) => e.currentTarget.style.background = "var(--bg-surface)"}
-            title="Settings"
+            className="h-9 w-9 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center transition-all cursor-pointer shadow-xs"
+            title="Workspace Settings"
           >
             <Settings size={15} />
           </button>
 
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold px-4 py-2.5 rounded-xl cursor-pointer shadow-md transition-all"
+            className="flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-bold px-4 py-2 rounded-xl cursor-pointer shadow-lg shadow-indigo-500/20 transition-all transform hover:scale-[1.02] active:scale-[0.98]"
           >
-            <Plus size={16} /> Create Project
+            <Plus size={16} /> New Project
           </button>
         </div>
-      </div>
+      </header>
 
-      {/* Tabs & Search Bar */}
-      <div className="max-w-7xl mx-auto flex flex-col gap-4 mb-8">
-        <div className="flex items-center gap-2 bg-[var(--bg-panel)] border border-[var(--border-subtle)] p-1.5 rounded-2xl w-fit">
-          <button
-            onClick={() => setActiveTab("all")}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === "all"
-                ? "bg-[var(--accent)] text-white shadow-sm"
-                : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-            }`}
-          >
-            All Projects ({projects.length})
-          </button>
-          <button
-            onClick={() => setActiveTab("my")}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === "my"
-                ? "bg-[var(--accent)] text-white shadow-sm"
-                : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-            }`}
-          >
-            My Projects ({myProjectsCount})
-          </button>
-          <button
-            onClick={() => setActiveTab("shared")}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeTab === "shared"
-                ? "bg-[var(--accent)] text-white shadow-sm"
-                : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-            }`}
-          >
-            <Users size={13} />
-            Shared with Me ({sharedProjectsCount})
-          </button>
-        </div>
-
-        <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-4 flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search size={16} className="absolute left-3.5 top-3.5 text-[var(--text-muted)]" />
-            <input
-              type="text"
-              placeholder="Search projects by name or description..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl pl-10 pr-4 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-all"
-            />
+      {/* ── MAIN CONTENT CONTAINER ── */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-8 space-y-8">
+        
+        {/* ── STATS HERO BANNER ── */}
+        <section className="grid grid-cols-1 md:grid-cols-4 gap-5">
+          <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-5 shadow-sm flex items-center gap-4 relative overflow-hidden group">
+            <div className="absolute right-0 top-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl group-hover:bg-indigo-500/10 transition-all" />
+            <div className="h-11 w-11 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center border border-indigo-500/20 shrink-0">
+              <Folder size={20} />
+            </div>
+            <div>
+              <span className="text-[11px] font-extrabold uppercase text-[var(--text-muted)] tracking-wider">Total Projects</span>
+              <h4 className="text-xl font-black text-[var(--text-primary)] mt-1">{projects.length}</h4>
+            </div>
           </div>
-          <div className="w-full md:w-64 relative">
-            <Filter size={16} className="absolute left-3.5 top-3.5 text-[var(--text-muted)]" />
-            <input
-              type="text"
-              placeholder="Filter by Client..."
-              value={filterClient}
-              onChange={(e) => setFilterClient(e.target.value)}
-              className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl pl-10 pr-4 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-all"
-            />
+
+          <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-5 shadow-sm flex items-center gap-4 relative overflow-hidden group">
+            <div className="absolute right-0 top-0 w-24 h-24 bg-purple-500/5 rounded-full blur-2xl group-hover:bg-purple-500/10 transition-all" />
+            <div className="h-11 w-11 rounded-2xl bg-purple-500/10 text-purple-400 flex items-center justify-center border border-purple-500/20 shrink-0">
+              <Users size={20} />
+            </div>
+            <div>
+              <span className="text-[11px] font-extrabold uppercase text-[var(--text-muted)] tracking-wider">Shared Projects</span>
+              <h4 className="text-xl font-black text-[var(--text-primary)] mt-1">{sharedProjectsCount}</h4>
+            </div>
           </div>
-        </div>
-      </div>
 
-      {/* Projects List Grid */}
-      <div className="max-w-7xl mx-auto">
-        {loading ? (
-          <div className="text-center py-20">
-            <div className="animate-spin rounded-full h-8 w-8 border-2 border-indigo-500 border-t-transparent mx-auto"></div>
-            <p className="text-xs text-[var(--text-secondary)] mt-4">Loading your workspace projects...</p>
+          <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-5 shadow-sm flex items-center gap-4 relative overflow-hidden group">
+            <div className="absolute right-0 top-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition-all" />
+            <div className="h-11 w-11 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20 shrink-0">
+              <FileText size={20} />
+            </div>
+            <div>
+              <span className="text-[11px] font-extrabold uppercase text-[var(--text-muted)] tracking-wider">Total Files</span>
+              <h4 className="text-xl font-black text-[var(--text-primary)] mt-1">{totalFilesCount}</h4>
+            </div>
           </div>
-        ) : filteredProjects.length === 0 ? (
-          <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl py-20 text-center">
-            <Folder size={48} className="mx-auto text-[var(--text-muted)] mb-4" />
-            <h3 className="text-sm font-bold text-[var(--text-primary)]">No projects found</h3>
-            <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto mt-2">
-              {searchQuery || filterClient 
-                ? "Try adjusting your search queries or filters." 
-                : activeTab === "shared"
-                  ? "No projects have been shared with you yet."
-                  : "Get started by creating your first localization project."}
-            </p>
+
+          <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-5 shadow-sm flex items-center gap-4 relative overflow-hidden group">
+            <div className="absolute right-0 top-0 w-24 h-24 bg-amber-500/5 rounded-full blur-2xl group-hover:bg-amber-500/10 transition-all" />
+            <div className="h-11 w-11 rounded-2xl bg-amber-500/10 text-amber-400 flex items-center justify-center border border-amber-500/20 shrink-0">
+              <TrendingUp size={20} />
+            </div>
+            <div>
+              <span className="text-[11px] font-extrabold uppercase text-[var(--text-muted)] tracking-wider">Workspace Mode</span>
+              <h4 className="text-sm font-black text-amber-400 mt-1">Enterprise active</h4>
+            </div>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredProjects.map((proj) => {
-              const totalJobs = proj.jobStats?.total || 0;
-              const completedJobs = proj.jobStats?.completed || 0;
-              const completionPercent = totalJobs > 0 ? Math.round((completedJobs / totalJobs) * 100) : 0;
-              const notesCount = proj.settings?.notes?.length || 0;
+        </section>
 
-              return (
-                <div 
-                  key={proj.id}
-                  className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] hover:border-zinc-700/80 rounded-2xl p-5 flex flex-col justify-between shadow-lg transition-all group relative"
-                >
-                  <div>
-                    {/* Card Header with 3-Dots Menu */}
-                    <div className="flex justify-between items-start gap-2 relative">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Folder size={18} className="text-indigo-400 flex-shrink-0" />
-                        <h3 className="text-sm font-bold text-[var(--text-primary)] group-hover:text-indigo-400 transition-colors truncate">
-                          {proj.name}
-                        </h3>
-                      </div>
+        {/* ── TOOLBAR: TABS & FILTERS ── */}
+        <section className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+          
+          {/* Tab Selector */}
+          <div className="flex items-center gap-1.5 bg-[var(--bg-panel)] border border-[var(--border-subtle)] p-1.5 rounded-2xl shadow-xs">
+            <button
+              onClick={() => setActiveTab("all")}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === "all"
+                  ? "bg-indigo-500 text-white shadow-md shadow-indigo-500/20"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+              }`}
+            >
+              All Projects ({projects.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("my")}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === "my"
+                  ? "bg-indigo-500 text-white shadow-md shadow-indigo-500/20"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+              }`}
+            >
+              My Projects ({myProjectsCount})
+            </button>
+            <button
+              onClick={() => setActiveTab("shared")}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === "shared"
+                  ? "bg-indigo-500 text-white shadow-md shadow-indigo-500/20"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+              }`}
+            >
+              <Users size={13} />
+              Shared ({sharedProjectsCount})
+            </button>
+          </div>
 
-                      {/* 3 Dots Menu Button */}
-                      <div className="relative">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setOpenMenuProjectId(openMenuProjectId === proj.id ? null : proj.id);
-                          }}
-                          className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer"
-                          title="Project Options"
-                        >
-                          <MoreVertical size={16} />
-                        </button>
+          {/* Search Inputs */}
+          <div className="flex flex-1 max-w-xl gap-3">
+            <div className="flex-1 relative">
+              <Search size={15} className="absolute left-3.5 top-3 text-[var(--text-muted)]" />
+              <input
+                type="text"
+                placeholder="Search projects..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-[var(--bg-panel)] border border-[var(--border-subtle)] focus:border-indigo-500/50 rounded-2xl pl-10 pr-4 py-2 text-xs text-[var(--text-primary)] outline-none transition-all"
+              />
+            </div>
+            <div className="w-48 relative">
+              <Filter size={15} className="absolute left-3.5 top-3 text-[var(--text-muted)]" />
+              <input
+                type="text"
+                placeholder="Filter client..."
+                value={filterClient}
+                onChange={(e) => setFilterClient(e.target.value)}
+                className="w-full bg-[var(--bg-panel)] border border-[var(--border-subtle)] focus:border-indigo-500/50 rounded-2xl pl-10 pr-4 py-2 text-xs text-[var(--text-primary)] outline-none transition-all"
+              />
+            </div>
+          </div>
 
-                        {/* Dropdown Popover */}
-                        {openMenuProjectId === proj.id && (
-                          <div 
-                            className="absolute right-0 mt-1 w-48 bg-[var(--bg-elevated)] border border-[var(--border-medium)] rounded-xl shadow-2xl z-50 py-1 flex flex-col divide-y divide-[var(--border-subtle)] text-xs select-none"
-                            onClick={(e) => e.stopPropagation()}
+        </section>
+
+        {/* ── PROJECTS CARDS GRID ── */}
+        <section>
+          {loading ? (
+            <CardGridSkeleton count={6} />
+          ) : filteredProjects.length === 0 ? (
+            <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-3xl py-24 text-center">
+              <Folder size={44} className="mx-auto text-[var(--text-muted)] mb-3" />
+              <h3 className="text-sm font-bold text-[var(--text-primary)]">No projects found</h3>
+              <p className="text-xs text-[var(--text-secondary)] mt-1">Try adjusting search filters or create a new project.</p>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="mt-5 inline-flex items-center gap-2 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold px-4 py-2 rounded-xl cursor-pointer shadow-md transition-all"
+              >
+                <Plus size={15} /> Create Project
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredProjects.map((proj) => {
+                const totalJobs = proj.jobs?.length || 0;
+                const completedJobs = proj.jobs?.filter(j => j.status === "completed" || j.progress === 100).length || 0;
+                
+                const avgProgress = totalJobs > 0 
+                  ? Math.round(proj.jobs.reduce((sum, j) => sum + (j.progress || 0), 0) / totalJobs) 
+                  : 0;
+
+                const avgVerified = totalJobs > 0
+                  ? Math.round(proj.jobs.reduce((sum, j) => sum + (j.verifiedProgress || 0), 0) / totalJobs)
+                  : 0;
+
+                const notesCount = proj.notesCount || 0;
+
+                return (
+                  <div
+                    key={proj.id}
+                    className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] hover:border-indigo-500/40 rounded-3xl p-6 flex flex-col justify-between shadow-md hover:shadow-2xl transition-all duration-300 group relative"
+                  >
+                    <div>
+                      {/* Card Header & Popover Menu */}
+                      <div className="flex justify-between items-start gap-3 relative">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="h-9 w-9 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center border border-indigo-500/20 shrink-0 group-hover:scale-105 transition-transform">
+                            <Folder size={18} />
+                          </div>
+                          <h3 className="text-sm font-extrabold text-[var(--text-primary)] group-hover:text-indigo-400 transition-colors truncate">
+                            {proj.name}
+                          </h3>
+                        </div>
+
+                        {/* 3-Dots Options Button */}
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenMenuProjectId(openMenuProjectId === proj.id ? null : proj.id);
+                            }}
+                            className="p-1.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer"
+                            title="Project Options"
                           >
-                            <div className="py-1">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSettingsModalProjectId(proj.id);
-                                  setOpenMenuProjectId(null);
-                                }}
-                                className="w-full text-left px-3.5 py-2 hover:bg-[var(--bg-hover)] flex items-center gap-2.5 font-bold text-[var(--text-primary)] cursor-pointer"
-                              >
-                                <Settings size={14} className="text-blue-400" /> Project Settings
-                              </button>
+                            <MoreVertical size={16} />
+                          </button>
 
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setShareModalProject(proj);
-                                  setOpenMenuProjectId(null);
-                                }}
-                                className="w-full text-left px-3.5 py-2 hover:bg-[var(--bg-hover)] flex items-center gap-2.5 font-bold text-[var(--text-primary)] cursor-pointer"
-                              >
-                                <Users size={14} className="text-indigo-400" /> Share Project
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setNotesModalProject(proj);
-                                  setOpenMenuProjectId(null);
-                                }}
-                                className="w-full text-left px-3.5 py-2 hover:bg-[var(--bg-hover)] flex items-center gap-2.5 font-bold text-[var(--text-primary)] cursor-pointer"
-                              >
-                                <StickyNote size={14} className="text-amber-400" /> Project Notes
-                                {notesCount > 0 && (
-                                  <span className="ml-auto bg-amber-500/20 text-amber-300 text-[10px] px-1.5 py-0.5 rounded-full font-extrabold">
-                                    {notesCount}
-                                  </span>
-                                )}
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => handleDuplicateProject(proj.id)}
-                                className="w-full text-left px-3.5 py-2 hover:bg-[var(--bg-hover)] flex items-center gap-2.5 font-bold text-[var(--text-primary)] cursor-pointer"
-                              >
-                                <Copy size={14} className="text-emerald-400" /> Duplicate Project
-                              </button>
-                            </div>
-
-                            {!proj.isShared && (
+                          {openMenuProjectId === proj.id && (
+                            <div 
+                              className="absolute right-0 mt-1 w-48 bg-[var(--bg-elevated)] border border-[var(--border-medium)] rounded-2xl shadow-2xl z-50 py-1.5 flex flex-col divide-y divide-[var(--border-subtle)] text-xs select-none"
+                              onClick={(e) => e.stopPropagation()}
+                            >
                               <div className="py-1">
                                 <button
                                   type="button"
                                   onClick={() => {
+                                    setSettingsModalProjectId(proj.id);
                                     setOpenMenuProjectId(null);
-                                    handleDeleteProject(proj.id, proj.name);
                                   }}
-                                  className="w-full text-left px-3.5 py-2 hover:bg-[var(--rose)]/10 text-[var(--text-rose)] hover:text-rose-400 flex items-center gap-2.5 font-bold cursor-pointer"
+                                  className="w-full text-left px-3.5 py-2 hover:bg-[var(--bg-hover)] flex items-center gap-2.5 font-bold text-[var(--text-primary)] cursor-pointer"
                                 >
-                                  <Trash2 size={14} /> Delete Project
+                                  <Settings size={14} className="text-blue-400" /> Project Settings
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShareModalProject(proj);
+                                    setOpenMenuProjectId(null);
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 hover:bg-[var(--bg-hover)] flex items-center gap-2.5 font-bold text-[var(--text-primary)] cursor-pointer"
+                                >
+                                  <Users size={14} className="text-indigo-400" /> Share Project
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setNotesModalProject(proj);
+                                    setOpenMenuProjectId(null);
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 hover:bg-[var(--bg-hover)] flex items-center gap-2.5 font-bold text-[var(--text-primary)] cursor-pointer"
+                                >
+                                  <StickyNote size={14} className="text-amber-400" /> Project Notes
+                                  {notesCount > 0 && (
+                                    <span className="ml-auto bg-amber-500/20 text-amber-300 text-[10px] px-1.5 py-0.5 rounded-full font-extrabold">
+                                      {notesCount}
+                                    </span>
+                                  )}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDuplicateProject(proj.id)}
+                                  className="w-full text-left px-3.5 py-2 hover:bg-[var(--bg-hover)] flex items-center gap-2.5 font-bold text-[var(--text-primary)] cursor-pointer"
+                                >
+                                  <Copy size={14} className="text-emerald-400" /> Duplicate Project
                                 </button>
                               </div>
-                            )}
-                          </div>
+
+                              {!proj.isShared && (
+                                <div className="py-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOpenMenuProjectId(null);
+                                      handleDeleteProject(proj.id, proj.name);
+                                    }}
+                                    className="w-full text-left px-3.5 py-2 hover:bg-rose-500/10 text-rose-400 flex items-center gap-2.5 font-bold cursor-pointer"
+                                  >
+                                    <Trash2 size={14} /> Delete Project
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Client / Due Badges */}
+                      <div className="flex flex-wrap items-center gap-2 mt-3">
+                        {proj.isShared ? (
+                          <span className="inline-flex items-center gap-1 bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[10px] font-bold px-2.5 py-0.5 rounded-lg">
+                            <Users size={11} /> Shared ({proj.sharedBy || "Owner"})
+                          </span>
+                        ) : (
+                          proj.client && (
+                            <span className="inline-block bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[10px] font-bold px-2.5 py-0.5 rounded-lg">
+                              Client: {proj.client}
+                            </span>
+                          )
                         )}
+
+                        {(() => {
+                          const rawDueDate = proj.dueDate || proj.deadline || proj.settings?.dueDate;
+                          if (!rawDueDate) return null;
+                          const dueDateFormatted = new Date(rawDueDate).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+                          return (
+                            <span className="inline-flex items-center gap-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold px-2.5 py-0.5 rounded-lg">
+                              <Calendar size= {11} /> Due: {dueDateFormatted}
+                            </span>
+                          );
+                        })()}
+                      </div>
+
+                      <p className="text-xs text-[var(--text-secondary)] mt-3 line-clamp-2 leading-relaxed font-medium">
+                        {proj.description || "No description provided."}
+                      </p>
+
+                      {/* Language Badges */}
+                      <div className="flex flex-wrap gap-1.5 mt-4">
+                        <span className="text-[10px] font-bold text-[var(--text-muted)] bg-[var(--bg-surface)] px-2 py-0.5 rounded-md border border-[var(--border-subtle)] uppercase">
+                          Src: {proj.source_lang}
+                        </span>
+                        {proj.target_languages && proj.target_languages.map(lang => (
+                          <span 
+                            key={lang} 
+                            className="text-[10px] font-bold text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded-md border border-indigo-500/20 uppercase"
+                          >
+                            {lang}
+                          </span>
+                        ))}
                       </div>
                     </div>
 
-                    {/* Shared / Client / Due Date Badges */}
-                    <div className="flex flex-wrap items-center gap-2 mt-2">
-                      {proj.isShared ? (
-                        <span className="inline-flex items-center gap-1 bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[10px] font-bold px-2 py-0.5 rounded-md">
-                          <Users size={11} /> Shared by {proj.sharedBy || "Owner"}
-                        </span>
-                      ) : (
-                        proj.client && (
-                          <span className="inline-block bg-indigo-500/10 text-indigo-400 text-[10px] font-bold px-2 py-0.5 rounded-md">
-                            Client: {proj.client}
-                          </span>
-                        )
-                      )}
+                    {/* Progress Metrics & Action */}
+                    <div className="mt-6 pt-4 border-t border-[var(--border-subtle)] space-y-3">
+                      <div className="space-y-1.5 text-[10px]">
+                        <div className="flex justify-between items-center font-bold">
+                          <span className="text-indigo-400">Translated</span>
+                          <span className="text-[var(--text-primary)]">{avgProgress}%</span>
+                        </div>
+                        <div className="w-full bg-[var(--bg-input)] h-1.5 rounded-full overflow-hidden border border-[var(--border-subtle)]">
+                          <div className="bg-indigo-500 h-full rounded-full transition-all duration-500" style={{ width: `${avgProgress}%` }} />
+                        </div>
 
-                      {(() => {
-                        const rawDueDate = proj.dueDate || proj.deadline || proj.settings?.dueDate;
-                        if (!rawDueDate) return null;
-                        const dueDateFormatted = new Date(rawDueDate).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-                        return (
-                          <span className="inline-flex items-center gap-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold px-2 py-0.5 rounded-md" title="Project Due Date">
-                            <Calendar size={11} /> Due: {dueDateFormatted}
-                          </span>
-                        );
-                      })()}
+                        <div className="flex justify-between items-center font-bold pt-1">
+                          <span className="text-emerald-400">Verified</span>
+                          <span className="text-[var(--text-primary)]">{avgVerified}%</span>
+                        </div>
+                        <div className="w-full bg-[var(--bg-input)] h-1.5 rounded-full overflow-hidden border border-[var(--border-subtle)]">
+                          <div className="bg-emerald-500 h-full rounded-full transition-all duration-500" style={{ width: `${avgVerified}%` }} />
+                        </div>
+                      </div>
 
-                      {notesCount > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setNotesModalProject(proj)}
-                          className="inline-flex items-center gap-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold px-2 py-0.5 rounded-md hover:bg-amber-500/20 transition-all cursor-pointer"
-                          title="Open Project Notes"
-                        >
-                          <StickyNote size={10} /> {notesCount} Note(s)
-                        </button>
-                      )}
-                    </div>
-
-                    <p className="text-xs text-[var(--text-secondary)] mt-3 line-clamp-2 leading-relaxed">
-                      {proj.description || "No project description provided."}
-                    </p>
-
-                    {/* Target Languages Badges */}
-                    <div className="flex flex-wrap gap-1 mt-4">
-                      <span className="text-[10px] text-[var(--text-muted)] bg-[var(--bg-input)] px-2 py-0.5 rounded-md border border-[var(--border-subtle)] font-semibold">
-                        Source: {proj.source_lang.toUpperCase()}
-                      </span>
-                      {proj.target_languages && proj.target_languages.map(lang => (
-                        <span 
-                          key={lang} 
-                          className="text-[10px] text-indigo-300 bg-indigo-500/5 px-2 py-0.5 rounded-md border border-indigo-500/10 font-semibold"
-                        >
-                          {lang.toUpperCase()}
-                        </span>
-                      ))}
+                      <button
+                        onClick={() => onOpenProject(proj.id)}
+                        className="w-full flex items-center justify-center gap-2 bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-medium)] text-xs font-bold py-2.5 rounded-2xl transition-all cursor-pointer group-hover:border-indigo-500/40"
+                      >
+                        <span>Open Workspace</span>
+                        <ChevronRight size={14} className="text-indigo-400" />
+                      </button>
                     </div>
                   </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
-                  {/* Progress and Footer */}
-                  <div className="mt-6 pt-4 border-t border-[var(--border-subtle)]">
-                    <div className="flex justify-between items-center text-[10px] text-[var(--text-secondary)] mb-2">
-                      <span className="font-medium">{proj.fileCount} File(s)</span>
-                      <span className="font-semibold">{completedJobs}/{totalJobs} Jobs Completed ({completionPercent}%)</span>
-                    </div>
+      </main>
 
-                    {/* Progress Bar */}
-                    <div className="w-full bg-[var(--bg-input)] h-1.5 rounded-full overflow-hidden mb-4">
-                      <div 
-                        className="bg-gradient-to-r from-indigo-500 to-purple-500 h-full rounded-full transition-all duration-500" 
-                        style={{ width: `${completionPercent}%` }}
-                      ></div>
-                    </div>
-
-                    <button
-                      onClick={() => onOpenProject(proj.id)}
-                      className="w-full flex items-center justify-center gap-1.5 bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-medium)] text-xs font-bold py-2.5 rounded-xl transition-all cursor-pointer"
-                    >
-                      Open Project <ChevronRight size={14} />
-                    </button>
-                  </div>
+      {/* ── CREATE NEW PROJECT MODAL ── */}
+      {showCreateModal && (
+        <div className="modal-overlay">
+          <div className="modal-card max-w-xl select-none text-left p-6 flex flex-col gap-5 max-h-[90vh] overflow-hidden" style={{ borderRadius: "20px" }}>
+            
+            <div className="flex justify-between items-center pb-3 border-b border-[var(--border-subtle)]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center border border-indigo-500/20">
+                  <Plus className="w-5 h-5" />
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                <div>
+                  <h3 className="text-base font-bold text-[var(--text-primary)] leading-snug">
+                    Create New Project
+                  </h3>
+                  <p className="text-xs text-[var(--text-secondary)] font-medium">
+                    Configure project languages and settings
+                  </p>
+                </div>
+              </div>
 
-      {/* Share Project Modal */}
+              <button 
+                onClick={() => setShowCreateModal(false)}
+                className="p-1.5 rounded-full hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all cursor-pointer"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateProject} className="space-y-4 overflow-y-auto pr-1">
+              <div>
+                <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1.5">Project Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Annual Legal Loan Agreement 2026"
+                  value={projName}
+                  onChange={(e) => setProjName(e.target.value)}
+                  className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1.5">Client / Organization</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Acme Corp"
+                    value={clientName}
+                    onChange={(e) => setClientName(e.target.value)}
+                    className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1.5">Due Date</label>
+                  <input
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1.5">Description</label>
+                <textarea
+                  rows={2}
+                  placeholder="Brief summary of project scope..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] outline-none resize-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1.5">Source Language</label>
+                  <select
+                    value={sourceLang}
+                    onChange={(e) => setSourceLang(e.target.value)}
+                    className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] focus:border-indigo-500 rounded-xl px-3 py-2.5 text-xs text-[var(--text-primary)] outline-none"
+                  >
+                    {LANGUAGES.map((l) => (
+                      <option key={l.code} value={l.code}>
+                        {l.flag} {l.name} ({l.code.toUpperCase()})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1.5">
+                    Target Languages ({selectedLangs.length})
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Search languages..."
+                    value={langSearch}
+                    onChange={(e) => setLangSearch(e.target.value)}
+                    className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] focus:border-indigo-500 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] outline-none mb-2"
+                  />
+                </div>
+              </div>
+
+              {/* Target Languages Multi-select Pills */}
+              <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-xl p-3 max-h-36 overflow-y-auto flex flex-wrap gap-1.5">
+                {filteredLanguages.map((l) => {
+                  const isSelected = selectedLangs.includes(l.code);
+                  return (
+                    <button
+                      key={l.code}
+                      type="button"
+                      onClick={() => toggleLanguageSelection(l.code)}
+                      className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${
+                        isSelected
+                          ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40"
+                          : "bg-[var(--bg-surface)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:border-zinc-600"
+                      }`}
+                    >
+                      <span>{l.flag} {l.name}</span>
+                      {isSelected && <Check size={12} className="text-indigo-400 ml-1" />}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="pt-4 border-t border-[var(--border-subtle)] flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/20 cursor-pointer"
+                >
+                  Create Project
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Share Modal */}
       {shareModalProject && (
         <ShareModal
           isOpen={!!shareModalProject}
@@ -493,7 +711,7 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
         />
       )}
 
-      {/* Collaborative Project Notes Modal */}
+      {/* Project Notes Modal */}
       {notesModalProject && (
         <ProjectNotesModal
           isOpen={!!notesModalProject}
@@ -504,7 +722,7 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
         />
       )}
 
-      {/* Existing Settings Modal (Opened on Project Settings tab) */}
+      {/* Settings Modal */}
       {settingsModalProjectId && (
         <SettingsModal
           show={!!settingsModalProjectId}
@@ -517,193 +735,17 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
         />
       )}
 
-      {/* Workspace Global History Modal */}
+      {/* Workspace History Modal */}
       {showGlobalHistoryModal && (
         <ProjectHistoryModal
           isOpen={showGlobalHistoryModal}
           onClose={() => setShowGlobalHistoryModal(false)}
           projectId={null}
+          projectName="Global Workspace"
           showToast={showToast}
         />
       )}
 
-      {/* Create Project Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-medium)] rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl animate-[fadeIn_0.15s_ease-out]">
-            <div className="p-6 border-b border-[var(--border-subtle)] flex justify-between items-center bg-[var(--bg-panel)]">
-              <div>
-                <h2 className="text-sm font-bold text-[var(--text-primary)]">Create Localization Project</h2>
-                <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">Initialize a collaborative space for document translations</p>
-              </div>
-              <button 
-                onClick={() => setShowCreateModal(false)}
-                className="text-[var(--text-secondary)] hover:text-white cursor-pointer text-xl font-bold"
-              >
-                &times;
-              </button>
-            </div>
-            
-            <form onSubmit={handleCreateProject}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6">
-                
-                {/* Left Column: Metadata */}
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
-                      Project Name *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Mobile Application v2"
-                      value={projName}
-                      onChange={(e) => setProjName(e.target.value)}
-                      className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-all"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
-                        Client Name
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. VerboLabs"
-                        value={clientName}
-                        onChange={(e) => setClientName(e.target.value)}
-                        className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-all"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
-                        Source Lang
-                      </label>
-                      <select
-                        value={sourceLang}
-                        onChange={(e) => setSourceLang(e.target.value)}
-                        className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-all"
-                      >
-                        {LANGUAGES.map(lang => (
-                          <option key={lang.code} value={lang.code}>
-                            {lang.flag} {lang.name} ({lang.code.toUpperCase()})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
-                        Due Date
-                      </label>
-                      <input
-                        type="date"
-                        value={dueDate}
-                        onChange={(e) => setDueDate(e.target.value)}
-                        className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-all cursor-pointer"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
-                      Description
-                    </label>
-                    <textarea
-                      placeholder="Describe the scope, terminology rules, or client specifics..."
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      rows={5}
-                      className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-all resize-none"
-                    />
-                  </div>
-                </div>
-
-                {/* Right Column: Searchable Target Languages Panel */}
-                <div className="flex flex-col h-full min-h-[300px]">
-                  <label className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
-                    Target Language(s) ({selectedLangs.length} selected)
-                  </label>
-                  
-                  <input
-                    type="text"
-                    placeholder="Search languages..."
-                    value={langSearch}
-                    onChange={(e) => setLangSearch(e.target.value)}
-                    className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] mb-3 focus:outline-none focus:border-[var(--accent)] transition-all"
-                  />
-                  
-                  <div className="flex-1 min-h-0 bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl p-3 overflow-y-auto grid grid-cols-2 gap-2 max-h-56">
-                    {LANGUAGES.filter(lang => 
-                      lang.name.toLowerCase().includes(langSearch.toLowerCase()) || 
-                      lang.code.toLowerCase().includes(langSearch.toLowerCase())
-                    ).map((lang) => {
-                      const isSelected = selectedLangs.includes(lang.code);
-                      return (
-                        <button
-                          key={lang.code}
-                          type="button"
-                          onClick={() => toggleLanguage(lang.code)}
-                          className={`flex items-center justify-between text-xs p-2.5 rounded-lg border transition-all cursor-pointer ${
-                            isSelected 
-                              ? "bg-indigo-500/20 border-indigo-500 text-indigo-300 font-semibold" 
-                              : "bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-white hover:border-zinc-700"
-                          }`}
-                        >
-                          <span className="flex items-center gap-2 truncate">
-                            <span className="text-base flex-shrink-0">{lang.flag}</span>
-                            <span className="truncate">{lang.name}</span>
-                          </span>
-                          {isSelected && <span className="text-[10px] text-indigo-400 font-bold">✓</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Selected Languages Pills List */}
-                  {selectedLangs.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-3 max-h-20 overflow-y-auto p-2 border border-[var(--border-subtle)]/50 rounded-xl bg-black/15">
-                      {selectedLangs.map(code => {
-                        const lang = LANGUAGES.find(l => l.code === code);
-                        return (
-                          <span key={code} className="inline-flex items-center gap-1 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[10px] font-bold px-2 py-0.5 rounded-md">
-                            {lang?.flag} {lang?.name}
-                            <button
-                              type="button"
-                              onClick={() => toggleLanguage(code)}
-                              className="hover:text-rose-400 font-bold ml-1 cursor-pointer"
-                            >
-                              &times;
-                            </button>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-              </div>
-
-              {/* Modal Footer */}
-              <div className="flex justify-end gap-3 p-6 border-t border-[var(--border-subtle)] bg-[var(--bg-panel)]">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-medium)] text-xs font-bold px-4 py-2.5 rounded-xl cursor-pointer transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold px-5 py-2.5 rounded-xl cursor-pointer shadow-md transition-all"
-                >
-                  Create Project
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

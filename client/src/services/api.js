@@ -597,6 +597,21 @@ export const duplicateDocument = async (documentId) => {
   return response.data;
 };
 
+export const fetchProtectedRules = async (projectId) => {
+  const response = await api.get(`/api/projects/${projectId}/protected-content/rules`);
+  return response.data;
+};
+
+export const saveProtectedRules = async (projectId, rules) => {
+  const response = await api.put(`/api/projects/${projectId}/protected-content/rules`, { rules });
+  return response.data;
+};
+
+export const scanProtectedContent = async (projectId, options = {}) => {
+  const response = await api.post(`/api/projects/${projectId}/protected-content/scan`, { options });
+  return response.data;
+};
+
 
 
 

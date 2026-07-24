@@ -610,10 +610,10 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
             </span>
           </div>
 
-          {/* High-tech security metadata footer */}
-          <div className="hidden md:flex items-center justify-between text-[9px] text-neutral-500 font-mono tracking-wider select-none border-t border-white/5 pt-4">
-            <span>SYS_VERSION // 1.2.0</span>
-            <span>ENCRYPTION: SHAKE_256</span>
+          {/* Professional security metadata footer */}
+          <div className="hidden md:flex items-center justify-between text-[11px] text-neutral-400 font-medium select-none border-t border-white/5 pt-4">
+            <span className="flex items-center gap-1.5"><Sparkles className="h-3 w-3 text-indigo-400" /> Centroid CAT Platform v2.4</span>
+            <span className="flex items-center gap-1"><LockKeyhole className="h-3 w-3 text-emerald-400" /> 256-Bit Encrypted</span>
           </div>
         </div>
 

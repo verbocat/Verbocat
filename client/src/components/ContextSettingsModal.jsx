@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { X, Sliders, Check, Sparkles, Loader, Upload, FileText, Trash2 } from "lucide-react";
+import { X, Sliders, Check, Sparkles, Loader, Upload, FileText, Trash2, ShieldCheck } from "lucide-react";
+import { ProtectedContentPanel } from "./ProtectedContentPanel";
 
 const DOMAINS = ["General", "Marketing", "Legal", "Medical", "Pharmaceutical", "Financial", "Banking", "Insurance", "Technical", "Software", "IT & Cybersecurity", "E-commerce", "Automotive", "Manufacturing", "Engineering", "Telecommunications", "Gaming", "Education", "Government", "HR & Recruitment", "Travel & Tourism", "Hospitality", "Retail", "Energy & Utilities", "Real Estate", "Life Sciences", "Healthcare", "Aerospace", "Agriculture", "Media & Entertainment"];
 
@@ -356,41 +357,74 @@ export const ContextSettingsModal = ({ show, onClose, contextSettings, setContex
     }
   };
 
+  const [activeModalTab, setActiveModalTab] = useState("context"); // "context", "protected"
   if (!show) return null;
 
   const currentDomain = contextSettings.domain || "General";
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card" style={{ maxWidth: 720, maxHeight: "90vh", display: "flex", flexDirection: "column", borderRadius: "6px" }}>
+      <div className="modal-card" style={{ maxWidth: 840, maxHeight: "92vh", display: "flex", flexDirection: "column", borderRadius: "12px" }}>
 
         {/* Header */}
-        <div className="modal-header" style={{ flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{
-              width: 32, height: 32, borderRadius: 8,
-              background: "rgba(91,106,240,0.1)",
-              border: "1px solid rgba(91,106,240,0.22)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: "var(--accent)"
-            }}>
-              <Sliders style={{ width: 15, height: 15 }} />
-            </div>
-            <div>
-              <div className="modal-title">Translation Context Engine</div>
-              <div style={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace", color: "var(--text-muted)", marginTop: 1 }}>
-                CONTEXT_AWARE_MT_TUNING
+        <div className="modal-header" style={{ flexShrink: 0, flexDirection: "column", alignItems: "stretch", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyBetween: "space-between", width: "100%" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: 8,
+                background: "rgba(91,106,240,0.1)",
+                border: "1px solid rgba(91,106,240,0.22)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: "var(--accent)"
+              }}>
+                <Sliders style={{ width: 15, height: 15 }} />
+              </div>
+              <div>
+                <div className="modal-title">Context & Protected Content Engine</div>
+                <div style={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace", color: "var(--text-muted)", marginTop: 1 }}>
+                  CONTEXT_AWARE_MT_TUNING & REGEX_PROTECTION
+                </div>
               </div>
             </div>
+            <button className="modal-close" onClick={onClose}>
+              <X style={{ width: 15, height: 15 }} />
+            </button>
           </div>
-          <button className="modal-close" onClick={onClose}>
-            <X style={{ width: 15, height: 15 }} />
-          </button>
+
+          {/* Modal Sub-Nav Tabs */}
+          <div className="flex items-center gap-2 border-t border-[var(--border-subtle)] pt-2.5">
+            <button
+              onClick={() => setActiveModalTab("context")}
+              className={`flex items-center gap-2 text-xs font-bold px-3.5 py-1.5 rounded-xl transition-all cursor-pointer ${
+                activeModalTab === "context"
+                  ? "bg-indigo-500/15 text-indigo-400 border border-indigo-500/30"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              }`}
+            >
+              <Sliders size={13} />
+              <span>Context & Translation Tuning</span>
+            </button>
+
+            <button
+              onClick={() => setActiveModalTab("protected")}
+              className={`flex items-center gap-2 text-xs font-bold px-3.5 py-1.5 rounded-xl transition-all cursor-pointer ${
+                activeModalTab === "protected"
+                  ? "bg-indigo-500/15 text-indigo-400 border border-indigo-500/30"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              }`}
+            >
+              <ShieldCheck size={13} />
+              <span>🔒 Protected Content & Regex Rules</span>
+            </button>
+          </div>
         </div>
 
         {/* Body */}
         <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 20, flex: 1, overflowY: "auto" }}>
-          
+          {activeModalTab === "protected" ? (
+            <ProtectedContentPanel projectId={documentId} theme="dark" />
+          ) : (
+            <div className="space-y-5">
           {/* Preset profiles */}
           <div>
             <span className="settings-section-label">Translation Profiles (Presets)</span>
@@ -533,7 +567,8 @@ export const ContextSettingsModal = ({ show, onClose, contextSettings, setContex
 
             </div>
           </div>
-
+        </div>
+      )}
         </div>
 
         {/* Footer */}

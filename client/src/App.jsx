@@ -10,6 +10,7 @@ import { QAPanel } from "./components/QAPanel.jsx";
 import { SegmentCard } from "./components/SegmentCard.jsx";
 import { WorkspaceToolbar } from "./components/WorkspaceToolbar.jsx";
 import { EmptyWorkspace } from "./components/EmptyWorkspace.jsx";
+import { PageSkeleton } from "./components/SkeletonLoader.jsx";
 import { SegmentBoard } from "./components/SegmentBoard.jsx";
 import { LoadingOverlay } from "./components/LoadingOverlay.jsx";
 import { ContextSettingsModal } from "./components/ContextSettingsModal.jsx";
@@ -261,14 +262,16 @@ export default function App() {
 
   // Load collaborative document from DB on startup/change
   const loadCollaborativeDocument = useCallback(async () => {
-    if (!documentId || !token) return;
+    const activeDocId = documentId || (currentRoute.screen === "editor" ? currentRoute.fileId : null);
+    if (!activeDocId || !token) return;
+
     setIsLoadingDocument(true);
     setHasNoAccess(false);
     setAccessRequestMessage("");
     try {
       let doc;
       if (currentRoute.screen === "editor" && currentRoute.targetLang) {
-        const jobData = await fetchJobSegmentsByPath(documentId, currentRoute.targetLang);
+        const jobData = await fetchJobSegmentsByPath(activeDocId, currentRoute.targetLang);
         doc = {
           id: jobData.documentId,
           name: jobData.fileName,
@@ -284,9 +287,10 @@ export default function App() {
           setContextSettings(jobData.contextSettings);
         }
       } else {
-        doc = await fetchDocument(documentId);
+        doc = await fetchDocument(activeDocId);
       }
 
+      setDocumentId(activeDocId);
       setSegments(doc.segments || []);
       // Extract and set the file extension dynamically from the document name or server metadata
       const extIndex = doc.name.lastIndexOf(".");
@@ -307,7 +311,7 @@ export default function App() {
       const isOwnerOrStaff = doc.ownerId === userRef.current?.id || ["admin", "verbolabs_staff"].includes(userRef.current?.role);
       if (isOwnerOrStaff) {
         try {
-          const reqs = await fetchAccessRequests(documentId);
+          const reqs = await fetchAccessRequests(activeDocId);
           setPendingAccessRequests(reqs);
         } catch (reqErr) {
           console.error("Failed to load access requests:", reqErr);
@@ -323,17 +327,13 @@ export default function App() {
         setHasNoAccess(true);
         // Check if there is already a pending request
         try {
-          const status = await fetchRequestStatus(documentId);
+          const status = await fetchRequestStatus(activeDocId);
           setHasPendingAccessRequest(status.hasPendingRequest);
         } catch (statusErr) {
           console.error(statusErr);
         }
       } else {
         showToast(err.response?.data?.error || "Access denied or document not found.", "error");
-        // Clear document ID from URL if load fails completely (like 404)
-        const newUrl = `${window.location.origin}${window.location.pathname}`;
-        window.history.pushState({ path: newUrl }, '', newUrl);
-        setDocumentId(null);
       }
     } finally {
       setIsLoadingDocument(false);
@@ -2935,7 +2935,11 @@ export default function App() {
           />
 
           {/* ── Zone 2+3: Action bar + Editor (or empty state) ── */}
-          {segments.length === 0 ? (
+          {isLoadingDocument ? (
+            <div className="flex-1 flex flex-col items-center justify-center bg-[var(--bg-base)] p-8">
+              <PageSkeleton />
+            </div>
+          ) : segments.length === 0 ? (
             <EmptyWorkspace
               darkMode={darkMode}
               onLoadProject={loadProject}

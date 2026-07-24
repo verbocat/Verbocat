@@ -227,9 +227,16 @@ export function ProjectHistoryModal({ isOpen, onClose, projectId = null, project
         {/* Activity Timeline List */}
         <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-3 min-h-[300px]">
           {loading ? (
-            <div className="py-20 text-center text-xs font-bold text-[var(--text-muted)]">
-              <div className="animate-spin rounded-full h-8 w-8 border-2 border-indigo-500 border-t-transparent mx-auto mb-3"></div>
-              Loading audit trail...
+            <div className="py-12 space-y-3 animate-pulse">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-xl p-3 flex items-center justify-between">
+                  <div className="space-y-1.5 flex-1">
+                    <div className="h-3 w-40 bg-[var(--bg-surface)] rounded" />
+                    <div className="h-2 w-64 bg-[var(--bg-surface)] rounded" />
+                  </div>
+                  <div className="h-3 w-16 bg-[var(--bg-surface)] rounded" />
+                </div>
+              ))}
             </div>
           ) : filteredActivities.length === 0 ? (
             <div className="py-20 text-center text-xs font-medium text-[var(--text-muted)] bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl">

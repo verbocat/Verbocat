@@ -2,16 +2,16 @@ import { LANGUAGES } from "../constants/languages.js";
 import { CollaboratorsList } from "./CollaboratorsList.jsx";
 import {
   BookOpen, Users, Settings as SettingsIcon,
-  LogOut, Plus, LockKeyhole, Sliders,
-  ChevronRight, FileText, LayoutDashboard
+  Plus, LockKeyhole, Sliders,
+  ChevronRight, FileText, LayoutDashboard, Sparkles
 } from "lucide-react";
 
-const NavBtn = ({ children, onClick, disabled = false, title = "", iconOnly = false }) => (
+const NavBtn = ({ children, onClick, disabled = false, title = "", iconOnly = false, active = false }) => (
   <button
     onClick={onClick}
     disabled={disabled}
     title={title}
-    className={iconOnly ? "nav-btn-icon" : "nav-btn"}
+    className={`${iconOnly ? "nav-btn-icon" : "nav-btn"} ${active ? "active" : ""}`}
   >
     {children}
   </button>
@@ -32,37 +32,37 @@ export const Header = ({
   const tgtLang = LANGUAGES.find(l => l.code === targetLanguage);
 
   return (
-    <header className="topbar">
+    <header className="topbar shadow-xs">
 
-      {/* Brand */}
-      <div className="topbar-brand">
-        <svg viewBox="0 0 100 100" style={{ width: 22, height: 22, color: "var(--accent)", flexShrink: 0 }}
-          fill="none" stroke="currentColor" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M 50,15 L 80,32 L 80,68 L 50,85 L 20,68 L 20,32 Z" opacity="0.4" />
-          <path d="M 50,15 L 50,42" />
-          <path d="M 80,68 L 57,55" />
-          <path d="M 20,68 L 43,55" />
-          <circle cx="50" cy="50" r="8" fill="currentColor" />
-          <circle cx="50" cy="50" r="16" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" />
-        </svg>
-        <span className="topbar-brand-name">Centroid</span>
+      {/* Brand Logo & Name */}
+      <div className="topbar-brand cursor-pointer hover:opacity-90 transition-opacity">
+        <div className="h-7 w-7 rounded-xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-indigo-400 flex items-center justify-center shadow-md shadow-indigo-500/20 shrink-0">
+          <Sparkles className="h-4 w-4 text-white animate-pulse" />
+        </div>
+        <span className="topbar-brand-name font-black tracking-tight text-sm bg-gradient-to-r from-white via-neutral-200 to-neutral-400 bg-clip-text text-transparent">
+          Centroid
+        </span>
       </div>
 
       <div className="topbar-divider" />
 
-      {/* Live breadcrumb */}
+      {/* Live Breadcrumb & Language Context */}
       {hasFile ? (
         <div className="topbar-crumb">
-          <FileText style={{ width: 12, height: 12, color: "var(--text-muted)", flexShrink: 0 }} />
-          <span className="topbar-filename" title={fileName}>{fileName}</span>
-          {fileExtension && <span className="topbar-badge">{fileExtension.replace(".", "")}</span>}
+          <FileText style={{ width: 13, height: 13, color: "var(--accent)", flexShrink: 0 }} />
+          <span className="topbar-filename font-bold" title={fileName}>{fileName}</span>
+          {fileExtension && (
+            <span className="topbar-badge font-mono text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+              {fileExtension.replace(".", "").toUpperCase()}
+            </span>
+          )}
           {srcLang && tgtLang && (
             <>
               <span className="topbar-sep-dot">·</span>
-              <div className="topbar-langpair">
-                <span>{srcLang.flag} {srcLang.code.toUpperCase()}</span>
-                <ChevronRight style={{ width: 9, height: 9, opacity: 0.4, flexShrink: 0 }} />
-                <span>{tgtLang.flag} {tgtLang.code.toUpperCase()}</span>
+              <div className="topbar-langpair px-2 py-0.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs font-semibold">
+                <span className="flex items-center gap-1">{srcLang.flag} {srcLang.code.toUpperCase()}</span>
+                <ChevronRight style={{ width: 11, height: 11, opacity: 0.5, flexShrink: 0 }} />
+                <span className="flex items-center gap-1">{tgtLang.flag} {tgtLang.code.toUpperCase()}</span>
               </div>
             </>
           )}
@@ -71,70 +71,63 @@ export const Header = ({
         <div style={{ flex: 1 }} />
       )}
 
-      {/* Right nav */}
+      {/* Right Navigation Actions */}
       <div className="topbar-actions">
 
-        {/* Collaborators List */}
+        {/* Active Collaborators */}
         {hasFile && collaborators && collaborators.length > 0 && (
           <CollaboratorsList collaborators={collaborators} onTeleport={onTeleport} />
         )}
 
         {/* Share Button */}
         {hasFile && onOpenShare && (
-          <NavBtn onClick={onOpenShare} title="Share Document Workspace">
+          <NavBtn onClick={onOpenShare} title="Share Workspace">
             <Users style={{ width: 13, height: 13 }} />
             <span>Share</span>
           </NavBtn>
         )}
 
-
-        {/* Primary upload CTA when no file */}
+        {/* Open File Button when in blank state */}
         {!hasFile && (
-          <label className="btn-cta btn-cta-premium" style={{ cursor: "pointer" }}>
-            <span className="project-action-icon">
-              <Plus style={{ width: 13, height: 13 }} />
-            </span>
-            <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1 }}>
-              <span>Open File</span>
-              <span className="btn-cta-meta">Import a document into the workspace</span>
-            </span>
+          <label className="btn-cta btn-cta-premium flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold shadow-md shadow-indigo-500/20 transition-all cursor-pointer">
+            <Plus style={{ width: 14, height: 14 }} />
+            <span>Open Document</span>
             <input type="file" onChange={onUpload} className="hidden" />
           </label>
         )}
 
-        {/* Glossary */}
-        <NavBtn onClick={onOpenGlossary} title="Glossary">
+        {/* Glossary Tool */}
+        <NavBtn onClick={onOpenGlossary} title="Glossary Database">
           <BookOpen style={{ width: 13, height: 13 }} />
           <span>Glossary</span>
         </NavBtn>
 
-        {/* Context */}
-        <NavBtn onClick={onOpenContext} title="Translation Context">
+        {/* Context Settings */}
+        <NavBtn onClick={onOpenContext} title="Translation Prompt Context">
           <Sliders style={{ width: 13, height: 13 }} />
           <span>Context</span>
         </NavBtn>
 
-        {/* Admin Panel — NOT "Team" */}
+        {/* Admin Dashboard Pill */}
         {isAdmin && onOpenAdmin && (
-          <NavBtn onClick={onOpenAdmin} title="Admin Panel">
-            <LayoutDashboard style={{ width: 13, height: 13 }} />
-            <span>Admin Panel</span>
+          <NavBtn onClick={onOpenAdmin} title="Admin Control Panel">
+            <LayoutDashboard style={{ width: 13, height: 13 }} className="text-indigo-400" />
+            <span className="text-indigo-300 font-bold">Admin Panel</span>
           </NavBtn>
         )}
 
         <div className="topbar-divider" />
 
-        {/* Settings */}
+        {/* Global Settings */}
         <button
           onClick={onOpenSettings}
           title="Workspace Settings"
-          className="settings-btn-premium"
+          className="p-1.5 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] border border-transparent hover:border-[var(--border-subtle)] transition-all cursor-pointer"
         >
           <SettingsIcon style={{ width: 15, height: 15 }} />
         </button>
 
-
-        {/* Lock */}
+        {/* Screen Lock */}
         {onLock && (
           <NavBtn onClick={onLock} title="Lock Screen" iconOnly>
             <LockKeyhole style={{ width: 14, height: 14 }} />
@@ -145,3 +138,4 @@ export const Header = ({
     </header>
   );
 };
+

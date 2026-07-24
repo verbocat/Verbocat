@@ -1,5 +1,10 @@
 const { supabase } = require("../config/supabase");
 const {
+  maskTextWithTokens,
+  unmaskTokensWithOriginals,
+  scanTextForProtectedContent
+} = require("../utils/protectedContentEngine");
+const {
   createProviderState,
   translateChunk,
   isLegitimatelyIdentical
@@ -358,8 +363,8 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
   });
 
   // ── Adaptive chunk sizing based on total character count ──
-  const MAX_SEGMENTS_PER_CHUNK = 15;
-  const MAX_CHARS_PER_CHUNK = 4000;
+  const MAX_SEGMENTS_PER_CHUNK = 8;
+  const MAX_CHARS_PER_CHUNK = 1200;
 
   const actualSourceLang = sourceLang || process.env.DEFAULT_SOURCE_LANG || "en";
 
@@ -394,18 +399,33 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
     const chunkChars = chunkSources.reduce((sum, text) => sum + String(text || "").length, 0);
     const estimatedTokens = 1000 + Math.round(chunkChars / 4) * 2;
 
+    // Extract protected terms for chunk
+    const protectedRules = contextSettings?.protectedContentRules || {};
+    const scannedProtected = scanTextForProtectedContent(chunkSources, protectedRules);
+    const protectedTermsList = scannedProtected.allProtectedList || [];
+
+    // Mask chunk sources before passing to AI provider
+    const tokenMaps = [];
+    const maskedChunkSources = chunkSources.map((source, idx) => {
+      const { maskedText, tokenMap } = maskTextWithTokens(source, protectedTermsList);
+      tokenMaps[idx] = tokenMap;
+      return maskedText;
+    });
+
     const translatedChunk = await enqueue({
       type: "translation",
       estimatedTokens,
       userId,
-      execute: () => translateChunk(chunkSources, target, actualSourceLang, providerState, contextSettings)
+      execute: () => translateChunk(maskedChunkSources, target, actualSourceLang, providerState, contextSettings)
     });
 
     const insertRows = [];
 
     chunkSources.forEach((source, offset) => {
       const translated = translatedChunk[offset];
-      const processedText = postProcessTranslation(source, translated.translated, target);
+      // Unmask tokens back to original protected terms
+      const unmaskedText = unmaskTokensWithOriginals(translated.translated, tokenMaps[offset]);
+      const processedText = postProcessTranslation(source, unmaskedText, target);
       const translatedText = ensureEnglishNumerals(processedText);
 
       tmMap[source] = {

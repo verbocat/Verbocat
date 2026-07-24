@@ -1,6 +1,7 @@
 const fs = require('fs');
 const JSZip = require('jszip');
 const cheerio = require('cheerio');
+const { splitTextIntoSentences } = require('../sentenceSplitter');
 
 // Helper to escape XML special characters
 const escapeXml = (text) => {
@@ -76,20 +77,28 @@ const parseFile = async (filePath) => {
         return pBlock;
       }
 
-      const currentSegId = segmentId++;
-      segments.push({
-        id: currentSegId,
-        source: cleanText,
-        target: "",
-        leading: "",
-        trailing: ""
+      const sentencesToUse = splitTextIntoSentences(cleanText, 35);
+      const paragraphSegIds = [];
+
+      sentencesToUse.forEach(sentenceText => {
+        const currentSegId = segmentId++;
+        paragraphSegIds.push(currentSegId);
+        segments.push({
+          id: currentSegId,
+          source: sentenceText,
+          target: "",
+          leading: "",
+          trailing: ""
+        });
       });
+
+      const segPlaceholders = paragraphSegIds.map(id => `__SEG_${id}__`).join(" ");
 
       let matchIdx = 0;
       return pBlock.replace(/<w:t\b[^>]*>[\s\S]*?<\/w:t>|<w:t\b[^>]*\/>/gi, () => {
         if (matchIdx === 0) {
           matchIdx++;
-          return `<w:t xml:space="preserve">__SEG_${currentSegId}__</w:t>`;
+          return `<w:t xml:space="preserve">${segPlaceholders}</w:t>`;
         }
         matchIdx++;
         return `<w:t></w:t>`;
