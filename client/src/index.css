@@ -1268,6 +1268,17 @@ code, .font-mono { font-family: "IBM Plex Mono", monospace; }
   cursor: pointer;
 }
 
+/* Forbidden Term highlight in source & target */
+.seg-forbidden-mark {
+  background: rgba(244, 63, 94, 0.22) !important;
+  color: #f43f5e !important;
+  border: 1px solid rgba(244, 63, 94, 0.45) !important;
+  border-radius: 3px !important;
+  padding: 0 3px !important;
+  font-weight: 700 !important;
+  text-decoration: line-through !important;
+}
+
 /* ================================================================
    EMPTY WORKSPACE
    ================================================================ */

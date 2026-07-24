@@ -223,7 +223,7 @@ const ForbiddenHighlight = ({ term, children }) => {
 };
 
 /* ── Tag conversion helpers ──────────────────────────────────── */
-const targetToHtml = (str) => {
+const targetToHtml = (str, forbiddenTerms = [], forbiddenTermsEnabled = true) => {
   if (!str) return "";
   let html = str.replace(/</g, "&lt;").replace(/>/g, "&gt;");
   html = html.replace(/&lt;(\/?[^&>]*)\&gt;/gi, (match, inner) => {
@@ -240,6 +240,31 @@ const targetToHtml = (str) => {
     const esc = inner.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
     return `<span class="seg-tag" contenteditable="true" data-tag="${esc}">${display}</span>`;
   });
+
+  if (forbiddenTermsEnabled && forbiddenTerms && forbiddenTerms.length > 0) {
+    const activeTerms = forbiddenTerms.filter(
+      (t) => t && t.enabled !== false && t.term && t.term.trim() && t.scope !== "source"
+    );
+    if (activeTerms.length > 0) {
+      const parts = html.split(/(<[^>]+>)/g);
+      activeTerms.forEach((ft) => {
+        const flags = ft.matchCase ? "g" : "gi";
+        const pattern = ft.term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const rx = new RegExp(`(${pattern})`, flags);
+
+        for (let i = 0; i < parts.length; i++) {
+          if (!parts[i].startsWith("<")) {
+            parts[i] = parts[i].replace(rx, (m) => {
+              const escTerm = ft.term.replace(/"/g, "&quot;");
+              return `<mark class="seg-forbidden-mark" title="⚠️ Forbidden Term: &quot;${escTerm}&quot;">${m}</mark>`;
+            });
+          }
+        }
+      });
+      html = parts.join("");
+    }
+  }
+
   return html.replace(/\n/g, "<br>");
 };
 
@@ -522,10 +547,10 @@ export const SegmentCard = ({
   // Sync on row recycle
   useEffect(() => {
     if (editorRef.current) {
-      editorRef.current.innerHTML = targetToHtml(segment.target || "");
+      editorRef.current.innerHTML = targetToHtml(segment.target || "", forbiddenTerms, forbiddenTermsEnabled);
       lastSaved.current = segment.target || "";
     }
-  }, [segment.id]);
+  }, [segment.id, forbiddenTerms, forbiddenTermsEnabled]);
 
   useEffect(() => {
     const wasTracking = !!prevOriginalTarget.current;
@@ -535,11 +560,11 @@ export const SegmentCard = ({
 
     if (editorRef.current && segment.target !== lastSaved.current) {
       if (document.activeElement !== editorRef.current || didRevertOrAccept) {
-        editorRef.current.innerHTML = targetToHtml(segment.target || "");
+        editorRef.current.innerHTML = targetToHtml(segment.target || "", forbiddenTerms, forbiddenTermsEnabled);
       }
       lastSaved.current = segment.target || "";
     }
-  }, [segment.target, segment.originalTargetText]);
+  }, [segment.target, segment.originalTargetText, forbiddenTerms, forbiddenTermsEnabled]);
 
   /* ── Tag Management & Mismatch Detection ── */
   const sourceTags = (segment.source || "").match(/<\/?\d+>/g) || [];
@@ -602,7 +627,7 @@ export const SegmentCard = ({
     // Immediately morph raw tag strings into styled pill badges
     const updatedTarget = htmlToTarget(editorRef.current);
     if (editorRef.current) {
-      editorRef.current.innerHTML = targetToHtml(updatedTarget);
+      editorRef.current.innerHTML = targetToHtml(updatedTarget, forbiddenTerms, forbiddenTermsEnabled);
     }
     lastSaved.current = updatedTarget;
     if (onTyping) onTyping(segment.id, updatedTarget);
@@ -621,7 +646,7 @@ export const SegmentCard = ({
     });
 
     if (editorRef.current) {
-      editorRef.current.innerHTML = targetToHtml(updated);
+      editorRef.current.innerHTML = targetToHtml(updated, forbiddenTerms, forbiddenTermsEnabled);
     }
     lastSaved.current = updated;
     if (onTyping) onTyping(segment.id, updated);
@@ -632,7 +657,7 @@ export const SegmentCard = ({
     if (readOnly || segment.verified || !!lockInfo) return;
     const strippedTarget = (segment.target || "").replace(/<\/?(?:[a-zA-Z][a-zA-Z0-9:\-_]*|\d+)(?:\s+[^>]*?)?\/?>/g, "").trim();
     if (editorRef.current) {
-      editorRef.current.innerHTML = targetToHtml(strippedTarget);
+      editorRef.current.innerHTML = targetToHtml(strippedTarget, forbiddenTerms, forbiddenTermsEnabled);
     }
     lastSaved.current = strippedTarget;
     if (onTyping) onTyping(segment.id, strippedTarget);
@@ -644,7 +669,7 @@ export const SegmentCard = ({
     if (!segment.source) return;
     const fixed = autoFixSegmentTags(segment.source, segment.target || "");
     if (editorRef.current) {
-      editorRef.current.innerHTML = targetToHtml(fixed);
+      editorRef.current.innerHTML = targetToHtml(fixed, forbiddenTerms, forbiddenTermsEnabled);
     }
     lastSaved.current = fixed;
     if (onTyping) onTyping(segment.id, fixed);
@@ -761,7 +786,7 @@ export const SegmentCard = ({
     for (let i = words.length - 1; i >= 0; i--) { if (words[i].trim()) { wi = i; break; } }
     if (wi !== -1) words[wi] = term.target; else words.push(term.target);
     const next = words.join("");
-    editorRef.current.innerHTML = targetToHtml(next);
+    editorRef.current.innerHTML = targetToHtml(next, forbiddenTerms, forbiddenTermsEnabled);
     lastSaved.current = next;
     if (onTyping) {
       onTyping(segment.id, next);
@@ -812,6 +837,9 @@ export const SegmentCard = ({
     lastSaved.current = t;
     if (hasChanged) {
       onUpdateTranslation(segment.id, t);
+    }
+    if (editorRef.current) {
+      editorRef.current.innerHTML = targetToHtml(t, forbiddenTerms, forbiddenTermsEnabled);
     }
     setTimeout(() => setSuggestions([]), 200);
     if (onBlurSegment) {
