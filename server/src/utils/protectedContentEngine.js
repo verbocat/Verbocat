@@ -163,15 +163,27 @@ function scanTextForProtectedContent(segments = [], options = {}) {
   const results = {};
   const allMatchesSet = new Set();
 
-  // Combine source texts
-  const fullText = Array.isArray(segments)
-    ? segments.map(s => s.source_text || s.source || "").join("\n")
-    : String(segments || "");
+  // Combine source and target texts
+  let fullText = "";
+  if (Array.isArray(segments)) {
+    fullText = segments.map(s => {
+      if (typeof s === "string") return s;
+      const src = s.source_text || s.source || "";
+      const tgt = s.target_text || s.target || "";
+      return `${src}\n${tgt}`;
+    }).join("\n");
+  } else if (typeof segments === "object" && segments !== null) {
+    const src = segments.source_text || segments.source || "";
+    const tgt = segments.target_text || segments.target || "";
+    fullText = `${src}\n${tgt}`;
+  } else {
+    fullText = String(segments || "");
+  }
 
   // 1. Scan Preset Categories
   activeCategories.forEach(catKey => {
     const config = PRESET_PATTERNS[catKey];
-    if (!config) return;
+    if (!config || !config.regex) return;
 
     const matches = fullText.match(config.regex) || [];
     const uniqueMatches = Array.from(new Set(matches.map(m => m.trim()))).filter(Boolean);
@@ -191,11 +203,18 @@ function scanTextForProtectedContent(segments = [], options = {}) {
   // 2. Scan Manual Terms
   const manualMatches = [];
   manualTerms.forEach(term => {
-    const cleanTerm = String(term).trim();
-    if (cleanTerm && fullText.includes(cleanTerm)) {
-      manualMatches.push(cleanTerm);
-      allMatchesSet.add(cleanTerm);
-    }
+    const termStr = typeof term === "object" && term !== null ? (term.term || "") : String(term || "");
+    const cleanTerm = termStr.trim();
+    if (!cleanTerm) return;
+
+    const rx = new RegExp(cleanTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+    const matches = fullText.match(rx);
+
+    const foundTerms = matches && matches.length > 0 ? Array.from(new Set(matches.map(m => m.trim()))) : [cleanTerm];
+    foundTerms.forEach(t => {
+      manualMatches.push(t);
+      allMatchesSet.add(t);
+    });
   });
 
   if (manualMatches.length > 0) {
@@ -210,24 +229,22 @@ function scanTextForProtectedContent(segments = [], options = {}) {
 
   // 3. Scan Custom Regex Rules
   customRegexRules.forEach((rule, idx) => {
-    if (!rule.enabled || !rule.pattern) return;
+    if (!rule || !rule.pattern || rule.enabled === false) return;
     try {
       const flags = rule.caseSensitive ? "g" : "gi";
       const regex = new RegExp(rule.pattern, flags);
       const matches = fullText.match(regex) || [];
       const uniqueMatches = Array.from(new Set(matches.map(m => m.trim()))).filter(Boolean);
 
-      if (uniqueMatches.length > 0) {
-        const ruleKey = `custom_${rule.id || idx}`;
-        results[ruleKey] = {
-          key: ruleKey,
-          label: rule.name || `Custom Rule #${idx + 1}`,
-          category: "Custom Regex",
-          matches: uniqueMatches,
-          count: uniqueMatches.length
-        };
-        uniqueMatches.forEach(m => allMatchesSet.add(m));
-      }
+      const ruleKey = `custom_${rule.id || idx}`;
+      results[ruleKey] = {
+        key: ruleKey,
+        label: rule.name || `Custom Rule #${idx + 1}`,
+        category: "Custom Regex",
+        matches: uniqueMatches,
+        count: uniqueMatches.length
+      };
+      uniqueMatches.forEach(m => allMatchesSet.add(m));
     } catch (err) {
       console.error(`Invalid custom regex rule ${rule.name}:`, err);
     }

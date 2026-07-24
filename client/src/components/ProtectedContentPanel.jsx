@@ -1,13 +1,23 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { 
-  ShieldCheck, Search, Plus, Trash2, Edit3, CheckCircle2, XCircle, RefreshCw, 
-  Code, Filter, ChevronDown, ChevronRight, FileText, Download, Upload, Sparkles, Sliders, AlertCircle, Copy, Lock, Unlock
+  ShieldCheck, Search, Plus, Trash2, CheckCircle2, XCircle, RefreshCw, 
+  Code, Filter, ChevronDown, ChevronRight, FileText, Sparkles, Sliders, Lock, Unlock, Zap
 } from "lucide-react";
-import { scanTextForProtectedContent, PRESET_PATTERNS } from "../utils/protectedContentEngine";
+import { PRESET_PATTERNS, scanTextForProtectedContent } from "../utils/protectedContentEngine";
 import { fetchProtectedRules, saveProtectedRules, scanProtectedContent } from "../services/api";
 
-export function ProtectedContentPanel({ projectId, showToast, theme = "dark" }) {
-  const [activeSubTab, setActiveSubTab] = useState("detection"); // "detection", "manual", "regex", "bulk"
+const REGEX_TEMPLATES = [
+  { name: "Invoice Code", pattern: "INV-[0-9]{5,8}", caseSensitive: false, desc: "Matches INV-12345, INV-98765432" },
+  { name: "Order Number", pattern: "(ORD|PO)-[A-Z0-9]{6,10}", caseSensitive: false, desc: "Matches ORD-AB123456, PO-998877" },
+  { name: "Product SKU", pattern: "SKU-[A-Z0-9]{4,8}", caseSensitive: false, desc: "Matches SKU-X789" },
+  { name: "UUID / GUID", pattern: "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", caseSensitive: false, desc: "Matches standard UUIDs" },
+  { name: "IP Address", pattern: "\\b(?:[0-9]{1,3}\\.){3}[0-9]{1,3}\\b", caseSensitive: false, desc: "Matches IPv4 addresses" },
+  { name: "Date (YYYY-MM-DD)", pattern: "\\b\\d{4}-\\d{2}-\\d{2}\\b", caseSensitive: false, desc: "Matches ISO dates like 2026-07-24" },
+  { name: "Hex Color", pattern: "#[a-fA-F0-9]{3,6}\\b", caseSensitive: false, desc: "Matches #fff, #1e293b" }
+];
+
+export function ProtectedContentPanel({ projectId, segments = [], showToast, theme = "dark" }) {
+  const [activeTab, setActiveTab] = useState("items"); // "items", "rules", "builder"
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -18,62 +28,99 @@ export function ProtectedContentPanel({ projectId, showToast, theme = "dark" }) 
     { id: "1", name: "Invoice Numbers", pattern: "INV-[0-9]{6}", caseSensitive: false, enabled: true },
     { id: "2", name: "Order Identifiers", pattern: "ORD-[A-Z0-9]{8}", caseSensitive: false, enabled: true }
   ]);
-  const [protectedMatches, setProtectedMatches] = useState([]); // List of explicitly protected strings
+  const [protectedMatches, setProtectedMatches] = useState([]);
 
   // Detection Tree State
   const [scannedData, setScannedData] = useState({ categories: {}, totalProtectedItems: 0, allProtectedList: [] });
   const [expandedCategories, setExpandedCategories] = useState({});
   const [searchFilter, setSearchFilter] = useState("");
 
-  // Form states for Manual Tab
+  // Form states for Manual Terms
   const [newManualTerm, setNewManualTerm] = useState("");
 
-  // Form states for Custom Regex Tab
+  // Form states for Custom Regex Builder
   const [newRuleName, setNewRuleName] = useState("");
   const [newRulePattern, setNewRulePattern] = useState("");
   const [newRuleCaseSensitive, setNewRuleCaseSensitive] = useState(false);
-  const [regexTestInput, setRegexTestInput] = useState("Test with INV-123456 and ORD-8899AABB sample text.");
-  const [regexTestResults, setRegexTestResults] = useState([]);
+  const [sandboxText, setSandboxText] = useState("Sample test text: INV-123456 invoice and ORD-ABC12345 order ID.");
 
   // Load saved rules on mount
   useEffect(() => {
-    if (projectId) {
-      loadRulesAndScan();
-    }
+    loadRulesAndScan();
   }, [projectId]);
 
-  const loadRulesAndScan = async () => {
+  const loadRulesAndScan = async (overrides = {}) => {
     setLoading(true);
     try {
-      const savedRules = await fetchProtectedRules(projectId);
+      let savedRules = null;
+      if (projectId) {
+        try {
+          savedRules = await fetchProtectedRules(projectId);
+        } catch (e) {}
+      }
+
+      const cats = overrides.activeCategories || savedRules?.activeCategories || activeCategories;
+      const terms = overrides.manualTerms || savedRules?.manualTerms || manualTerms;
+      const regexes = overrides.customRegexRules || savedRules?.customRegexRules || customRegexRules;
+
       if (savedRules) {
-        if (savedRules.activeCategories) setActiveCategories(savedRules.activeCategories);
-        if (savedRules.manualTerms) setManualTerms(savedRules.manualTerms);
-        if (savedRules.customRegexRules) setCustomRegexRules(savedRules.customRegexRules);
-        if (savedRules.protectedMatches) setProtectedMatches(savedRules.protectedMatches);
+        if (savedRules.activeCategories && !overrides.activeCategories) setActiveCategories(savedRules.activeCategories);
+        if (savedRules.manualTerms && !overrides.manualTerms) setManualTerms(savedRules.manualTerms);
+        if (savedRules.customRegexRules && !overrides.customRegexRules) setCustomRegexRules(savedRules.customRegexRules);
       }
 
-      // Run scan against project text
-      const scanRes = await scanProtectedContent(projectId, {
-        activeCategories: savedRules?.activeCategories || Object.keys(PRESET_PATTERNS),
-        manualTerms: savedRules?.manualTerms || [],
-        customRegexRules: savedRules?.customRegexRules || []
-      });
+      const scanOptions = {
+        activeCategories: cats,
+        manualTerms: terms,
+        customRegexRules: regexes
+      };
 
-      if (scanRes) {
-        setScannedData(scanRes);
-        // Expand top 3 categories by default
-        const initExpanded = {};
-        Object.keys(scanRes.categories || {}).slice(0, 3).forEach(k => {
-          initExpanded[k] = true;
+      let apiRes = null;
+      if (projectId) {
+        try {
+          apiRes = await scanProtectedContent(projectId, scanOptions);
+        } catch (e) {}
+      }
+
+      // Client-side scan on passed segments
+      const clientRes = scanTextForProtectedContent(segments || [], scanOptions);
+
+      // Merge server & client scan categories
+      const mergedCategories = { ...(clientRes.categories || {}) };
+      if (apiRes && apiRes.categories) {
+        Object.entries(apiRes.categories).forEach(([k, v]) => {
+          if (!mergedCategories[k]) {
+            mergedCategories[k] = v;
+          } else {
+            const combinedMatches = Array.from(new Set([...(mergedCategories[k].matches || []), ...(v.matches || [])]));
+            mergedCategories[k] = { ...v, matches: combinedMatches, count: combinedMatches.length };
+          }
         });
-        setExpandedCategories(initExpanded);
-
-        // Pre-protect all matches if empty
-        if (!savedRules?.protectedMatches || savedRules.protectedMatches.length === 0) {
-          setProtectedMatches(scanRes.allProtectedList || []);
-        }
       }
+
+      const allList = Array.from(new Set([
+        ...(clientRes.allProtectedList || []),
+        ...(apiRes?.allProtectedList || [])
+      ]));
+
+      const scanRes = {
+        categories: mergedCategories,
+        totalProtectedItems: allList.length,
+        allProtectedList: allList
+      };
+
+      setScannedData(scanRes);
+
+      const initExpanded = {};
+      Object.keys(mergedCategories).forEach(k => {
+        initExpanded[k] = true;
+      });
+      setExpandedCategories(prev => ({ ...initExpanded, ...prev }));
+
+      const savedProtected = savedRules?.protectedMatches || [];
+      const updatedProtected = Array.from(new Set([...savedProtected, ...allList, ...protectedMatches]));
+      setProtectedMatches(updatedProtected);
+
     } catch (err) {
       console.error(err);
       if (showToast) showToast("Failed to scan protected content.", "error");
@@ -91,7 +138,9 @@ export function ProtectedContentPanel({ projectId, showToast, theme = "dark" }) 
         customRegexRules,
         protectedMatches
       };
-      await saveProtectedRules(projectId, rulesPayload);
+      if (projectId) {
+        await saveProtectedRules(projectId, rulesPayload);
+      }
       if (showToast) showToast("Protected Content rules saved successfully!", "success");
     } catch (err) {
       console.error(err);
@@ -125,29 +174,73 @@ export function ProtectedContentPanel({ projectId, showToast, theme = "dark" }) 
     });
   };
 
-  // Add Manual Term
-  const handleAddManualTerm = () => {
+  // Toggle Preset Category Active state
+  const toggleCategoryPreset = (catKey) => {
+    const updated = activeCategories.includes(catKey)
+      ? activeCategories.filter(c => c !== catKey)
+      : [...activeCategories, catKey];
+    setActiveCategories(updated);
+    loadRulesAndScan({ activeCategories: updated });
+  };
+
+  // Add Manual Term with Auto-save
+  const handleAddManualTerm = async () => {
     if (!newManualTerm.trim()) return;
     const term = newManualTerm.trim();
     if (!manualTerms.includes(term)) {
-      const updated = [...manualTerms, term];
-      setManualTerms(updated);
-      setProtectedMatches(prev => [...prev, term]);
+      const updatedTerms = [...manualTerms, term];
+      setManualTerms(updatedTerms);
+      setProtectedMatches(prev => Array.from(new Set([...prev, term])));
       setNewManualTerm("");
-      if (showToast) showToast(`Added "${term}" to Protected Terms`, "success");
+
+      try {
+        const rulesPayload = {
+          activeCategories,
+          manualTerms: updatedTerms,
+          customRegexRules,
+          protectedMatches: Array.from(new Set([...protectedMatches, term]))
+        };
+        if (projectId) await saveProtectedRules(projectId, rulesPayload);
+        if (showToast) showToast(`Added & Saved "${term}" to Protected Terms`, "success");
+      } catch (e) {
+        if (showToast) showToast(`Added "${term}" to Protected Terms`, "success");
+      }
+
+      loadRulesAndScan({ manualTerms: updatedTerms });
     }
   };
 
-  // Delete Manual Term
-  const handleDeleteManualTerm = (term) => {
-    setManualTerms(prev => prev.filter(t => t !== term));
+  // Delete Manual Term with Auto-save
+  const handleDeleteManualTerm = async (term) => {
+    const updatedTerms = manualTerms.filter(t => t !== term);
+    setManualTerms(updatedTerms);
     setProtectedMatches(prev => prev.filter(t => t !== term));
+
+    try {
+      const rulesPayload = {
+        activeCategories,
+        manualTerms: updatedTerms,
+        customRegexRules,
+        protectedMatches: protectedMatches.filter(t => t !== term)
+      };
+      if (projectId) await saveProtectedRules(projectId, rulesPayload);
+    } catch (e) {}
+
+    loadRulesAndScan({ manualTerms: updatedTerms });
   };
 
-  // Add Custom Regex Rule
-  const handleAddCustomRegexRule = () => {
+  // Apply Regex Template to Builder
+  const handleSelectTemplate = (template) => {
+    setNewRuleName(template.name);
+    setNewRulePattern(template.pattern);
+    setNewRuleCaseSensitive(template.caseSensitive);
+    if (showToast) showToast(`Loaded template: ${template.name}`, "info");
+  };
+
+  // Add Custom Regex Rule with Auto-save
+  const handleAddCustomRegexRule = async () => {
     if (!newRuleName.trim() || !newRulePattern.trim()) {
-      if (showToast) showToast("Name and Regex pattern are required.", "error");
+      if (showToast) showToast("Rule Name and Regex Pattern are required.", "error");
       return;
     }
 
@@ -159,33 +252,78 @@ export function ProtectedContentPanel({ projectId, showToast, theme = "dark" }) 
     }
 
     const newRule = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: "rule_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
       name: newRuleName.trim(),
       pattern: newRulePattern.trim(),
       caseSensitive: newRuleCaseSensitive,
       enabled: true
     };
 
-    setCustomRegexRules(prev => [...prev, newRule]);
+    const updatedRules = [...customRegexRules, newRule];
+    setCustomRegexRules(updatedRules);
     setNewRuleName("");
     setNewRulePattern("");
-    if (showToast) showToast(`Created Regex Rule: ${newRule.name}`, "success");
-  };
 
-  // Test Regex Pattern
-  const handleTestRegex = (pattern, caseSensitive) => {
-    if (!pattern || !regexTestInput) return;
     try {
-      const flags = caseSensitive ? "g" : "gi";
-      const regex = new RegExp(pattern, flags);
-      const matches = regexTestInput.match(regex) || [];
-      setRegexTestResults(Array.from(new Set(matches)));
+      const payload = {
+        activeCategories,
+        manualTerms,
+        customRegexRules: updatedRules,
+        protectedMatches
+      };
+      if (projectId) {
+        await saveProtectedRules(projectId, payload);
+      }
+      if (showToast) showToast(`Saved Regex Rule: ${newRule.name}`, "success");
     } catch (err) {
-      setRegexTestResults([]);
+      console.error("Auto-save regex rule error:", err);
     }
+
+    loadRulesAndScan({ customRegexRules: updatedRules });
   };
 
-  // Global Bulk Actions
+  // Delete Custom Regex Rule with Auto-save
+  const handleDeleteRegexRule = async (id) => {
+    const updatedRules = customRegexRules.filter(r => r.id !== id);
+    setCustomRegexRules(updatedRules);
+
+    try {
+      const payload = {
+        activeCategories,
+        manualTerms,
+        customRegexRules: updatedRules,
+        protectedMatches
+      };
+      if (projectId) {
+        await saveProtectedRules(projectId, payload);
+      }
+      if (showToast) showToast("Regex rule deleted.", "info");
+    } catch (err) {
+      console.error(err);
+    }
+
+    loadRulesAndScan({ customRegexRules: updatedRules });
+  };
+
+  // Live Sandbox matches computation
+  const sandboxMatches = useMemo(() => {
+    if (!sandboxText.trim() || customRegexRules.length === 0) return [];
+    const results = [];
+    customRegexRules.forEach(rule => {
+      if (!rule.enabled || !rule.pattern) return;
+      try {
+        const flags = rule.caseSensitive ? "g" : "gi";
+        const rx = new RegExp(rule.pattern, flags);
+        const matches = sandboxText.match(rx) || [];
+        matches.forEach(m => {
+          results.push({ ruleName: rule.name, match: m });
+        });
+      } catch (e) {}
+    });
+    return results;
+  }, [sandboxText, customRegexRules]);
+
+  // Bulk Actions
   const handleBulkAction = (actionType) => {
     if (actionType === "protect_all") {
       setProtectedMatches(scannedData.allProtectedList || []);
@@ -193,50 +331,38 @@ export function ProtectedContentPanel({ projectId, showToast, theme = "dark" }) 
     } else if (actionType === "unprotect_all") {
       setProtectedMatches([]);
       if (showToast) showToast("Unprotected all items.", "info");
-    } else if (actionType === "protect_emails") {
-      const emailMatches = scannedData.categories["email"]?.matches || [];
-      setProtectedMatches(prev => Array.from(new Set([...prev, ...emailMatches])));
-    } else if (actionType === "protect_urls") {
-      const urlMatches = scannedData.categories["url"]?.matches || [];
-      setProtectedMatches(prev => Array.from(new Set([...prev, ...urlMatches])));
-    } else if (actionType === "protect_placeholders") {
-      const ph1 = scannedData.categories["placeholder_mustache"]?.matches || [];
-      const ph2 = scannedData.categories["placeholder_curly"]?.matches || [];
-      const ph3 = scannedData.categories["placeholder_printf"]?.matches || [];
-      const ph4 = scannedData.categories["html_tag"]?.matches || [];
-      setProtectedMatches(prev => Array.from(new Set([...prev, ...ph1, ...ph2, ...ph3, ...ph4])));
     }
   };
 
   return (
-    <div className="space-y-6 text-[var(--text-primary)]">
+    <div className="space-y-6 text-[var(--text-primary)] font-sans w-full">
       
-      {/* Top Banner & Save Action */}
-      <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-3xl p-6 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+      {/* ── TOP HEADER BANNER ── */}
+      <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4 shadow-sm">
         <div className="flex items-center gap-3.5">
-          <div className="h-11 w-11 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center border border-indigo-500/20">
+          <div className="h-10 w-10 rounded-xl bg-indigo-500/15 text-indigo-400 flex items-center justify-center border border-indigo-500/30 shrink-0">
             <ShieldCheck size={22} />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-base font-extrabold tracking-tight text-[var(--text-primary)]">
-                Protected Content & Regex Engine
+                Protected Content Guard & Regex Engine
               </h3>
-              <span className="text-[10px] font-extrabold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-                50+ Scanners Active
+              <span className="text-[10px] font-extrabold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-md">
+                Guard Active
               </span>
             </div>
             <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-              Automatically detect, mask, and lock non-translatable text (variables, brand names, code tags, URLs, IDs, and custom regex rules) before AI translation.
+              Automatically detect, mask, and lock non-translatable text (IDs, variables, URLs, emails, and custom rules)
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
           <button
-            onClick={loadRulesAndScan}
+            onClick={() => loadRulesAndScan()}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-xs font-bold transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-xs font-bold transition cursor-pointer"
           >
             <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
             Rescan Text
@@ -245,7 +371,7 @@ export function ProtectedContentPanel({ projectId, showToast, theme = "dark" }) 
           <button
             onClick={handleSaveRules}
             disabled={saving}
-            className="flex items-center gap-2 px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold transition-all shadow-md cursor-pointer active:scale-[0.97]"
+            className="flex items-center gap-2 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow-sm cursor-pointer active:scale-[0.98]"
           >
             <ShieldCheck size={14} />
             {saving ? "Saving..." : "Save Protection Rules"}
@@ -253,106 +379,88 @@ export function ProtectedContentPanel({ projectId, showToast, theme = "dark" }) 
         </div>
       </div>
 
-      {/* Navigation Sub-Tabs */}
-      <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-2">
-        <div className="flex items-center gap-2">
+      {/* ── SPACIOUS UNIFIED TABS NAVIGATION ── */}
+      <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-2.5 gap-4">
+        <div className="flex items-center gap-2 p-1 bg-[var(--bg-panel)] rounded-xl border border-[var(--border-subtle)]">
           <button
-            onClick={() => setActiveSubTab("detection")}
-            className={`flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer ${
-              activeSubTab === "detection"
-                ? "bg-indigo-500/15 text-indigo-400 border border-indigo-500/30"
-                : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-panel)]"
+            onClick={() => setActiveTab("items")}
+            className={`flex items-center gap-2 text-xs font-extrabold px-4 py-2 rounded-lg transition cursor-pointer ${
+              activeTab === "items"
+                ? "bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-xs border border-[var(--border-subtle)]"
+                : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
             }`}
           >
             <Filter size={14} />
-            <span>Regex Detection Tree</span>
-            <span className="ml-1 text-[10px] bg-indigo-500/20 text-indigo-300 font-mono px-1.5 py-0.2 rounded-md">
-              {scannedData.totalProtectedItems}
-            </span>
+            <span>Scanned Tokens ({scannedData.totalProtectedItems})</span>
           </button>
 
           <button
-            onClick={() => setActiveSubTab("manual")}
-            className={`flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer ${
-              activeSubTab === "manual"
-                ? "bg-indigo-500/15 text-indigo-400 border border-indigo-500/30"
-                : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-panel)]"
+            onClick={() => setActiveTab("rules")}
+            className={`flex items-center gap-2 text-xs font-extrabold px-4 py-2 rounded-lg transition cursor-pointer ${
+              activeTab === "rules"
+                ? "bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-xs border border-[var(--border-subtle)]"
+                : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
             }`}
           >
-            <FileText size={14} />
-            <span>Manual Terms ({manualTerms.length})</span>
+            <Zap size={14} />
+            <span>Presets & Terms ({activeCategories.length + manualTerms.length})</span>
           </button>
 
           <button
-            onClick={() => setActiveSubTab("regex")}
-            className={`flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer ${
-              activeSubTab === "regex"
-                ? "bg-indigo-500/15 text-indigo-400 border border-indigo-500/30"
-                : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-panel)]"
+            onClick={() => setActiveTab("builder")}
+            className={`flex items-center gap-2 text-xs font-extrabold px-4 py-2 rounded-lg transition cursor-pointer ${
+              activeTab === "builder"
+                ? "bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-xs border border-[var(--border-subtle)]"
+                : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
             }`}
           >
             <Code size={14} />
-            <span>Custom Regex Rules ({customRegexRules.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveSubTab("bulk")}
-            className={`flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer ${
-              activeSubTab === "bulk"
-                ? "bg-indigo-500/15 text-indigo-400 border border-indigo-500/30"
-                : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-panel)]"
-            }`}
-          >
-            <Sliders size={14} />
-            <span>Bulk Actions & Presets</span>
+            <span>Regex Rules & Sandbox ({customRegexRules.length})</span>
           </button>
         </div>
 
-        <div className="text-[11px] font-bold text-[var(--text-muted)] flex items-center gap-1.5">
-          <Lock size={12} className="text-emerald-400" />
-          <span>{protectedMatches.length} Items Protected</span>
+        <div className="text-xs font-bold text-[var(--text-muted)] flex items-center gap-2 bg-[var(--bg-panel)] px-3 py-1.5 rounded-xl border border-[var(--border-subtle)]">
+          <Lock size={13} className="text-emerald-400" />
+          <span>{protectedMatches.length} Tokens Locked & Protected</span>
         </div>
       </div>
 
-      {/* ── TAB 1: REGEX DETECTION TREE ── */}
-      {activeSubTab === "detection" && (
-        <div className="space-y-5 animate-[fadeIn_0.15s_ease-out]">
-          
-          {/* Search Filter Toolbar */}
-          <div className="flex items-center justify-between gap-4">
+      {/* ── TAB 1: SCANNED TOKENS TREE ── */}
+      {activeTab === "items" && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="relative flex-1 max-w-md">
               <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
               <input
                 type="text"
                 value={searchFilter}
                 onChange={(e) => setSearchFilter(e.target.value)}
-                placeholder="Search detected items or categories..."
-                className="w-full pl-9 pr-4 py-2 rounded-xl bg-[var(--bg-input)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] focus:outline-hidden focus:border-indigo-500/50"
+                placeholder="Filter detected tokens..."
+                className="w-full pl-9 pr-4 py-2 rounded-xl bg-[var(--bg-input)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] outline-none focus:border-indigo-500/50"
               />
             </div>
 
             <div className="flex items-center gap-2">
               <button
                 onClick={() => handleBulkAction("protect_all")}
-                className="text-xs font-extrabold text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 px-3 py-1.5 rounded-xl cursor-pointer transition-all"
+                className="text-xs font-bold text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 px-3.5 py-2 rounded-xl transition cursor-pointer"
               >
-                Protect All Scanned
+                Protect All
               </button>
               <button
                 onClick={() => handleBulkAction("unprotect_all")}
-                className="text-xs font-extrabold text-[var(--text-muted)] hover:text-[var(--text-primary)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] px-3 py-1.5 rounded-xl cursor-pointer transition-all"
+                className="text-xs font-bold text-[var(--text-muted)] hover:text-[var(--text-primary)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] px-3.5 py-2 rounded-xl transition cursor-pointer"
               >
                 Unprotect All
               </button>
             </div>
           </div>
 
-          {/* Categories Accordion Tree */}
           {Object.keys(scannedData.categories || {}).length === 0 ? (
-            <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-3xl py-16 text-center space-y-2">
-              <ShieldCheck size={36} className="mx-auto text-[var(--text-muted)] opacity-50" />
+            <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl py-14 text-center space-y-2">
+              <ShieldCheck size={36} className="mx-auto text-[var(--text-muted)] opacity-40" />
               <p className="text-xs font-bold text-[var(--text-secondary)]">No non-translatable tokens detected in project text.</p>
-              <p className="text-[11px] text-[var(--text-muted)]">Upload documents or add custom rules to detect non-translatable content.</p>
+              <p className="text-[11px] text-[var(--text-muted)]">Add custom terms or rules to protect specific words.</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -366,54 +474,47 @@ export function ProtectedContentPanel({ projectId, showToast, theme = "dark" }) 
                 const isAllCatProtected = matches.length > 0 && protectedCountInCat === matches.length;
 
                 return (
-                  <div key={catKey} className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl overflow-hidden transition-all">
-                    
-                    {/* Category Header */}
+                  <div key={catKey} className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl overflow-hidden transition">
                     <div 
                       onClick={() => toggleCategoryExpand(catKey)}
-                      className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-[var(--bg-surface)] transition-colors select-none"
+                      className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-[var(--bg-surface)] transition select-none"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="text-[var(--text-muted)]">
+                        <span className="text-[var(--text-muted)]">
                           {isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-extrabold text-[var(--text-primary)]">{catData.label}</span>
-                            <span className="text-[9px] uppercase font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.2 rounded-full">
-                              {catData.category}
-                            </span>
-                          </div>
-                        </div>
+                        </span>
+                        <span className="text-xs font-bold text-[var(--text-primary)]">{catData.label}</span>
+                        <span className="text-[9px] font-extrabold uppercase text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded-full">
+                          {catData.category}
+                        </span>
                       </div>
 
                       <div className="flex items-center gap-3" onClick={e => e.stopPropagation()}>
                         <span className="text-[11px] font-mono font-bold text-[var(--text-muted)]">
-                          {protectedCountInCat} / {matches.length} Protected
+                          {protectedCountInCat}/{matches.length} Protected
                         </span>
 
                         <button
                           onClick={() => toggleProtectCategory(catKey, !isAllCatProtected)}
-                          className={`text-[10px] font-extrabold px-2.5 py-1 rounded-lg transition-all cursor-pointer border ${
+                          className={`text-[10px] font-extrabold px-3 py-1 rounded-lg transition border cursor-pointer ${
                             isAllCatProtected
                               ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20"
                               : "bg-[var(--bg-input)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:text-[var(--text-primary)]"
                           }`}
                         >
-                          {isAllCatProtected ? "Protected ✓" : "Protect Category"}
+                          {isAllCatProtected ? "Protected ✓" : "Protect All in Category"}
                         </button>
                       </div>
                     </div>
 
-                    {/* Category Body / Items List */}
                     {isExpanded && (
-                      <div className="border-t border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 space-y-1.5">
+                      <div className="border-t border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 gap-2.5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
                         {filteredMatches.map((item, idx) => {
                           const isProtected = protectedMatches.includes(item);
                           return (
                             <div 
                               key={idx} 
-                              className="flex items-center justify-between gap-3 bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-xl px-3.5 py-2 text-xs hover:border-indigo-500/30 transition-all"
+                              className="flex items-center justify-between gap-2 bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-xl px-3.5 py-2 text-xs hover:border-indigo-500/30 transition"
                             >
                               <div className="flex items-center gap-2 font-mono text-[11px] text-[var(--text-primary)] truncate">
                                 {isProtected ? <Lock size={12} className="text-emerald-400 shrink-0" /> : <Unlock size={12} className="text-[var(--text-muted)] shrink-0" />}
@@ -422,13 +523,13 @@ export function ProtectedContentPanel({ projectId, showToast, theme = "dark" }) 
 
                               <button
                                 onClick={() => toggleItemProtection(item)}
-                                className={`text-[10px] font-bold px-3 py-1 rounded-lg transition-all cursor-pointer border ${
+                                className={`text-[10px] font-bold px-2.5 py-1 rounded-lg transition border cursor-pointer ${
                                   isProtected
-                                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-rose-500/10 hover:text-rose-400 hover:border-rose-500/30"
-                                    : "bg-[var(--bg-input)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:text-indigo-400 hover:border-indigo-500/30"
+                                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-rose-500/10 hover:text-rose-400"
+                                    : "bg-[var(--bg-input)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:text-indigo-400"
                                 }`}
                               >
-                                {isProtected ? "Protected ✓" : "Unprotected"}
+                                {isProtected ? "Protected" : "Protect"}
                               </button>
                             </div>
                           );
@@ -443,212 +544,242 @@ export function ProtectedContentPanel({ projectId, showToast, theme = "dark" }) 
         </div>
       )}
 
-      {/* ── TAB 2: MANUAL TERMS ── */}
-      {activeSubTab === "manual" && (
-        <div className="space-y-6 animate-[fadeIn_0.15s_ease-out]">
-          
-          {/* Add Manual Term Input Form */}
-          <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-4 flex items-center gap-3">
-            <input
-              type="text"
-              value={newManualTerm}
-              onChange={(e) => setNewManualTerm(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleAddManualTerm()}
-              placeholder="Enter brand name, phrase, or non-translatable word (e.g. OpenAI, ChatGPT, DNT-100)..."
-              className="flex-1 px-4 py-2.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] focus:outline-hidden focus:border-indigo-500/50"
-            />
-            <button
-              onClick={handleAddManualTerm}
-              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-[0.97]"
-            >
-              <Plus size={14} /> Add Protected Term
-            </button>
-          </div>
-
-          {/* Manual Terms List Grid */}
-          {manualTerms.length === 0 ? (
-            <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-3xl py-12 text-center space-y-2">
-              <FileText size={32} className="mx-auto text-[var(--text-muted)] opacity-40" />
-              <p className="text-xs font-bold text-[var(--text-secondary)]">No manual terms added yet.</p>
-              <p className="text-[11px] text-[var(--text-muted)]">Type brand names or phrases above to ensure they are never translated.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {manualTerms.map((term, i) => (
-                <div key={i} className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-3.5 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <Lock size={12} className="text-emerald-400 shrink-0" />
-                    <span className="text-xs font-bold text-[var(--text-primary)] font-mono">{term}</span>
-                  </div>
-                  <button
-                    onClick={() => handleDeleteManualTerm(term)}
-                    className="p-1 rounded-lg text-[var(--text-muted)] hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
-                    title="Remove Term"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── TAB 3: CUSTOM REGEX RULES BUILDER ── */}
-      {activeSubTab === "regex" && (
-        <div className="space-y-6 animate-[fadeIn_0.15s_ease-out]">
-          
-          {/* Create Custom Regex Rule Card */}
-          <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-3xl p-5 space-y-4">
-            <h4 className="text-xs font-extrabold uppercase text-indigo-400 tracking-wider flex items-center gap-2">
-              <Code size={14} /> Create Custom Regex Rule
+      {/* ── TAB 2: RULES & PRESETS ── */}
+      {activeTab === "rules" && (
+        <div className="space-y-6">
+          {/* Manual Terms Input */}
+          <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-5 space-y-4">
+            <h4 className="text-xs font-extrabold uppercase text-[var(--text-primary)] flex items-center gap-2 tracking-wider">
+              <FileText size={15} className="text-indigo-400" /> Add Protected Term or Brand Name
             </h4>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="flex items-center gap-3">
               <input
                 type="text"
-                value={newRuleName}
-                onChange={(e) => setNewRuleName(e.target.value)}
-                placeholder="Rule Name (e.g. Invoice Numbers)"
-                className="px-3.5 py-2 rounded-xl bg-[var(--bg-input)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] focus:outline-hidden focus:border-indigo-500/50"
+                value={newManualTerm}
+                onChange={(e) => setNewManualTerm(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAddManualTerm()}
+                placeholder="Type brand name or non-translatable word (e.g. Verbocat, ChatGPT, DNT-100)..."
+                className="flex-1 px-4 py-2.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] outline-none focus:border-indigo-500/50"
               />
-              <input
-                type="text"
-                value={newRulePattern}
-                onChange={(e) => setNewRulePattern(e.target.value)}
-                placeholder="Regex Pattern (e.g. INV-[0-9]{6})"
-                className="px-3.5 py-2 rounded-xl bg-[var(--bg-input)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] font-mono focus:outline-hidden focus:border-indigo-500/50"
-              />
-              <div className="flex items-center gap-3">
-                <label className="flex items-center gap-2 text-xs font-bold text-[var(--text-secondary)] cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={newRuleCaseSensitive}
-                    onChange={(e) => setNewRuleCaseSensitive(e.target.checked)}
-                    className="accent-indigo-500 rounded"
-                  />
-                  Case Sensitive
-                </label>
-                <button
-                  onClick={handleAddCustomRegexRule}
-                  className="ml-auto px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all cursor-pointer"
-                >
-                  Create Rule
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Regex Tester Sandbox */}
-          <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-3xl p-5 space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-xs font-extrabold uppercase text-[var(--text-muted)] tracking-wider">Live Regex Sandbox Tester</span>
-              {regexTestResults.length > 0 && (
-                <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                  {regexTestResults.length} Matches Found
-                </span>
-              )}
+              <button
+                onClick={handleAddManualTerm}
+                disabled={!newManualTerm.trim()}
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-xs font-bold transition cursor-pointer shadow-sm active:scale-[0.98]"
+              >
+                <Plus size={14} /> Save Protected Term
+              </button>
             </div>
 
-            <textarea
-              rows={2}
-              value={regexTestInput}
-              onChange={(e) => setRegexTestInput(e.target.value)}
-              placeholder="Type sample text to test your custom regex rules live..."
-              className="w-full p-3 rounded-xl bg-[var(--bg-input)] border border-[var(--border-subtle)] text-xs font-mono text-[var(--text-primary)] focus:outline-hidden focus:border-indigo-500/50"
-            />
-
-            <div className="flex flex-wrap gap-2 pt-1">
-              {customRegexRules.map(rule => (
-                <button
-                  key={rule.id}
-                  onClick={() => handleTestRegex(rule.pattern, rule.caseSensitive)}
-                  className="text-[11px] font-mono bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-indigo-400 px-3 py-1 rounded-lg transition-all cursor-pointer"
-                >
-                  Test {rule.name} (<code>{rule.pattern}</code>)
-                </button>
-              ))}
-            </div>
-
-            {regexTestResults.length > 0 && (
-              <div className="bg-[var(--bg-surface)] p-3 rounded-xl border border-indigo-500/20 flex flex-wrap gap-2">
-                {regexTestResults.map((res, i) => (
-                  <span key={i} className="text-xs font-mono font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 px-2.5 py-0.5 rounded-lg flex items-center gap-1">
-                    <Lock size={10} /> {res}
+            {manualTerms.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-2">
+                {manualTerms.map((term, i) => (
+                  <span key={i} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs font-mono font-bold text-slate-200 shadow-xs">
+                    <Lock size={11} className="text-emerald-400" />
+                    <span>{term}</span>
+                    <button
+                      onClick={() => handleDeleteManualTerm(term)}
+                      className="text-slate-400 hover:text-rose-400 transition cursor-pointer text-sm font-bold pl-1"
+                      title="Remove Term"
+                    >
+                      ×
+                    </button>
                   </span>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Saved Custom Rules List */}
-          <div className="space-y-3">
-            {customRegexRules.map((rule) => (
-              <div key={rule.id} className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-4 flex items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-[var(--text-primary)]">{rule.name}</span>
-                    <code className="text-[11px] bg-[var(--bg-surface)] text-indigo-400 px-2 py-0.5 rounded-md font-mono border border-[var(--border-subtle)]">
-                      {rule.pattern}
-                    </code>
-                  </div>
-                  <span className="text-[10px] text-[var(--text-muted)]">
-                    {rule.caseSensitive ? "Case-Sensitive" : "Case-Insensitive"} • Active
-                  </span>
-                </div>
+          {/* Preset Rule Toggles Grid */}
+          <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-5 space-y-4">
+            <h4 className="text-xs font-extrabold uppercase text-[var(--text-primary)] flex items-center gap-2 tracking-wider">
+              <Zap size={15} className="text-amber-400" /> 1-Click Preset Protection Scanners
+            </h4>
 
-                <button
-                  onClick={() => setCustomRegexRules(prev => prev.filter(r => r.id !== rule.id))}
-                  className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
-                  title="Delete Rule"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            ))}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {Object.entries(PRESET_PATTERNS).map(([catKey, info]) => {
+                const isActive = activeCategories.includes(catKey);
+                return (
+                  <label
+                    key={catKey}
+                    className={`flex items-center justify-between p-3 rounded-xl border transition cursor-pointer select-none ${
+                      isActive
+                        ? "bg-indigo-500/10 border-indigo-500/30 text-indigo-300 shadow-xs"
+                        : "bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                    }`}
+                  >
+                    <div className="min-w-0 pr-2">
+                      <div className="text-xs font-bold truncate">{info.label}</div>
+                      <div className="text-[10px] opacity-75 font-semibold mt-0.5">{info.category}</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={isActive}
+                      onChange={() => toggleCategoryPreset(catKey)}
+                      className="w-4 h-4 accent-indigo-500 cursor-pointer"
+                    />
+                  </label>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
 
-      {/* ── TAB 4: BULK ACTIONS ── */}
-      {activeSubTab === "bulk" && (
-        <div className="space-y-6 animate-[fadeIn_0.15s_ease-out]">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* ── TAB 3: REGEX BUILDER & SANDBOX (CLEAR VISIBLE LAYOUT) ── */}
+      {activeTab === "builder" && (
+        <div className="space-y-6">
+          
+          {/* Preset Templates Buttons */}
+          <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-extrabold uppercase text-indigo-400 flex items-center gap-2 tracking-wider">
+                <Sparkles size={15} /> 1-Click Preset Templates
+              </h4>
+              <span className="text-[11px] text-[var(--text-muted)] font-semibold">Click any template to auto-fill generator</span>
+            </div>
+
+            <div className="flex flex-wrap gap-2.5">
+              {REGEX_TEMPLATES.map((tmpl, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleSelectTemplate(tmpl)}
+                  className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[var(--bg-surface)] hover:bg-indigo-500/15 border border-[var(--border-subtle)] hover:border-indigo-500/40 text-[var(--text-secondary)] hover:text-indigo-300 text-xs font-semibold transition cursor-pointer"
+                >
+                  <span className="font-bold">{tmpl.name}</span>
+                  <code className="font-mono text-[10px] bg-black/30 px-2 py-0.5 rounded text-indigo-300">{tmpl.pattern}</code>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Rule Creator & Live Sandbox Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             
-            <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-3xl p-5 space-y-3">
-              <h4 className="text-xs font-extrabold uppercase text-[var(--text-primary)]">Protect All Emails</h4>
-              <p className="text-[11px] text-[var(--text-secondary)]">Automatically protect all detected email addresses across documents.</p>
+            {/* Rule Creator Form */}
+            <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-5 space-y-4 flex flex-col justify-between">
+              <div className="space-y-3">
+                <h4 className="text-xs font-extrabold uppercase text-[var(--text-primary)] tracking-wider flex items-center gap-2">
+                  <Code size={15} className="text-indigo-400" /> Create & Save Regex Rule
+                </h4>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-1">Rule Name</label>
+                    <input
+                      type="text"
+                      value={newRuleName}
+                      onChange={(e) => setNewRuleName(e.target.value)}
+                      placeholder="e.g. Invoice Code, SKU Number, Serial ID"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] outline-none focus:border-indigo-500/50"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-1">Regex Pattern</label>
+                    <input
+                      type="text"
+                      value={newRulePattern}
+                      onChange={(e) => setNewRulePattern(e.target.value)}
+                      placeholder="e.g. INV-[0-9]{6} or ORD-[A-Z0-9]+"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] font-mono outline-none focus:border-indigo-500/50"
+                    />
+                  </div>
+
+                  <label className="flex items-center gap-2 text-xs font-bold text-[var(--text-secondary)] cursor-pointer select-none pt-1">
+                    <input
+                      type="checkbox"
+                      checked={newRuleCaseSensitive}
+                      onChange={(e) => setNewRuleCaseSensitive(e.target.checked)}
+                      className="w-4 h-4 accent-indigo-500 cursor-pointer"
+                    />
+                    <span>Match Case Sensitive</span>
+                  </label>
+                </div>
+              </div>
+
               <button
-                onClick={() => handleBulkAction("protect_emails")}
-                className="w-full text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white py-2 rounded-xl transition-all cursor-pointer"
+                onClick={handleAddCustomRegexRule}
+                disabled={!newRuleName.trim() || !newRulePattern.trim()}
+                className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-xs font-bold transition cursor-pointer shadow-md active:scale-[0.98] mt-4"
               >
-                Protect Emails
+                Save & Apply Regex Rule
               </button>
             </div>
 
-            <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-3xl p-5 space-y-3">
-              <h4 className="text-xs font-extrabold uppercase text-[var(--text-primary)]">Protect All URLs & Links</h4>
-              <p className="text-[11px] text-[var(--text-secondary)]">Protect web endpoints, URLs, and domains from translation.</p>
-              <button
-                onClick={() => handleBulkAction("protect_urls")}
-                className="w-full text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white py-2 rounded-xl transition-all cursor-pointer"
-              >
-                Protect URLs
-              </button>
-            </div>
+            {/* Sandbox Tester */}
+            <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-5 space-y-3 flex flex-col">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-extrabold uppercase text-[var(--text-primary)] tracking-wider">Live Regex Sandbox Tester</h4>
+                <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-md">
+                  {sandboxMatches.length} Matches Found
+                </span>
+              </div>
 
-            <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-3xl p-5 space-y-3">
-              <h4 className="text-xs font-extrabold uppercase text-[var(--text-primary)]">Protect Code Placeholders</h4>
-              <p className="text-[11px] text-[var(--text-secondary)]">Protect HTML/XML tags, mustache {"{{var}}"}, curly {"{var}"}, and printf placeholders.</p>
-              <button
-                onClick={() => handleBulkAction("protect_placeholders")}
-                className="w-full text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white py-2 rounded-xl transition-all cursor-pointer"
-              >
-                Protect Placeholders & Tags
-              </button>
+              <textarea
+                rows={4}
+                value={sandboxText}
+                onChange={(e) => setSandboxText(e.target.value)}
+                placeholder="Type or paste sample text here to test your custom regex rules in real-time..."
+                className="w-full flex-1 p-3 rounded-xl bg-[var(--bg-input)] border border-[var(--border-subtle)] text-xs font-mono text-[var(--text-primary)] outline-none focus:border-indigo-500/50 resize-none"
+              />
+
+              {sandboxMatches.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-2 border-t border-[var(--border-subtle)]">
+                  {sandboxMatches.map((m, i) => (
+                    <span key={i} className="text-xs font-mono font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 px-3 py-1 rounded-lg flex items-center gap-1.5">
+                      <Lock size={11} className="text-emerald-400" /> {m.match} <span className="opacity-60 text-[10px]">({m.ruleName})</span>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
           </div>
+
+          {/* Fully Open Saved Rules List */}
+          <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-5 space-y-4">
+            <h4 className="text-xs font-extrabold uppercase text-[var(--text-primary)] tracking-wider flex items-center gap-2">
+              <Code size={15} className="text-indigo-400" /> Saved Custom Rules ({customRegexRules.length})
+            </h4>
+
+            {customRegexRules.length === 0 ? (
+              <div className="p-6 text-center text-xs text-[var(--text-muted)] font-medium">
+                No custom regex rules saved yet. Use the generator above or click a template.
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {customRegexRules.map((rule) => (
+                  <div key={rule.id} className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl p-3.5 flex items-center justify-between gap-4 hover:border-indigo-500/30 transition">
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center border border-indigo-500/20 shrink-0 font-mono text-xs font-bold">
+                        .*
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-[var(--text-primary)]">{rule.name}</span>
+                          <code className="text-[11px] bg-black/40 text-indigo-300 px-2 py-0.5 rounded font-mono border border-[var(--border-subtle)]">
+                            {rule.pattern}
+                          </code>
+                        </div>
+                        <div className="text-[10px] text-[var(--text-muted)] font-semibold mt-0.5">
+                          {rule.caseSensitive ? "Match Case Sensitive" : "Case Insensitive"} • Rule Saved & Enforced
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleDeleteRegexRule(rule.id)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-bold transition cursor-pointer"
+                      title="Delete Rule"
+                    >
+                      <Trash2 size={13} /> Delete
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
         </div>
       )}
 

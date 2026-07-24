@@ -3,7 +3,7 @@ import { LANGUAGES } from "../constants/languages.js";
 import {
   FileText, ArrowRight, Search, Filter, Sparkles,
   Save, Upload, Download, Trash2, RefreshCw, ChevronDown, Plus, Link2,
-  FolderOpen, Sliders, GitBranch, Check, BookOpen
+  FolderOpen, Sliders, GitBranch, Check, BookOpen, ShieldAlert
 } from "lucide-react";
 
 export const WorkspaceToolbar = ({
@@ -15,6 +15,8 @@ export const WorkspaceToolbar = ({
   canTranslate = true, fileExtension, filterStatus, setFilterStatus, onUpload,
   onRunQc, isAuditing,
   trackChangesEnabled, onToggleTrackChanges, isOwner,
+  lengthRestrictionEnabled, onToggleLengthRestriction,
+  forbiddenTermsCount = 0, forbiddenTermsEnabled = true, onOpenForbiddenTerms,
   onAcceptAllChanges, hasTrackedChanges, onApplyGlossary,
   isAllSelected, onToggleSelectAll, selectedCount
 }) => {
@@ -108,6 +110,73 @@ export const WorkspaceToolbar = ({
             <span>Track Changes: {trackChangesEnabled ? "ON" : "OFF"}</span>
           </button>
         )}
+
+        <button
+          onClick={onToggleLengthRestriction}
+          className="ab"
+          style={
+            lengthRestrictionEnabled
+              ? {
+                  background: "rgba(99,102,241,0.3)",
+                  color: "#fff",
+                  border: "1px solid rgba(99,102,241,0.6)",
+                  marginLeft: "8px",
+                  display: "flex",
+                  alignItems: "center",
+                  padding: "2px 6px",
+                  borderRadius: "4px"
+                }
+              : {
+                  background: "rgba(200,200,200,0.2)",
+                  color: "var(--text-muted)",
+                  border: "1px solid rgba(99,102,241,0.4)",
+                  marginLeft: "8px",
+                  display: "flex",
+                  alignItems: "center",
+                  padding: "2px 6px",
+                  borderRadius: "4px"
+                }
+          }
+          title="Toggle segment word length restrictions"
+        >
+          <Sliders style={{ width: 12, height: 12, color: lengthRestrictionEnabled ? "#fff" : "var(--text-muted)", flexShrink: 0 }} />
+          <span style={{ marginLeft: "4px" }}>Length Limits: {lengthRestrictionEnabled ? "ON" : "OFF"}</span>
+        </button>
+
+        {/* Forbidden Terms Guard */}
+        <button
+          onClick={onOpenForbiddenTerms}
+          className="ab"
+          style={
+            forbiddenTermsEnabled && forbiddenTermsCount > 0
+              ? {
+                  background: "rgba(244,63,94,0.2)",
+                  color: "#f43f5e",
+                  border: "1px solid rgba(244,63,94,0.5)",
+                  marginLeft: "8px",
+                  display: "flex",
+                  alignItems: "center",
+                  padding: "2px 6px",
+                  borderRadius: "4px"
+                }
+              : {
+                  background: "rgba(200,200,200,0.2)",
+                  color: "var(--text-muted)",
+                  border: "1px solid rgba(244,63,94,0.3)",
+                  marginLeft: "8px",
+                  display: "flex",
+                  alignItems: "center",
+                  padding: "2px 6px",
+                  borderRadius: "4px"
+                }
+          }
+          title="Configure Forbidden Terms Guard"
+        >
+          <ShieldAlert style={{ width: 12, height: 12, color: forbiddenTermsEnabled && forbiddenTermsCount > 0 ? "#f43f5e" : "var(--text-muted)", flexShrink: 0 }} />
+          <span style={{ marginLeft: "4px" }}>
+            Forbidden Terms: {forbiddenTermsEnabled ? (forbiddenTermsCount > 0 ? `${forbiddenTermsCount}` : "ON") : "OFF"}
+          </span>
+        </button>
 
         {/* Accept All Changes (Owner Only) */}
         {isOwner && hasTrackedChanges && (

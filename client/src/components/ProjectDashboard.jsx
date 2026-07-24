@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Folder, User, Calendar, Trash2, Search, Filter, Globe, BookOpen, Settings, ChevronRight, LayoutDashboard, Users, Share2, MoreVertical, Copy, StickyNote, History, Check, XCircle, Sparkles, Layers, FileText, CheckCircle2, TrendingUp } from "lucide-react";
+import { Plus, Folder, User, Calendar, Trash2, Search, Filter, Globe, BookOpen, Settings, ChevronRight, LayoutDashboard, Users, Share2, MoreVertical, Copy, StickyNote, History, Check, XCircle, Sparkles, Layers, FileText, CheckCircle2, TrendingUp, LogOut } from "lucide-react";
 import { fetchProjects, createProject, deleteProject, duplicateProject } from "../services/api";
 import { LANGUAGES } from "../constants/languages";
 import { ShareModal } from "./ShareModal";
@@ -10,7 +10,7 @@ import { CardGridSkeleton } from "./SkeletonLoader";
 
 import io from "socket.io-client";
 
-export default function ProjectDashboard({ onOpenProject, showToast, theme, userRole, onOpenAdmin, onOpenSettings }) {
+export default function ProjectDashboard({ onOpenProject, showToast, theme, userRole, onOpenAdmin, onOpenSettings, onLogout }) {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -211,6 +211,16 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
           >
             <Settings size={15} />
           </button>
+
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="h-9 w-9 rounded-xl bg-[var(--bg-surface)] hover:bg-rose-500/10 border border-[var(--border-subtle)] hover:border-rose-500/30 text-[var(--text-secondary)] hover:text-rose-400 flex items-center justify-center transition-all cursor-pointer shadow-xs"
+              title="Log Out"
+            >
+              <LogOut size={15} />
+            </button>
+          )}
 
           <button
             onClick={() => setShowCreateModal(true)}

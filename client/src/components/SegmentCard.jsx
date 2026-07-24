@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from "react";
-import { Copy, Check, ArrowRight, AlertTriangle, Lock, Sparkles, Award, UploadCloud, Trash2, Image, MessageSquare, X, Tag, Wand2, ChevronDown } from "lucide-react";
+import { useState, useRef, useEffect, useMemo } from "react";
+import { Copy, Check, ArrowRight, AlertTriangle, Lock, Sparkles, Award, UploadCloud, Trash2, Image, MessageSquare, X, Tag, Wand2, ChevronDown, Sliders, ShieldAlert } from "lucide-react";
 import { useChatStore } from "../services/chatStore";
 import { autoFixSegmentTags, validateSegmentTags } from "../utils/tagValidation.js";
 
@@ -182,6 +182,46 @@ const GlossaryHighlight = ({ term, children }) => {
   );
 };
 
+/* ── Forbidden Term highlight tooltip ─────────────────────────────── */
+const ForbiddenHighlight = ({ term, children }) => {
+  const [show, setShow] = useState(false);
+  const t = useRef(null);
+  const enter = () => { if (t.current) clearTimeout(t.current); setShow(true); };
+  const leave = () => { t.current = setTimeout(() => setShow(false), 800); };
+
+  return (
+    <span className="relative inline-block" onMouseEnter={enter} onMouseLeave={leave}>
+      <mark style={{
+        background: "rgba(244,63,94,0.2)",
+        color: "#f43f5e",
+        border: "1px solid rgba(244,63,94,0.4)",
+        borderRadius: "3px",
+        padding: "0 3px",
+        fontWeight: 600,
+        textDecoration: "line-through"
+      }}>{children}</mark>
+      {show && (
+        <span
+          style={{
+            position: "absolute", bottom: "100%", left: "50%",
+            transform: "translateX(-50%)", marginBottom: 6,
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "4px 8px", borderRadius: 7,
+            background: "#881337",
+            border: "1px solid #f43f5e",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+            fontSize: 11, fontWeight: 700, color: "#fff",
+            whiteSpace: "nowrap", zIndex: 999
+          }}
+          onMouseEnter={enter} onMouseLeave={leave}
+        >
+          <span>⚠️ Forbidden Term: &quot;{term.term}&quot;</span>
+        </span>
+      )}
+    </span>
+  );
+};
+
 /* ── Tag conversion helpers ──────────────────────────────────── */
 const targetToHtml = (str) => {
   if (!str) return "";
@@ -236,7 +276,8 @@ export const SegmentCard = ({
   lockInfo, onFocusSegment, onBlurSegment, readOnly, permission,
   onSaveContext, onTranslateWithContext, onTyping,
   isOwner, onAcceptChange, onRejectChange, autocompleteEnabled = true,
-  isSelected, onToggleSelect
+  isSelected, onToggleSelect, lengthRestrictionEnabled, onUpdateSegmentMaxWords,
+  forbiddenTerms = [], forbiddenTermsEnabled = true, onOpenForbiddenTerms
 }) => {
   const editorRef = useRef(null);
   const lastSaved = useRef(segment.target || "");
@@ -253,6 +294,52 @@ export const SegmentCard = ({
   const [translatingLocal, setTranslatingLocal] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [showTagsMenu, setShowTagsMenu] = useState(false);
+
+  const [showLengthPopover, setShowLengthPopover] = useState(false);
+  const [limitInput, setLimitInput] = useState(segment.maxWords !== undefined && segment.maxWords !== null ? String(segment.maxWords) : "");
+
+  useEffect(() => {
+    setLimitInput(segment.maxWords !== undefined && segment.maxWords !== null ? String(segment.maxWords) : "");
+  }, [segment.maxWords]);
+
+  const currentTargetWords = (segment.target || "").replace(/<[^>]+>/g, "").trim().split(/\s+/).filter(Boolean).length;
+  const isOverWordLimit = lengthRestrictionEnabled && segment.maxWords && currentTargetWords > segment.maxWords;
+
+  /* ── Forbidden Terms Detection ── */
+  const activeForbiddenTerms = useMemo(() => {
+    if (!forbiddenTermsEnabled || !forbiddenTerms || forbiddenTerms.length === 0) return [];
+    return forbiddenTerms.filter((t) => t && t.enabled !== false && t.term && t.term.trim());
+  }, [forbiddenTerms, forbiddenTermsEnabled]);
+
+  const detectedForbiddenInSource = useMemo(() => {
+    if (!activeForbiddenTerms.length || !segment.source) return [];
+    return activeForbiddenTerms.filter((item) => {
+      if (item.scope === "target") return false;
+      const flags = item.matchCase ? "g" : "gi";
+      const pattern = item.term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const rx = new RegExp(pattern, flags);
+      return rx.test(segment.source);
+    });
+  }, [activeForbiddenTerms, segment.source]);
+
+  const detectedForbiddenInTarget = useMemo(() => {
+    if (!activeForbiddenTerms.length || !segment.target) return [];
+    const cleanTarget = segment.target.replace(/<[^>]+>/g, "");
+    return activeForbiddenTerms.filter((item) => {
+      if (item.scope === "source") return false;
+      const flags = item.matchCase ? "g" : "gi";
+      const pattern = item.term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const rx = new RegExp(pattern, flags);
+      return rx.test(cleanTarget);
+    });
+  }, [activeForbiddenTerms, segment.target]);
+
+  const allDetectedForbidden = useMemo(() => {
+    const map = new Map();
+    detectedForbiddenInSource.forEach((t) => map.set(t.id, t));
+    detectedForbiddenInTarget.forEach((t) => map.set(t.id, t));
+    return Array.from(map.values());
+  }, [detectedForbiddenInSource, detectedForbiddenInTarget]);
 
   const chatStore = useChatStore();
   const existingQuery = chatStore.queries.find(
@@ -583,6 +670,28 @@ export const SegmentCard = ({
       });
     }
 
+    if (forbiddenTermsEnabled && activeForbiddenTerms.length) {
+      activeForbiddenTerms.forEach((ft) => {
+        if (ft.scope === "target") return;
+        const flags = ft.matchCase ? "g" : "gi";
+        const pattern = ft.term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const rx = new RegExp(`(${pattern})`, flags);
+        els = els.flatMap((el) =>
+          typeof el === "string"
+            ? el.split(rx).map((p, i) =>
+                i % 2 === 1 ? (
+                  <ForbiddenHighlight key={`ft-${ft.id}-${i}`} term={ft}>
+                    {p}
+                  </ForbiddenHighlight>
+                ) : (
+                  p
+                )
+              )
+            : el
+        );
+      });
+    }
+
     els = els.flatMap((el) => {
       if (typeof el === "string") {
         const parts = el.split(/(<\/?[\d]+>|<\/?(?:g|ph|x|bpt|ept|it)[^>]*>)/gi);
@@ -763,6 +872,8 @@ export const SegmentCard = ({
               </span>
             )
           )}
+
+
         </div>
 
         {/* Col 2: Source */}
@@ -804,7 +915,7 @@ export const SegmentCard = ({
                 ...((readOnly || segment.verified || lockInfo)
                   ? { opacity: 0.55, cursor: lockInfo ? "not-allowed" : readOnly ? "default" : "text", pointerEvents: lockInfo ? "none" : "auto" }
                   : {}),
-                paddingRight: (segment.mqmAccuracyScore !== undefined || (parsedMqmReport && parsedMqmReport.errors && parsedMqmReport.errors.length > 0)) ? "140px" : "36px"
+                paddingRight: "36px"
               }}
             />
 
@@ -822,21 +933,49 @@ export const SegmentCard = ({
               <Copy style={{ width: 9, height: 9 }} />
             </button>
 
-            {/* Absolute Badges Container */}
-            {(segment.target && (
-              <div 
-                style={{
-                  position: "absolute",
-                  top: "50%",
-                  right: "34px",
-                  transform: "translateY(-50%)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  zIndex: 5,
-                  pointerEvents: "auto"
-                }}
-              >
+          {/* Badges Row - below editor */}
+          {(segment.target || allDetectedForbidden.length > 0) && (
+            <div 
+              style={{
+                display: "flex",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "5px",
+                marginTop: "4px",
+                padding: "0 2px"
+              }}
+            >
+                {/* Forbidden Terms Badge */}
+                {allDetectedForbidden.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onOpenForbiddenTerms) onOpenForbiddenTerms();
+                    }}
+                    style={{
+                      fontSize: "9px",
+                      fontWeight: 700,
+                      fontFamily: "'Inter', sans-serif",
+                      color: "#f43f5e",
+                      background: "rgba(244,63,94,0.12)",
+                      border: "1px solid rgba(244,63,94,0.35)",
+                      borderRadius: "6px",
+                      padding: "3px 6px",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      transition: "all 0.2s ease",
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.2)"
+                    }}
+                    title={`Forbidden term(s) detected: ${allDetectedForbidden.map((t) => t.term).join(", ")}. Click to configure guard.`}
+                  >
+                    <ShieldAlert style={{ width: 11, height: 11, color: "#f43f5e" }} />
+                    <span>Forbidden ({allDetectedForbidden.map((t) => t.term).join(", ")})</span>
+                  </button>
+                )}
+
                 {/* MQM Quality Badge */}
                 {isMqmEvaluated && (
                   <button
@@ -920,8 +1059,146 @@ export const SegmentCard = ({
                     <AlertTriangle style={{ width: 11, height: 11 }} />
                   </span>
                 )}
-              </div>
-            ))}
+                {lengthRestrictionEnabled && (
+                  <div style={{ position: "relative", display: "inline-flex" }}>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowLengthPopover(!showLengthPopover);
+                      }}
+                      style={{
+                        fontSize: "9px",
+                        fontWeight: 700,
+                        fontFamily: "'Inter', sans-serif",
+                        color: segment.maxWords
+                          ? isOverWordLimit ? "#f87171" : "#818cf8"
+                          : "#94a3b8",
+                        background: segment.maxWords
+                          ? isOverWordLimit ? "rgba(248,113,113,0.12)" : "rgba(99,102,241,0.12)"
+                          : "rgba(100,116,139,0.12)",
+                        border: segment.maxWords
+                          ? isOverWordLimit ? "1px solid rgba(248,113,113,0.3)" : "1px solid rgba(99,102,241,0.3)"
+                          : "1px solid rgba(100,116,139,0.25)",
+                        borderRadius: "6px",
+                        padding: "3px 6px",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        transition: "all 0.2s ease",
+                        boxShadow: "0 2px 6px rgba(0,0,0,0.2)"
+                      }}
+                      title={segment.maxWords ? `Max limit: ${segment.maxWords} words (Current: ${currentTargetWords})` : "Set segment word limit"}
+                    >
+                      <Sliders style={{ width: 10, height: 10 }} />
+                      <span>{segment.maxWords ? `${currentTargetWords}/${segment.maxWords}w` : "Limit"}</span>
+                    </button>
+
+                    {showLengthPopover && (
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          position: "absolute",
+                          right: 0,
+                          top: "calc(100% + 4px)",
+                          zIndex: 60,
+                          padding: "8px",
+                          background: "var(--bg-surface, #1e293b)",
+                          border: "1px solid var(--border-medium, #334155)",
+                          borderRadius: "8px",
+                          boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+                          minWidth: "150px",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "6px"
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <span style={{ fontSize: "10px", fontWeight: 600, color: "#cbd5e1" }}>Max Word Limit</span>
+                          <button
+                            onClick={() => setShowLengthPopover(false)}
+                            style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", padding: "2px" }}
+                          >
+                            <X style={{ width: 10, height: 10 }} />
+                          </button>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                          <input
+                            type="number"
+                            min="1"
+                            max="500"
+                            placeholder="e.g. 25"
+                            value={limitInput}
+                            onChange={(e) => setLimitInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                const val = limitInput ? parseInt(limitInput, 10) : null;
+                                if (onUpdateSegmentMaxWords) onUpdateSegmentMaxWords(segment.id, val);
+                                setShowLengthPopover(false);
+                              }
+                            }}
+                            style={{
+                              flex: 1,
+                              background: "var(--bg-deep, #0f172a)",
+                              border: "1px solid var(--border-subtle, #1e293b)",
+                              borderRadius: "5px",
+                              padding: "4px 6px",
+                              color: "#e2e8f0",
+                              fontSize: "11px",
+                              outline: "none",
+                              width: "60px"
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const val = limitInput ? parseInt(limitInput, 10) : null;
+                              if (onUpdateSegmentMaxWords) onUpdateSegmentMaxWords(segment.id, val);
+                              setShowLengthPopover(false);
+                            }}
+                            style={{
+                              background: "#6366f1",
+                              color: "#fff",
+                              border: "none",
+                              borderRadius: "5px",
+                              padding: "4px 8px",
+                              fontSize: "10px",
+                              fontWeight: 700,
+                              cursor: "pointer"
+                            }}
+                          >
+                            Save
+                          </button>
+                        </div>
+                        {segment.maxWords && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (onUpdateSegmentMaxWords) onUpdateSegmentMaxWords(segment.id, null);
+                              setLimitInput("");
+                              setShowLengthPopover(false);
+                            }}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "#f87171",
+                              fontSize: "9.5px",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              textAlign: "left",
+                              padding: "2px 0 0 0"
+                            }}
+                          >
+                            Clear Limit
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+            </div>
+          )}
 
             {sourceTags.length > 0 && !readOnly && !segment.verified && !lockInfo && (
               <div style={{ position: "relative", marginTop: "4px" }}>

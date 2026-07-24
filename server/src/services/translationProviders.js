@@ -416,6 +416,23 @@ const translateWithOpenAI = async (protectedTexts, target, source = DEFAULT_SOUR
       }
       userContext += `\n\nCRITICAL RETRY WARNING: A previous translation attempt for this segment was rejected due to translation quality or script purity violations.${specificInfo}\nYou MUST translate the text fully. Under no circumstances should you echo the source text verbatim or copy entire English phrases. Ensure the output is strictly in the target language script (${targetName}) and vocabulary. Do NOT leave any Latin/English words in the translation, except for uppercase acronyms (e.g. GST, PAN, RBI) and section identifiers. Everything else must be translated or transliterated to ${targetName} script.`;
     }
+
+    if (contextSettings.lengthRestrictionEnabled && contextSettings.maxWordsMap) {
+      const limits = [];
+      protectedTexts.forEach((text, idx) => {
+        const limit = contextSettings.maxWordsMap[idx] || contextSettings.maxWordsMap[text];
+        if (limit) {
+          limits.push(`- Segment item ${idx + 1}: MAXIMUM ${limit} WORDS IN TARGET TRANSLATION.`);
+        }
+      });
+
+      if (limits.length > 0) {
+        userContext += `\n\nSTRICT LENGTH RESTRICTIONS ENFORCED:
+When translating the specified segments into ${targetName}, you MUST limit your translation so it does NOT exceed the word limit:
+${limits.join("\n")}
+Keep the translation concise, natural, and strictly within the specified maximum word limit.`;
+      }
+    }
   }
 
   const payload = {

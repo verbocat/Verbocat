@@ -243,7 +243,7 @@ const truncateContextContent = (content) => {
   return `${content.slice(0, MAX_CONTEXT_FILE_CHARS)}\n\n[Context file truncated to ${MAX_CONTEXT_FILE_CHARS} characters]`;
 };
 
-export const ContextSettingsModal = ({ show, onClose, contextSettings, setContextSettings, documentId }) => {
+export const ContextSettingsModal = ({ show, onClose, contextSettings, setContextSettings, theme, documentId, segments = [], showToast }) => {
   const [activeProfile, setActiveProfile] = useState("Custom");
   const [isDetecting, setIsDetecting] = useState(false);
   const [fileError, setFileError] = useState("");
@@ -364,7 +364,7 @@ export const ContextSettingsModal = ({ show, onClose, contextSettings, setContex
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card" style={{ maxWidth: 840, maxHeight: "92vh", display: "flex", flexDirection: "column", borderRadius: "12px" }}>
+      <div className="modal-card" style={{ maxWidth: activeModalTab === "protected" ? 1180 : 840, width: "95%", maxHeight: "92vh", display: "flex", flexDirection: "column", borderRadius: "16px", transition: "all 0.2s ease" }}>
 
         {/* Header */}
         <div className="modal-header" style={{ flexShrink: 0, flexDirection: "column", alignItems: "stretch", gap: 12 }}>
@@ -422,7 +422,7 @@ export const ContextSettingsModal = ({ show, onClose, contextSettings, setContex
         {/* Body */}
         <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 20, flex: 1, overflowY: "auto" }}>
           {activeModalTab === "protected" ? (
-            <ProtectedContentPanel projectId={documentId} theme="dark" />
+            <ProtectedContentPanel projectId={documentId} segments={segments} showToast={showToast} theme="dark" />
           ) : (
             <div className="space-y-5">
           {/* Preset profiles */}

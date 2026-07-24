@@ -3,7 +3,7 @@ import { CollaboratorsList } from "./CollaboratorsList.jsx";
 import {
   BookOpen, Users, Settings as SettingsIcon,
   Plus, LockKeyhole, Sliders,
-  ChevronRight, FileText, LayoutDashboard, Sparkles
+  ChevronRight, FileText, LayoutDashboard, Sparkles, LogOut
 } from "lucide-react";
 
 const NavBtn = ({ children, onClick, disabled = false, title = "", iconOnly = false, active = false }) => (
@@ -126,6 +126,17 @@ export const Header = ({
         >
           <SettingsIcon style={{ width: 15, height: 15 }} />
         </button>
+
+        {/* Logout */}
+        {onLogout && (
+          <button
+            onClick={onLogout}
+            title="Log Out"
+            className="p-1.5 rounded-xl text-[var(--text-secondary)] hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all cursor-pointer"
+          >
+            <LogOut style={{ width: 15, height: 15 }} />
+          </button>
+        )}
 
         {/* Screen Lock */}
         {onLock && (

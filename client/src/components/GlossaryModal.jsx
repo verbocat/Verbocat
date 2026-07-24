@@ -1,6 +1,6 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import Papa from "papaparse";
-import { X, Search, FileUp, Database, Edit, Plus, Trash2, Check, RefreshCw } from "lucide-react";
+import { X, Search, FileUp, FileDown, Database, Edit, Plus, Trash2, Check, RefreshCw, Download, Upload } from "lucide-react";
 
 export const GlossaryModal = ({
   darkMode,
@@ -45,6 +45,7 @@ export const GlossaryModal = ({
   const [activeView, setActiveView] = useState("list");
   const [pasteText, setPasteText] = useState("");
   const fileInputRef = useRef(null);
+  const tbxFileInputRef = useRef(null);
 
   const handleAddRow = () => {
     onAddRow();
@@ -129,6 +130,106 @@ export const GlossaryModal = ({
       if (fileInputRef.current) fileInputRef.current.value = "";
     };
     reader.readAsText(file, "UTF-8");
+  };
+
+  /* ── TBX Import ────────────────────────────────────── */
+  const handleImportTbx = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(event.target.result, "text/xml");
+        const entries = xmlDoc.querySelectorAll("termEntry, conceptEntry");
+        const imported = [];
+
+        entries.forEach((entry) => {
+          const langSets = entry.querySelectorAll("langSet");
+          let sourceTerm = "";
+          let targetTerm = "";
+
+          langSets.forEach((ls) => {
+            const lang = (ls.getAttribute("xml:lang") || ls.getAttribute("lang") || "").toLowerCase();
+            const termEl = ls.querySelector("term");
+            const term = termEl ? termEl.textContent.trim() : "";
+            if (!term) return;
+
+            const srcCode = glossarySourceLang.toLowerCase();
+            const tgtCode = glossaryTargetLang.toLowerCase();
+
+            if (lang === srcCode || lang.startsWith(srcCode + "-") || srcCode.startsWith(lang + "-")) {
+              sourceTerm = term;
+            } else if (lang === tgtCode || lang.startsWith(tgtCode + "-") || tgtCode.startsWith(lang + "-")) {
+              targetTerm = term;
+            } else if (!sourceTerm) {
+              sourceTerm = term;
+            } else if (!targetTerm) {
+              targetTerm = term;
+            }
+          });
+
+          if (sourceTerm && targetTerm) {
+            imported.push({ source: sourceTerm, target: targetTerm });
+          }
+        });
+
+        if (imported.length > 0) {
+          setGlossary([...glossary, ...imported]);
+        }
+      } catch (err) {
+        console.error("TBX parse error:", err);
+      }
+      if (tbxFileInputRef.current) tbxFileInputRef.current.value = "";
+    };
+    reader.readAsText(file, "UTF-8");
+  };
+
+  /* ── TBX Export ────────────────────────────────────── */
+  const handleExportTbx = () => {
+    if (glossary.length === 0) return;
+
+    const escXml = (str) => str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+    let tbx = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+    tbx += `<tbx type="TBX-Basic" style="dca" xml:lang="${escXml(glossarySourceLang)}" xmlns="urn:iso:std:iso:30042:ed-2">\n`;
+    tbx += `  <tbxHeader>\n`;
+    tbx += `    <fileDesc>\n`;
+    tbx += `      <sourceDesc><p>Exported from Verbocat Glossary</p></sourceDesc>\n`;
+    tbx += `    </fileDesc>\n`;
+    tbx += `  </tbxHeader>\n`;
+    tbx += `  <text>\n`;
+    tbx += `    <body>\n`;
+
+    glossary.forEach((term, i) => {
+      tbx += `      <conceptEntry id="c${i + 1}">\n`;
+      tbx += `        <langSec xml:lang="${escXml(glossarySourceLang)}">\n`;
+      tbx += `          <termSec>\n`;
+      tbx += `            <term>${escXml(term.source)}</term>\n`;
+      tbx += `          </termSec>\n`;
+      tbx += `        </langSec>\n`;
+      tbx += `        <langSec xml:lang="${escXml(glossaryTargetLang)}">\n`;
+      tbx += `          <termSec>\n`;
+      tbx += `            <term>${escXml(term.target)}</term>\n`;
+      tbx += `          </termSec>\n`;
+      tbx += `        </langSec>\n`;
+      tbx += `      </conceptEntry>\n`;
+    });
+
+    tbx += `    </body>\n`;
+    tbx += `  </text>\n`;
+    tbx += `</tbx>`;
+
+    const blob = new Blob([tbx], { type: "application/xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `glossary_${glossarySourceLang}-${glossaryTargetLang}.tbx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const filteredGlossary = glossary.map((item, index) => ({...item, originalIndex: index}))
@@ -506,6 +607,25 @@ export const GlossaryModal = ({
             >
               <RefreshCw className="w-3.5 h-3.5" />
               Import TMX
+            </button>
+
+            <input type="file" accept=".tbx,.xml" ref={tbxFileInputRef} className="hidden" onChange={handleImportTbx} />
+            <button
+              onClick={() => tbxFileInputRef.current?.click()}
+              className="flex items-center gap-1.5 rounded-lg bg-[var(--bg-surface)] hover:bg-[var(--bg-hover)] border border-[var(--border-medium)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-bold px-3 py-2 transition-all cursor-pointer shadow-sm"
+              title="Import terminology from a TBX file"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              Import TBX
+            </button>
+            <button
+              onClick={handleExportTbx}
+              disabled={glossary.length === 0}
+              className="flex items-center gap-1.5 rounded-lg bg-[var(--bg-surface)] hover:bg-[var(--bg-hover)] border border-[var(--border-medium)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-bold px-3 py-2 transition-all cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Export current glossary as a TBX file"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Export TBX
             </button>
           </div>
 

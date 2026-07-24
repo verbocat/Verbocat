@@ -4236,6 +4236,7 @@ apiRouter.get("/documents/:documentId/lang/:lang/segments", checkAuth, async (re
         contextDescription: seg.context_description,
         originalTargetText: seg.original_target_text,
         trackedBy: seg.tracked_by,
+        maxWords: seg.max_words || null,
         fuzzyScore,
         matchType
       };
@@ -4462,6 +4463,34 @@ apiRouter.post("/documents/:documentId/lang/:lang/segments/:index/translate-cont
     }
   }
 });
+
+// Patch max_words limit for a segment
+apiRouter.patch("/documents/:documentId/segments/:segmentIndex/max-words", checkAuth, async (request, response) => {
+  try {
+    const { documentId, segmentIndex } = request.params;
+    const { maxWords } = request.body;
+
+    const parsedIndex = parseInt(segmentIndex, 10);
+    if (isNaN(parsedIndex)) {
+      return response.status(400).json({ error: "Invalid segment index." });
+    }
+
+    try {
+      await supabase
+        .from("document_segments")
+        .update({ max_words: maxWords || null })
+        .eq("document_id", documentId)
+        .eq("segment_index", parsedIndex);
+    } catch (dbErr) {
+      console.warn("Could not update max_words in DB:", dbErr.message);
+    }
+
+    response.json({ success: true, documentId, segmentIndex: parsedIndex, maxWords: maxWords || null });
+  } catch (err) {
+    console.error("Failed to update segment max words:", err);
+    response.status(500).json({ error: "Failed to update max words." });
+  }
+});
 // ═══════════════════════════════════════════════════════════
 // PROTECTED CONTENT MANAGEMENT ROUTES
 // ═══════════════════════════════════════════════════════════
@@ -4489,14 +4518,13 @@ apiRouter.post("/projects/:projectId/protected-content/scan", checkAuth, async (
 
     const docIds = docs.map(d => d.id);
 
-    // Fetch all source template segments for these documents
-    const { data: sourceSegments } = await supabase
+    // Fetch all document segments (both source_text and target_text) for these documents
+    const { data: documentSegments } = await supabase
       .from("document_segments")
-      .select("source_text")
-      .in("document_id", docIds)
-      .is("target_lang", null);
+      .select("source_text, target_text")
+      .in("document_id", docIds);
 
-    const scanResults = scanTextForProtectedContent(sourceSegments || [], options || {});
+    const scanResults = scanTextForProtectedContent(documentSegments || [], options || {});
     response.json(scanResults);
   } catch (err) {
     console.error("Protected content scan error:", err);

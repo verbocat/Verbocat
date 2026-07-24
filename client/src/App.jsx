@@ -15,6 +15,7 @@ import { SegmentBoard } from "./components/SegmentBoard.jsx";
 import { LoadingOverlay } from "./components/LoadingOverlay.jsx";
 import { ContextSettingsModal } from "./components/ContextSettingsModal.jsx";
 import { SearchReplaceModal } from "./components/SearchReplaceModal.jsx";
+import { ForbiddenTermsModal } from "./components/ForbiddenTermsModal.jsx";
 import { SettingsModal } from "./components/SettingsModal.jsx";
 import { LANGUAGES } from "./constants/languages.js";
 import { useGlossaryManager } from "./hooks/useGlossaryManager.js";
@@ -107,6 +108,45 @@ export default function App() {
   const [collaborators, setCollaborators] = useState([]);
   const [cellLocks, setCellLocks] = useState(new Map());
   const [showShareModal, setShowShareModal] = useState(false);
+
+  const [lengthRestrictionEnabled, setLengthRestrictionEnabled] = useState(() => {
+    const saved = localStorage.getItem("centroid_length_restriction_enabled");
+    return saved !== null ? saved === "true" : false;
+  });
+
+  const handleToggleLengthRestriction = () => {
+    setLengthRestrictionEnabled((prev) => {
+      const next = !prev;
+      localStorage.setItem("centroid_length_restriction_enabled", String(next));
+      showToast(`Length Restriction: ${next ? "ON" : "OFF"}`);
+      return next;
+    });
+  };
+
+  const handleUpdateSegmentMaxWords = (segmentId, maxWords) => {
+    setSegments((prev) =>
+      prev.map((seg) =>
+        seg.id === segmentId ? { ...seg, maxWords } : seg
+      )
+    );
+    try {
+      const targetSegment = segments.find(s => s.id === segmentId);
+      const segmentIndex = targetSegment?.segmentIndex !== undefined ? targetSegment.segmentIndex : segmentId - 1;
+      const token = localStorage.getItem("centroid_token");
+      if (documentId) {
+        fetch(`${API_BASE_URL}/documents/${documentId}/segments/${segmentIndex}/max-words`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ maxWords })
+        }).catch((err) => console.error("Failed to persist maxWords:", err));
+      }
+    } catch (e) {
+      console.error("MaxWords update error:", e);
+    }
+  };
   const parseUrlRoute = () => {
     const path = window.location.pathname;
     const jobMatch = path.match(/^\/project\/([^\/]+)\/file\/([^\/]+)\/lang\/([^\/]+)/);
@@ -658,6 +698,37 @@ export default function App() {
     terminologyStrictness: "Flexible",
     seoOptimization: "Off"
   });
+
+  const [showForbiddenTermsModal, setShowForbiddenTermsModal] = useState(false);
+  const [forbiddenTermsEnabled, setForbiddenTermsEnabled] = useState(() => {
+    try {
+      const saved = localStorage.getItem("verbocat_forbidden_terms_enabled");
+      return saved !== null ? JSON.parse(saved) : true;
+    } catch (e) {
+      return true;
+    }
+  });
+
+  const [forbiddenTerms, setForbiddenTerms] = useState(() => {
+    try {
+      const saved = localStorage.getItem("verbocat_forbidden_terms");
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("verbocat_forbidden_terms_enabled", JSON.stringify(forbiddenTermsEnabled));
+    } catch (e) {}
+  }, [forbiddenTermsEnabled]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("verbocat_forbidden_terms", JSON.stringify(forbiddenTerms));
+    } catch (e) {}
+  }, [forbiddenTerms]);
 
   const glossaryManager = useGlossaryManager({
     defaultSourceLang: "en",
@@ -1252,12 +1323,26 @@ export default function App() {
     }
 
     try {
+      const maxWordsMap = {};
+      segments.forEach((s, idx) => {
+        if (s.maxWords) {
+          maxWordsMap[s.id] = s.maxWords;
+          maxWordsMap[idx] = s.maxWords;
+          if (s.segmentIndex !== undefined) maxWordsMap[s.segmentIndex] = s.maxWords;
+        }
+      });
+
       const BATCH_SIZE = 25;
       let completedCount = 0;
 
       for (let i = 0; i < segmentsToTranslate.length; i += BATCH_SIZE) {
         const batch = segmentsToTranslate.slice(i, i + BATCH_SIZE);
-        const data = await translateBatch(batch, targetLanguage, sourceLanguage, { ...contextSettings, glossary: translationGlossary }, documentId);
+        const data = await translateBatch(batch, targetLanguage, sourceLanguage, {
+          ...contextSettings,
+          glossary: translationGlossary,
+          lengthRestrictionEnabled,
+          maxWordsMap
+        }, documentId);
         const results = data.results || [];
 
         if (results.length > 0 && i === 0) {
@@ -1914,7 +1999,9 @@ export default function App() {
       currentProvider,
       segments,
       glossaryMap,
-      contextSettings
+      contextSettings,
+      forbiddenTerms,
+      forbiddenTermsEnabled
     };
 
     const blob = new Blob([JSON.stringify(projectData, null, 2)], {
@@ -1934,53 +2021,56 @@ export default function App() {
     updateSegmentsWithHistory((previous) =>
       previous.map((segment) => {
         if (!segment.target) return segment;
-        // Simple global case-insensitive replace, or exact match if preferred. Let's do exact match or case-insensitive?
-        // Let's do exact text replacement but global
-        const regex = new RegExp(findStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-        if (regex.test(segment.target)) {
+        const clean = segment.target.replace(/<[^>]+>/g, "");
+        if (clean.toLowerCase().includes(findStr.toLowerCase())) {
           replacedCount++;
-          return {
-            ...segment,
-            target: segment.target.replace(regex, replaceStr),
-            verified: false
-          };
+          const rx = new RegExp(findStr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+          const newTarget = segment.target.replace(rx, replaceStr);
+          return { ...segment, target: newTarget, edited: true };
         }
         return segment;
       })
     );
-    showToast(`Replaced in ${replacedCount} segments`);
+    showToast(`Replaced in ${replacedCount} segment(s)`);
   };
 
-  const loadProject = async (event) => {
-    const file = event.target.files[0];
-    if (!file) {
-      return;
-    }
+  const loadProject = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
 
-    const text = await file.text();
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const project = JSON.parse(event.target.result);
+        setFileId(project.fileId || `proj-${Date.now()}`);
+        setFileName(project.fileName || "Loaded Project");
+        setFileExtension(project.fileExtension || "txt");
+        setSegments(project.segments || []);
+        setHistory([]);
+        setFuture([]);
+        setSourceLanguage((project.sourceLanguage || "en") === "pt" ? "pt-BR" : (project.sourceLanguage || "en"));
+        setTargetLanguage((project.targetLanguage || "hi") === "pt" ? "pt-BR" : (project.targetLanguage || "hi"));
+        setCurrentProvider(project.currentProvider || "");
+        setShowQaPanel(false);
+        glossaryManager.setGlossaryMap(project.glossaryMap || {});
+        
+        if (project.contextSettings) {
+          setContextSettings(project.contextSettings);
+        }
 
-    try {
-      const project = JSON.parse(text);
-      setFileId(project.fileId || null);
-      setFileExtension(project.fileExtension || ".html");
-      setFileName((project.fileName || file.name.replace(".json", "")).replace(/\.[^/.]+$/, ""));
-      setSegments(project.segments || []);
-      setHistory([]);
-      setFuture([]);
-      setSourceLanguage((project.sourceLanguage || "en") === "pt" ? "pt-BR" : (project.sourceLanguage || "en"));
-      setTargetLanguage((project.targetLanguage || "hi") === "pt" ? "pt-BR" : (project.targetLanguage || "hi"));
-      setCurrentProvider(project.currentProvider || "");
-      setShowQaPanel(false);
-      glossaryManager.setGlossaryMap(project.glossaryMap || {});
-      
-      if (project.contextSettings) {
-        setContextSettings(project.contextSettings);
+        if (project.forbiddenTerms) {
+          setForbiddenTerms(project.forbiddenTerms);
+        }
+        if (project.forbiddenTermsEnabled !== undefined) {
+          setForbiddenTermsEnabled(project.forbiddenTermsEnabled);
+        }
+        
+        showToast("File loaded!");
+      } catch (error) {
+        showToast("Invalid file format", "error");
       }
-      
-      showToast("File loaded!");
-    } catch (error) {
-      showToast("Invalid file format", "error");
-    }
+    };
+    reader.readAsText(file, "UTF-8");
   };
 
   const handleExportDocument = async (overrideExt) => {
@@ -2815,6 +2905,7 @@ export default function App() {
           userRole={user ? user.role : ""}
           onOpenAdmin={() => setShowAdminDashboard(true)}
           onOpenSettings={() => setShowSettingsModal(true)}
+          onLogout={logout}
         />
       )}
 
@@ -2871,6 +2962,16 @@ export default function App() {
             onImportTmx={handleImportTmx}
           />
 
+          <ForbiddenTermsModal
+            show={showForbiddenTermsModal}
+            onClose={() => setShowForbiddenTermsModal(false)}
+            forbiddenTerms={forbiddenTerms}
+            setForbiddenTerms={setForbiddenTerms}
+            forbiddenTermsEnabled={forbiddenTermsEnabled}
+            setForbiddenTermsEnabled={setForbiddenTermsEnabled}
+            theme={theme}
+          />
+
           <ExportModal
             show={showExportModal}
             onClose={() => setShowExportModal(false)}
@@ -2894,6 +2995,8 @@ export default function App() {
             setContextSettings={setContextSettings}
             theme={theme}
             documentId={documentId}
+            segments={segments}
+            showToast={showToast}
           />
 
           <SearchReplaceModal
@@ -2902,8 +3005,6 @@ export default function App() {
             onReplaceAll={handleReplaceAll}
             theme={theme}
           />
-
-
 
           {/* ── Zone 1: Topbar (always visible) ── */}
           <Header
@@ -2938,6 +3039,10 @@ export default function App() {
             collaborators={collaborators}
             onOpenShare={ownerId && (ownerId === user?.id || ["admin", "verbolabs_staff"].includes(user?.role)) ? () => setShowShareModal(true) : null}
             onTeleport={handleTeleport}
+            setDarkMode={setDarkMode}
+            onExport={() => setShowExportModal(true)}
+            onOpenQa={() => setShowQaPanel((value) => !value)}
+            onSearchReplace={() => setShowSearchReplace(true)}
           />
 
           {/* ── Zone 2+3: Action bar + Editor (or empty state) ── */}
@@ -2986,6 +3091,11 @@ export default function App() {
                 onUpload={handleUpload}
                 trackChangesEnabled={trackChangesEnabled}
                 onToggleTrackChanges={handleToggleTrackChanges}
+                lengthRestrictionEnabled={lengthRestrictionEnabled}
+                onToggleLengthRestriction={handleToggleLengthRestriction}
+                forbiddenTermsCount={forbiddenTerms.filter(t => t.enabled !== false).length}
+                forbiddenTermsEnabled={forbiddenTermsEnabled}
+                onOpenForbiddenTerms={() => setShowForbiddenTermsModal(true)}
                 isOwner={ownerId === user?.id}
                 onAcceptAllChanges={handleAcceptAllChanges}
                 hasTrackedChanges={segments.some(s => s.originalTargetText && s.originalTargetText !== s.target)}
@@ -3050,6 +3160,11 @@ export default function App() {
                       onAcceptChange={handleAcceptChange}
                       onRejectChange={handleRejectChange}
                       autocompleteEnabled={autocompleteEnabled}
+                      lengthRestrictionEnabled={lengthRestrictionEnabled}
+                      onUpdateSegmentMaxWords={handleUpdateSegmentMaxWords}
+                      forbiddenTerms={forbiddenTerms}
+                      forbiddenTermsEnabled={forbiddenTermsEnabled}
+                      onOpenForbiddenTerms={() => setShowForbiddenTermsModal(true)}
                     />
                   )}
                 />
