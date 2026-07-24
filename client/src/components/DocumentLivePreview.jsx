@@ -20,28 +20,49 @@ export const DocumentLivePreview = ({
   const containerRef = useRef(null);
   const [zoomLevel, setZoomLevel] = useState(100);
   const [renderError, setRenderError] = useState(null);
+  const [htmlContent, setHtmlContent] = useState("");
 
   // PPTX specific states
   const [slides, setSlides] = useState([]);
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const [parsingSlides, setParsingSlides] = useState(false);
 
-  const fileExt = (fileName.split('.').pop() || documentType).toLowerCase();
-  const isDocx = fileExt === "docx" || fileExt === "doc";
-  const isPptx = fileExt === "pptx" || fileExt === "ppt";
+  // Robust File Extension Extractor
+  const getFileExtension = () => {
+    if (fileName && fileName.includes(".")) {
+      const ext = fileName.split('.').pop().toLowerCase();
+      if (["docx", "doc", "pptx", "ppt", "html", "htm", "txt", "pdf"].includes(ext)) {
+        return ext;
+      }
+    }
+    if (documentType) {
+      const cleanType = documentType.replace(".", "").toLowerCase();
+      if (["docx", "doc", "pptx", "ppt", "html", "htm", "txt", "pdf"].includes(cleanType)) {
+        return cleanType;
+      }
+    }
+    return "docx"; // Default to docx
+  };
 
-  // Handle DOCX Rendering
+  const fileExt = getFileExtension();
+  const isPptx = fileExt === "pptx" || fileExt === "ppt";
+  const isDocx = fileExt === "docx" || fileExt === "doc" || !isPptx;
+
+  // Handle DOCX & Fallback Text Rendering
   useEffect(() => {
-    if (!arrayBuffer || !isDocx || !containerRef.current) return;
+    if (!arrayBuffer || isPptx) return;
 
     let isMounted = true;
     setRenderError(null);
+    setHtmlContent("");
 
     const renderWordDocument = async () => {
       try {
         if (containerRef.current) {
           containerRef.current.innerHTML = "";
         }
+
+        // 1. Try rendering via docx-preview first
         await renderDocx(arrayBuffer, containerRef.current, null, {
           className: "docx-rendered-page",
           inWrapper: true,
@@ -53,9 +74,18 @@ export const DocumentLivePreview = ({
           useHTML5: true
         });
       } catch (err) {
-        console.error("DOCX Preview Error:", err);
-        if (isMounted) {
-          setRenderError("Could not render DOCX preview layout.");
+        console.warn("DOCX Preview parse warning, falling back to text decoder:", err);
+        try {
+          // 2. Fallback text/HTML decoder
+          const textDecoder = new TextDecoder("utf-8");
+          const decodedText = textDecoder.decode(arrayBuffer);
+          if (isMounted) {
+            setHtmlContent(decodedText);
+          }
+        } catch (fallbackErr) {
+          if (isMounted) {
+            setRenderError("Could not render visual preview for this document.");
+          }
         }
       }
     };
@@ -65,7 +95,7 @@ export const DocumentLivePreview = ({
     return () => {
       isMounted = false;
     };
-  }, [arrayBuffer, isDocx]);
+  }, [arrayBuffer, isDocx, isPptx]);
 
   // Handle PPTX Slide Extraction & Parsing
   useEffect(() => {
@@ -161,7 +191,7 @@ export const DocumentLivePreview = ({
       <div className="flex items-center justify-between px-4 py-3 bg-slate-900/90 border-b border-slate-800 backdrop-blur">
         <div className="flex items-center gap-2 overflow-hidden">
           <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-            {isDocx ? <FileText size={16} /> : <Presentation size={16} />}
+            {isPptx ? <Presentation size={16} /> : <FileText size={16} />}
           </div>
           <div className="flex flex-col truncate">
             <span className="text-xs font-bold text-slate-200 truncate flex items-center gap-1.5">
@@ -201,7 +231,7 @@ export const DocumentLivePreview = ({
           <button
             onClick={onRefresh}
             disabled={isLoading}
-            className="p-1.5 text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 rounded-lg transition-all"
+            className="p-1.5 text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 rounded-lg transition-all cursor-pointer"
             title="Refresh Preview"
           >
             <RefreshCw size={14} className={isLoading ? "animate-spin text-indigo-400" : ""} />
@@ -211,7 +241,7 @@ export const DocumentLivePreview = ({
           <button
             onClick={handleDownload}
             disabled={!arrayBuffer}
-            className="p-1.5 text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 rounded-lg transition-all"
+            className="p-1.5 text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 rounded-lg transition-all cursor-pointer"
             title="Download Live Export Buffer"
           >
             <Download size={14} />
@@ -220,7 +250,7 @@ export const DocumentLivePreview = ({
           {/* Close preview button */}
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 rounded-lg transition-all ml-1"
+            className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 rounded-lg transition-all ml-1 cursor-pointer"
             title="Close Preview"
           >
             <X size={15} />
@@ -233,7 +263,7 @@ export const DocumentLivePreview = ({
         
         {/* Loading Overlay */}
         {isLoading && (
-          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm z-20 flex flex-col items-center justify-center gap-3">
+          <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm z-20 flex flex-col items-center justify-center gap-3">
             <RefreshCw size={24} className="animate-spin text-indigo-400" />
             <span className="text-xs font-medium text-slate-300">Rendering live document output…</span>
           </div>
@@ -244,7 +274,7 @@ export const DocumentLivePreview = ({
           <div className="w-full max-w-lg mb-4 p-3 bg-rose-500/10 border border-rose-500/20 text-rose-300 rounded-xl text-xs flex items-start gap-2.5">
             <AlertCircle size={16} className="text-rose-400 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold mb-0.5">Preview Render Warning</p>
+              <p className="font-semibold mb-0.5">Preview Render Notice</p>
               <p className="text-[11px] text-rose-300/80">{renderError}</p>
             </div>
           </div>
@@ -256,10 +286,19 @@ export const DocumentLivePreview = ({
             className="w-full flex flex-col items-center transition-transform duration-200 origin-top"
             style={{ transform: `scale(${zoomLevel / 100})` }}
           >
+            {/* DOCX Render Container */}
             <div 
               ref={containerRef} 
-              className="docx-preview-container bg-white text-slate-900 rounded-lg shadow-2xl overflow-hidden min-h-[600px] w-full max-w-[800px] p-6 text-sm leading-relaxed"
+              className="docx-preview-container bg-white text-slate-900 rounded-lg shadow-2xl overflow-hidden min-h-[600px] w-full max-w-[800px] p-8 text-sm leading-relaxed"
             />
+
+            {/* Fallback Decoded HTML Content if docx-preview is empty */}
+            {htmlContent && (
+              <div 
+                className="bg-white text-slate-900 rounded-lg shadow-2xl overflow-hidden min-h-[600px] w-full max-w-[800px] p-8 text-sm leading-relaxed border border-slate-200 mt-4"
+                dangerouslySetInnerHTML={{ __html: htmlContent }}
+              />
+            )}
           </div>
         )}
 
@@ -274,7 +313,7 @@ export const DocumentLivePreview = ({
                   <button
                     onClick={() => setActiveSlideIndex(prev => Math.max(0, prev - 1))}
                     disabled={activeSlideIndex === 0}
-                    className="p-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-40 transition-colors"
+                    className="p-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-40 transition-colors cursor-pointer"
                   >
                     <ChevronLeft size={16} />
                   </button>
@@ -284,7 +323,7 @@ export const DocumentLivePreview = ({
                   <button
                     onClick={() => setActiveSlideIndex(prev => Math.min(slides.length - 1, prev + 1))}
                     disabled={activeSlideIndex === slides.length - 1}
-                    className="p-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-40 transition-colors"
+                    className="p-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-40 transition-colors cursor-pointer"
                   >
                     <ChevronRight size={16} />
                   </button>
@@ -296,7 +335,7 @@ export const DocumentLivePreview = ({
                     <button
                       key={idx}
                       onClick={() => setActiveSlideIndex(idx)}
-                      className={`px-2 py-1 text-[10px] font-mono rounded border transition-all ${
+                      className={`px-2 py-1 text-[10px] font-mono rounded border transition-all cursor-pointer ${
                         idx === activeSlideIndex 
                           ? 'bg-indigo-600 text-white border-indigo-400 font-bold' 
                           : 'bg-slate-800/90 text-slate-400 border-slate-700 hover:text-slate-200'

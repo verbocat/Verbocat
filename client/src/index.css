@@ -2635,3 +2635,31 @@ body, .topbar, .workspace-footer, .seg-row, .seg-editor, .nav-btn, .modal-card, 
   animation: skeletonShimmer 1.6s ease-in-out infinite;
 }
 
+/* DOCX Preview Container Styles */
+.docx-wrapper {
+  background: transparent !important;
+  padding: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  width: 100% !important;
+}
+.docx-wrapper > section.docx,
+.docx-rendered-page {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4) !important;
+  margin-bottom: 24px !important;
+  border-radius: 8px !important;
+  padding: 40px !important;
+  min-height: 600px !important;
+  width: 100% !important;
+  max-width: 800px !important;
+}
+.docx-wrapper > section.docx p,
+.docx-wrapper > section.docx td,
+.docx-wrapper > section.docx span {
+  color: #0f172a !important;
+}
+
+

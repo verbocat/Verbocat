@@ -3851,19 +3851,30 @@ apiRouter.post("/documents/:id/preview", checkAuth, async (request, response) =>
     const { id } = request.params;
     const { segments: customSegments, targetLang } = request.body || {};
 
-    const { data: doc, error: docErr } = await supabase
+    let doc = null;
+    const { data: docById } = await supabase
       .from("documents")
       .select("*, file_id, name")
       .eq("id", id)
       .single();
 
-    if (docErr || !doc) {
-      return response.status(404).json({ error: "Document not found." });
+    if (docById) {
+      doc = docById;
+    } else {
+      const { data: docByFile } = await supabase
+        .from("documents")
+        .select("*, file_id, name")
+        .eq("file_id", id)
+        .single();
+      if (docByFile) doc = docByFile;
     }
+
+    const docName = doc ? doc.name : "document.docx";
+    const fileIdToUse = doc ? doc.file_id : id;
 
     let segmentsList = customSegments;
     if (!segmentsList || !Array.isArray(segmentsList)) {
-      const activeLang = targetLang || doc.target_lang || "hi";
+      const activeLang = targetLang || (doc ? doc.target_lang : "hi");
       const dbSegments = await fetchAllSegments(id, "segment_index, source_text, target_text", activeLang);
       segmentsList = dbSegments.map(s => ({
         id: s.segment_index,
@@ -3872,10 +3883,10 @@ apiRouter.post("/documents/:id/preview", checkAuth, async (request, response) =>
       }));
     }
 
-    const extIndex = doc.name.lastIndexOf(".");
-    const ext = extIndex !== -1 ? doc.name.substring(extIndex).toLowerCase() : ".docx";
+    const extIndex = docName.lastIndexOf(".");
+    const ext = extIndex !== -1 ? docName.substring(extIndex).toLowerCase() : ".docx";
 
-    const buffer = await exportHtml(doc.file_id || id, segmentsList, ext, targetLang || doc.target_lang || "hi");
+    const buffer = await exportHtml(fileIdToUse, segmentsList, ext, targetLang || (doc ? doc.target_lang : "hi"));
 
     let mimeType = "application/octet-stream";
     if (ext === ".docx" || ext === ".doc") {
@@ -3890,12 +3901,14 @@ apiRouter.post("/documents/:id/preview", checkAuth, async (request, response) =>
 
     response.setHeader("Content-Type", mimeType);
     response.setHeader("X-Document-Type", ext.replace(".", ""));
+    response.setHeader("X-Document-Name", encodeURIComponent(docName));
     response.send(buffer);
   } catch (err) {
     console.error("Preview endpoint error:", err);
     response.status(500).json({ error: "Failed to generate document preview." });
   }
 });
+
 
 
 // 12. Download ZIP of all files for a target language in the project
