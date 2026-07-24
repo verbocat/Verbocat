@@ -291,7 +291,13 @@ export default function App() {
       }
 
       setDocumentId(activeDocId);
-      setSegments(doc.segments || []);
+      const rawSegments = doc.segments || [];
+      const cleanSegs = rawSegments.map((s, idx) => ({
+        ...s,
+        id: idx + 1,
+        uniqueKey: s.uniqueKey || `seg-${activeDocId}-${idx + 1}`
+      }));
+      setSegments(cleanSegs);
       // Extract and set the file extension dynamically from the document name or server metadata
       const extIndex = doc.name.lastIndexOf(".");
       const ext = doc.fileExtension || (extIndex !== -1 ? doc.name.substring(extIndex) : ".html");
@@ -3016,10 +3022,10 @@ export default function App() {
                   ref={virtuosoRef}
                   style={{ flex: 1 }}
                   data={filteredSegments}
-                  computeItemKey={(index, item) => item.id}
+                  computeItemKey={(index, item) => item.uniqueKey || `seg-${item.id}-${index}`}
                   itemContent={(index, item) => (
                     <SegmentCard
-                      key={item.id}
+                      key={item.uniqueKey || `seg-${item.id}-${index}`}
                       darkMode={darkMode}
                       index={index}
                       segment={item}

@@ -4181,7 +4181,19 @@ apiRouter.get("/documents/:documentId/lang/:lang/segments", checkAuth, async (re
 
     const stringSimilarity = require("string-similarity");
 
-    const mappedSegments = segments.map(seg => {
+    // Deduplicate segments by segment_index to prevent duplicate IDs or repeating segment rows
+    const seenIndices = new Set();
+    const cleanSegmentsList = [];
+    (segments || []).forEach(seg => {
+      const idxKey = seg.segment_index !== undefined && seg.segment_index !== null ? seg.segment_index : cleanSegmentsList.length;
+      if (!seenIndices.has(idxKey)) {
+        seenIndices.add(idxKey);
+        cleanSegmentsList.push(seg);
+      }
+    });
+
+    const mappedSegments = cleanSegmentsList.map((seg, idx) => {
+      const seqId = idx + 1; // Strict 1-indexed sequential segment number
       let fuzzyScore = null;
       let matchType = null;
 
@@ -4211,7 +4223,9 @@ apiRouter.get("/documents/:documentId/lang/:lang/segments", checkAuth, async (re
       }
 
       return {
-        id: seg.segment_index + 1,
+        id: seqId,
+        uniqueKey: `doc-${documentId}-seg-${seqId}`,
+        segmentIndex: seg.segment_index !== undefined ? seg.segment_index : idx,
         source: seg.source_text,
         target: seg.target_text || "",
         status: seg.status,
