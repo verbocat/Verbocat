@@ -1,6 +1,9 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import Papa from "papaparse";
-import { X, Search, FileUp, FileDown, Database, Edit, Plus, Trash2, Check, RefreshCw, Download, Upload } from "lucide-react";
+import { 
+  X, Search, FileUp, FileDown, Database, Edit, Plus, Trash2, Check, RefreshCw, 
+  Download, Upload, AlertTriangle, Sparkles, Copy 
+} from "lucide-react";
 
 export const GlossaryModal = ({
   darkMode,
@@ -42,10 +45,54 @@ export const GlossaryModal = ({
   const [isEditing, setIsEditing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [newRowIndex, setNewRowIndex] = useState(null);
-  const [activeView, setActiveView] = useState("list");
+  const [activeView, setActiveView] = useState("list"); // "list", "spreadsheet", "duplicates"
   const [pasteText, setPasteText] = useState("");
   const fileInputRef = useRef(null);
   const tbxFileInputRef = useRef(null);
+
+  // Duplicate Detection Analysis
+  const duplicateInfo = useMemo(() => {
+    const counts = {};
+    const duplicateIndices = new Set();
+    const duplicateGroups = {}; // normalizedSource -> array of { source, target, originalIndex }
+
+    glossary.forEach((item, index) => {
+      const norm = (item.source || "").trim().toLowerCase();
+      if (!norm) return;
+      if (!counts[norm]) {
+        counts[norm] = [];
+      }
+      counts[norm].push({ ...item, originalIndex: index });
+    });
+
+    Object.entries(counts).forEach(([norm, list]) => {
+      if (list.length > 1) {
+        duplicateGroups[norm] = list;
+        list.forEach(el => duplicateIndices.add(el.originalIndex));
+      }
+    });
+
+    return {
+      duplicateIndices,
+      duplicateGroups,
+      totalDuplicateCount: duplicateIndices.size,
+      duplicateGroupCount: Object.keys(duplicateGroups).length
+    };
+  }, [glossary]);
+
+  const handleRemoveSubsequentDuplicates = () => {
+    const seen = new Set();
+    const cleaned = [];
+    glossary.forEach(item => {
+      const norm = (item.source || "").trim().toLowerCase();
+      if (!norm || !seen.has(norm)) {
+        if (norm) seen.add(norm);
+        cleaned.push(item);
+      }
+    });
+    setGlossary(cleaned);
+    if (selectedGlossaryRows.length > 0) onClearSelection();
+  };
 
   const handleAddRow = () => {
     onAddRow();
@@ -64,7 +111,7 @@ export const GlossaryModal = ({
   };
 
   const handleDeleteRow = (index, event) => {
-    event.stopPropagation();
+    if (event) event.stopPropagation();
     setGlossary(glossary.filter((_, idx) => idx !== index));
     if (selectedGlossaryRows.includes(index)) {
       onClearSelection();
@@ -306,13 +353,19 @@ export const GlossaryModal = ({
               </div>
 
               {/* Status Stats */}
-              <div className="flex items-center gap-2 pt-1 border-t border-[var(--border-subtle)]">
+              <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-[var(--border-subtle)]">
                 <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${theme.accentSoft}`}>
                   {glossary.length} terms
                 </span>
                 {selectedGlossaryRows.length > 0 && (
                   <span className="rounded-full bg-[var(--bg-active)] px-2.5 py-0.5 text-[10px] font-bold text-[var(--text-accent)] border border-[var(--border-subtle)]">
                     {selectedGlossaryRows.length} selected
+                  </span>
+                )}
+                {duplicateInfo.totalDuplicateCount > 0 && (
+                  <span className="rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2.5 py-0.5 text-[10px] font-bold flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" />
+                    {duplicateInfo.totalDuplicateCount} duplicates
                   </span>
                 )}
               </div>
@@ -363,7 +416,7 @@ export const GlossaryModal = ({
             {/* Toolbar Header */}
             <div className="p-4 border-b border-[var(--border-subtle)] flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between shrink-0">
               {/* Tab selector */}
-              <div className="flex gap-2 p-1 bg-[var(--bg-panel)] rounded-xl border border-[var(--border-medium)] w-fit shrink-0">
+              <div className="flex gap-1.5 p-1 bg-[var(--bg-panel)] rounded-xl border border-[var(--border-medium)] w-fit shrink-0">
                 <button
                   type="button"
                   onClick={() => setActiveView("list")}
@@ -375,6 +428,7 @@ export const GlossaryModal = ({
                 >
                   Term List
                 </button>
+
                 <button
                   type="button"
                   onClick={() => setActiveView("spreadsheet")}
@@ -385,6 +439,23 @@ export const GlossaryModal = ({
                   }`}
                 >
                   Spreadsheet Importer
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveView("duplicates")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    activeView === "duplicates"
+                      ? "bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-sm border border-[var(--border-subtle)]"
+                      : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent"
+                  }`}
+                >
+                  <span>Duplicates</span>
+                  {duplicateInfo.totalDuplicateCount > 0 && (
+                    <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                      {duplicateInfo.totalDuplicateCount}
+                    </span>
+                  )}
                 </button>
               </div>
 
@@ -474,6 +545,87 @@ export const GlossaryModal = ({
                     </button>
                   </div>
                 </div>
+              ) : activeView === "duplicates" ? (
+                /* Duplicates Inspector & Cleaner View */
+                <div className="flex-1 flex flex-col min-h-0 overflow-hidden space-y-3">
+                  {/* Summary Header */}
+                  <div className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/10 flex flex-wrap items-center justify-between gap-3 shrink-0">
+                    <div className="flex items-center gap-2.5">
+                      <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+                      <div>
+                        <div className="text-xs font-bold text-[var(--text-primary)]">
+                          Glossary Duplicate Detection
+                        </div>
+                        <div className="text-[11px] text-[var(--text-secondary)] font-semibold mt-0.5">
+                          Found {duplicateInfo.duplicateGroupCount} repeated source term{duplicateInfo.duplicateGroupCount !== 1 ? "s" : ""} across {duplicateInfo.totalDuplicateCount} rows.
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleRemoveSubsequentDuplicates}
+                      disabled={duplicateInfo.totalDuplicateCount === 0}
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      Auto-Clean Duplicates (Keep First)
+                    </button>
+                  </div>
+
+                  {/* Duplicate Groups List */}
+                  <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                    {duplicateInfo.duplicateGroupCount === 0 ? (
+                      <div className="p-12 text-center text-xs text-[var(--text-muted)] font-bold bg-[var(--bg-input)] rounded-xl border border-[var(--border-subtle)] space-y-1">
+                        <Check className="w-8 h-8 mx-auto text-emerald-400 opacity-80" />
+                        <div className="text-sm text-[var(--text-primary)]">No duplicate source terms found!</div>
+                        <div className="text-[11px] font-medium text-[var(--text-muted)]">All glossary source terms in this language pair are unique.</div>
+                      </div>
+                    ) : (
+                      Object.entries(duplicateInfo.duplicateGroups).map(([norm, items], gIdx) => (
+                        <div key={gIdx} className="bg-[var(--bg-input)] border border-amber-500/30 rounded-xl p-3.5 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-extrabold text-[var(--text-primary)] font-mono bg-[var(--bg-surface)] px-2.5 py-1 rounded-md border border-[var(--border-subtle)]">
+                                &quot;{items[0].source}&quot;
+                              </span>
+                              <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                                {items.length} Occurrences
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            {items.map((entry, idx) => (
+                              <div key={entry.originalIndex} className="flex items-center justify-between p-2.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs hover:border-amber-500/40 transition">
+                                <div className="flex items-center gap-3 font-semibold text-[var(--text-secondary)]">
+                                  <span className="text-[10px] font-bold font-mono text-[var(--text-muted)] w-8 text-center bg-[var(--bg-panel)] py-0.5 rounded border border-[var(--border-subtle)]">
+                                    #{entry.originalIndex + 1}
+                                  </span>
+                                  <span className="text-[var(--text-primary)] font-bold">{entry.source}</span>
+                                  <span className="text-[var(--text-muted)]">➔</span>
+                                  <span className="text-indigo-400 font-bold">{entry.target || "(Empty Target)"}</span>
+                                  {idx === 0 && (
+                                    <span className="text-[9px] font-extrabold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                                      Primary (Keep First)
+                                    </span>
+                                  )}
+                                </div>
+
+                                <button
+                                  onClick={(e) => handleDeleteRow(entry.originalIndex, e)}
+                                  className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-rose)] hover:bg-[var(--text-rose)]/10 transition cursor-pointer"
+                                  title="Delete this duplicate entry"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               ) : (
                 /* Terms grid table */
                 <div className="flex-1 flex flex-col min-h-0 overflow-hidden border border-[var(--border-medium)] rounded-xl bg-[var(--bg-input)]">
@@ -496,13 +648,18 @@ export const GlossaryModal = ({
                       filteredGlossary.map((item) => {
                         const index = item.originalIndex;
                         const selected = selectedGlossaryRows.includes(index);
+                        const isDuplicate = duplicateInfo.duplicateIndices.has(index);
 
                         return (
                           <div
                             key={`${glossaryKey}-${index}`}
                             onClick={(event) => onToggleRow(index, event)}
                             className={`glossary-row grid grid-cols-[56px_1fr_1fr_48px] items-center cursor-pointer transition-colors ${
-                              selected ? "bg-[var(--bg-active)]" : "hover:bg-[var(--bg-hover)]"
+                              selected 
+                                ? "bg-[var(--bg-active)]" 
+                                : isDuplicate 
+                                ? "bg-amber-500/10 border-l-2 border-l-amber-500 hover:bg-amber-500/15" 
+                                : "hover:bg-[var(--bg-hover)]"
                             }`}
                           >
                             {/* Row number */}
@@ -511,7 +668,7 @@ export const GlossaryModal = ({
                             </div>
 
                             {/* Source term input */}
-                            <div className="h-full border-r border-[var(--border-subtle)] flex items-center">
+                            <div className="h-full border-r border-[var(--border-subtle)] flex items-center relative">
                               <input
                                 value={item.source}
                                 disabled={!isEditing && newRowIndex !== index}
@@ -527,8 +684,16 @@ export const GlossaryModal = ({
                                   onUpdateGlossary(index, "source", event.target.value)
                                 }
                                 placeholder="Enter source term..."
-                                className="w-full h-full bg-transparent border-none outline-none text-xs text-[var(--text-primary)] px-3.5 py-2.5 placeholder-[var(--text-muted)] disabled:opacity-85 font-semibold focus:bg-[var(--bg-panel)]"
+                                className="w-full h-full bg-transparent border-none outline-none text-xs text-[var(--text-primary)] px-3.5 py-2.5 placeholder-[var(--text-muted)] disabled:opacity-85 font-semibold focus:bg-[var(--bg-panel)] pr-20"
                               />
+                              {isDuplicate && (
+                                <span 
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-extrabold text-amber-400 bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 rounded pointer-events-none"
+                                  title="Duplicate source term in glossary"
+                                >
+                                  ⚠️ Duplicate
+                                </span>
+                              )}
                             </div>
 
                             {/* Target term input */}
