@@ -23,10 +23,10 @@ app.use("/api/admin", adminRouter);
 // Mount chat router
 app.use("/api/chat", chatRouter);
 
-// Mount API router under both `/` and `/api` so older clients
-// expecting root paths (e.g. `/upload`) continue to work while
-// newer clients can use `/api/*`.
-app.use(["/", "/api"], apiRouter);
+// Mount API router under both `/api` and `/` (in that order) so requests starting
+// with `/api` have `/api` stripped properly before matching apiRouter.
+app.use("/api", apiRouter);
+app.use("/", apiRouter);
 
 module.exports = {
   app

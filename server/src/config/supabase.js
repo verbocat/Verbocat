@@ -70,7 +70,7 @@ const resegmentDocumentInDb = async (documentId, sourceSegments) => {
 
   let needsResegmenting = false;
   const newSourceSegments = [];
-  let segIdx = 0;
+  let segIdx = 1;
 
   for (const seg of sourceSegments) {
     const text = String(seg.source_text || "").trim();

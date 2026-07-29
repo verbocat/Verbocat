@@ -612,17 +612,41 @@ export const scanProtectedContent = async (projectId, options = {}) => {
   return response.data;
 };
 
+export const fetchDocumentTemplate = async (documentId) => {
+  const response = await api.get(`/api/documents/${documentId}/template`);
+  return response.data;
+};
+
 export const fetchDocumentPreview = async (documentId, segments = null, targetLang = "hi") => {
-  const response = await api.post(
-    `/api/documents/${documentId}/preview`,
-    { segments, targetLang },
-    { responseType: "arraybuffer" }
-  );
-  return {
-    data: response.data,
-    contentType: response.headers["content-type"],
-    documentType: response.headers["x-document-type"]
-  };
+  try {
+    const response = await api.post(
+      `/api/documents/${documentId}/preview`,
+      { segments, targetLang },
+      { responseType: "arraybuffer" }
+    );
+    return {
+      data: response.data,
+      contentType: response.headers["content-type"],
+      documentType: response.headers["x-document-type"]
+    };
+  } catch (err) {
+    // Axios wraps non-2xx responses as errors when responseType is arraybuffer.
+    // Decode the arraybuffer response body to extract the server's JSON error message.
+    if (err.response && err.response.data instanceof ArrayBuffer) {
+      try {
+        const text = new TextDecoder("utf-8").decode(err.response.data);
+        const parsed = JSON.parse(text);
+        if (parsed && parsed.error) {
+          const decodedError = new Error(parsed.error);
+          decodedError.status = err.response.status;
+          throw decodedError;
+        }
+      } catch (decodeErr) {
+        if (decodeErr.status) throw decodeErr; // re-throw if we already built a nice error
+      }
+    }
+    throw err;
+  }
 };
 
 

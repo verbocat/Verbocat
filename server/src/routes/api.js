@@ -3845,6 +3845,55 @@ apiRouter.get("/jobs/:jobId/download", checkAuth, async (request, response) => {
   }
 });
 
+// 11a. Fetch Document Template Endpoint for Instant Live Preview
+apiRouter.get("/documents/:id/template", checkAuth, async (request, response) => {
+  try {
+    const { id } = request.params;
+    let doc = null;
+
+    const { data: docById } = await supabase
+      .from("documents")
+      .select("*, file_id, name")
+      .eq("id", id)
+      .single();
+
+    if (docById) {
+      doc = docById;
+    } else {
+      const { data: docByFile } = await supabase
+        .from("documents")
+        .select("*, file_id, name")
+        .eq("file_id", id)
+        .single();
+      if (docByFile) doc = docByFile;
+    }
+
+    const fileIdToUse = doc ? doc.file_id : id;
+    const docIdToUse = doc ? doc.id : id;
+    const docName = doc ? doc.name : "document.docx";
+
+    let { data: htmlData } = await supabase
+      .from("html_files")
+      .select("content")
+      .eq("id", fileIdToUse)
+      .single();
+
+    if (!htmlData || !htmlData.content) {
+      return response.status(404).json({ error: "Document template not found." });
+    }
+
+    response.json({
+      template: htmlData.content,
+      docName,
+      fileId: fileIdToUse,
+      docId: docIdToUse
+    });
+  } catch (err) {
+    console.error("Fetch document template error:", err);
+    response.status(500).json({ error: "Failed to fetch document template." });
+  }
+});
+
 // 11b. Live Preview Document Buffer Endpoint
 apiRouter.post("/documents/:id/preview", checkAuth, async (request, response) => {
   try {
@@ -3871,43 +3920,74 @@ apiRouter.post("/documents/:id/preview", checkAuth, async (request, response) =>
 
     const docName = doc ? doc.name : "document.docx";
     const fileIdToUse = doc ? doc.file_id : id;
+    const docIdToQuery = doc ? doc.id : id;
 
-    // Always fetch complete document segments from database
-    const activeLang = targetLang || (doc ? doc.target_lang : "hi");
-    const dbSegments = await fetchAllSegments(id, "segment_index, source_text, target_text", activeLang);
-
-    const fullSegmentsMap = new Map();
-    dbSegments.forEach(s => {
-      const idx = Number(s.segment_index);
-      fullSegmentsMap.set(idx, {
-        id: idx,
-        source: s.source_text,
-        target: s.target_text || s.source_text
-      });
-    });
-
-    // Overlay live target text updates from editor state if provided
-    if (Array.isArray(customSegments)) {
-      customSegments.forEach(s => {
-        const segId = Number(s.id);
-        if (fullSegmentsMap.has(segId)) {
-          const existing = fullSegmentsMap.get(segId);
-          fullSegmentsMap.set(segId, {
-            ...existing,
-            target: s.target !== undefined ? s.target : existing.target
-          });
-        } else {
-          fullSegmentsMap.set(segId, {
-            id: segId,
-            source: s.source || "",
-            target: s.target || s.source || ""
-          });
-        }
+    // Guard: Live preview is not supported for very large documents (>10MB)
+    // because the DOCX template can be 3x the original file size in base64
+    // and causes timeouts / out-of-memory errors when processing 5000+ segments.
+    const FILE_SIZE_LIMIT = 10 * 1024 * 1024; // 10MB
+    if (doc && doc.file_size && doc.file_size > FILE_SIZE_LIMIT) {
+      return response.status(413).json({
+        error: `Live preview is not available for documents larger than 10 MB (this file is ${(doc.file_size / 1024 / 1024).toFixed(1)} MB). Please use the Download button to view the translated document.`
       });
     }
 
-    const segmentsList = Array.from(fullSegmentsMap.values()).sort((a, b) => a.id - b.id);
+    // 1. Fetch complete base source segments list ordered by segment_index
+    const activeLang = targetLang || (doc ? doc.target_lang : "hi");
+    const sourceSegments = await fetchAllSegments(docIdToQuery, "segment_index, source_text, target_text", "source");
 
+    const segmentsList = sourceSegments.map((s, arrayIdx) => ({
+      id: arrayIdx,
+      segment_index: arrayIdx,
+      source: s.source_text || "",
+      target: (s.target_text !== undefined && s.target_text !== null && s.target_text !== "") ? s.target_text : (s.source_text || "")
+    }));
+
+    // 2. Fetch target language segment translations if activeLang is specified
+    if (activeLang && activeLang !== "source") {
+      try {
+        const targetSegments = await fetchAllSegments(docIdToQuery, "segment_index, target_text", activeLang);
+        targetSegments.forEach((s, idx) => {
+          const arrayIdx = s.segment_index !== undefined && s.segment_index !== null ? Number(s.segment_index) : idx;
+          if (segmentsList[arrayIdx]) {
+            if (s.target_text !== undefined && s.target_text !== null && s.target_text !== "") {
+              segmentsList[arrayIdx].target = s.target_text;
+            }
+          }
+        });
+      } catch (err) {
+        console.warn("Could not fetch target segments for activeLang:", activeLang, err);
+      }
+    }
+
+    // 3. Overlay live target text updates from client editor state (customSegments)
+    if (Array.isArray(customSegments) && customSegments.length > 0) {
+      customSegments.forEach((s, arrayIdx) => {
+        let targetSeg = null;
+        if (s.segment_index !== undefined && s.segment_index !== null) {
+          const segIdx = Number(s.segment_index);
+          targetSeg = segmentsList.find(t => t.segment_index === segIdx) ||
+                      segmentsList.find(t => t.segment_index === segIdx - 1) ||
+                      segmentsList.find(t => t.id === segIdx) ||
+                      segmentsList.find(t => t.id === segIdx - 1);
+        }
+        if (!targetSeg && s.id !== undefined && s.id !== null) {
+          const sId = Number(s.id);
+          targetSeg = segmentsList.find(t => t.id === sId) ||
+                      segmentsList.find(t => t.id === sId - 1) ||
+                      segmentsList.find(t => t.segment_index === sId) ||
+                      segmentsList.find(t => t.segment_index === sId - 1);
+        }
+        if (!targetSeg && segmentsList[arrayIdx]) {
+          targetSeg = segmentsList[arrayIdx];
+        }
+        if (targetSeg) {
+          if (s.target !== undefined && s.target !== null && s.target !== "") {
+            targetSeg.target = s.target;
+          }
+        }
+      });
+    }
 
     const extIndex = docName.lastIndexOf(".");
     const ext = extIndex !== -1 ? docName.substring(extIndex).toLowerCase() : ".docx";

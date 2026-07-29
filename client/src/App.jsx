@@ -17,7 +17,7 @@ import { ContextSettingsModal } from "./components/ContextSettingsModal.jsx";
 import { SearchReplaceModal } from "./components/SearchReplaceModal.jsx";
 import { ForbiddenTermsModal } from "./components/ForbiddenTermsModal.jsx";
 import { SettingsModal } from "./components/SettingsModal.jsx";
-import { DocumentLivePreview } from "./components/DocumentLivePreview.jsx";
+import { LiveDocumentViewer } from "./components/LiveDocumentViewer.jsx";
 import { LANGUAGES } from "./constants/languages.js";
 import { useGlossaryManager } from "./hooks/useGlossaryManager.js";
 import { useUserStore } from "./services/userStore.js";
@@ -385,6 +385,7 @@ export default function App() {
       const cleanSegs = rawSegments.map((s, idx) => ({
         ...s,
         id: idx + 1,
+        segment_index: idx + 1,
         uniqueKey: s.uniqueKey || `seg-${activeDocId}-${idx + 1}`
       }));
       setSegments(cleanSegs);
@@ -3227,16 +3228,14 @@ export default function App() {
                 {/* Live Preview Panel Side-by-Side */}
                 {showLivePreview && (
                   <div className="w-1/2 h-full flex-shrink-0 flex flex-col overflow-hidden">
-                    <DocumentLivePreview
+                    <LiveDocumentViewer
                       documentId={documentId || currentRoute.fileId}
                       fileName={fileName}
-                      arrayBuffer={previewBuffer}
-                      documentType={fileExtension || "docx"}
-                      isLoading={isPreviewLoading}
-                      onRefresh={() => handleFetchLivePreview()}
-                      onClose={() => setShowLivePreview(false)}
+                      fileExtension={fileExtension}
+                      segments={segments}
+                      targetLang={targetLanguage}
                       darkMode={darkMode}
-                      isSplitView={true}
+                      onClose={() => setShowLivePreview(false)}
                     />
                   </div>
                 )}

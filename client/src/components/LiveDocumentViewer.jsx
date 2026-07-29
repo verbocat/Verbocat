@@ -1,0 +1,354 @@
+import React, { useEffect, useRef, useState, useCallback } from "react";
+import { renderAsync } from "docx-preview";
+import { fetchDocumentPreview } from "../services/api";
+import { 
+  FileText, Globe, RefreshCw, ZoomIn, ZoomOut, Download, AlertTriangle, X, CheckCircle2 
+} from "lucide-react";
+
+export const LiveDocumentViewer = ({
+  documentId,
+  fileName = "Document",
+  fileExtension = ".html",
+  segments = [],
+  targetLang = "hi",
+  darkMode = true,
+  onClose = () => {},
+}) => {
+  const containerRef = useRef(null);
+  const iframeRef = useRef(null);
+  const viewportRef = useRef(null);
+
+  const [zoom, setZoom] = useState(100);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState(null);
+  const [isSizeLimitError, setIsSizeLimitError] = useState(false);
+  const [previewBuffer, setPreviewBuffer] = useState(null);
+  const [docType, setDocType] = useState(null); // "html" | "docx" | "pptx" etc.
+  const [htmlContent, setHtmlContent] = useState(null);
+  const [lastSyncTime, setLastSyncTime] = useState(new Date());
+
+  // Derive rendering mode: HTML iframe vs DOCX/binary canvas
+  const isHtmlMode = docType === "html" || docType === "htm" ||
+    (!docType && (fileExtension === ".html" || fileExtension === ".htm"));
+
+  // 1. Fetch preview buffer/content from backend
+  const loadPreviewBuffer = useCallback(async () => {
+    if (!documentId) return;
+    setIsLoading(true);
+    setErrorMsg(null);
+    setIsSizeLimitError(false);
+
+    try {
+      const res = await fetchDocumentPreview(documentId, segments, targetLang);
+      const data = res.data;
+      const detectedType = (res.documentType || "").toLowerCase();
+
+      setDocType(detectedType);
+
+      if (!data || data.byteLength === 0) {
+        throw new Error("Received empty response from preview generator.");
+      }
+
+      // HTML preview: decode bytes as UTF-8 text and render in iframe
+      const resolvedIsHtml = detectedType === "html" || detectedType === "htm" ||
+        (!detectedType && (fileExtension === ".html" || fileExtension === ".htm"));
+
+      if (resolvedIsHtml) {
+        const text = new TextDecoder("utf-8").decode(data);
+        setHtmlContent(text);
+        setPreviewBuffer(null);
+        setLastSyncTime(new Date());
+        return;
+      }
+
+      // DOCX / PPTX / binary: validate PK ZIP magic bytes
+      const bytes = new Uint8Array(data);
+      if (bytes.length < 4 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
+        const rawText = new TextDecoder("utf-8").decode(data);
+        let parsedError = "The generated document is not a valid archive.";
+        try {
+          const errObj = JSON.parse(rawText);
+          if (errObj && errObj.error) parsedError = errObj.error;
+        } catch (_) {}
+        throw new Error(parsedError);
+      }
+
+      setPreviewBuffer(data);
+      setHtmlContent(null);
+      setLastSyncTime(new Date());
+    } catch (err) {
+      console.error("LiveDocumentViewer load error:", err);
+      const isSize = err.status === 413 || (err.message && err.message.includes("larger than"));
+      setIsSizeLimitError(isSize);
+      setErrorMsg(err.message || "Failed to load live document preview.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [documentId, segments, targetLang, fileExtension]);
+
+  // Initial load & debounced update when segments or targetLang change
+  useEffect(() => {
+    let isMounted = true;
+    const timer = setTimeout(() => {
+      if (isMounted) loadPreviewBuffer();
+    }, 400);
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [loadPreviewBuffer]);
+
+  // 2a. Render DOCX using docx-preview into unmanaged DOM container
+  useEffect(() => {
+    if (!previewBuffer || !containerRef.current || isHtmlMode) return;
+
+    let isCancelled = false;
+
+    const renderDocument = async () => {
+      try {
+        const targetElement = containerRef.current;
+        targetElement.innerHTML = "";
+
+        await renderAsync(previewBuffer, targetElement, null, {
+          className: "docx-paper-page",
+          inWrapper: true,
+          ignoreWidth: false,
+          ignoreHeight: false,
+          ignoreFonts: false,
+          breakPages: true,
+          renderHeaders: true,
+          renderFooters: true,
+          renderFootnotes: true,
+          renderEndnotes: true,
+          experimental: true,
+          useHTML5: true
+        });
+
+        if (!isCancelled) {
+          const renderedElements = targetElement.querySelectorAll(
+            ".docx-wrapper, .docx-paper-page, section.docx, p, span, td, th, h1, h2, h3, h4, h5, h6"
+          );
+          renderedElements.forEach(el => {
+            if (!el.style.color) el.style.color = "#0f172a";
+          });
+        }
+      } catch (renderErr) {
+        console.error("docx-preview rendering error:", renderErr);
+        if (!isCancelled) setErrorMsg("Could not render document layout formatting.");
+      }
+    };
+
+    renderDocument();
+    return () => { isCancelled = true; };
+  }, [previewBuffer, isHtmlMode]);
+
+  // 2b. Write HTML content into sandboxed iframe
+  useEffect(() => {
+    if (!htmlContent || !iframeRef.current) return;
+    try {
+      const iframeDoc = iframeRef.current.contentDocument || iframeRef.current.contentWindow?.document;
+      if (iframeDoc) {
+        iframeDoc.open();
+        iframeDoc.write(htmlContent);
+        iframeDoc.close();
+      }
+    } catch (e) {
+      console.error("HTML iframe write error:", e);
+    }
+  }, [htmlContent]);
+
+  const handleZoomIn = () => setZoom(prev => Math.min(prev + 15, 200));
+  const handleZoomOut = () => setZoom(prev => Math.max(prev - 15, 50));
+  const handleResetZoom = () => setZoom(100);
+
+  const handleDownload = () => {
+    if (isHtmlMode && htmlContent) {
+      const blob = new Blob([htmlContent], { type: "text/html; charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = (fileName || "Document") + ".html";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } else if (previewBuffer) {
+      const ext = docType ? `.${docType}` : fileExtension || ".docx";
+      const mimeMap = {
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".doc": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      };
+      const mime = mimeMap[ext] || "application/octet-stream";
+      const blob = new Blob([previewBuffer], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = (fileName || "Document") + ext;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const hasContent = isHtmlMode ? !!htmlContent : !!previewBuffer;
+  const docTypeLabel = isHtmlMode ? "Live HTML Document" : "Live Word Document";
+  const exportLabel = isHtmlMode ? "Export HTML" : "Export DOCX";
+
+  return (
+    <div 
+      className={`h-full w-full flex flex-col overflow-hidden font-sans border-l border-[var(--border-subtle)] ${
+        darkMode ? "bg-slate-900 text-slate-100" : "bg-slate-50 text-slate-800"
+      }`}
+    >
+      {/* Viewer Header Toolbar */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-panel)] shrink-0 select-none">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className={`p-1.5 rounded-lg border shrink-0 ${
+            isHtmlMode
+              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+              : "bg-indigo-500/10 text-indigo-400 border-indigo-500/20"
+          }`}>
+            {isHtmlMode ? <Globe size={16} /> : <FileText size={16} />}
+          </div>
+          <div className="min-w-0">
+            <h4 className="text-xs font-bold truncate text-[var(--text-primary)]">
+              {fileName}
+            </h4>
+            <p className="text-[10px] text-[var(--text-muted)] font-medium flex items-center gap-1.5 mt-0.5">
+              <span>{docTypeLabel}</span>
+              <span>•</span>
+              <span className="text-emerald-400 font-bold flex items-center gap-1">
+                <CheckCircle2 size={10} />
+                Synced {lastSyncTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+              </span>
+            </p>
+          </div>
+        </div>
+
+        {/* Toolbar Action Controls */}
+        <div className="flex items-center gap-1.5">
+          {/* Zoom Buttons — only for DOCX (HTML iframe scrolls natively) */}
+          {!isHtmlMode && (
+            <div className="flex items-center gap-1 bg-[var(--bg-input)] p-1 rounded-lg border border-[var(--border-subtle)] mr-1">
+              <button
+                onClick={handleZoomOut}
+                className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer"
+                title="Zoom Out"
+              >
+                <ZoomOut size={13} />
+              </button>
+              <button
+                onClick={handleResetZoom}
+                className="text-[10px] font-mono font-bold w-10 text-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
+                title="Reset Zoom (100%)"
+              >
+                {zoom}%
+              </button>
+              <button
+                onClick={handleZoomIn}
+                className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer"
+                title="Zoom In"
+              >
+                <ZoomIn size={13} />
+              </button>
+            </div>
+          )}
+
+          {/* Export Download Button */}
+          <button
+            onClick={handleDownload}
+            disabled={!hasContent}
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg disabled:opacity-40 text-white text-xs font-bold transition cursor-pointer shadow-xs ${
+              isHtmlMode
+                ? "bg-emerald-600 hover:bg-emerald-500"
+                : "bg-indigo-600 hover:bg-indigo-500"
+            }`}
+            title={`Download ${exportLabel}`}
+          >
+            <Download size={13} />
+            <span className="hidden sm:inline">{exportLabel}</span>
+          </button>
+
+          {/* Refresh Button */}
+          <button
+            onClick={loadPreviewBuffer}
+            disabled={isLoading}
+            className="p-1.5 rounded-lg bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer"
+            title="Refresh Live Preview"
+          >
+            <RefreshCw size={13} className={isLoading ? "animate-spin" : ""} />
+          </button>
+
+          {/* Close Panel Button */}
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg bg-[var(--bg-surface)] hover:bg-rose-500/20 border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-rose-400 transition cursor-pointer ml-1"
+            title="Close Preview"
+          >
+            <X size={13} />
+          </button>
+        </div>
+      </div>
+
+      {/* Main Document Viewport */}
+      <div
+        ref={viewportRef}
+        className="flex-1 overflow-hidden relative bg-slate-950/80"
+      >
+        {/* Loading Overlay */}
+        {isLoading && (
+          <div className="absolute inset-0 bg-slate-950/75 backdrop-blur-xs flex flex-col items-center justify-center gap-3 z-30">
+            <RefreshCw size={26} className="animate-spin text-indigo-400" />
+            <p className="text-xs font-bold text-slate-200">Rendering Live Formatted Document...</p>
+          </div>
+        )}
+
+        {/* Error Card */}
+        {errorMsg ? (
+          <div className="h-full flex items-center justify-center p-6">
+            <div className="max-w-md text-center p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-3 shadow-2xl">
+              <AlertTriangle size={36} className={`mx-auto ${isSizeLimitError ? "text-orange-400" : "text-amber-400"}`} />
+              <h4 className="text-sm font-bold text-slate-100">
+                {isSizeLimitError ? "Document Too Large for Preview" : "Live Preview Unavailable"}
+              </h4>
+              <p className="text-xs text-slate-300 leading-relaxed">{errorMsg}</p>
+              {!isSizeLimitError && (
+                <button
+                  onClick={loadPreviewBuffer}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition cursor-pointer"
+                >
+                  Retry Sync
+                </button>
+              )}
+            </div>
+          </div>
+        ) : isHtmlMode ? (
+          /* ── HTML Preview: sandboxed iframe ── */
+          <iframe
+            ref={iframeRef}
+            title="HTML Live Preview"
+            className="w-full h-full border-0"
+            sandbox="allow-same-origin"
+            style={{ backgroundColor: "white" }}
+          />
+        ) : (
+          /* ── DOCX / Binary Preview: docx-preview canvas ── */
+          <div className="w-full h-full overflow-y-auto overflow-x-auto scroll-smooth p-6">
+            <div
+              className="w-full flex justify-center origin-top transition-transform duration-150 py-4 min-h-full"
+              style={{ transform: `scale(${zoom / 100})` }}
+            >
+              <div
+                ref={containerRef}
+                className="live-docx-render-container w-full max-w-4xl"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};

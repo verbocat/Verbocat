@@ -17,39 +17,45 @@ const parseFile = async (filePath) => {
   const tagMapGlobal = new Map();
   const tagCounter = { value: 1 };
 
-  for (const relativePath in zip.files) {
-    if (relativePath.startsWith('ppt/slides/slide') && relativePath.endsWith('.xml')) {
-      const xmlContent = await zip.file(relativePath).async('string');
-      const $ = cheerio.load(xmlContent, { xmlMode: true });
-      let modified = false;
+  const slideFiles = Object.keys(zip.files).filter(relativePath => 
+    relativePath.startsWith('ppt/slides/slide') && relativePath.endsWith('.xml')
+  ).sort((a, b) => {
+    const numA = parseInt(a.replace(/[^0-9]/g, ''), 10) || 0;
+    const numB = parseInt(b.replace(/[^0-9]/g, ''), 10) || 0;
+    return numA - numB;
+  });
 
-      $('a\\:p').each((_, element) => {
-        const rawText = $(element).text().trim();
-        if (!rawText) return;
+  for (const relativePath of slideFiles) {
+    const xmlContent = await zip.file(relativePath).async('string');
+    const $ = cheerio.load(xmlContent, { xmlMode: true });
+    let modified = false;
 
-        const placeholderStr = extractPlaceholders(element, $, tagMapGlobal, tagCounter);
-        const subSegments = splitByPunctuation(placeholderStr);
+    $('a\\:p').each((_, element) => {
+      const rawText = $(element).text().trim();
+      if (!rawText) return;
 
-        $(element).empty();
+      const placeholderStr = extractPlaceholders(element, $, tagMapGlobal, tagCounter);
+      const subSegments = splitByPunctuation(placeholderStr);
 
-        subSegments.forEach((subSeg) => {
-          const segmentId = segmentIndex++;
-          $(element).append(`__SEG_${segmentId}__`);
-          const { leading, body, trailing } = extractSegmentTags(subSeg);
-          segments.push({
-            id: segmentId,
-            source: body,
-            target: "",
-            leading,
-            trailing,
-          });
+      $(element).empty();
+
+      subSegments.forEach((subSeg) => {
+        const segmentId = segmentIndex++;
+        $(element).append(`__SEG_${segmentId}__`);
+        const { leading, body, trailing } = extractSegmentTags(subSeg);
+        segments.push({
+          id: segmentId,
+          source: body,
+          target: "",
+          leading,
+          trailing,
         });
-        modified = true;
       });
+      modified = true;
+    });
 
-      if (modified) {
-        zip.file(relativePath, $.xml());
-      }
+    if (modified) {
+      zip.file(relativePath, $.xml());
     }
   }
 
@@ -94,16 +100,22 @@ const exportFile = async (templateBase64, segments) => {
     segmentMap.set(segment.id, restoredText);
   });
 
-  for (const relativePath in zip.files) {
-    if (relativePath.startsWith('ppt/slides/slide') && relativePath.endsWith('.xml')) {
-      let xmlContent = await zip.file(relativePath).async('string');
-      xmlContent = xmlContent.replace(/__SEG_(\d+)__/g, (match, idStr) => {
-        const id = parseInt(idStr, 10);
-        if (segmentMap.has(id)) return segmentMap.get(id);
-        return match;
-      });
-      zip.file(relativePath, xmlContent);
-    }
+  const slideFiles = Object.keys(zip.files).filter(relativePath => 
+    relativePath.startsWith('ppt/slides/slide') && relativePath.endsWith('.xml')
+  ).sort((a, b) => {
+    const numA = parseInt(a.replace(/[^0-9]/g, ''), 10) || 0;
+    const numB = parseInt(b.replace(/[^0-9]/g, ''), 10) || 0;
+    return numA - numB;
+  });
+
+  for (const relativePath of slideFiles) {
+    let xmlContent = await zip.file(relativePath).async('string');
+    xmlContent = xmlContent.replace(/__SEG_(\d+)__/g, (match, idStr) => {
+      const id = parseInt(idStr, 10);
+      if (segmentMap.has(id)) return segmentMap.get(id);
+      return match;
+    });
+    zip.file(relativePath, xmlContent);
   }
 
   return await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });

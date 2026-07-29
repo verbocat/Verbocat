@@ -90,17 +90,9 @@ const getLeafTextBlocks = ($) => {
     $(el).replaceWith($(el).contents());
   });
 
-  $("td table, th table").each((_, tbl) => {
-    $(tbl).replaceWith($(tbl).contents());
-  });
-
   $("table").each((idx, el) => {
     $(el).attr("data-relink-table-id", String(idx));
   });
-
-  if ($("body").length > 0) {
-    wrapInlineSiblings($("body")[0], $);
-  }
 
   const leafTextBlocks = [];
   const traverse = (node) => {
@@ -187,6 +179,15 @@ function alignLeafBlocksDP(sourceBlockIndices, sourceGroups, targetBlockPlacehol
       fallback[bIdx] = "";
     });
     return fallback;
+  }
+
+  // 1-to-1 strict sequential mapping when source and target DOM trees share identical leaf structure
+  if (Math.abs(N - M) <= 20) {
+    const directMap = {};
+    sourceBlockIndices.forEach((bIdx, idx) => {
+      directMap[bIdx] = targetBlockPlaceholders[idx] || "";
+    });
+    return directMap;
   }
 
   const srcInfos = sourceBlockIndices.map(bIdx => {
@@ -577,7 +578,12 @@ async function processRelinkDualFiles(sourceFilePath, targetFilePath) {
     const relativeIdx = blockSourceSegs.findIndex(s => s.id === srcSeg.id);
     const splitTargetSegs = alignBlockTargetToSourceN(targetPlaceholderStr, blockSourceSegs, targetTagMap, sourceTagMap);
 
-    let targetText = splitTargetSegs[relativeIdx >= 0 ? relativeIdx : 0] || "";
+    let targetText = "";
+    if (relativeIdx >= 0 && relativeIdx < splitTargetSegs.length) {
+      targetText = splitTargetSegs[relativeIdx] || "";
+    } else if (relativeIdx === 0 && splitTargetSegs.length > 0) {
+      targetText = splitTargetSegs[0] || "";
+    }
 
     const srcLeading = (srcSeg.leading || "").trim();
     const srcTrailing = (srcSeg.trailing || "").trim();

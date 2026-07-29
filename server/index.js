@@ -12,6 +12,7 @@ const server = http.createServer(app);
 initSocket(server);
 
 server.listen(PORT, "0.0.0.0", () => {
+  // Updated HTML parser & sentence segmentation rules loaded
   console.log(`Server running on port ${PORT}`);
   // Start background translation queue worker
   // startQueueWorker();

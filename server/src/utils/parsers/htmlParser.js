@@ -280,7 +280,7 @@ const parseFile = async (filePath) => {
     decodeEntities: false
   });
   const segments = [];
-  let segmentIndex = 0;
+  let segmentIndex = 1; // 1-based to match DOCX parser convention (client maps id: idx+1)
 
   const tagMapGlobal = new Map();
   const tagCounter = { value: 1 };
@@ -296,8 +296,13 @@ const parseFile = async (filePath) => {
       const subSegments = splitByPunctuation(placeholderStr, tagMapGlobal);
 
       let replacementPlaceholder = "";
-      subSegments.forEach((subSeg) => {
+      subSegments.forEach((subSeg, subIdx) => {
         const segmentId = segmentIndex++;
+        // Insert a space separator between consecutive segment markers in the same block
+        // so that sentences like "Hello world. Goodbye." don't get joined as "Hello world.Goodbye."
+        if (subIdx > 0) {
+          replacementPlaceholder += " ";
+        }
         replacementPlaceholder += `__SEG_${segmentId}__`;
         const { leading, body, trailing } = extractSegmentTags(subSeg);
         segments.push({
@@ -367,25 +372,36 @@ const exportFile = async (templateBase64, segments) => {
     html = templateBase64;
   }
 
+  // Strip legacy __temp-leaf-block__ div wrappers if present in old templates
+  if (typeof html === "string" && html.includes("__temp-leaf-block__")) {
+    html = html.replace(/<div class=["']__temp-leaf-block__["']>\s*/gi, "").replace(/\s*<\/div>/gi, "");
+  }
+
   const segmentMap = new Map();
   segments.forEach((segment) => {
     const savedTags = segmentTagsMap.get(segment.id) || {};
     const leading = savedTags.leading || segment.leading || "";
     const trailing = savedTags.trailing || segment.trailing || "";
-    
-    let rawTarget = (segment.target !== undefined && segment.target !== null && segment.target.trim() !== "") 
-      ? segment.target.trim() 
-      : (segment.source || "");
+
+    // Use target if non-empty, otherwise fall back to source.
+    // Do NOT trim aggressively — spaces at segment boundaries matter for rendering.
+    const hasTarget = segment.target !== undefined && segment.target !== null && segment.target.trim() !== "";
+    let rawTarget = hasTarget ? segment.target : (segment.source || "");
+
+    // Only strip surrounding whitespace that is definitely extra (not a separator space)
+    rawTarget = rawTarget.replace(/^[\r\n]+|[\r\n]+$/g, ""); // strip only newlines, not spaces
 
     // Escape raw ampersands inside translation text (excluding tag placeholders)
     rawTarget = escapeRawAmpersands(rawTarget);
 
-    // Guard against double-tagging: strip leading/trailing tags if rawTarget already has them
-    if (leading && rawTarget.startsWith(leading.trim())) {
-      rawTarget = rawTarget.slice(leading.trim().length).trim();
+    // Guard against double-tagging: strip leading/trailing tag-placeholders if rawTarget already has them
+    const leadingTrimmed = leading.trim();
+    const trailingTrimmed = trailing.trim();
+    if (leadingTrimmed && rawTarget.startsWith(leadingTrimmed)) {
+      rawTarget = rawTarget.slice(leadingTrimmed.length);
     }
-    if (trailing && rawTarget.endsWith(trailing.trim())) {
-      rawTarget = rawTarget.slice(0, rawTarget.length - trailing.trim().length).trim();
+    if (trailingTrimmed && rawTarget.endsWith(trailingTrimmed)) {
+      rawTarget = rawTarget.slice(0, rawTarget.length - trailingTrimmed.length);
     }
 
     const fullTarget = leading + rawTarget + trailing;

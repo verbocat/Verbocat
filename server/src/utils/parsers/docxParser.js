@@ -48,14 +48,18 @@ const parseFile = async (filePath) => {
   const docXmlFiles = Object.keys(zip.files).filter(name => 
     name === 'word/document.xml' || 
     name.match(/^word\/(header|footer)\d+\.xml$/)
-  );
+  ).sort((a, b) => {
+    if (a === 'word/document.xml') return -1;
+    if (b === 'word/document.xml') return 1;
+    return a.localeCompare(b, undefined, { numeric: true });
+  });
 
   if (docXmlFiles.length === 0) {
     throw new Error('Invalid DOCX file: missing word/document.xml');
   }
 
   const segments = [];
-  let segmentId = 0;
+  let segmentId = 1;
 
   for (const xmlFile of docXmlFiles) {
     let xmlContent = await zip.file(xmlFile).async('string');
@@ -150,17 +154,54 @@ const exportFile = async (templateBase64, segments) => {
   const docXmlFiles = Object.keys(zip.files).filter(name => 
     name === 'word/document.xml' || 
     name.match(/^word\/(header|footer)\d+\.xml$/)
-  );
-
-  const segmentMap = new Map();
-  segments.forEach((seg) => {
-    const rawText = seg.target !== undefined && seg.target !== null && seg.target !== "" 
-      ? seg.target 
-      : (seg.source || "");
-    const cleanText = stripTagMarkers(rawText);
-    const numericId = Number(seg.id);
-    segmentMap.set(numericId, escapeXml(cleanText));
+  ).sort((a, b) => {
+    if (a === 'word/document.xml') return -1;
+    if (b === 'word/document.xml') return 1;
+    return a.localeCompare(b, undefined, { numeric: true });
   });
+
+  // Collect all unique placeholder IDs present in template XML files
+  const placeholderSet = new Set();
+  for (const xmlFile of docXmlFiles) {
+    const xmlContent = await zip.file(xmlFile).async('string');
+    const matches = Array.from(xmlContent.matchAll(/__SEG_(\d+)__/g));
+    matches.forEach(m => placeholderSet.add(parseInt(m[1], 10)));
+  }
+
+  const sortedPlaceholders = Array.from(placeholderSet).sort((a, b) => a - b);
+  const segmentMap = new Map();
+
+  if (sortedPlaceholders.length > 0 && segments.length > sortedPlaceholders.length) {
+    // Smart proportional mapping when segments count > template placeholders count
+    const N_placeholders = sortedPlaceholders.length;
+    const N_segments = segments.length;
+
+    sortedPlaceholders.forEach((phId, idx) => {
+      const startSeg = Math.floor(idx * N_segments / N_placeholders);
+      const endSeg = Math.floor((idx + 1) * N_segments / N_placeholders);
+      const segSlice = segments.slice(startSeg, endSeg);
+
+      const combinedText = segSlice.map(seg => {
+        const rawText = (seg.target !== undefined && seg.target !== null && seg.target !== "")
+          ? seg.target : (seg.source || "");
+        return stripTagMarkers(rawText);
+      }).filter(Boolean).join(" ");
+
+      segmentMap.set(phId, escapeXml(combinedText));
+    });
+  } else {
+    const minPlaceholder = sortedPlaceholders.length > 0 ? sortedPlaceholders[0] : 0;
+    segments.forEach((seg, arrayIdx) => {
+      const rawText = (seg.target !== undefined && seg.target !== null && seg.target !== "") 
+        ? seg.target 
+        : (seg.source || "");
+      const cleanText = stripTagMarkers(rawText);
+
+      // Align segment arrayIdx cleanly with template XML placeholders (0-indexed or 1-indexed)
+      const phKey = arrayIdx + minPlaceholder;
+      segmentMap.set(phKey, escapeXml(cleanText));
+    });
+  }
 
   for (const xmlFile of docXmlFiles) {
     let xmlContent = await zip.file(xmlFile).async('string');
