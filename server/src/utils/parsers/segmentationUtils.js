@@ -104,8 +104,8 @@ const splitByTags = (str) => {
 };
 
 // Automatically balances active tag placeholders <1>...</1> within a segment
-const balanceSegmentTags = (str) => {
-  if (!str) return str;
+const balanceSegmentTags = (str, tagMap) => {
+  if (!str || !str.includes("<")) return str;
   const tagRegex = /<\/?(\d+)>/g;
   const activeTags = [];
   const unopenedClosers = [];
@@ -122,6 +122,10 @@ const balanceSegmentTags = (str) => {
         unopenedClosers.push(id);
       }
     } else {
+      // Do not treat self-closing tags (closing tag is empty string in tagMap) as opening tags requiring closure
+      if (tagMap && tagMap.get(`</${id}>`) === "") {
+        continue;
+      }
       activeTags.push(id);
     }
   }
@@ -138,66 +142,91 @@ const balanceSegmentTags = (str) => {
 };
 
 // Helper to check net active tag depth (unmatched open tags)
-const getActiveTagDepth = (str) => {
-  if (!str) return 0;
+const getActiveTagDepth = (str, tagMap) => {
+  if (!str || !str.includes("<")) return 0;
   const tagRegex = /<\/?(\d+)>/g;
   let depth = 0;
   let match;
   while ((match = tagRegex.exec(str)) !== null) {
-    if (match[0].startsWith("</")) {
+    const fullTag = match[0];
+    const id = match[1];
+    if (fullTag.startsWith("</")) {
       depth = Math.max(0, depth - 1);
     } else {
+      if (tagMap && tagMap.get(`</${id}>`) === "") {
+        continue;
+      }
       depth++;
     }
   }
   return depth;
 };
 
-// Splits a placeholder string into natural sentence segments based on punctuation (. ! ? । ॥ \n)
-// Automatically balances active tags across split segments without dropping any prefix text or characters
+// Splits a placeholder string into natural sentence segments.
+// Uses Intl.Segmenter for language-aware, regex-free sentence detection.
+// Works correctly for all languages and all file types without hanging.
 const splitByPunctuation = (str, tagMap) => {
   if (!str || !str.trim()) return [];
 
-  // Match sentence boundary positions (. ! ? । ॥ \n) followed by whitespace, tag, or end of string
-  const regex = /(?<=[.!?।॥\r\n])(?=\s+|<\/?\d+>|$)/g;
-  const rawPieces = str.split(regex);
-
-  const sentences = [];
-  let currentAcc = "";
-
-  for (let i = 0; i < rawPieces.length; i++) {
-    const piece = rawPieces[i];
-    if (!piece) continue;
-
-    if (currentAcc) {
-      currentAcc += piece;
-    } else {
-      currentAcc = piece;
-    }
-
-    const trimmed = currentAcc.trim();
-    // Do NOT split across decimal points, version numbers (v.2, 3.1a), or common abbreviations (Mr., Dr., Jan_26/v.2, No. 2)
-    const isDecimalOrVersion = /(?:^|\s|\/|\()([A-Za-z0-9]|\d+|v)\.$/i.test(trimmed) && i < rawPieces.length - 1 && /^[a-zA-Z0-9]/.test(rawPieces[i + 1].trim());
-    const isShortAbbr = /(?:\b(?:sr|no|nos|v|vol|sec|art|cin|inc|ltd|pvt|corp|co|st|dr|mr|mrs|ms|prof|vs|e\.?\s*g|i\.?\s*e|etc|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|approx|max|min|fig|paras?|dept|assn|bldg|rs|re|inr|opp|ref|par|cl|ch|ver|sub|cl|para)\.|\b[a-z]\.)$/i.test(trimmed);
-    const isInsideTag = getActiveTagDepth(currentAcc) > 0;
-
-    if (!isDecimalOrVersion && !isShortAbbr && !isInsideTag) {
-      const balanced = balanceSegmentTags(currentAcc);
-      if (balanced && balanced.replace(/<\/?\d+>/g, "").trim().length > 0) {
-        sentences.push(balanced);
-        currentAcc = "";
-      }
-    }
+  // Fast path: no sentence-boundary characters present
+  if (!/[.!?।॥\r\n]/.test(str)) {
+    return [balanceSegmentTags(str, tagMap)];
   }
 
-  if (currentAcc) {
-    const balanced = balanceSegmentTags(currentAcc);
-    if (balanced && balanced.replace(/<\/?\d+>/g, "").trim().length > 0) {
+  // Build a mapping from clean-text positions back to original string positions.
+  // We strip placeholder tags (e.g. <1>, </2>) so the segmenter sees plain text.
+  const cleanToOrig = []; // cleanToOrig[cleanIdx] = origIdx in str
+  let cleanText = '';
+
+  for (let i = 0; i < str.length; i++) {
+    // Detect placeholder tag pattern <N> or </N>
+    if (str[i] === '<') {
+      let j = i + 1;
+      if (j < str.length && str[j] === '/') j++;
+      let numStr = '';
+      while (j < str.length && str[j] >= '0' && str[j] <= '9') {
+        numStr += str[j++];
+      }
+      if (numStr.length > 0 && j < str.length && str[j] === '>') {
+        i = j; // skip the entire placeholder tag
+        continue;
+      }
+    }
+    cleanToOrig.push(i);
+    cleanText += str[i];
+  }
+
+  // Use Intl.Segmenter for robust, language-aware sentence splitting.
+  // It correctly handles abbreviations (No., Dr., Rs.), decimal numbers (3.14),
+  // and works for all languages including Hindi, English, etc.
+  let rawSegments;
+  try {
+    const segmenter = new Intl.Segmenter(undefined, { granularity: 'sentence' });
+    rawSegments = [...segmenter.segment(cleanText)];
+  } catch (_) {
+    // If Intl.Segmenter is unavailable, treat entire block as one segment
+    return [balanceSegmentTags(str, tagMap)];
+  }
+
+  const sentences = [];
+  for (const { index, segment } of rawSegments) {
+    if (!segment.trim()) continue;
+
+    // Map clean-text boundaries back to original string positions
+    const startOrig = cleanToOrig[index] ?? 0;
+    const endCleanIdx = index + segment.length;
+    const endOrig = endCleanIdx < cleanToOrig.length
+      ? cleanToOrig[endCleanIdx]
+      : str.length;
+
+    const origSlice = str.slice(startOrig, endOrig);
+    const balanced = balanceSegmentTags(origSlice, tagMap);
+    if (balanced && balanced.replace(/<\/?[\d]+>/g, '').trim().length > 0) {
       sentences.push(balanced);
     }
   }
 
-  return sentences.length ? sentences : [balanceSegmentTags(str)];
+  return sentences.length ? sentences : [balanceSegmentTags(str, tagMap)];
 };
 
 // Replaces placeholders back with original HTML tags (handles both <N> and entity-encoded &lt;N&gt;)
@@ -214,13 +243,14 @@ const restorePlaceholders = (segmentedStr, tagMap) => {
 // Separates a segment string into leading tags, clean body, and trailing tags
 const extractSegmentTags = (str) => {
   if (!str) return { leading: "", body: "", trailing: "" };
+  if (!str.includes("<")) return { leading: "", body: str, trailing: "" };
 
   let leading = "";
   let trailing = "";
   let body = str;
 
-  // Match leading tags, spaces, and bullet points
-  const leadingRegex = /^(\s*<\/?\d+>\s*|\s+|[•\-*]\s*)+/;
+  // Match leading tags and whitespace (bullet points are translatable content and stay in the body)
+  const leadingRegex = /^(\s*<\/?\d+>\s*|\s+)+/;
   const leadingMatch = body.match(leadingRegex);
   if (leadingMatch) {
     leading = leadingMatch[0];

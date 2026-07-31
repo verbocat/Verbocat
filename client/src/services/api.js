@@ -1,7 +1,7 @@
 import axios from "axios";
 import { useUserStore } from "./userStore";
 
-const api = axios.create({
+export const api = axios.create({
   // If VITE_API_URL is set at build/runtime, use it. Otherwise use
   // an empty baseURL so requests go to the current origin.
   baseURL: import.meta.env.VITE_API_URL || ""
@@ -77,9 +77,8 @@ api.interceptors.response.use(
         console.error("Session refresh failed on 401 response:", refreshError);
       }
       
-      // If refresh fails or token is rejected, log out completely
+      // If refresh fails or token is rejected, log out cleanly
       useUserStore.getState().logout();
-      window.location.reload();
     }
     return Promise.reject(error);
   }

@@ -81,11 +81,13 @@ const xliffParser = {
 
 const getParser = (ext) => {
   switch (ext) {
-    case '.html': return htmlParser;
+    case '.html':
+    case '.htm': return htmlParser;
     case '.docx':
     case '.doc': return docxParser;
     case '.pptx': return pptxParser;
-    case '.xlsx': return xlsxParser;
+    case '.xlsx':
+    case '.csv': return xlsxParser;
     case '.txt': return txtParser;
     case '.pdf': return pdfParser;
     case '.xlf':
@@ -225,7 +227,7 @@ const exportHtml = async (fileId, segments, ext = '.html', targetLang = 'hi', te
 
   // ── Combined Template Detection & Routing ────────────────────────────────
   try {
-    const rawJson = Buffer.from(data.content, 'base64').toString('utf-8');
+    const rawJson = Buffer.from(templateContent, 'base64').toString('utf-8');
     const combinedData = JSON.parse(rawJson);
     
     if (combinedData && combinedData.originalPdfBytes && combinedData.docxTemplate) {
@@ -241,9 +243,9 @@ const exportHtml = async (fileId, segments, ext = '.html', targetLang = 'hi', te
     // If it's not a JSON object, fallback to checking if it's a raw gzip PDF template
     try {
       const zlib = require('zlib');
-      const buf = Buffer.from(data.content, 'base64');
+      const buf = Buffer.from(templateContent, 'base64');
       let rawJson;
-      try { rawJson = zlib.gunzipSync(buf).toString('utf-8'); } catch (_) { rawJson = data.content; }
+      try { rawJson = zlib.gunzipSync(buf).toString('utf-8'); } catch (_) { rawJson = templateContent; }
       const templateData = JSON.parse(rawJson);
       if (templateData && templateData.pdfBytes && templateData.items) {
         parser = pdfParser;

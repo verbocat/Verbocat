@@ -1,4 +1,6 @@
-require("dotenv").config();
+const path = require("path");
+require("dotenv").config({ path: path.resolve(__dirname, "../../.env") });
+
 const { createClient } = require("@supabase/supabase-js");
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -124,17 +126,11 @@ const fetchAllSegments = async (documentId, select = "*", targetLang = null) => 
     // 1. Fetch template segments (target_lang IS NULL)
     let sourceSegments = await fetchAllSegmentsRaw(documentId, select, "source");
 
-    // Auto-resegment oversized paragraph documents in database
-    const didResegment = await resegmentDocumentInDb(documentId, sourceSegments);
-    if (didResegment) {
-      sourceSegments = await fetchAllSegmentsRaw(documentId, select, "source");
-    }
-
     // 2. Fetch target language segments
     let targetSegments = await fetchAllSegmentsRaw(documentId, select, targetLang);
 
-    // 3. If targetSegments is EMPTY or didResegment is true, clone/initialize fresh sentence segments
-    if ((!targetSegments || targetSegments.length === 0 || didResegment || targetSegments.length !== sourceSegments.length) && sourceSegments && sourceSegments.length > 0) {
+    // 3. If targetSegments is EMPTY or length mismatch, clone/initialize fresh target segments
+    if ((!targetSegments || targetSegments.length === 0 || targetSegments.length !== sourceSegments.length) && sourceSegments && sourceSegments.length > 0) {
       targetSegments = sourceSegments.map(src => ({
         ...src,
         target_lang: targetLang,
@@ -170,12 +166,7 @@ const fetchAllSegments = async (documentId, select = "*", targetLang = null) => 
     return targetSegments;
   }
 
-  let sourceSegments = await fetchAllSegmentsRaw(documentId, select, targetLang);
-  const didResegment = await resegmentDocumentInDb(documentId, sourceSegments);
-  if (didResegment) {
-    sourceSegments = await fetchAllSegmentsRaw(documentId, select, targetLang);
-  }
-  return sourceSegments;
+  return await fetchAllSegmentsRaw(documentId, select, targetLang);
 };
 
 module.exports = {

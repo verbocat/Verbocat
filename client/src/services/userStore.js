@@ -1,15 +1,25 @@
 import { create } from "zustand";
 import axios from "axios";
+import { api } from "./api";
 
 const API_URL = import.meta.env.VITE_API_URL 
   ? `${import.meta.env.VITE_API_URL}/api` 
   : "/api";
 
+const getSavedUser = () => {
+  try {
+    const saved = localStorage.getItem("centroid_user");
+    return saved ? JSON.parse(saved) : null;
+  } catch (_) {
+    return null;
+  }
+};
+
 export const useUserStore = create((set, get) => ({
   token: localStorage.getItem("centroid_token") || null,
   refreshToken: localStorage.getItem("centroid_refresh_token") || null,
   expiresAt: localStorage.getItem("centroid_expires_at") ? parseInt(localStorage.getItem("centroid_expires_at"), 10) : null,
-  user: null,
+  user: getSavedUser(),
   isAuth: !!localStorage.getItem("centroid_token"),
   loading: false,
   error: null,
@@ -19,6 +29,7 @@ export const useUserStore = create((set, get) => ({
     localStorage.setItem("centroid_token", token);
     if (refreshToken) localStorage.setItem("centroid_refresh_token", refreshToken);
     if (expiresAt) localStorage.setItem("centroid_expires_at", String(expiresAt));
+    if (user) localStorage.setItem("centroid_user", JSON.stringify(user));
     set({ token, refreshToken, expiresAt, user, isAuth: true, error: null });
   },
 
@@ -27,6 +38,7 @@ export const useUserStore = create((set, get) => ({
     localStorage.removeItem("centroid_token");
     localStorage.removeItem("centroid_refresh_token");
     localStorage.removeItem("centroid_expires_at");
+    localStorage.removeItem("centroid_user");
     set({ token: null, refreshToken: null, expiresAt: null, user: null, isAuth: false, error: null });
   },
 
@@ -35,14 +47,16 @@ export const useUserStore = create((set, get) => ({
 
   // 4. Fetch / Sync User Profile from Backend
   fetchProfile: async () => {
-    const { token, logout } = get();
+    const { token, logout, user: existingUser } = get();
     if (!token) return;
 
-    set({ loading: true, error: null });
+    // Only set full loading overlay if we don't already have cached user profile
+    if (!existingUser) {
+      set({ loading: true, error: null });
+    }
     try {
-      const response = await axios.get(`${API_URL}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await api.get("/api/auth/me");
+      localStorage.setItem("centroid_user", JSON.stringify(response.data));
       set({ user: response.data, isAuth: true, loading: false });
     } catch (err) {
       console.error("Failed to sync profile session:", err);
@@ -54,9 +68,16 @@ export const useUserStore = create((set, get) => ({
           ? (serverErr.message || JSON.stringify(serverErr))
           : (serverErr || "Session expired. Please log in again.");
         set({ error: errorText, loading: false });
+      } else if (err.response && err.response.status === 502) {
+        set({ 
+          error: "Backend server is currently restarting or unavailable (502 Bad Gateway). Retrying connection...", 
+          loading: false 
+        });
       } else {
         set({ error: "Failed to connect to authentication server", loading: false });
       }
+    } finally {
+      set({ loading: false });
     }
   }
 }));

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   ArrowLeft, FileText, Globe, Play, Pause, XCircle, RotateCcw, 
   Download, Upload, CheckCircle2, AlertCircle, Eye, Database, BarChart3, TrendingUp, Folder, Plus, Trash2, 
-  Settings, List, Activity, Calendar, User, Clock, ChevronDown, Check, Edit2, Copy, FileCode, CheckSquare, Square, RefreshCw, Users, LayoutDashboard, StickyNote, History, Sparkles, Search, LayoutGrid, ShieldCheck
+  Settings, List, Activity, Calendar, User, Clock, ChevronDown, Check, Edit2, Copy, FileCode, CheckSquare, Square, RefreshCw, Users, LayoutDashboard, StickyNote, History, Sparkles, Search, LayoutGrid, ShieldCheck, LogOut, X
 } from "lucide-react";
 import io from "socket.io-client";
 import { 
@@ -22,8 +22,9 @@ import {
   ProjectDetailsAnalyticsSkeleton 
 } from "./SkeletonLoader";
 import { ProtectedContentPanel } from "./ProtectedContentPanel";
+import { normalizeStatus, formatStatusLabel, getStatusColorClass, getStatusDotColor, STATUS_OPTIONS } from "../utils/projectStatusUtils";
 
-export default function ProjectDetails({ projectId, onBack, onOpenEditor, showToast, theme, token, onOpenSettings, userId, userRole, onOpenAdmin }) {
+export default function ProjectDetails({ projectId, onBack, onOpenEditor, showToast, theme, token, onOpenSettings, userId, userRole, onOpenAdmin, onLogout }) {
   const [project, setProject] = useState(null);
   const [files, setFiles] = useState([]);
   const [jobs, setJobs] = useState([]);
@@ -75,9 +76,21 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
 
   // Status dropdown in header
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const statusDropdownRef = useRef(null);
 
   const fileInputRef = useRef(null);
   const socketRef = useRef(null);
+
+  // Click outside to close status dropdown
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(e.target)) {
+        setShowStatusDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
 
   useEffect(() => {
     loadProjectDetails();
@@ -107,6 +120,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
       }
     };
   }, [projectId]);
+
 
   const loadProjectDetails = async () => {
     try {
@@ -162,14 +176,29 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
       for (const file of filesList) {
         current++;
         setUploadProgress({ current, total: filesList.length });
-        await uploadFileToProject(projectId, file);
+        console.log(`[FRONTEND UPLOAD DEBUG] Starting upload ${current}/${filesList.length}: name=${file.name}, size=${file.size} bytes`);
+        const uploadRes = await uploadFileToProject(projectId, file);
+        console.log(`[FRONTEND UPLOAD DEBUG] Upload succeeded for ${file.name}:`, uploadRes);
+
+        if (uploadRes && uploadRes.document) {
+          setFiles(prev => [...prev.filter(f => f.id !== uploadRes.document.id), uploadRes.document]);
+          if (uploadRes.jobs && uploadRes.jobs.length > 0) {
+            const formattedJobs = uploadRes.jobs.map(j => ({
+              ...j,
+              fileName: j.documents?.name || uploadRes.document.name
+            }));
+            setJobs(prev => [...prev.filter(j => j.document_id !== uploadRes.document.id), ...formattedJobs]);
+          }
+        }
       }
       showToast("All files uploaded and segments parsed successfully!");
       loadProjectDetails();
       loadAnalytics();
     } catch (err) {
-      console.error(err);
-      showToast(err.response?.data?.error || "Failed to upload one or more files.", "error");
+      console.error("[FRONTEND UPLOAD ERROR]", err);
+      const errMsg = err.response?.data?.error || err.response?.statusText || err.message || "Failed to upload file.";
+      alert(`UPLOAD ERROR: ${errMsg}`);
+      showToast(errMsg, "error");
     } finally {
       setIsUploading(false);
       setUploadProgress(null);
@@ -252,11 +281,16 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
 
   const handleStatusChange = async (newStatus) => {
     try {
-      showToast(`Updating status to ${newStatus}...`);
+      showToast(`Updating status to ${formatStatusLabel(newStatus)}...`);
       const updated = await updateProjectDetails(projectId, { status: newStatus });
-      setProject(updated);
+      setProject(prev => ({
+        ...prev,
+        ...updated,
+        status: newStatus,
+        settings: { ...(prev?.settings || {}), ...(updated?.settings || {}), status: newStatus }
+      }));
       setShowStatusDropdown(false);
-      showToast(`Project is now ${newStatus}`);
+      showToast(`Project status set to ${formatStatusLabel(newStatus)}!`);
       loadProjectDetails();
     } catch (err) {
       console.error(err);
@@ -453,16 +487,6 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
     return found ? found.name : code.toUpperCase();
   };
 
-  const getStatusColorClass = (status) => {
-    const cleanStatus = String(status || "").toLowerCase();
-    switch (cleanStatus) {
-      case "active": return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20";
-      case "completed": return "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20";
-      case "archived": return "bg-zinc-500/20 text-zinc-600 dark:text-zinc-400 border border-zinc-500/30";
-      default: return "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400 border border-zinc-500/20";
-    }
-  };
-
   const handleOpenLanguageSelection = (fileId, action) => {
     setOpenLangSelectFileId(fileId);
     setOpenLangAction(action);
@@ -521,45 +545,19 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
     <div className="h-screen flex flex-col bg-[var(--bg-base)] text-[var(--text-primary)]">
       
       {/* ── TOP NAV BAR & GLOBAL ACTIONS ── */}
-      <header className="border-b border-[var(--border-subtle)] bg-[var(--bg-panel)] px-8 py-3.5 flex items-center justify-between shadow-xs shrink-0">
-        <div className="flex items-center gap-4">
+      <header className="border-b border-[var(--border-subtle)] bg-[var(--bg-panel)] px-8 py-3.5 flex items-center justify-between shadow-xs shrink-0 relative z-[60]">
+        <div className="flex items-center gap-4 min-w-0">
           <button
             onClick={onBack}
-            className="flex items-center justify-center h-8 w-8 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer"
+            className="flex items-center justify-center h-8 w-8 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer shrink-0"
             title="Back to Dashboard"
           >
             <ArrowLeft size={15} />
           </button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-base font-black tracking-tight text-[var(--text-primary)]">
-                {project.name}
-              </h1>
-              
-              {/* Dynamic Status Dropdown Selector */}
-              <div className="relative">
-                <button
-                  onClick={() => setShowStatusDropdown(prev => !prev)}
-                  className={`flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full select-none cursor-pointer transition-all ${getStatusColorClass(projectStatus)}`}
-                >
-                  Status: {projectStatus} <ChevronDown size={10} />
-                </button>
-                {showStatusDropdown && (
-                  <div className="absolute left-0 mt-1.5 w-32 bg-[var(--bg-surface)] border border-[var(--border-medium)] rounded-xl py-1 shadow-2xl z-50">
-                    {["Active", "Completed", "Archived"].map((st) => (
-                      <button
-                        key={st}
-                        onClick={() => handleStatusChange(st)}
-                        className="w-full text-left px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] flex items-center justify-between cursor-pointer font-semibold"
-                      >
-                        <span>{st}</span>
-                        {projectStatus === st && <Check size={10} className="text-indigo-500" />}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+          <div className="min-w-0">
+            <h1 className="text-base font-black tracking-tight text-[var(--text-primary)] truncate max-w-md">
+              {project.name}
+            </h1>
             <div className="flex items-center gap-3 text-[11px] text-[var(--text-muted)] mt-0.5 font-medium flex-wrap">
               {project.client && (
                 <span>
@@ -640,6 +638,54 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
             <span>History</span>
           </button>
 
+          {/* Dynamic Status Dropdown Action Button */}
+          <div className="relative inline-block" ref={statusDropdownRef}>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowStatusDropdown(prev => !prev);
+              }}
+              className="project-secondary-action"
+              title="Click to change project status"
+            >
+              <span className={`w-2 h-2 rounded-full shrink-0 ${getStatusDotColor(projectStatus)}`} />
+              <span>Status: <strong className="text-[var(--text-primary)]">{formatStatusLabel(projectStatus)}</strong></span>
+              <ChevronDown size={13} className="text-[var(--text-muted)] ml-0.5" />
+            </button>
+
+            {showStatusDropdown && (
+              <div 
+                className="absolute right-0 top-full mt-1.5 w-44 bg-[var(--bg-elevated)] border border-[var(--border-medium)] rounded-2xl py-1.5 shadow-2xl z-[100] select-none backdrop-blur-md"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="px-3.5 py-1 text-[10px] font-extrabold uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--border-subtle)] mb-1">
+                  Set Project Status
+                </div>
+                {STATUS_OPTIONS.map((st) => (
+                  <button
+                    key={st.value}
+                    type="button"
+                    onClick={() => handleStatusChange(st.value)}
+                    className={`w-full text-left px-3.5 py-2 text-xs flex items-center justify-between cursor-pointer font-bold transition-colors ${
+                      normalizeStatus(projectStatus) === st.value
+                        ? "bg-indigo-500/10 text-indigo-400"
+                        : "text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${st.dotColor}`} />
+                      <span>{st.label}</span>
+                    </span>
+                    {normalizeStatus(projectStatus) === st.value && (
+                      <Check size={14} className="text-indigo-400 shrink-0 font-extrabold" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="project-divider" />
 
           <div className="project-icon-actions">
@@ -693,6 +739,16 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                 title="Project Settings"
               >
                 <Settings size={14} />
+              </button>
+            )}
+
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="project-icon-action text-[var(--text-secondary)] hover:text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/30 transition-all cursor-pointer"
+                title="Log Out"
+              >
+                <LogOut size={14} />
               </button>
             )}
           </div>
@@ -1079,35 +1135,6 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
           {/* ── TAB 2: BRAND NEW CARD-BASED FILES HUB (NO LIST / TABLE SYSTEM) ── */}
           {activeTab === "files" && (
             <div className="space-y-6 animate-[fadeIn_0.15s_ease-out] relative pb-16">
-              
-              {/* 1. Drag & Drop Document Uploader Card */}
-              <div 
-                onDragOver={(e) => { e.preventDefault(); setIsDraggingFile(true); }}
-                onDragLeave={() => setIsDraggingFile(false)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setIsDraggingFile(false);
-                  if (e.dataTransfer.files?.length) {
-                    handleFileUpload({ target: { files: e.dataTransfer.files } });
-                  }
-                }}
-                onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-3xl p-6 text-center cursor-pointer transition-all duration-300 select-none ${
-                  isDraggingFile 
-                    ? "border-indigo-500 bg-indigo-500/10 scale-[1.01]" 
-                    : "border-[var(--border-medium)] bg-[var(--bg-panel)] hover:border-indigo-500/50 hover:bg-[var(--bg-panel)]/90"
-                }`}
-              >
-                <div className="h-10 w-10 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center mx-auto mb-2.5 border border-indigo-500/20 shadow-inner">
-                  <Upload size={20} />
-                </div>
-                <h4 className="text-xs font-black text-[var(--text-primary)] tracking-wide">
-                  Click or Drag & Drop Documents to Import
-                </h4>
-                <p className="text-[11px] text-[var(--text-muted)] mt-1 font-medium max-w-md mx-auto">
-                  Automatic parsing for HTML, DOCX, XLIFF, TMX, JSON, TXT, PDF formats into translation segments
-                </p>
-              </div>
 
               {/* 2. Control Toolbar: Search, Format Filters, Status Filters, Sort Selector */}
               <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-4 space-y-3 shadow-xs">

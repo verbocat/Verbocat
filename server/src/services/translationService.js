@@ -67,13 +67,13 @@ const postProcessTranslation = (source, target, targetLang) => {
 
   // 1. List prefix protection: h. / b) / a) / r).
   // Match prefix like 'h. ', 'b) ', 'a) ', '1. ', 'r). ', '(a) '
-  const prefixRegex = /^(\(?[a-zA-Z0-9]+\)[\.\)]?\s*|^[a-zA-Z0-9]+\.\s*)/;
+  const prefixRegex = /^(\(?[a-zA-Z0-9]{1,4}\)[\.\)]?\s*|^[a-zA-Z0-9]{1,4}\.\s*)/;
   const sourceMatch = source.match(prefixRegex);
   if (sourceMatch) {
     const sourcePrefix = sourceMatch[1];
     if (!output.startsWith(sourcePrefix)) {
-      // Find what target prefix was generated (e.g. any word/characters followed by a purna-viram, dot, or bracket)
-      const targetPrefixRegex = /^(\(?[^\s]+\)[\.\।\)]?\s*|^[^\s]+[\.।]\s*)/;
+      // Only match short label prefix in target (up to 4 chars), not full translated words
+      const targetPrefixRegex = /^(\(?[a-zA-Z0-9\u0A00-\u0A7F\u0900-\u097F]{1,4}\)[\.\)]?\s*|^[a-zA-Z0-9\u0A00-\u0A7F\u0900-\u097F]{1,4}\.\s*)/;
       const targetMatch = output.match(targetPrefixRegex);
       if (targetMatch) {
         const targetPrefix = targetMatch[1];
@@ -212,32 +212,34 @@ const isPersistableProvider = (provider) =>
 
 const upsertTranslationMemoryBatch = async (rows) => {
   if (!rows || rows.length === 0) return;
-  for (const row of rows) {
-    try {
-      const { data: existing } = await supabase
-        .from("translation_memory")
-        .select("id")
-        .eq("source_text", row.source_text)
-        .eq("source_lang", row.source_lang)
-        .eq("target_lang", row.target_lang)
-        .limit(1);
+  try {
+    const { error } = await supabase
+      .from("translation_memory")
+      .upsert(rows, { onConflict: "source_text,source_lang,target_lang" });
 
-      if (existing && existing.length > 0) {
-        await supabase
+    if (error) {
+      // Fallback for tables without composite unique index
+      for (const row of rows) {
+        const { data: existing } = await supabase
           .from("translation_memory")
-          .update({
-            target_text: row.target_text,
-            provider: row.provider
-          })
-          .eq("id", existing[0].id);
-      } else {
-        await supabase
-          .from("translation_memory")
-          .insert(row);
+          .select("id")
+          .eq("source_text", row.source_text)
+          .eq("source_lang", row.source_lang)
+          .eq("target_lang", row.target_lang)
+          .limit(1);
+
+        if (existing && existing.length > 0) {
+          await supabase
+            .from("translation_memory")
+            .update({ target_text: row.target_text, provider: row.provider })
+            .eq("id", existing[0].id);
+        } else {
+          await supabase.from("translation_memory").insert(row);
+        }
       }
-    } catch (err) {
-      console.error("Error in upsertTranslationMemoryBatch:", err);
     }
+  } catch (err) {
+    console.error("Error in upsertTranslationMemoryBatch:", err);
   }
 };
 

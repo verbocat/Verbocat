@@ -10,8 +10,7 @@ export const EmptyWorkspace = ({ darkMode, onLoadProject, onOpenGlossary, onUplo
 
       <h1 className="empty-heading">Open a file to begin</h1>
       <p className="empty-sub">
-        Supports HTML, DOCX, XLIFF, and SDLXLIFF.
-        Drag and drop anywhere or click below to choose a file.
+        Supports HTML, DOCX, XLIFF, and SDLXLIFF. Click below to choose a file.
       </p>
 
       <label className="empty-primary-btn" style={{ cursor: "pointer", display: "inline-flex" }}>
@@ -27,8 +26,6 @@ export const EmptyWorkspace = ({ darkMode, onLoadProject, onOpenGlossary, onUplo
           <input type="file" accept=".json" onChange={onLoadProject} className="hidden" />
         </label>
       </div>
-
-      <p className="empty-hint">Or drag and drop a file anywhere on this page</p>
     </div>
   </div>
 );

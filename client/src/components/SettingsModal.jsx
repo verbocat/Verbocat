@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { fetchProjectDetails, updateProjectDetails } from "../services/api.js";
 import { LANGUAGES } from "../constants/languages.js";
+import { normalizeStatus, formatStatusLabel, STATUS_OPTIONS } from "../utils/projectStatusUtils.js";
 
 const Toggle = ({ on, onToggle }) => (
   <button
@@ -48,6 +49,7 @@ export const SettingsModal = ({
   const [projectSettings, setProjectSettings] = useState(null);
   const [localProjectName, setLocalProjectName] = useState("");
   const [localClientName, setLocalClientName] = useState("");
+  const [localStatus, setLocalStatus] = useState("active");
   const [localDescription, setLocalDescription] = useState("");
   const [localSourceLang, setLocalSourceLang] = useState("");
   const [localDeadline, setLocalDeadline] = useState("");
@@ -90,6 +92,7 @@ export const SettingsModal = ({
         setProjectSettings(data.project);
         setLocalProjectName(data.project.name || "");
         setLocalClientName(data.project.client || "");
+        setLocalStatus(normalizeStatus(data.project.status || data.project.settings?.status));
         setLocalDescription(data.project.description || "");
         setLocalSourceLang(data.project.source_lang || data.project.source_language || "en");
         setLocalDeadline(data.project.dueDate || data.project.deadline || data.project.settings?.dueDate || data.project.settings?.deadline || "");
@@ -121,6 +124,7 @@ export const SettingsModal = ({
         await updateProjectDetails(projectId, {
           name: localProjectName,
           client: localClientName,
+          status: localStatus,
           description: localDescription,
           sourceLanguage: localSourceLang,
           targetLanguages: projectSettings.target_languages || [],
@@ -131,7 +135,8 @@ export const SettingsModal = ({
             autoSave: localAutoSave,
             notifications: localNotifications,
             dueDate: localDeadline || null,
-            deadline: localDeadline || null
+            deadline: localDeadline || null,
+            status: localStatus
           }
         });
         if (onProjectUpdated) {
@@ -444,7 +449,7 @@ export const SettingsModal = ({
             <div>
               <span className="settings-section-label">Project Details</span>
               <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 8 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
                   <div>
                     <label style={{ display: "block", fontSize: 10, fontWeight: 700, textTransform: "uppercase", tracking: "0.05em", color: "var(--text-muted)", marginBottom: 6 }}>
                       Project Name
@@ -484,6 +489,31 @@ export const SettingsModal = ({
                         outline: "none"
                       }}
                     />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 10, fontWeight: 700, textTransform: "uppercase", tracking: "0.05em", color: "var(--text-muted)", marginBottom: 6 }}>
+                      Project Status
+                    </label>
+                    <select
+                      value={localStatus}
+                      onChange={(e) => setLocalStatus(e.target.value)}
+                      style={{
+                        width: "100%",
+                        background: "var(--bg-active)",
+                        border: "1px solid var(--border-medium)",
+                        borderRadius: 8,
+                        padding: "8px 12px",
+                        fontSize: 12.5,
+                        color: "var(--text-primary)",
+                        outline: "none"
+                      }}
+                    >
+                      {STATUS_OPTIONS.map(st => (
+                        <option key={st.value} value={st.value}>
+                          {st.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 

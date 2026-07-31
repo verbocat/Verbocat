@@ -3,7 +3,8 @@ import { LANGUAGES } from "../constants/languages.js";
 import {
   FileText, ArrowRight, Search, Filter, Sparkles, Eye,
   Save, Upload, Download, Trash2, RefreshCw, ChevronDown, Plus, Link2,
-  FolderOpen, Sliders, GitBranch, Check, BookOpen, ShieldAlert
+  FolderOpen, Sliders, GitBranch, Check, BookOpen, ShieldAlert,
+  CheckCircle2, XCircle, X
 } from "lucide-react";
 
 export const WorkspaceToolbar = ({
@@ -18,7 +19,9 @@ export const WorkspaceToolbar = ({
   lengthRestrictionEnabled, onToggleLengthRestriction,
   forbiddenTermsCount = 0, forbiddenTermsEnabled = true, onOpenForbiddenTerms,
   onAcceptAllChanges, hasTrackedChanges, onApplyGlossary,
-  isAllSelected, onToggleSelectAll, selectedCount,
+  isAllSelected, onToggleSelectAll, selectedCount = 0,
+  onTranslateSelected, onVerifySelected, onUnverifySelected,
+  onCopySourceToTargetSelected, onClearTargetSelected, onClearSelection,
   showLivePreview = false, onToggleLivePreview, isPreviewLoading = false
 }) => {
 
@@ -299,6 +302,87 @@ export const WorkspaceToolbar = ({
             <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", userSelect: "none" }}>
               Select All
             </span>
+          </div>
+        )}
+
+        {/* Selected Segments Bulk Actions Strip */}
+        {selectedCount > 0 && (
+          <div className="flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/30 px-3 py-1 rounded-xl text-xs font-bold text-indigo-400 select-none mr-3 animate-in fade-in shrink-0">
+            <span className="flex items-center gap-1 font-extrabold text-white bg-indigo-600 px-2 py-0.5 rounded-md text-[10px]">
+              {selectedCount} Selected
+            </span>
+
+            {onTranslateSelected && (
+              <button
+                type="button"
+                onClick={onTranslateSelected}
+                disabled={isTranslating}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 font-bold text-[11px] transition-all cursor-pointer border border-indigo-500/30"
+                title="Auto-translate selected segments"
+              >
+                <Sparkles size={12} />
+                <span>Translate</span>
+              </button>
+            )}
+
+            {onVerifySelected && (
+              <button
+                type="button"
+                onClick={onVerifySelected}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold text-[11px] transition-all cursor-pointer border border-emerald-500/30"
+                title="Mark selected segments as verified"
+              >
+                <CheckCircle2 size={12} />
+                <span>Verify</span>
+              </button>
+            )}
+
+            {onUnverifySelected && (
+              <button
+                type="button"
+                onClick={onUnverifySelected}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold text-[11px] transition-all cursor-pointer border border-amber-500/30"
+                title="Unverify selected segments"
+              >
+                <XCircle size={12} />
+                <span>Unverify</span>
+              </button>
+            )}
+
+            {onCopySourceToTargetSelected && (
+              <button
+                type="button"
+                onClick={onCopySourceToTargetSelected}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 font-bold text-[11px] transition-all cursor-pointer border border-blue-500/30"
+                title="Copy source text to target for selected segments"
+              >
+                <ArrowRight size={12} />
+                <span>Copy Source</span>
+              </button>
+            )}
+
+            {onClearTargetSelected && (
+              <button
+                type="button"
+                onClick={onClearTargetSelected}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-bold text-[11px] transition-all cursor-pointer border border-rose-500/30"
+                title="Clear target text for selected segments"
+              >
+                <Trash2 size={12} />
+                <span>Clear Target</span>
+              </button>
+            )}
+
+            {onClearSelection && (
+              <button
+                type="button"
+                onClick={onClearSelection}
+                className="p-1 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-white/10 transition-all cursor-pointer ml-1"
+                title="Deselect All"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
         )}
 

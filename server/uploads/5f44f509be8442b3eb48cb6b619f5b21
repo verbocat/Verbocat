@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <style>
+        @page {
+            margin: 100px 25px 180px;
+
+            @bottom-center {
+                content: element(pageFooter);
+            }
+
+            @top-right {
+                content: element(pageHeader);
+            }
+        }
+
+        h1 {
+            text-align: right;
+            margin-right: 20px;
+            margin-top: 40px;
+        }
+
+        h2 {
+            text-align: center;
+        }
+
+        h3 {
+            text-align: center;
+        }
+
+        .annexABC-table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: auto;
+            table-layout: auto;
+        }
+
+        .first-col {
+            width: 4%;
+            text-align: center;
+            border: 1px solid black;
+            word-wrap: break-word;
+        }
+
+        .second-col {
+            width: 15%;
+            padding: 5px;
+            border: 1px solid black;
+            text-align: left;
+            word-wrap: break-word;
+        }
+
+        .parent_loan_col {
+            width: 20%;
+            padding: 5px;
+            border: 1px solid black;
+            text-align: left;
+            word-wrap: break-word;
+        }
+
+        .top_up_col, .insurance_col, .total_col{
+            width: 20%;
+            padding: 5px;
+            border: 1px solid black;
+            text-align: left;
+            word-wrap: break-word;
+        }
+
+        .half_col {
+            width: 50%;
+            padding: 5px;
+        }
+        .page-break {
+            page-break-before: always;
+        }
+
+        #pageFooter {
+            position: running(pageFooter);
+            text-align: center;
+            padding-bottom: 100px;
+            width: 100%;
+        }
+
+        #pageFooter table {
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        #pageHeader {
+            position: running(pageHeader);
+            text-align: right;
+            padding-bottom: 60px;
+        }
+    </style>
+</head>
+
+<body>
+<header id="pageHeader"> <img src="https://cdn.pchf.in/logos/piramal_company_logo.png" height="150px"
+                              width="auto" />
+</header>
+<h1>Annex A</h1>
+<h2>Key Facts and Statements</h2>
+<h3>Part 1 (Interest rate and fees/charges)</h3>
+<table class="annexABC-table">
+    <tr style="font-weight: bold;">
+        <td class="half_col" style="text-align: left;" >
+            Generated Date: <span th:text="${generatedDate}"></span>
+        </td>
+        <td class="half_col" style="text-align: right;">
+            Validity: 3 Days
+        </td>
+    </tr>
+</table>
+
+<br />
+<table class="annexABC-table">
+    <tr style="text-align:left; padding-left:5px; font-weight: bold;">
+        <th class="first-col">Sr No.</th>
+        <th class="second-col">Particulars</th>
+        <th class="parent_loan_col">Details</th>
+        <th class="top_up_col" th:if="${top_up_applicable}">Top Up Details</th>
+        <th class="insurance_col" th:if="${insurance_child_loan_applicable}">Insurance Details</th>
+    </tr>
+    <tr>
+        <td class="first-col">1</td>
+        <td class="second-col" style="font-weight: bold;">Loan Proposal/Account No.</td>
+        <td class="parent_loan_col" th:text="${loanAccountNo}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}" th:text="${top_up_leadId}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" th:text="${insurance_leadId}"></td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col" style="font-weight: bold;">Type of Loan</td>
+        <td class="parent_loan_col">Housing Loan</td>
+        <td class="top_up_col" th:if="${top_up_applicable}">Top Up Loan</td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}">Insurance Loan</td>
+    </tr>
+
+    <tr>
+        <td class="first-col">2</td>
+        <td class="second-col" style="font-weight: bold;">Sanctioned Loan Amount (in
+            Rupees)</td>
+        <td class="parent_loan_col">₹ <span th:text="${loanAmount}"></span></td>
+        <td class="top_up_col" th:if="${top_up_applicable}" th:text="${top_up_amount}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" th:text="${insurance_amount}">
+        </td>
+    </tr>
+
+    <tr>
+        <td class="first-col">3</td>
+        <td class="second-col">
+            <b>Disbursal Schedule</b> <br />
+            (i) Disbursement in stages or 100% upfront.<br />
+            (ii) Disbursement in stages, specify stages and amount at each stage.
+        </td>
+        <td class="parent_loan_col" th:text="${disbursal100orNot}">
+        </td>
+        <td class="top_up_col" th:if="${top_up_applicable}" th:text="${disbursal100orNot}">
+        </td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" th:text="${disbursal100orNot}">
+        </td>
+    </tr>
+
+    <tr>
+        <td class="first-col">4</td>
+        <td class="second-col" style="font-weight: bold;">Loan term (year/months/days)
+        </td>
+        <td class="parent_loan_col"><span th:text="${loanTerm}"></span></td>
+        <td class="top_up_col" th:if="${top_up_applicable}" th:text="${top_up_tenor}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" th:text="${insurance_tenor}">
+        </td>
+    </tr>
+
+    <tr th:if="${tenureSplitList != null}" th:each="tenure, iterStat : ${tenureSplitList}">
+        <td class="first-col" th:if="${tenureSplitList != null}"></td>
+        <td class="second-col" th:if="${tenureSplitList != null}"><span th:text="${iterStat.index + 1} + ' Period'"></span></td>
+        <td class="parent_loan_col" th:if="${tenureSplitList != null}"><span th:text="${tenure}"></span></td>
+        <td class="top_up_col" th:if="${top_up_applicable and tenureSplitList != null}" th:text="${tenure}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable and tenureSplitList != null}" th:text="${tenure}"></td>
+    </tr>
+
+    <tr>
+        <td class="first-col">5</td>
+        <td colspan="2" style="font-weight: bold;">Instalment details</td>
+    </tr>
+
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">Type of Instalments</td>
+        <td class="parent_loan_col" th:text="${instalmentType}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}" th:text="${instalmentType}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" th:text="${instalmentType}"></td>
+    </tr>
+
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">Number of EMIs</td>
+        <td class="parent_loan_col" th:text="${loanTerm}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}" th:text="${top_up_tenor}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" th:text="${insurance_tenor}">
+        </td>
+    </tr>
+
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col"> EMI(in Rupees)</td>
+        <td class="parent_loan_col" th:if="${tenureSplitList == null}">₹ <span th:text="${emi}"></span></td>
+        <td class="top_up_col" th:if="${top_up_applicable and tenureSplitList == null}" th:text="${top_up_emi}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable and tenureSplitList == null}" th:text="${insurance_emi}"></td>
+
+        <td class="parent_loan_col" th:if="${tenureSplitList != null}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable and tenureSplitList != null}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable and tenureSplitList != null}"></td>
+    </tr>
+
+    <tr th:if="${tenureSplitList != null}" th:each="tenure, iterStat : ${tenureSplitList}">
+        <td class="first-col"></td>
+        <td class="second-col"><span style="padding: 2px"
+                                     th:text="${iterStat.index == 0 ? 'First ' + tenure + ' months'
+                                                        : (iterStat.index == tenureSplitList.size() - 1
+                                                            ? 'Remaining ' + tenure + ' months'
+                                                            : 'Next ' + tenure + ' months')}"></span></td>
+        <td class="parent_loan_col" th:if="${primaryEmiSplitList != null and !#lists.isEmpty(primaryEmiSplitList)}">₹ <span th:text="${primaryEmiSplitList[iterStat.index]}"></span></td>
+        <td class="top_up_col" th:if="${top_up_applicable and topUpLoanEmiSplit != null and !#lists.isEmpty(topUpLoanEmiSplit)}" th:text="${topUpLoanEmiSplit[iterStat.index]}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable and insuranceEmiSplit != null and !#lists.isEmpty(insuranceEmiSplit)}" th:text="${insuranceEmiSplit[iterStat.index]}"></td>
+    </tr>
+
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">Commencement of repayment, post sanction</td>
+        <td class="parent_loan_col">5th of every month</td>
+        <td class="top_up_col" th:if="${top_up_applicable}">5th of every month</td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}">5th of every month</td>
+    </tr>
+    <tr>
+        <td class="first-col">6</td>
+        <td class="second-col" style="font-weight: bold;">Interest rate (%)</td>
+        <td class="parent_loan_col"><span th:text="${roi}"></span>% p.a</td>
+        <td class="top_up_col" th:if="${top_up_applicable}"><span th:text="${top_up_roi}"></span>% p.a</td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}"><span th:text="${insurance_roi}"></span>% p.a</td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col" style="font-weight: bold;">Interest Type (Fixed/Floating)</td>
+        <td class="parent_loan_col" th:text="${interestRateType}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}" th:text="${interestRateType}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" th:text="${interestRateType}"></td>
+    </tr>
+
+    <tr>
+        <td class="first-col">7</td>
+        <td colspan="2" style="font-weight: bold;">Additional Information in case
+            of Floating rate of interest</td>
+    </tr>
+
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">Reference Benchmark</td>
+        <td class="parent_loan_col" th:text="${referenceBenchmark}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}" th:text="${referenceBenchmark}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" th:text="${referenceBenchmark}"></td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">Benchmark rate (%) (B)</td>
+        <td class="parent_loan_col" th:text="${benchmarkRate}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}" th:text="${benchmarkRate}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" th:text="${benchmarkRate}"></td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">Spread (%) (S)</td>
+        <td class="parent_loan_col" th:text="${spreadRate}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}" th:text="${spreadRate}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" th:text="${spreadRate}"></td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">Final rate (%)
+            R = (B) + (S)</td>
+        <td class="parent_loan_col" th:text="${finalRate}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}" th:text="${finalRate}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" th:text="${finalRate}"></td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">Reset periodicity
+            (Months)</td>
+        <td class="parent_loan_col" th:text="${resetPeriodicity}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}" th:text="${resetPeriodicity}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" th:text="${resetPeriodicity}"></td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">Impact of change in the reference benchmark <br />
+            (for 25 bps)</td>
+        <td class="parent_loan_col" th:text="${benchmarkImpact}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}" th:text="${benchmarkImpact}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" th:text="${benchmarkImpact}"></td>
+    </tr>
+
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">Change in EMI(in Rupees)</td>
+        <td class="parent_loan_col" th:text="${benchmarkEmi}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}" th:text="${top_up_benchmarkEmi}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" th:text="${insurance_benchmarkEmi}"></td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">Change in No. of EMIs</td>
+        <td class="parent_loan_col" th:text="${benchmarkTenure}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}" th:text="${top_up_benchmarkTenure}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" th:text="${insurance_benchmarkTenure}"></td>
+    </tr>
+
+    <tr>
+        <td class="first-col">8</td>
+        <td colspan="2" style="font-weight: bold;">Fee/Charges</td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col" style="font-weight: bold;">1. Payable to PFL (A)</td>
+        <td class="parent_loan_col" th:text="${payableToREA}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">(i)</td>
+        <td class="second-col">Login Fee (One-time)</td>
+        <td class="parent_loan_col" th:text="${loginFees}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">(ii)</td>
+        <td class="second-col">Admin Charges (One-time)</td>
+        <td class="parent_loan_col" th:text="${adminFees}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">(iii)</td>
+        <td class="second-col">Processing Fees (One-time)</td>
+        <td class="parent_loan_col">₹ <span th:text="${processingFees}"></span></td>
+        <td class="top_up_col" th:if="${top_up_applicable}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">(iv)</td>
+        <td class="second-col">Stamp Duty Charges</td>
+        <td class="parent_loan_col" th:text="${stampDutyChargesForKfs}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}">
+        </td>
+    </tr>
+    <tr>
+        <td class="first-col">(v)</td>
+        <td class="second-col">Stamp Duty Service Charges</td>
+        <td class="parent_loan_col" th:text="${stampDutyServiceCharge}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}">
+        </td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col" style="font-weight: bold;">2. Payable to a third party through PFL (B)</td>
+        <td class="parent_loan_col" th:text="${payableToREBDisplay}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">(i)</td>
+        <td class="second-col">Valuation Fees (One-time)</td>
+        <td class="parent_loan_col" th:text="${valuationFees}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">(ii)</td>
+        <td class="second-col">CERSAI Charges (One-time)</td>
+        <td class="parent_loan_col" th:text="${cersaiCharges}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">(iii)</td>
+        <td class="second-col">Insurance Charges (One-time)</td>
+        <td class="parent_loan_col" th:text="${insuranceCharges}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">(iv)</td>
+        <td class="second-col">MG Fees</td>
+        <td class="parent_loan_col" th:text="${mgFees}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">(v)</td>
+        <td class="second-col">CIBIL Charges</td>
+        <td class="parent_loan_col" th:text="${cibilCharges}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">9</td>
+        <td class="second-col" style="font-weight: bold;">Annual Percentage Rate (APR)
+            (%)</td>
+        <td class="parent_loan_col" th:text="${apr}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}" th:text="${top_up_apr}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" th:text="${insurance_apr}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">10</td>
+        <td style="font-weight: bold;">Details of Contingent Charges
+            (in Rupees or %, as applicable)</td>
+    </tr>
+    <tr>
+        <td class="first-col">(i)</td>
+        <td class="second-col">Penal Charges, if any, in case of delayed payment
+        </td>
+        <td class="parent_loan_col" style="text-align: justify;">
+            24% per annum i.e. 2% p.m. on default of Installment/ EMI from the date of default till the date of
+            actual payment
+        </td>
+        <td class="top_up_col" th:if="${top_up_applicable}" style="text-align: justify;">
+            24% per annum i.e. 2% p.m. on default of Installment/ EMI from the date of default till the date of
+            actual payment
+        </td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" style="text-align: justify;">
+            24% per annum i.e. 2% p.m. on default of Installment/ EMI from the date of default till the date of
+            actual payment
+        </td>
+    </tr>
+    <tr>
+        <td class="first-col">(ii)</td>
+        <td class="second-col">Other Penal Charges, if any</td>
+        <td class="parent_loan_col" style="text-align: justify;">
+            2% p.m. on Outstanding Amount for the non-compliance of the terms and conditions of the Transaction
+            Documents as detailed below by the Borrower, for the period beginning the date of such non-compliance
+            until the same is cured to the satisfaction of the Lender
+        </td>
+        <td class="top_up_col" th:if="${top_up_applicable}" style="text-align: justify;">
+            2% p.m. on Outstanding Amount for the non-compliance of the terms and conditions of the Transaction
+            Documents as detailed below by the Borrower, for the period beginning the date of such non-compliance
+            until the same is cured to the satisfaction of the Lender
+        </td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" style="text-align: justify;">
+            2% p.m. on Outstanding Amount for the non-compliance of the terms and conditions of the Transaction
+            Documents as detailed below by the Borrower, for the period beginning the date of such non-compliance
+            until the same is cured to the satisfaction of the Lender
+        </td>
+    </tr>
+    <tr>
+        <td class="first-col">(iii)</td>
+        <td class="second-col">Part Payment/Pre-closure charges</td>
+        <td class="parent_loan_col" style="text-align: justify;">
+            <ul th:if="${isMortgageForeclosureChangesApplicable}!=true">
+                <li style="text-align: left;">Fixed rate HL: 2% of principal of loan being prepaid + applicable taxes</li>
+                <li style="text-align: left;">NHL for business purpose (individual): 4% of principal of loan being prepaid + applicable taxes</li>
+                <li style="text-align: left;">NHL by non-individual: 4% of principal of loan being prepaid + applicable taxes</li>
+            </ul>
+            <div th:if="${isMortgageForeclosureChangesApplicable == true}">
+                <ul>
+                    <li>Loans availed by Individual Borrower and / or Micro &amp; Small Enterprises (MSEs) at Floating Rate of Interest: <b>No prepayment or part-payment charges. (Housing Loans &amp; Non-Housing Loans)</b></li>
+                    <li>Loans availed by Non-Individuals (Other than MSEs) at Floating Rate of Interest: <b>4% of the principal amount being prepaid, plus applicable taxes. (Housing Loans &amp; Non-Housing Loans)</b></li>
+                    <li>Loans availed by Individuals at Fixed Rate of Interest: <b>2% of the principal amount being prepaid, plus applicable taxes. (Housing Loans)</b></li>
+                    <li>Loans availed by Individuals at Fixed Rate of Interest: <b>4% of the principal amount being prepaid, plus applicable taxes. (Non-Housing Loans)</b></li>
+                    <li>Loans availed by Non-Individuals at Fixed Rate of Interest: <b>4% of the principal amount being prepaid, plus applicable taxes. (Housing Loans &amp; Non-Housing Loans)</b></li>
+                </ul>
+                <div>
+                    <b>Part-Payment Terms:</b> The borrower may make part-payments towards the outstanding principal only once in a calendar month. Each such part-payment amount should exceed one (1) Equated Monthly Instalment (EMI) else any amount less than or equal to one (1) EMI shall be treated as an advance EMI and shall not be considered as a part-payment towards reduction of the principal.
+                </div>
+            </div>
+        </td>
+        <td class="top_up_col" th:if="${top_up_applicable}" style="text-align: justify;">
+            <ul th:if="${isMortgageForeclosureChangesApplicable}!=true">
+                <li>Fixed rate HL: 2% of principal of loan being prepaid + applicable taxes</li>
+                <li>NHL for business purpose (individual): 4% of principal of loan being prepaid + applicable taxes</li>
+                <li>NHL by non-individual: 4% of principal of loan being prepaid + applicable taxes</li>
+            </ul>
+            <div th:if="${isMortgageForeclosureChangesApplicable == true}">
+                <ul>
+                    <li>Loans availed by Individual Borrower and / or Micro &amp; Small Enterprises (MSEs) at Floating Rate of Interest: <b>No prepayment or part-payment charges. (Housing Loans &amp; Non-Housing Loans)</b></li>
+                    <li>Loans availed by Non-Individuals (Other than MSEs) at Floating Rate of Interest: <b>4% of the principal amount being prepaid, plus applicable taxes. (Housing Loans &amp; Non-Housing Loans)</b></li>
+                    <li>Loans availed by Individuals at Fixed Rate of Interest: <b>2% of the principal amount being prepaid, plus applicable taxes. (Housing Loans)</b></li>
+                    <li>Loans availed by Individuals at Fixed Rate of Interest: <b>4% of the principal amount being prepaid, plus applicable taxes. (Non-Housing Loans)</b></li>
+                    <li>Loans availed by Non-Individuals at Fixed Rate of Interest: <b>4% of the principal amount being prepaid, plus applicable taxes. (Housing Loans &amp; Non-Housing Loans)</b></li>
+                </ul>
+                <div>
+                    <b>Part-Payment Terms:</b> The borrower may make part-payments towards the outstanding principal only once in a calendar month. Each such part-payment amount should exceed one (1) Equated Monthly Instalment (EMI) else any amount less than or equal to one (1) EMI shall be treated as an advance EMI and shall not be considered as a part-payment towards reduction of the principal.
+                </div>
+            </div>
+        </td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" style="text-align: justify;">
+            <ul th:if="${isMortgageForeclosureChangesApplicable}!=true">
+                <li>Fixed rate HL: 2% of principal of loan being prepaid + applicable taxes</li>
+                <li>NHL for business purpose (individual): 4% of principal of loan being prepaid + applicable taxes</li>
+                <li>NHL by non-individual: 4% of principal of loan being prepaid + applicable taxes</li>
+            </ul>
+            <div th:if="${isMortgageForeclosureChangesApplicable == true}">
+                <ul>
+                    <li>Loans availed by Individual Borrower and / or Micro &amp; Small Enterprises (MSEs) at Floating Rate of Interest: <b>No prepayment or part-payment charges. (Housing Loans &amp; Non-Housing Loans)</b></li>
+                    <li>Loans availed by Non-Individuals (Other than MSEs) at Floating Rate of Interest: <b>4% of the principal amount being prepaid, plus applicable taxes. (Housing Loans &amp; Non-Housing Loans)</b></li>
+                    <li>Loans availed by Individuals at Fixed Rate of Interest: <b>2% of the principal amount being prepaid, plus applicable taxes. (Housing Loans)</b></li>
+                    <li>Loans availed by Individuals at Fixed Rate of Interest: <b>4% of the principal amount being prepaid, plus applicable taxes. (Non-Housing Loans)</b></li>
+                    <li>Loans availed by Non-Individuals at Fixed Rate of Interest: <b>4% of the principal amount being prepaid, plus applicable taxes. (Housing Loans &amp; Non-Housing Loans)</b></li>
+                </ul>
+                <div>
+                    <b>Part-Payment Terms:</b> The borrower may make part-payments towards the outstanding principal only once in a calendar month. Each such part-payment amount should exceed one (1) Equated Monthly Instalment (EMI) else any amount less than or equal to one (1) EMI shall be treated as an advance EMI and shall not be considered as a part-payment towards reduction of the principal.
+                </div>
+            </div>
+        </td>
+    </tr>
+    <tr>
+        <td class="first-col">(iv)</td>
+        <td class="second-col">Charges for switching of loans from floating to fixed rate and vice versa</td>
+        <td class="parent_loan_col" style="text-align: justify;">
+            Up to 1% of principal outstanding + applicable taxes.
+        </td>
+        <td class="top_up_col" th:if="${top_up_applicable}" style="text-align: justify;">
+            Up to 1% of principal outstanding + applicable taxes.
+        </td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" style="text-align: justify;">
+            Up to 1% of principal outstanding + applicable taxes.
+        </td>
+    </tr>
+    <tr>
+        <td class="first-col">(v)</td>
+        <td class="second-col">Any other charges, please specify</td>
+        <td class="parent_loan_col" style="text-align: justify;">
+            -
+        </td>
+        <td class="top_up_col" th:if="${top_up_applicable}" style="text-align: justify;">
+            -
+        </td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" style="text-align: justify;">
+            -
+        </td>
+    </tr>
+</table>
+<br />
+
+<h2>Part 2 (Other qualitative information)</h2>
+
+
+<table class="annexABC-table">
+    <tr>
+        <td class="first-col">1</td>
+        <td class="second-col">Clause of Loan agreement relating to
+            engagement of recovery agents</td>
+        <td class="parent_loan_col" style="text-align: justify;">
+            The Borrower expressly recognises and accepts that the Lender shall, without prejudice to its right to
+            perform such activities itself or through its officers or servants, be absolutely entitled and have full
+            powers and authority to appoint &amp;engage at the cost &amp;expenses of the Borrower a recovery agent
+            of the Lender’s choice to assist in the recovery of any Outstanding Amounts due under this Agreement, to
+            visit the premises of the Borrower whether residential or office or otherwise, collect on behalf of the
+            Lender all unpaid dues, getting or verifying any information of the Borrower/ their assets and to
+            perform and execute all act(s), deed(s), matter(s) and thing(s) connected therewith or incidental
+            thereto including sending notices of demand, or otherwise contacting the Borrower, receiving the
+            outstanding (in cash/through bank draft/cheque) from the Borrower, and to perform and execute all lawful
+            acts, deeds, matters and things connected herewith or incidental hereto as the recovery agent may
+            consider appropriate for the purpose.
+            The Borrower expressly agrees that in the event of Lender appointing an agent as aforesaid, the Lender
+            shall be entitled to provide the information held by the Lender in relation to the Borrower/guarantor
+            &amp;Loan to such agent and the Borrower shall co-operate with such agent appointed by the Lender in the
+            same manner as it would with the Lender in terms of this Agreement.
+        </td>
+        <td class="top_up_col" th:if="${top_up_applicable}" style="text-align: justify;">
+            The Borrower expressly recognises and accepts that the Lender shall, without prejudice to its right to
+            perform such activities itself or through its officers or servants, be absolutely entitled and have full
+            powers and authority to appoint &amp;engage at the cost &amp;expenses of the Borrower a recovery agent
+            of the Lender’s choice to assist in the recovery of any Outstanding Amounts due under this Agreement, to
+            visit the premises of the Borrower whether residential or office or otherwise, collect on behalf of the
+            Lender all unpaid dues, getting or verifying any information of the Borrower/ their assets and to
+            perform and execute all act(s), deed(s), matter(s) and thing(s) connected therewith or incidental
+            thereto including sending notices of demand, or otherwise contacting the Borrower, receiving the
+            outstanding (in cash/through bank draft/cheque) from the Borrower, and to perform and execute all lawful
+            acts, deeds, matters and things connected herewith or incidental hereto as the recovery agent may
+            consider appropriate for the purpose.
+            The Borrower expressly agrees that in the event of Lender appointing an agent as aforesaid, the Lender
+            shall be entitled to provide the information held by the Lender in relation to the Borrower/guarantor
+            &amp;Loan to such agent and the Borrower shall co-operate with such agent appointed by the Lender in the
+            same manner as it would with the Lender in terms of this Agreement.
+        </td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" style="text-align: justify;">
+            The Borrower expressly recognises and accepts that the Lender shall, without prejudice to its right to
+            perform such activities itself or through its officers or servants, be absolutely entitled and have full
+            powers and authority to appoint &amp;engage at the cost &amp;expenses of the Borrower a recovery agent
+            of the Lender’s choice to assist in the recovery of any Outstanding Amounts due under this Agreement, to
+            visit the premises of the Borrower whether residential or office or otherwise, collect on behalf of the
+            Lender all unpaid dues, getting or verifying any information of the Borrower/ their assets and to
+            perform and execute all act(s), deed(s), matter(s) and thing(s) connected therewith or incidental
+            thereto including sending notices of demand, or otherwise contacting the Borrower, receiving the
+            outstanding (in cash/through bank draft/cheque) from the Borrower, and to perform and execute all lawful
+            acts, deeds, matters and things connected herewith or incidental hereto as the recovery agent may
+            consider appropriate for the purpose.
+            The Borrower expressly agrees that in the event of Lender appointing an agent as aforesaid, the Lender
+            shall be entitled to provide the information held by the Lender in relation to the Borrower/guarantor
+            &amp;Loan to such agent and the Borrower shall co-operate with such agent appointed by the Lender in the
+            same manner as it would with the Lender in terms of this Agreement.
+        </td>
+    </tr>
+    <tr>
+        <td class="first-col">2</td>
+        <td class="second-col">Clause of Loan agreement which details
+            grievance redressal mechanism</td>
+        <td class="parent_loan_col" style="text-align: justify;">Grievance Redressal:
+            There can be instances where the Borrower is not satisfied with the services provided. To highlight such
+            instances &amp;register a complaint the Borrower may follow the following process:
+            The Borrower may raise his / her complaint through Toll free number mentioned on www.piramalfinance.com
+            or email to customercare@piramal.com or contact the Branch Operations Manager of the respective dealing
+            branch within working hours as mentioned on the website
+            If the Borrower is not satisfied with the resolution provided or his/her queries are not solved within
+            15 days, the Borrower may escalate to:grievances@piramal.com.
+            In case the concern remains unresolved beyond a period of 15 days, the Borrower may escalate the matter
+            to “The Nodal Officer”, Piramal Finance Limited (Formerly known as Piramal Capital &amp; Housing Finance Limited), 1st Floor, Piramal
+            Amiti Building, Piramal Agastya Corporate Park, Kamani Junction, Opp. Fire Station, LBS Marg, Kurla
+            (West), Mumbai - 400 070. Email : <a
+                    href="mailto:nodal.officer@piramal.com">nodal.officer@piramal.com</a>, Contact No: 022-71740555
+            In case of non-addressal of the complaint to the customer’s satisfaction, within a period of 30 days
+            from the above quarters, the Borrower may approach the RBI CMS portal by  lodging a complaint online at the given link  https://cms.rbi.org.in or may write to below mentioned address :
+            Centralised Receipt and Processing Centre, Reserve Bank of India, 4th Floor, Sector 17, Chandigarh – 160017, Toll Free No. 14448.</td>
+        <td class="top_up_col" th:if="${top_up_applicable}" style="text-align: justify;">Grievance Redressal:
+            There can be instances where the Borrower is not satisfied with the services provided. To highlight such
+            instances &amp;register a complaint the Borrower may follow the following process:
+            The Borrower may raise his / her complaint through Toll free number mentioned on www.piramalfinance.com
+            or email to customercare@piramal.com or contact the Branch Operations Manager of the respective dealing
+            branch within working hours as mentioned on the website
+            If the Borrower is not satisfied with the resolution provided or his/her queries are not solved within
+            15 days, the Borrower may escalate to:grievances@piramal.com.
+            In case the concern remains unresolved beyond a period of 15 days, the Borrower may escalate the matter
+            to “The Nodal Officer”, Piramal Finance Limited (Formerly known as Piramal Capital &amp; Housing Finance Limited), 1st Floor, Piramal
+            Amiti Building, Piramal Agastya Corporate Park, Kamani Junction, Opp. Fire Station, LBS Marg, Kurla
+            (West), Mumbai - 400 070. Email : <a
+                    href="mailto:nodal.officer@piramal.com">nodal.officer@piramal.com</a>, Contact No: 022-71740555
+            In case of non-addressal of the complaint to the customer’s satisfaction, within a period of 30 days
+            from the above quarters, the Borrower may approach the RBI CMS portal by lodging a complaint online at the given link  https://cms.rbi.org.in or may write to below mentioned address :
+            Centralised Receipt and Processing Centre, Reserve Bank of India, 4th Floor, Sector 17, Chandigarh – 160017, Toll Free No. 14448.</td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" style="text-align: justify;">Grievance Redressal:
+            There can be instances where the Borrower is not satisfied with the services provided. To highlight such
+            instances &amp;register a complaint the Borrower may follow the following process:
+            The Borrower may raise his / her complaint through Toll free number mentioned on www.piramalfinance.com
+            or email to customercare@piramal.com or contact the Branch Operations Manager of the respective dealing
+            branch within working hours as mentioned on the website
+            If the Borrower is not satisfied with the resolution provided or his/her queries are not solved within
+            15 days, the Borrower may escalate to:grievances@piramal.com.
+            In case the concern remains unresolved beyond a period of 15 days, the Borrower may escalate the matter
+            to “The Nodal Officer”, Piramal Finance Limited (Formerly known as Piramal Capital &amp; Housing Finance Limited), 1st Floor, Piramal
+            Amiti Building, Piramal Agastya Corporate Park, Kamani Junction, Opp. Fire Station, LBS Marg, Kurla
+            (West), Mumbai - 400 070. Email : <a
+                    href="mailto:nodal.officer@piramal.com">nodal.officer@piramal.com</a>, Contact No: 022-71740555
+            In case of non-addressal of the complaint to the customer’s satisfaction, within a period of 30 days
+            from the above quarters, the Borrower may approach the RBI CMS portal by lodging a complaint online at the given link  https://cms.rbi.org.in or may write to below mentioned address :
+            Centralised Receipt and Processing Centre, Reserve Bank of India, 4th Floor, Sector 17, Chandigarh – 160017, Toll Free No. 14448.</td>
+    </tr>
+    <tr>
+        <td class="first-col">3</td>
+        <td class="second-col">Phone number and email id of the nodal
+            grievance redressal officer</td>
+        <td class="parent_loan_col" style="text-align: justify;">
+            “The Nodal Officer - Hetal Parihar”, 1st Floor, Amiti Building, Agastya Corporate Park, Kamani Junction,
+            Opp. Fire Station, LBS Marg, Kurla (West), Mumbai - 400 070. Contact details: 022-71740555, Email: <a
+                href="mailto:nodal.officer@piramal.com">nodal.officer@piramal.com</a>
+        </td>
+        <td class="top_up_col" th:if="${top_up_applicable}" style="text-align: justify;">
+            “The Nodal Officer - Hetal Parihar”, 1st Floor, Amiti Building, Agastya Corporate Park, Kamani Junction,
+            Opp. Fire Station, LBS Marg, Kurla (West), Mumbai - 400 070. Contact details: 022-71740555, Email: <a
+                href="mailto:nodal.officer@piramal.com">nodal.officer@piramal.com</a>
+        </td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" style="text-align: justify;">
+            “The Nodal Officer - Hetal Parihar”, 1st Floor, Amiti Building, Agastya Corporate Park, Kamani Junction,
+            Opp. Fire Station, LBS Marg, Kurla (West), Mumbai - 400 070. Contact details: 022-71740555, Email: <a
+                href="mailto:nodal.officer@piramal.com">nodal.officer@piramal.com</a>
+        </td>
+    </tr>
+    <tr>
+        <td class="first-col">4</td>
+        <td class="second-col">Whether the loan is, or in future maybe,
+            subject
+            to transfer to other REs or securitisation (Yes/ No)</td>
+        <td class="parent_loan_col">Yes</td>
+        <td class="top_up_col" th:if="${top_up_applicable}">Yes</td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}">Yes</td>
+    </tr>
+    <tr>
+        <td class="first-col">5</td>
+        <td class="second-col">In case of lending under collaborative lending
+            arrangements (e.g., co-lending/outsourcing),
+            following additional details may be furnished:
+        </td>
+        <td class="parent_loan_col"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}"></td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">Name of the originating RE, along with its
+            funding proportion</td>
+        <td class="parent_loan_col">NA</td>
+        <td class="top_up_col" th:if="${top_up_applicable}">NA</td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}">NA</td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">Name of the partner RE along with its
+            proportion of funding</td>
+        <td class="parent_loan_col">NA</td>
+        <td class="top_up_col" th:if="${top_up_applicable}">NA</td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}">NA</td>
+    </tr>
+    <tr>
+        <td class="first-col"></td>
+        <td class="second-col">Blended rate of interest</td>
+        <td class="parent_loan_col">NA</td>
+        <td class="top_up_col" th:if="${top_up_applicable}">NA</td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}">NA</td>
+    </tr>
+
+    <tr>
+        <td class="first-col">6</td>
+        <td class="second-col">In Case of Digital Loans</td>
+        <td class="parent_loan_col"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">(i)</td>
+        <td class="second-col">Cooling Off/Look-up Period, in Terms of RE’s Board Approved Policy</td>
+        <td class="parent_loan_col">3 days</td>
+        <td class="top_up_col" th:if="${top_up_applicable}">3 days</td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}">3 days</td>
+    </tr>
+    <tr>
+        <td class="first-col">(ii)</td>
+        <td class="second-col">Details of LSP Acting as Recovery Agent and Authorized to Approach the Borrower</td>
+        <td class="parent_loan_col">Piramal Finance Limited (Formerly known as Piramal Capital &amp; Housing Finance Limited)</td>
+        <td class="top_up_col" th:if="${top_up_applicable}">Piramal Finance Limited (Formerly known as Piramal Capital &amp; Housing Finance Limited)</td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}">Piramal Finance Limited (Formerly known as Piramal Capital &amp; Housing Finance Limited)</td>
+    </tr>
+</table>
+<br />
+<table>
+    <tr>
+        <td>The above terms and conditions have been explained to me/us and have been acknowledged &amp; understood
+            by me/us.</td>
+    </tr>
+</table>
+
+<table>
+    <tr>
+        <td>
+            Borrower Signature:
+        </td>
+
+        <td>
+            Co-Borrower Signature:
+        </td>
+
+        <td>
+            Guarantor Signature:
+        </td>
+    </tr>
+    <tr>
+        <td>
+            ______________________________
+        </td>
+
+        <td>
+            ______________________________
+        </td>
+
+        <td>
+            ______________________________
+        </td>
+    </tr>
+    <tr>
+        <td>
+            Date:
+        </td>
+
+        <td>
+            Date:
+        </td>
+
+        <td>
+            Date:
+        </td>
+    </tr>
+</table>
+
+<h1 class="page-break">Annex B</h1>
+
+<h2 style="text-align: center; font-weight: bold;">Computation of APR
+</h2>
+
+<table class="annexABC-table">
+    <tr>
+        <th class="first-col">Sr. No.</th>
+        <th class="second-col">Parameter</th>
+        <th class="parent_loan_col">Details</th>
+        <th class="top_up_col" th:if="${top_up_applicable}">Top Up Details</th>
+        <th class="insurance_col" th:if="${insurance_child_loan_applicable}">Insurance Details</th>
+        <th class="total_col" th:if="${total_detail_applicable}">Total Details</th>
+    </tr>
+    <tr>
+        <td class="first-col">1</td>
+        <td class="second-col">Sanctioned Loan Amount</td>
+        <td class="parent_loan_col">₹ <span th:text="${loanAmount}"></span></td>
+        <td class="top_up_col" th:if="${top_up_applicable}" th:text="${top_up_amount}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" th:text="${insurance_amount}"></td>
+        <td class="total_col" th:if="${total_detail_applicable}">₹ <span th:text="${total_amount}"></span></td>
+    </tr>
+    <tr>
+        <td class="first-col">2</td>
+        <td class="second-col">Loan Term</td>
+        <td class="parent_loan_col" th:text="${loanTerm}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}" th:text="${top_up_tenor}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" th:text="${insurance_tenor}"></td>
+        <td class="total_col" th:if="${total_detail_applicable}"><span th:text="${total_tenor}"></span></td>
+    </tr>
+
+    <tr th:if="${tenureSplitList != null}" th:each="tenure, iterStat : ${tenureSplitList}">
+        <td class="first-col" th:if="${tenureSplitList != null}"></td>
+        <td class="second-col" th:if="${tenureSplitList != null}"><span th:text="${iterStat.index + 1} + ' Period'"></span></td>
+        <td class="parent_loan_col" th:if="${tenureSplitList != null}"><span th:text="${tenure}"></span></td>
+        <td class="top_up_col" th:if="${top_up_applicable and tenureSplitList != null}" th:text="${tenure}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable and tenureSplitList != null}" th:text="${tenure}"></td>
+        <td class="total_col" th:if="${total_detail_applicable}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">3</td>
+        <td class="second-col">Interest Type (Fixed/Floating)</td>
+        <td class="parent_loan_col" th:text="${interestRateType}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}" th:text="${interestRateType}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" th:text="${interestRateType}"></td>
+        <td class="total_col" th:if="${total_detail_applicable}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">4</td>
+        <td class="second-col">Rate of Interest</td>
+        <td class="parent_loan_col"><span th:text="${roi}"></span>%p.a</td>
+        <td class="top_up_col" th:if="${top_up_applicable}"><span th:text="${top_up_roi}"></span>%p.a</td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}"><span
+                th:text="${insurance_roi}"></span>%p.a</td>
+        <td class="total_col" th:if="${total_detail_applicable}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">5</td>
+        <td class="second-col">Loan EMI (Monthly)</td>
+        <td class="parent_loan_col" th:if="${tenureSplitList == null}">₹ <span th:text="${emi}"></span></td>
+        <td class="top_up_col" th:if="${top_up_applicable and tenureSplitList == null}">₹ <span th:text="${top_up_emi}"></span></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable and tenureSplitList == null}">₹ <span
+                th:text="${insurance_emi}"></span></td>
+        <td class="total_col" th:if="${total_detail_applicable == true and tenureSplitList == null}">₹ <span th:text="${total_emi}"></span></td>
+
+        <td class="parent_loan_col" th:if="${tenureSplitList != null}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable and tenureSplitList != null}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable and tenureSplitList != null}"></td>
+        <td class="total_col" th:if="${total_detail_applicable == true and tenureSplitList != null}"></td>
+    </tr>
+    <tr th:if="${tenureSplitList != null}" th:each="tenure, iterStat : ${tenureSplitList}">
+        <td class="first-col"></td>
+        <td class="second-col"><span style="padding: 2px"
+                                     th:text="${iterStat.index == 0 ? 'First ' + tenure + ' months'
+                                                        : (iterStat.index == tenureSplitList.size() - 1
+                                                            ? 'Remaining ' + tenure + ' months'
+                                                            : 'Next ' + tenure + ' months')}"></span></td>
+        <td class="parent_loan_col" th:if="${primaryEmiSplitList != null and !#lists.isEmpty(primaryEmiSplitList)}">₹ <span th:text="${primaryEmiSplitList[iterStat.index]}"></span></td>
+        <td class="top_up_col" th:if="${top_up_applicable and topUpLoanEmiSplit != null and !#lists.isEmpty(topUpLoanEmiSplit)}" th:text="${topUpLoanEmiSplit[iterStat.index]}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable and insuranceEmiSplit != null and !#lists.isEmpty(insuranceEmiSplit)}" th:text="${insuranceEmiSplit[iterStat.index]}"></td>
+        <td class="total_col" th:if="${total_detail_applicable}">₹ <span th:text="${
+    (primaryEmiSplitList != null and !#lists.isEmpty(primaryEmiSplitList) ? primaryEmiSplitList[iterStat.index] : 0) +
+    (topUpLoanEmiSplit != null and !#lists.isEmpty(topUpLoanEmiSplit) ? topUpLoanEmiSplit[iterStat.index] : 0) +
+    (insuranceEmiSplit != null and !#lists.isEmpty(insuranceEmiSplit) ? insuranceEmiSplit[iterStat.index] : 0)}"></span></td>
+    </tr>
+    <tr>
+        <td class="first-col">6</td>
+        <td class="second-col">Total Interest Amount to be charged during the entire tenor of the loan as per the
+            rate prevailing on sanction date</td>
+        <td class="parent_loan_col">₹ <span th:text="${totalInterestAmount}"></span></td>
+        <td class="top_up_col" th:if="${top_up_applicable}">₹ <span th:text="${top_up_totalInterestAmount}"></span></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}">₹ <span
+                th:text="${insurance_totalInterestAmount}"></span></td>
+        <td class="total_col" th:if="${total_detail_applicable}">₹ <span th:text="${total_totalInterestAmount}"></span></td>
+    </tr>
+    <tr>
+        <td class="first-col">7</td>
+        <td class="second-col">Fee/Charges payable</td>
+        <td class="parent_loan_col">₹ <span th:text="${feesPayable}"></span></td>
+        <td class="top_up_col" th:if="${top_up_applicable}">₹0</td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}">₹ <span th:text="${insurance_feesPayable}"></span></td>
+        <td class="total_col" th:if="${total_detail_applicable}">₹ <span th:text="${total_feesPayable}"></span></td>
+    </tr>
+    <tr>
+        <td class="first-col">a)</td>
+        <td class="second-col">Payable to PFL</td>
+        <td class="parent_loan_col">₹ <span th:text="${payableToREA}"></span></td>
+        <td class="top_up_col" th:if="${top_up_applicable}">₹0</td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}">₹0</td>
+        <td class="total_col" th:if="${total_detail_applicable}">₹ <span th:text="${total_payableToREA}"></span></td>
+    </tr>
+    <tr>
+        <td class="first-col">b)</td>
+        <td class="second-col">Payable to third-party</td>
+        <td class="parent_loan_col">₹ <span th:text="${payableToREB}"></span></td>
+        <td class="top_up_col" th:if="${top_up_applicable}">₹0</td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}">₹ <span th:text="${insurance_payableToREB}"></span></td>
+        <td class="total_col" th:if="${total_detail_applicable}">₹ <span th:text="${total_payableToREB}"></span></td>
+    </tr>
+    <tr>
+        <td class="first-col">8</td>
+        <td class="second-col">Net disbursed amount</td>
+        <td class="parent_loan_col">₹ <span th:text="${netDisbursedAmount}"></span></td>
+        <td class="top_up_col" th:if="${top_up_applicable}" th:text="${top_up_netDisbursedAmount}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" th:text="${insurance_netDisbursedAmount}"></td>
+        <td class="total_col" th:if="${total_detail_applicable}">₹ <span th:text="${total_totalNetDisbursedAmount}"></span></td>
+    </tr>
+    <tr>
+        <td class="first-col">9</td>
+        <td class="second-col">Total amount to be paid by the borrower (1+5)</td>
+        <td class="parent_loan_col">₹ <span th:text="${totalAmountKfs}"></span></td>
+        <td class="top_up_col" th:if="${top_up_applicable}">₹ <span th:text="${top_up_totalAmountPaidbyBorrower}"></span></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}">₹ <span
+                th:text="${insurance_totalAmountPaidbyBorrower}"></span></td>
+        <td class="total_col" th:if="${total_detail_applicable}">₹ <span th:text="${total_totalAmountPaidbyBorrower}"></span></td>
+    </tr>
+    <tr>
+        <td class="first-col">10</td>
+        <td class="second-col">Annual Percentage rate- Effective annualized interest rate</td>
+        <td class="parent_loan_col" th:text="${apr}"></td>
+        <td class="top_up_col" th:if="${top_up_applicable}" th:text="${top_up_apr}"></td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}" th:text="NA"></td>
+        <td class="total_col" th:if="${total_detail_applicable}"><span th:text="${total_apr}"></span></td>
+    </tr>
+    <tr>
+        <td class="first-col">11</td>
+        <td class="second-col">Schedule of disbursement as per terms and conditions</td>
+        <td class="parent_loan_col">Attached as AnnexC of KFS</td>
+        <td class="top_up_col" th:if="${top_up_applicable}">Attached as AnnexC of KFS</td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}">Attached as AnnexC of KFS</td>
+        <td class="total_col" th:if="${total_detail_applicable}"></td>
+    </tr>
+    <tr>
+        <td class="first-col">12</td>
+        <td class="second-col">Due date of payment of instalment/interest</td>
+        <td class="parent_loan_col">5th of every month</td>
+        <td class="top_up_col" th:if="${top_up_applicable}">5th of every month</td>
+        <td class="insurance_col" th:if="${insurance_child_loan_applicable}">5th of every month</td>
+        <td class="total_col" th:if="${total_detail_applicable}"></td>
+    </tr>
+</table>
+
+<h1 class="page-break">Annex C</h1>
+<h2>Loan Summary</h2>
+
+<table class="annexABC-table" id="loanDetailsTable">
+    <tr>
+        <th style="border: 1px solid black;text-align: center;">Principal Amount</th>
+        <th style="border: 1px solid black;text-align: center;">Rate of Interest</th>
+        <th style="border: 1px solid black;text-align: center;">Total Interest</th>
+        <th style="border: 1px solid black;text-align: center;">Loan Term (Months)</th>
+        <th style="border: 1px solid black;text-align: center;">Monthly Payment</th>
+        <th style="border: 1px solid black;text-align: center;">Number of Payments</th>
+        <th style="border: 1px solid black;text-align: center;">Early Payments</th>
+        <th style="border: 1px solid black;text-align: center;">Lender Name</th>
+    </tr>
+    <tr>
+        <td style="border: 1px solid black;text-align: center;" th:text="${loanAmount}"></td>
+        <td style="border: 1px solid black;text-align: center;" th:text="${roi}"></td>
+        <td style="border: 1px solid black;text-align: center;" th:text="${totalInterestAmount}"></td>
+        <td style="border: 1px solid black;text-align: center;" th:text="${loanTerm}"></td>
+        <td style="border: 1px solid black;text-align: center;" th:text="${emi}"></td>
+        <td style="border: 1px solid black;text-align: center;" th:text="${loanTerm}"></td>
+        <td style="border: 1px solid black;text-align: center;">0.00</td>
+        <td style="border: 1px solid black;text-align: center;">Piramal</td>
+    </tr>
+</table>
+
+<h2>Loan Amortization Schedule</h2>
+
+<table class="annexABC-table" id="scheduleTable">
+    <tr>
+        <th style="border: 1px solid black; text-align: center;">Month</th>
+        <th style="border: 1px solid black; text-align: center;">Monthly Payment</th>
+        <th style="border: 1px solid black; text-align: center;">Principal Payment</th>
+        <th style="border: 1px solid black; text-align: center;">Interest Payment</th>
+        <th style="border: 1px solid black; text-align: center;">Remaining Balance</th>
+        <th style="border: 1px solid black; text-align: center;">Cumulative Interest</th>
+    </tr>
+    <tr th:each="row: ${rps_rows}">
+        <td style="border: 1px solid black; text-align: center;" th:each="header: ${rps_headers}"
+            th:text="${row.get(header)}">
+        </td>
+    </tr>
+</table>
+
+<h2 class="page-break" th:if="${top_up_applicable}">Top Up Loan Amortization Schedule</h2>
+<table class="annexABC-table" th:if="${top_up_applicable}" id="loanDetailsTable">
+    <tr>
+        <th style="border: 1px solid black;text-align: center;">Principal Amount</th>
+        <th style="border: 1px solid black;text-align: center;">Rate of Interest</th>
+        <th style="border: 1px solid black;text-align: center;">Total Interest</th>
+        <th style="border: 1px solid black;text-align: center;">Loan Term (Months)</th>
+        <th style="border: 1px solid black;text-align: center;">Monthly Payment</th>
+        <th style="border: 1px solid black;text-align: center;">Number of Payments</th>
+        <th style="border: 1px solid black;text-align: center;">Early Payments</th>
+        <th style="border: 1px solid black;text-align: center;">Lender Name</th>
+    </tr>
+    <tr>
+        <td style="border: 1px solid black;text-align: center;" th:text="${top_up_amount}"></td>
+        <td style="border: 1px solid black;text-align: center;" th:text="${top_up_roi}"></td>
+        <td style="border: 1px solid black;text-align: center;" th:text="${top_up_totalInterestAmount}"></td>
+        <td style="border: 1px solid black;text-align: center;" th:text="${top_up_tenor}"></td>
+        <td style="border: 1px solid black;text-align: center;" th:text="${top_up_emi}"></td>
+        <td style="border: 1px solid black;text-align: center;" th:text="${top_up_tenor}"></td>
+        <td style="border: 1px solid black;text-align: center;">0.00</td>
+        <td style="border: 1px solid black;text-align: center;">Piramal</td>
+    </tr>
+</table>
+<table class="annexABC-table" id="scheduleTable" th:if="${top_up_applicable}">
+    <tr>
+        <th style="border: 1px solid black; text-align: center;">Month</th>
+        <th style="border: 1px solid black; text-align: center;">Monthly Payment</th>
+        <th style="border: 1px solid black; text-align: center;">Principal Payment</th>
+        <th style="border: 1px solid black; text-align: center;">Interest Payment</th>
+        <th style="border: 1px solid black; text-align: center;">Remaining Balance</th>
+        <th style="border: 1px solid black; text-align: center;">Cumulative Interest</th>
+    </tr>
+    <tr th:each="row: ${top_up_rps_rows}">
+        <td style="border: 1px solid black; text-align: center;" th:each="header: ${rps_headers}"
+            th:text="${row.get(header)}">
+        </td>
+    </tr>
+</table>
+
+<h2 class="page-break" th:if="${insurance_child_loan_applicable}">Insurance Loan Amortization Schedule</h2>
+<table class="annexABC-table" th:if="${insurance_child_loan_applicable}" id="loanDetailsTable">
+    <tr>
+        <th style="border: 1px solid black;text-align: center;">Principal Amount</th>
+        <th style="border: 1px solid black;text-align: center;">Rate of Interest</th>
+        <th style="border: 1px solid black;text-align: center;">Total Interest</th>
+        <th style="border: 1px solid black;text-align: center;">Loan Term (Months)</th>
+        <th style="border: 1px solid black;text-align: center;">Monthly Payment</th>
+        <th style="border: 1px solid black;text-align: center;">Number of Payments</th>
+        <th style="border: 1px solid black;text-align: center;">Early Payments</th>
+        <th style="border: 1px solid black;text-align: center;">Lender Name</th>
+    </tr>
+    <tr>
+        <td style="border: 1px solid black;text-align: center;" th:text="${insurance_amount}"></td>
+        <td style="border: 1px solid black;text-align: center;" th:text="${insurance_roi}"></td>
+        <td style="border: 1px solid black;text-align: center;" th:text="${insurance_totalInterestAmount}"></td>
+        <td style="border: 1px solid black;text-align: center;" th:text="${insurance_tenor}"></td>
+        <td style="border: 1px solid black;text-align: center;" th:text="${insurance_emi}"></td>
+        <td style="border: 1px solid black;text-align: center;" th:text="${insurance_tenor}"></td>
+        <td style="border: 1px solid black;text-align: center;">0.00</td>
+        <td style="border: 1px solid black;text-align: center;">Piramal</td>
+    </tr>
+</table>
+<table class="annexABC-table" id="scheduleTable" th:if="${insurance_child_loan_applicable}">
+    <tr>
+        <th style="border: 1px solid black; text-align: center;">Month</th>
+        <th style="border: 1px solid black; text-align: center;">Monthly Payment</th>
+        <th style="border: 1px solid black; text-align: center;">Principal Payment</th>
+        <th style="border: 1px solid black; text-align: center;">Interest Payment</th>
+        <th style="border: 1px solid black; text-align: center;">Remaining Balance</th>
+        <th style="border: 1px solid black; text-align: center;">Cumulative Interest</th>
+    </tr>
+
+    <tr th:each="row: ${insurance_rps_rows}">
+        <td style="border: 1px solid black; text-align: center;" th:each="header: ${rps_headers}"
+            th:text="${row.get(header)}">
+        </td>
+    </tr>
+</table>
+
+<footer id="pageFooter">
+    <table>
+        <tr class="border_top">
+            <td style="text-align: center"> <span class="text-piramal-blue bold">Piramal Finance
+                        Limited</span><br />
+                <span class="text-piramal-blue bold">(Formerly known as Piramal Capital &amp; Housing Finance
+                        Limited)</span>
+                <span class="text-piramal-blue">
+                    </span><br /> <span class="text-piramal-blue">CIN :
+                        L64910MH1984PLC032639</span><br /> <span class="text-piramal-blue">Registered office: 601, 6th
+                        Floor, Amiti
+                        Building,
+                        Agastya Corporation Park, Kamani Junction,
+                    </span><br /> <span class="text-piramal-blue">Opp. Fire Station, LBS Marg, Kurla (West), Mumbai -
+                        400 070
+                    </span><br /> <span class="text-piramal-blue">Toll Free Number: 1800 2666 444</span><br /> <span
+                        style="color: #ff0000">www.piramalfinance.com | Email ID: customercare@piramal.com</span><br />
+            </td>
+        </tr>
+    </table>
+</footer>
+
+</body>
+
+</html>

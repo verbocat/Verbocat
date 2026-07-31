@@ -29,7 +29,9 @@ const getPythonEnv = () => {
   };
 };
 
+let isPdfDepsVerified = false;
 function ensureDependenciesInstalled() {
+  if (isPdfDepsVerified) return;
   const pythonCmd = getPythonCommand();
   const deps = ['fitz', 'uharfbuzz', 'fontTools', 'reportlab', 'PIL', 'requests'];
   const pipNames = ['pymupdf', 'uharfbuzz', 'fonttools', 'reportlab', 'pillow', 'requests'];
@@ -47,6 +49,7 @@ function ensureDependenciesInstalled() {
       }
     }
   }
+  isPdfDepsVerified = true;
 }
 
 const parseFile = async (filePath) => {

@@ -1,6 +1,7 @@
 const express = require("express");
 const multer = require("multer");
 const fs = require("fs");
+const path = require("path");
 const { processUploadedFile, exportHtml } = require("../services/fileService");
 const { translateSegments } = require("../services/translationService");
 const { getProviderStatus } = require("../services/translationProviders");
@@ -16,8 +17,14 @@ const {
 } = require("../utils/exporters");
 
 const apiRouter = express.Router();
+
+const uploadDir = path.join(__dirname, "../../uploads");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
 const upload = multer({
-  dest: "uploads/"
+  dest: uploadDir
 });
 
 const countWords = (text) => {
@@ -38,11 +45,23 @@ apiRouter.get("/", (request, response) => {
 
 apiRouter.post("/upload", checkAuth, upload.single("file"), async (request, response) => {
   try {
+    console.log(`\n========================================`);
+    console.log(`[SINGLE UPLOAD DEBUG] Received single file upload request:`);
+    console.log(`[SINGLE UPLOAD DEBUG] File info: name=${request.file?.originalname}, size=${request.file?.size} bytes`);
+    if (!request.file) {
+      console.error(`[SINGLE UPLOAD DEBUG ERROR] No file attached in request`);
+      return response.status(400).json({ error: "No file was uploaded." });
+    }
+
+    console.log(`[SINGLE UPLOAD DEBUG] Step 1: Parsing file with parser engine...`);
     const result = await processUploadedFile(request.file);
+    console.log(`[SINGLE UPLOAD DEBUG] Step 1 complete. Extracted ${result.segments?.length || 0} segments, documentId=${result.fileId}`);
+
     const userId = request.user.id;
-    const documentId = result.fileId; // Align documentId with the layout template ID (fileId)
+    const documentId = result.fileId; // Align documentId with layout template ID
 
     // 1. Create document record
+    console.log(`[SINGLE UPLOAD DEBUG] Step 2: Inserting document record into Supabase...`);
     const { error: docError } = await supabase
       .from("documents")
       .insert({
@@ -55,9 +74,10 @@ apiRouter.post("/upload", checkAuth, upload.single("file"), async (request, resp
       });
 
     if (docError) {
-      console.error("Failed to insert document metadata:", docError);
-      return response.status(500).json({ error: "Failed to create document record." });
+      console.error("[SINGLE UPLOAD DEBUG ERROR] Failed to insert document metadata:", docError);
+      return response.status(500).json({ error: `Failed to create document record: ${docError.message || docError.details || "Database error"}` });
     }
+    console.log(`[SINGLE UPLOAD DEBUG] Step 2 complete. Document metadata inserted.`);
 
     // 2. Persist parsed segments to the database
     const segmentInserts = result.segments.map((seg, idx) => ({
@@ -68,7 +88,7 @@ apiRouter.post("/upload", checkAuth, upload.single("file"), async (request, resp
       status: "draft"
     }));
 
-    // 2. Persist parsed segments to the database in batches of 500 for maximum throughput
+    console.log(`[SINGLE UPLOAD DEBUG] Step 3: Persisting ${segmentInserts.length} segments in DB batches...`);
     const BATCH_SIZE = 500;
     for (let i = 0; i < segmentInserts.length; i += BATCH_SIZE) {
       const batch = segmentInserts.slice(i, i + BATCH_SIZE);
@@ -77,11 +97,14 @@ apiRouter.post("/upload", checkAuth, upload.single("file"), async (request, resp
         .insert(batch);
 
       if (segError) {
-        console.error("Failed to insert document segments batch:", segError);
+        console.error(`[SINGLE UPLOAD DEBUG ERROR] Failed to insert segments batch starting at index ${i}:`, segError);
         await supabase.from("documents").delete().eq("id", documentId);
-        return response.status(500).json({ error: "Failed to persist document segments." });
+        return response.status(500).json({ error: `Failed to persist document segments: ${segError.message || segError.details || "Database error"}` });
       }
     }
+    console.log(`[SINGLE UPLOAD DEBUG] Step 3 complete. Segments saved.`);
+    console.log(`[SINGLE UPLOAD DEBUG] SUCCESS! Responding with document metadata.`);
+    console.log(`========================================\n`);
 
     response.json({
       type: result.type,
@@ -90,10 +113,10 @@ apiRouter.post("/upload", checkAuth, upload.single("file"), async (request, resp
       originalName: result.originalName
     });
   } catch (error) {
-    console.log(error);
+    console.error("[SINGLE UPLOAD DEBUG ERROR] Exception in single file upload:", error);
     const statusCode = (error.status >= 100 && error.status < 1000) ? error.status : 500;
     response.status(statusCode).json({
-      error: error.message || "Server error"
+      error: error.message || "Server error during single file upload."
     });
   }
 });
@@ -604,10 +627,10 @@ apiRouter.get("/documents/:id", checkAuth, async (request, response) => {
     const doc = await verifyDocumentAccess(request, response, "read");
     if (!doc) return;
 
-    // Fetch segments
+    // Fetch segments with optimized select columns
     let segments;
     try {
-      segments = await fetchAllSegments(doc.id);
+      segments = await fetchAllSegments(doc.id, "segment_index, source_text, target_text, status, context_jira, context_description, mqm_accuracy_score, mqm_report, original_target_text, tracked_by");
     } catch (segError) {
       console.error("Failed to load document segments:", segError);
       return response.status(500).json({ error: "Failed to load document segments." });
@@ -2493,37 +2516,56 @@ apiRouter.get("/projects", checkAuth, async (request, response) => {
       }
     }
 
-    // Enhance project stats
-    const enhancedProjects = await Promise.all(allProjects.map(async (proj) => {
-      // Get document count
-      const { count: fileCount } = await supabase
-        .from("documents")
-        .select("*", { count: "exact", head: true })
-        .eq("project_id", proj.id);
+    // Fetch document counts and job stats in batch queries (eliminating N+1 query slowdowns)
+    const allProjectIds = allProjects.map(p => p.id);
+    
+    let docCountsMap = new Map();
+    let jobsByProjectMap = new Map();
 
-      // Get translation jobs status counts
-      const { data: jobs } = await supabase
-        .from("translation_jobs")
-        .select("status, word_count, progress")
-        .eq("project_id", proj.id);
+    if (allProjectIds.length > 0) {
+      const [{ data: allDocs }, { data: allJobs }] = await Promise.all([
+        supabase.from("documents").select("id, project_id").in("project_id", allProjectIds),
+        supabase.from("translation_jobs").select("id, project_id, status, word_count, progress").in("project_id", allProjectIds)
+      ]);
+
+      if (allDocs) {
+        allDocs.forEach(d => {
+          docCountsMap.set(d.project_id, (docCountsMap.get(d.project_id) || 0) + 1);
+        });
+      }
+
+      if (allJobs) {
+        allJobs.forEach(j => {
+          if (!jobsByProjectMap.has(j.project_id)) {
+            jobsByProjectMap.set(j.project_id, []);
+          }
+          jobsByProjectMap.get(j.project_id).push(j);
+        });
+      }
+    }
+
+    const enhancedProjects = allProjects.map(proj => {
+      const fileCount = docCountsMap.get(proj.id) || 0;
+      const jobs = jobsByProjectMap.get(proj.id) || [];
 
       const jobStats = {
-        total: jobs?.length || 0,
-        completed: jobs?.filter(j => j.status === "completed")?.length || 0,
-        running: jobs?.filter(j => j.status === "running")?.length || 0,
-        pending: jobs?.filter(j => j.status === "pending")?.length || 0,
-        failed: jobs?.filter(j => j.status === "failed")?.length || 0,
-        totalWords: jobs?.reduce((sum, j) => sum + (j.word_count || 0), 0) || 0
+        total: jobs.length,
+        completed: jobs.filter(j => j.status === "completed").length,
+        running: jobs.filter(j => j.status === "running").length,
+        pending: jobs.filter(j => j.status === "pending").length,
+        failed: jobs.filter(j => j.status === "failed").length,
+        totalWords: jobs.reduce((sum, j) => sum + (j.word_count || 0), 0)
       };
 
       return {
         ...proj,
+        status: proj.status || proj.settings?.status || "active",
         dueDate: proj.settings?.dueDate || proj.dueDate || null,
         sharedBy: ownerEmailMap.get(proj.owner_id) || null,
-        fileCount: fileCount || 0,
+        fileCount,
         jobStats
       };
-    }));
+    });
 
     response.json(enhancedProjects);
   } catch (err) {
@@ -2626,31 +2668,18 @@ apiRouter.get("/projects/:projectId", checkAuth, async (request, response) => {
       .select("*, documents(name)")
       .eq("project_id", project.id);
 
-    const jobs = await Promise.all((rawJobs || []).map(async (j) => {
-      try {
-        const segs = await fetchAllSegments(j.document_id, "source_text, status, target_text", j.target_lang);
-        const stats = calculateProgress(segs);
-        const newStatus = stats.progress === 100 ? "completed" : j.status;
-        if (stats.progress !== j.progress && j.status !== "running") {
-          await supabase.from("translation_jobs").update({ progress: stats.progress, status: newStatus }).eq("id", j.id);
-        }
-        return {
-          ...j,
-          progress: stats.progress,
-          verifiedProgress: stats.verifiedProgress,
-          completedSegments: stats.completedSegments,
-          verifiedSegments: stats.verifiedSegments,
-          totalSegments: stats.totalSegments,
-          status: newStatus
-        };
-      } catch (e) {
-        return j;
-      }
+    const jobs = (rawJobs || []).map((j) => ({
+      ...j,
+      progress: j.progress || 0,
+      completedSegments: j.completed_segments || 0,
+      totalSegments: j.total_segments || 0,
+      fileName: j.documents ? j.documents.name : undefined
     }));
 
     response.json({
       project: {
         ...project,
+        status: project.status || project.settings?.status || "active",
         isShared: !access.isOwner,
         accessLevel: access.accessLevel
       },
@@ -3095,63 +3124,32 @@ apiRouter.put("/projects/:projectId", checkAuth, async (request, response) => {
     const { projectId } = request.params;
     const { name, client, status, description, sourceLanguage, targetLanguages, dueDate, settings } = request.body;
 
-    // Check project ownership
-    const { data: existingProject, error: checkErr } = await supabase
-      .from("projects")
-      .select("*")
-      .eq("id", projectId)
-      .eq("owner_id", request.user.id)
-      .single();
+    const access = await verifyProjectAccess(request, response, "write");
+    if (!access) return;
 
-    if (checkErr || !existingProject) {
-      return response.status(404).json({ error: "Project not found or unauthorized." });
-    }
+    const existingProject = access.project;
 
     const updateData = {};
     if (name !== undefined) updateData.name = name;
     if (client !== undefined) updateData.client = client;
-    if (status !== undefined) updateData.status = status;
     if (description !== undefined) updateData.description = description;
     if (sourceLanguage !== undefined) updateData.source_lang = sourceLanguage;
     if (targetLanguages !== undefined) updateData.target_languages = targetLanguages;
-    if (settings !== undefined || dueDate !== undefined) {
-      updateData.settings = { 
-        ...existingProject.settings, 
-        ...(settings || {}),
-        ...(dueDate !== undefined ? { dueDate } : {}) 
-      };
-    }
+
+    const mergedSettings = {
+      ...(existingProject.settings || {}),
+      ...(settings || {}),
+      ...(dueDate !== undefined ? { dueDate } : {}),
+      ...(status !== undefined ? { status } : {})
+    };
+    updateData.settings = mergedSettings;
     updateData.updated_at = new Date().toISOString();
 
-    // Check what changed to log appropriate activities
-    if (settings !== undefined || name !== undefined || client !== undefined || status !== undefined) {
-      const oldSettings = existingProject.settings || {};
-      const newSettings = settings || {};
-      
-      const promptChanged = newSettings.translationPrompt !== oldSettings.translationPrompt ||
-                            newSettings.aiModel !== oldSettings.aiModel ||
-                            newSettings.autoSave !== oldSettings.autoSave ||
-                            newSettings.notifications !== oldSettings.notifications;
-      
-      const glossaryChanged = JSON.stringify(newSettings.glossary || []) !== JSON.stringify(oldSettings.glossary || []) ||
-                              JSON.stringify(newSettings.glossaryMap || {}) !== JSON.stringify(oldSettings.glossaryMap || {});
-      
-      if (promptChanged) {
-        await logProjectActivity(projectId, "context_updated", {
-          aiModel: newSettings.aiModel || oldSettings.aiModel,
-          autoSave: newSettings.autoSave !== undefined ? newSettings.autoSave : oldSettings.autoSave,
-          notifications: newSettings.notifications !== undefined ? newSettings.notifications : oldSettings.notifications
-        }, request.user.email);
-      }
-      
-      if (glossaryChanged) {
-        await logProjectActivity(projectId, "glossary_modified", {
-          glossarySize: (newSettings.glossary || []).length || Object.keys(newSettings.glossaryMap || {}).length
-        }, request.user.email);
-      }
+    if (status !== undefined) {
+      updateData.status = status;
     }
 
-    const { data: updatedProject, error: updateErr } = await supabase
+    let { data: updatedProject, error: updateErr } = await supabase
       .from("projects")
       .update(updateData)
       .eq("id", projectId)
@@ -3159,29 +3157,39 @@ apiRouter.put("/projects/:projectId", checkAuth, async (request, response) => {
       .single();
 
     if (updateErr) {
-      // Graceful fallback for status column missing
-      if (updateErr.code === '42703' && status !== undefined) {
-        const fallbackSettings = { ...existingProject.settings, ...settings, status };
+      // Graceful fallback for status column missing in Supabase schema cache
+      const isMissingStatusCol = updateErr.code === 'PGRST204' || 
+                                 updateErr.code === '42703' || 
+                                 (updateErr.message && updateErr.message.toLowerCase().includes("status"));
+
+      if (isMissingStatusCol && updateData.status !== undefined) {
         delete updateData.status;
-        updateData.settings = fallbackSettings;
         const { data: updatedFallback, error: fallbackErr } = await supabase
           .from("projects")
           .update(updateData)
           .eq("id", projectId)
           .select()
           .single();
-        
+
         if (fallbackErr) {
+          console.error("Fallback update project error:", fallbackErr);
           return response.status(500).json({ error: fallbackErr.message });
         }
-        return response.json(updatedFallback);
+        updatedProject = updatedFallback;
+      } else {
+        console.error("Update project error:", updateErr);
+        return response.status(500).json({ error: updateErr.message });
       }
-      return response.status(500).json({ error: updateErr.message });
     }
 
-    response.json(updatedProject);
+    const finalProject = {
+      ...updatedProject,
+      status: updatedProject?.status || updatedProject?.settings?.status || status || "active"
+    };
+
+    response.json(finalProject);
   } catch (err) {
-    console.error(err);
+    console.error("Server error updating project:", err);
     response.status(500).json({ error: "Failed to update project details." });
   }
 });
@@ -3221,15 +3229,25 @@ apiRouter.get("/projects/:projectId/activities", checkAuth, async (request, resp
 apiRouter.post("/projects/:projectId/upload", checkAuth, upload.single("file"), async (request, response) => {
   try {
     const { projectId } = request.params;
+    console.log(`\n========================================`);
+    console.log(`[UPLOAD DEBUG] Received upload request for project: ${projectId}`);
+    console.log(`[UPLOAD DEBUG] File info: name=${request.file?.originalname}, size=${request.file?.size} bytes`);
 
     // Verify project access
     const access = await verifyProjectAccess(request, response, "write");
-    if (!access) return;
+    if (!access) {
+      console.error(`[UPLOAD DEBUG ERROR] User lacks write access to project ${projectId}`);
+      return;
+    }
 
     const project = access.project;
+    console.log(`[UPLOAD DEBUG] Access verified. Source lang=${project.source_lang}, targets=${(project.target_languages || []).join(",")}`);
 
     // Process file extraction
+    console.log(`[UPLOAD DEBUG] Step 1: Parsing file with parser engine...`);
     const result = await processUploadedFile(request.file);
+    console.log(`[UPLOAD DEBUG] Step 1 complete. Extracted ${result.segments?.length || 0} segments, documentId=${result.fileId}`);
+
     const documentId = result.fileId;
     const fileSize = request.file.size || 0;
 
@@ -3238,8 +3256,10 @@ apiRouter.post("/projects/:projectId/upload", checkAuth, upload.single("file"), 
     result.segments.forEach(seg => {
       wordCount += countWords(seg.source);
     });
+    console.log(`[UPLOAD DEBUG] Step 2: Total word count = ${wordCount}`);
 
     // 1. Create document record under the project
+    console.log(`[UPLOAD DEBUG] Step 3: Creating document record in Supabase...`);
     const { error: docError } = await supabase
       .from("documents")
       .insert({
@@ -3255,9 +3275,10 @@ apiRouter.post("/projects/:projectId/upload", checkAuth, upload.single("file"), 
       });
 
     if (docError) {
-      console.error("Failed to insert document metadata:", docError);
-      return response.status(500).json({ error: "Failed to create document record." });
+      console.error("[UPLOAD DEBUG ERROR] Failed to insert document metadata:", docError);
+      return response.status(500).json({ error: `Failed to create document record: ${docError.message || docError.details || docError}` });
     }
+    console.log(`[UPLOAD DEBUG] Step 3 complete. Document metadata inserted.`);
 
     // Sync document_access for all shared project members
     try {
@@ -3278,7 +3299,7 @@ apiRouter.post("/projects/:projectId/upload", checkAuth, upload.single("file"), 
           .upsert(docAccessInserts, { onConflict: "document_id,user_id" });
       }
     } catch (syncErr) {
-      console.error("Failed to sync document_access for shared members:", syncErr);
+      console.error("[UPLOAD DEBUG WARNING] Failed to sync document_access:", syncErr);
     }
 
     // 2. Persist parsed source template segments to the database (target_lang = NULL)
@@ -3291,23 +3312,24 @@ apiRouter.post("/projects/:projectId/upload", checkAuth, upload.single("file"), 
       status: "draft"
     }));
 
-    // 2. Persist parsed source template segments to the database in fast parallel batches of 1000
-    const BATCH_SIZE = 1000;
-    const batchPromises = [];
+    console.log(`[UPLOAD DEBUG] Step 4: Persisting ${segmentInserts.length} source segments in DB batches...`);
+    const BATCH_SIZE = 300;
     for (let i = 0; i < segmentInserts.length; i += BATCH_SIZE) {
       const batch = segmentInserts.slice(i, i + BATCH_SIZE);
-      batchPromises.push(supabase.from("document_segments").insert(batch));
+      const { error: batchErr } = await supabase.from("document_segments").insert(batch);
+      if (batchErr) {
+        console.error(`[UPLOAD DEBUG ERROR] Failed to insert segments batch starting at index ${i}:`, batchErr);
+        await supabase.from("documents").delete().eq("id", documentId);
+        return response.status(500).json({
+          error: `Failed to persist document segments: ${batchErr.message || batchErr.details || "Database error"}`
+        });
+      }
     }
-    const batchResults = await Promise.all(batchPromises);
-    const hasBatchError = batchResults.some(r => r.error);
-    if (hasBatchError) {
-      console.error("Failed to insert document segments batch");
-      await supabase.from("documents").delete().eq("id", documentId);
-      return response.status(500).json({ error: "Failed to persist document segments." });
-    }
+    console.log(`[UPLOAD DEBUG] Step 4 complete. All segments inserted successfully.`);
 
     // 3. Auto-initialize translation jobs for target languages selected in the project
     if (project.target_languages && project.target_languages.length > 0) {
+      console.log(`[UPLOAD DEBUG] Step 5: Initializing translation jobs for target languages...`);
       const jobInserts = project.target_languages.map(targetLang => ({
         project_id: projectId,
         document_id: documentId,
@@ -3326,7 +3348,34 @@ apiRouter.post("/projects/:projectId/upload", checkAuth, upload.single("file"), 
       fileSize
     }, request.user.email);
 
+    const { data: createdDoc } = await supabase
+      .from("documents")
+      .select("*")
+      .eq("id", documentId)
+      .single();
+
+    const { data: createdJobs } = await supabase
+      .from("translation_jobs")
+      .select("*, documents(name)")
+      .eq("document_id", documentId);
+
+    console.log(`[UPLOAD DEBUG] SUCCESS! Responding to client with document and jobs.`);
+    console.log(`========================================\n`);
+
     response.json({
+      success: true,
+      document: createdDoc || {
+        id: documentId,
+        name: result.originalName || "Untitled Document",
+        owner_id: request.user.id,
+        file_id: result.fileId,
+        source_lang: project.source_lang,
+        project_id: projectId,
+        word_count: wordCount,
+        file_size: fileSize,
+        status: "pending"
+      },
+      jobs: createdJobs || [],
       type: result.type,
       documentId,
       originalName: result.originalName,
@@ -3334,8 +3383,11 @@ apiRouter.post("/projects/:projectId/upload", checkAuth, upload.single("file"), 
       fileSize
     });
   } catch (error) {
-    console.error(error);
-    response.status(500).json({ error: error.message || "Failed to upload file to project." });
+    console.error("[UPLOAD DEBUG ERROR] Exception caught in upload route:", error);
+    const statusCode = (error.status >= 100 && error.status < 1000) ? error.status : 500;
+    response.status(statusCode).json({
+      error: error.message || "Server error during file upload."
+    });
   }
 });
 
@@ -4330,12 +4382,16 @@ apiRouter.get("/documents/:documentId/lang/:lang/segments", checkAuth, async (re
     const segments = await fetchAllSegments(documentId, "*", lang);
 
     // Dynamic TM lookup to assign fuzzyScore and matchType
-    const uniqueSources = [...new Set(segments.map(s => s.source_text))];
-    const { data: tmEntries } = await supabase
-      .from("translation_memory")
-      .select("*")
-      .in("source_text", uniqueSources)
-      .eq("target_lang", lang);
+    const uniqueSources = [...new Set(segments.map(s => s.source_text).filter(Boolean))];
+    let tmEntries = [];
+    if (uniqueSources.length > 0) {
+      const { data } = await supabase
+        .from("translation_memory")
+        .select("*")
+        .in("source_text", uniqueSources)
+        .eq("target_lang", lang);
+      tmEntries = data || [];
+    }
 
     const tmMap = {};
     (tmEntries || []).forEach(item => {

@@ -66,13 +66,14 @@ export default function App() {
   const virtuosoRef = useRef(null);
   
   // Zustand Session Store hook
-  const { isAuth, fetchProfile, token, logout, user, loading } = useUserStore();
+  const { isAuth, fetchProfile, token, logout, user, loading, error: authError } = useUserStore();
   const userRef = useRef(user);
   useEffect(() => {
     userRef.current = user;
   }, [user]);
 
   const [segments, setSegments] = useState([]);
+  const [selectedSegmentIds, setSelectedSegmentIds] = useState(new Set());
   const [history, setHistory] = useState([]);
   const [future, setFuture] = useState([]);
   const [fileId, setFileId] = useState(null);
@@ -234,6 +235,7 @@ export default function App() {
   const [ownerId, setOwnerId] = useState(null);
   const [trackChangesEnabled, setTrackChangesEnabled] = useState(false);
   const [hasNoAccess, setHasNoAccess] = useState(false);
+  const [docLoadError, setDocLoadError] = useState(null);
   const [hasPendingAccessRequest, setHasPendingAccessRequest] = useState(false);
   const [accessRequestMessage, setAccessRequestMessage] = useState("");
   const [pendingAccessRequests, setPendingAccessRequests] = useState([]);
@@ -357,6 +359,7 @@ export default function App() {
 
     setIsLoadingDocument(true);
     setHasNoAccess(false);
+    setDocLoadError(null);
     setAccessRequestMessage("");
     try {
       let doc;
@@ -430,7 +433,9 @@ export default function App() {
           console.error(statusErr);
         }
       } else {
-        showToast(err.response?.data?.error || "Access denied or document not found.", "error");
+        const errorMsg = err.response?.data?.error || "Document not found or unable to load workspace.";
+        setDocLoadError(errorMsg);
+        showToast(errorMsg, "error");
       }
     } finally {
       setIsLoadingDocument(false);
@@ -1051,6 +1056,7 @@ export default function App() {
     try {
       setProgress(0);
       setIsUploading(true);
+      console.log(`[SINGLE FILE UPLOAD DEBUG] Starting upload: name=${file.name}, size=${file.size} bytes`);
       
       const isHtmlUpload = file.name.endsWith(".html") || file.name.endsWith(".htm");
       const isCurrentXlf = fileExtension === ".xlf" || fileExtension === ".xliff" || fileExtension === ".sdlxliff";
@@ -1061,6 +1067,7 @@ export default function App() {
       }
 
       const data = await uploadFile(file, sourceLanguage, targetLanguage);
+      console.log(`[SINGLE FILE UPLOAD DEBUG] Upload succeeded:`, data);
       
       const extractTagsOnly = (str) => {
         return (str.match(/<\/?\d+>/g) || []).join(" ");
@@ -1176,8 +1183,9 @@ export default function App() {
         showToast(`File uploaded: ${file.name}`);
       }
     } catch (error) {
-      console.error(error);
-      const errMsg = error.response?.data?.error || error.message || "Is the backend running?";
+      console.error("[SINGLE FILE UPLOAD ERROR]", error);
+      const errMsg = error.response?.data?.error || error.response?.statusText || error.message || "Failed to upload file.";
+      alert(`SINGLE FILE UPLOAD ERROR: ${errMsg}`);
       showToast(`Upload failed: ${errMsg}`, "error");
     } finally {
       setIsUploading(false);
@@ -1185,39 +1193,20 @@ export default function App() {
   };
 
   const handleRelinkHtml = async (event) => {
-    handleFileProcessing(event.target.files[0]);
+    const file = event.target.files && event.target.files[0];
+    if (file) {
+      handleFileProcessing(file);
+    }
+    event.target.value = "";
   };
 
   const handleUpload = (event) => {
-    handleFileProcessing(event.target.files[0]);
+    const file = event.target.files && event.target.files[0];
+    if (file) {
+      handleFileProcessing(file);
+    }
+    event.target.value = "";
   };
-
-  useEffect(() => {
-    const handleDragOver = (event) => {
-      event.preventDefault();
-      setIsDragging(true);
-    };
-
-    const handleDragLeave = () => setIsDragging(false);
-
-    const handleDrop = (event) => {
-      event.preventDefault();
-      setIsDragging(false);
-      if (event.dataTransfer.files && event.dataTransfer.files[0]) {
-        handleFileProcessing(event.dataTransfer.files[0]);
-      }
-    };
-
-    window.addEventListener("dragover", handleDragOver);
-    window.addEventListener("dragleave", handleDragLeave);
-    window.addEventListener("drop", handleDrop);
-
-    return () => {
-      window.removeEventListener("dragover", handleDragOver);
-      window.removeEventListener("dragleave", handleDragLeave);
-      window.removeEventListener("drop", handleDrop);
-    };
-  }, []);
 
   useEffect(() => {
     const handleGlobalKeyDown = (event) => {
@@ -1509,6 +1498,118 @@ export default function App() {
       setIsTranslating(false);
       showToast(`Translation failed: ${error.response?.data?.error || error.message || error}`, "error");
     }
+  };
+
+  // ── BULK SEGMENT SELECTION HANDLERS ──
+  const handleToggleSelectAll = (checked) => {
+    if (checked) {
+      const allIds = filteredSegments.map((s) => s.id);
+      setSelectedSegmentIds(new Set(allIds));
+    } else {
+      setSelectedSegmentIds(new Set());
+    }
+  };
+
+  const handleToggleSelectSegment = (segId, checked) => {
+    setSelectedSegmentIds((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(segId);
+      } else {
+        next.delete(segId);
+      }
+      return next;
+    });
+  };
+
+  const handleTranslateSelectedSegments = async () => {
+    if (selectedSegmentIds.size === 0 || isTranslating) return;
+    const targetSegs = segments.filter((s) => selectedSegmentIds.has(s.id));
+    if (targetSegs.length === 0) return;
+    showToast(`Auto-translating ${targetSegs.length} selected segments...`);
+    setIsTranslating(true);
+    setProgress(0);
+    try {
+      const BATCH_SIZE = 5;
+      let completedCount = 0;
+      for (let i = 0; i < targetSegs.length; i += BATCH_SIZE) {
+        const batch = targetSegs.slice(i, i + BATCH_SIZE);
+        const data = await translateBatch(
+          batch,
+          targetLanguage,
+          sourceLanguage,
+          { ...contextSettings, glossary: translationGlossary },
+          documentId
+        );
+        const results = data.results || [];
+        setSegments((prev) => {
+          const newSegs = [...prev];
+          results.forEach((item) => {
+            const idx = newSegs.findIndex((s) => s.id === item.id);
+            if (idx !== -1 && item.translated) {
+              newSegs[idx] = {
+                ...newSegs[idx],
+                target: applyGlossaryTerms(
+                  newSegs[idx].source,
+                  item.translated,
+                  translationGlossary
+                ),
+                provider: item.provider
+              };
+            }
+          });
+          return newSegs;
+        });
+        completedCount += batch.length;
+        setProgress(Math.round((completedCount / targetSegs.length) * 100));
+      }
+      showToast(`Finished auto-translating ${targetSegs.length} selected segments!`);
+    } catch (err) {
+      console.error("Batch translate selected failed:", err);
+      showToast("Selected translation encountered issues.", "error");
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  const handleVerifySelectedSegments = () => {
+    if (selectedSegmentIds.size === 0) return;
+    setSegments((prev) =>
+      prev.map((s) =>
+        selectedSegmentIds.has(s.id) ? { ...s, verified: true } : s
+      )
+    );
+    showToast(`Marked ${selectedSegmentIds.size} segments as verified!`);
+  };
+
+  const handleUnverifySelectedSegments = () => {
+    if (selectedSegmentIds.size === 0) return;
+    setSegments((prev) =>
+      prev.map((s) =>
+        selectedSegmentIds.has(s.id) ? { ...s, verified: false } : s
+      )
+    );
+    showToast(`Unverified ${selectedSegmentIds.size} segments!`);
+  };
+
+  const handleCopySourceToTargetSelected = () => {
+    if (selectedSegmentIds.size === 0) return;
+    setSegments((prev) =>
+      prev.map((s) =>
+        selectedSegmentIds.has(s.id) ? { ...s, target: s.source } : s
+      )
+    );
+    showToast(`Copied source to target for ${selectedSegmentIds.size} segments!`);
+  };
+
+  const handleClearTargetSelected = () => {
+    if (selectedSegmentIds.size === 0) return;
+    setSegments((prev) =>
+      prev.map((s) =>
+        selectedSegmentIds.has(s.id) ? { ...s, target: "", verified: false } : s
+      )
+    );
+    showToast(`Cleared target text for ${selectedSegmentIds.size} segments!`);
   };
 
   const handleSourceLanguageChange = async (lang) => {
@@ -2852,6 +2953,35 @@ export default function App() {
   }
 
   if (isAuth && (!user || loading)) {
+    if (authError) {
+      return (
+        <div className={`h-screen w-screen flex flex-col items-center justify-center ${theme.bg} p-6 overflow-hidden`}>
+          <Toast toast={toast} />
+          <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto text-xl font-bold">
+              ⚠️
+            </div>
+            <h2 className="text-xl font-bold text-white">Session Verification Error</h2>
+            <p className="text-sm text-slate-400">{authError}</p>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                onClick={() => fetchProfile()}
+                className="px-4 py-2 bg-teal-500 hover:bg-teal-600 text-slate-950 font-semibold rounded-xl text-sm transition"
+              >
+                Try Again
+              </button>
+              <button
+                onClick={() => logout()}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-sm transition"
+              >
+                Back to Login
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className={`h-screen w-screen flex flex-col items-center justify-center ${theme.bg} overflow-hidden gap-4`}>
         <LoadingOverlay message="Verifying secure session..." />
@@ -2908,11 +3038,43 @@ export default function App() {
     );
   }
 
+  if (docLoadError && currentRoute.screen === "editor") {
+    return (
+      <div className={`h-screen w-screen flex flex-col items-center justify-center bg-[#08090e] text-white p-6`}>
+        <Toast toast={toast} />
+        <div className="max-w-md w-full bg-[var(--bg-surface)] border border-[var(--border-medium)] rounded-2xl p-8 text-center space-y-6 shadow-2xl animate-[fadeIn_0.2s_ease]">
+          <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/20 rounded-full flex items-center justify-center mx-auto text-amber-500 shadow-lg text-2xl font-bold">
+            ⚠️
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-lg font-bold text-[var(--text-primary)]">Unable to Load Document</h2>
+            <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+              {docLoadError}
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 pt-2">
+            <button
+              onClick={() => { setDocLoadError(null); navigateTo("/"); }}
+              className="w-full rounded-xl py-3 text-xs font-bold transition-all bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white cursor-pointer shadow-md"
+            >
+              Go to Dashboard
+            </button>
+            <button
+              onClick={() => { setDocLoadError(null); loadCollaborativeDocument(); }}
+              className="w-full rounded-xl py-2.5 text-xs font-semibold text-zinc-400 hover:text-white bg-zinc-800/60 hover:bg-zinc-800 border border-zinc-700/60 transition cursor-pointer"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="workspace-shell" style={{ color: "var(--text-primary)" }}>
 
       {/* ── Global overlays & modals ── */}
-      <DragOverlay isDragging={isDragging} />
       <LoadingOverlay isUploading={isUploading} isLoadingDocument={isLoadingDocument} theme={theme} />
       <Toast toast={toast} />
 
@@ -2975,6 +3137,7 @@ export default function App() {
           userRole={user ? user.role : ""}
           userId={user ? user.id : null}
           onOpenAdmin={() => setShowAdminDashboard(true)}
+          onLogout={logout}
         />
       )}
 
@@ -3154,6 +3317,15 @@ export default function App() {
                 showLivePreview={showLivePreview}
                 onToggleLivePreview={handleToggleLivePreview}
                 isPreviewLoading={isPreviewLoading}
+                isAllSelected={filteredSegments.length > 0 && selectedSegmentIds.size === filteredSegments.length}
+                selectedCount={selectedSegmentIds.size}
+                onToggleSelectAll={handleToggleSelectAll}
+                onTranslateSelected={permission === "write" ? handleTranslateSelectedSegments : null}
+                onVerifySelected={permission === "write" ? handleVerifySelectedSegments : null}
+                onUnverifySelected={permission === "write" ? handleUnverifySelectedSegments : null}
+                onCopySourceToTargetSelected={permission === "write" ? handleCopySourceToTargetSelected : null}
+                onClearTargetSelected={permission === "write" ? handleClearTargetSelected : null}
+                onClearSelection={() => setSelectedSegmentIds(new Set())}
               />
 
               {/* QA panel (collapsible modal) */}
@@ -3195,6 +3367,8 @@ export default function App() {
                         index={index}
                         segment={item}
                         theme={theme}
+                        isSelected={selectedSegmentIds.has(item.id)}
+                        onToggleSelect={(segId, checked) => handleToggleSelectSegment(segId, checked)}
                         translationGlossary={translationGlossary}
                         onCopy={copyToClipboard}
                         onUpdateTranslation={updateTranslation}

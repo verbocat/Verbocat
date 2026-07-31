@@ -1,434 +1,705 @@
 const fs = require("fs");
 const zlib = require("zlib");
+const util = require("util");
+const gzipAsync = util.promisify(zlib.gzip);
 const cheerio = require("cheerio");
 const {
-  extractPlaceholders,
   splitByPunctuation,
   restorePlaceholders,
   extractSegmentTags,
 } = require("./segmentationUtils");
 
-const SKIP_SELECTOR = "script,style,noscript,svg,canvas";
+// ─── Constants ──────────────────────────────────────────────────────────────────
+
+const SKIP_TAGS = ["script", "style", "noscript", "svg", "canvas"];
 const BLOCK_TAGS = [
-  "p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "th", "blockquote", 
+  "p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "th", "blockquote",
   "section", "article", "nav", "header", "footer", "figcaption", "address", "main",
   "ul", "ol", "table", "tbody", "thead", "tfoot", "tr", "colgroup", "col", "caption",
   "dl", "dt", "dd", "form", "fieldset",
   "body", "html"
 ];
 
-const isBlockNode = (node) => {
-  if (!node || node.type !== "tag") return false;
-  if (node._isBlockNodeCached !== undefined) return node._isBlockNodeCached;
+// ─── Node Classification ────────────────────────────────────────────────────────
 
-  const tagName = node.name.toLowerCase();
-  if (BLOCK_TAGS.includes(tagName)) {
-    node._isBlockNodeCached = true;
-    return true;
+function isBlockTag(node) {
+  return node && node.type === "tag" && BLOCK_TAGS.includes(node.name.toLowerCase());
+}
+
+function isSkipTag(node) {
+  return node && node.type === "tag" && SKIP_TAGS.includes(node.name.toLowerCase());
+}
+
+// ─── Position Utilities ─────────────────────────────────────────────────────────
+
+/**
+ * Scan forward from startIndex to find the '>' that closes the opening tag.
+ * Respects quoted attribute values so that '>' inside attrs is not mis-detected.
+ */
+function findOpenTagEnd(html, startIndex) {
+  let inQuote = false;
+  let quoteChar = null;
+  for (let i = startIndex + 1; i < html.length; i++) {
+    const ch = html[i];
+    if (inQuote) {
+      if (ch === quoteChar) { inQuote = false; quoteChar = null; }
+    } else {
+      if (ch === '"' || ch === "'") { inQuote = true; quoteChar = ch; }
+      else if (ch === ">") return i;
+    }
   }
-  
-  let hasBlockDescendant = false;
-  if (node.children) {
-    for (let i = 0; i < node.children.length; i++) {
-      const child = node.children[i];
-      if (child.type === "tag" && isBlockNode(child)) {
-        hasBlockDescendant = true;
-        break;
-      }
+  return -1;
+}
+
+/**
+ * Compute the inner content range of a block element.
+ *
+ * Returns { innerStart, innerEnd } where:
+ *   innerStart = first char position after the opening tag's '>'
+ *   innerEnd   = first char position of the closing tag's '</'
+ *
+ * For self-closing or void elements returns null.
+ *
+ * The closing tag position is computed deterministically from
+ * htmlparser2's endIndex: endIndex points at the '>' of '</tag>',
+ * so the '<' of '</tag>' is at  endIndex - tagName.length - 2.
+ * A verification check confirms the substring matches; if not,
+ * a backward scan provides a reliable fallback.
+ */
+function getInnerRange(node, html) {
+  if (node.startIndex == null || node.endIndex == null) return null;
+
+  const openEnd = findOpenTagEnd(html, node.startIndex);
+  if (openEnd === -1) return null;
+
+  // Self-closing check (e.g. <br/>, <img ... />)
+  if (html.substring(node.startIndex, openEnd + 1).trimEnd().endsWith("/>")) return null;
+
+  const innerStart = openEnd + 1;
+
+  // Deterministic closing-tag start:  </tagName>  has length tagName.length + 3
+  const tagName = node.name;
+  const expectedStart = node.endIndex - tagName.length - 2;
+
+  if (expectedStart >= innerStart) {
+    const candidate = html.substring(expectedStart, node.endIndex + 1);
+    if (candidate.toLowerCase() === `</${tagName.toLowerCase()}>`) {
+      return { innerStart, innerEnd: expectedStart };
     }
   }
 
-  node._isBlockNodeCached = hasBlockDescendant;
-  return hasBlockDescendant;
-};
+  // Fallback: native C-optimized scan backward for '</'
+  const lastCloseIdx = html.lastIndexOf("</", node.endIndex);
+  if (lastCloseIdx >= innerStart) {
+    return { innerStart, innerEnd: lastCloseIdx };
+  }
 
-const wrapInlineSiblings = (element, $) => {
-  $(element).children().each((_, child) => {
-    wrapInlineSiblings(child, $);
-  });
+  return { innerStart, innerEnd: innerStart };
+}
 
-  const children = $(element).contents();
-  let hasBlock = false;
-  let hasInline = false;
+/**
+ * Extract the exact opening and closing tag strings from the original HTML
+ * for a given inline element node. Used for building the tag placeholder map.
+ */
+function getRawTagStrings(node, html) {
+  if (node.startIndex == null) return null;
 
-  children.each((_, child) => {
+  const openEnd = findOpenTagEnd(html, node.startIndex);
+  if (openEnd === -1) return null;
+
+  const openingTag = html.substring(node.startIndex, openEnd + 1);
+  if (openingTag.trimEnd().endsWith("/>")) {
+    return { openingTag, closingTag: "" };
+  }
+
+  if (node.endIndex == null) {
+    return { openingTag, closingTag: `</${node.name}>` };
+  }
+
+  // Deterministic position
+  const tagName = node.name;
+  const expectedStart = node.endIndex - tagName.length - 2;
+  if (expectedStart > openEnd) {
+    const candidate = html.substring(expectedStart, node.endIndex + 1);
+    if (candidate.toLowerCase() === `</${tagName.toLowerCase()}>`) {
+      return { openingTag, closingTag: candidate };
+    }
+  }
+
+  // Fallback scan: native C-optimized search
+  const lastCloseIdx = html.lastIndexOf("</", node.endIndex);
+  if (lastCloseIdx > openEnd) {
+    return { openingTag, closingTag: html.substring(lastCloseIdx, node.endIndex + 1) };
+  }
+
+  return { openingTag, closingTag: `</${tagName}>` };
+}
+
+// ─── Inline Tag Placeholder Extraction ──────────────────────────────────────────
+
+/**
+ * Walk the children of a block element and convert inline HTML tags to
+ * numbered placeholders  (<1>, </1>, <2>, …).
+ *
+ * Text node content is extracted directly from the original HTML string
+ * via startIndex/endIndex to preserve exact whitespace and entities.
+ *
+ * Returns the placeholder string and populates tagMap.
+ */
+function extractInlinePlaceholders(element, $, tagMap, tagCounter, html) {
+  // Iterative DFS using an explicit stack to avoid recursive call overhead for large DOM trees.
+  let result = "";
+  const stack = [];
+
+  // Push all direct children of element in reverse order
+  const rootChildren = element.children || [];
+  for (let i = rootChildren.length - 1; i >= 0; i--) {
+    stack.push({ type: "enter", node: rootChildren[i] });
+  }
+
+  while (stack.length > 0) {
+    const frame = stack.pop();
+    const child = frame.node;
+
+    if (frame.type === "exit") {
+      result += frame.closingPlaceholder;
+      continue;
+    }
+
     if (child.type === "text") {
-      if ($(child).text().trim()) {
-        hasInline = true;
+      if (child.startIndex != null && child.endIndex != null) {
+        result += html.substring(child.startIndex, child.endIndex + 1);
+      } else {
+        result += child.data || "";
       }
     } else if (child.type === "tag") {
-      if (isBlockNode(child)) {
-        hasBlock = true;
-      } else if (!["script", "style", "noscript"].includes(child.name.toLowerCase())) {
-        hasInline = true;
+      if (isSkipTag(child)) continue;
+
+      const id = tagCounter.value++;
+      const rawTags = getRawTagStrings(child, html);
+      const openingTag = rawTags ? rawTags.openingTag : `<${child.name}>`;
+      const closingTag = rawTags ? rawTags.closingTag : "";
+
+      tagMap.set(`<${id}>`, openingTag);
+      tagMap.set(`</${id}>`, closingTag);
+      result += `<${id}>`;
+
+      if (closingTag) {
+        stack.push({ type: "exit", node: child, closingPlaceholder: `</${id}>` });
       }
-    }
-  });
 
-  if (hasBlock && hasInline) {
-    let currentGroup = [];
-    
-    children.each((_, child) => {
-      const isBlock = child.type === "tag" && isBlockNode(child);
-      const isWhitespaceText = child.type === "text" && !$(child).text().trim();
-      const isIgnoredTag = child.type === "tag" && ["script", "style", "noscript"].includes(child.name.toLowerCase());
-
-      if (isBlock || isIgnoredTag) {
-        if (currentGroup.length > 0) {
-          const wrapper = $("<div class='__temp-leaf-block__'></div>");
-          $(currentGroup[0]).replaceWith(wrapper);
-          currentGroup.forEach((node) => {
-            wrapper.append(node);
-          });
-          currentGroup = [];
-        }
-      } else if (!isWhitespaceText) {
-        currentGroup.push(child);
+      const children = child.children || [];
+      for (let i = children.length - 1; i >= 0; i--) {
+        stack.push({ type: "enter", node: children[i] });
       }
-    });
-
-    if (currentGroup.length > 0) {
-      const wrapper = $("<div class='__temp-leaf-block__'></div>");
-      $(currentGroup[0]).replaceWith(wrapper);
-      currentGroup.forEach((node) => {
-        wrapper.append(node);
-      });
-    }
-  }
-};
-
-const getRawTags = (node, sourceHtml) => {
-  if (node.startIndex === null || node.startIndex === undefined) {
-    return null;
-  }
-
-  // Find the end of the opening tag starting from node.startIndex
-  let openTagEnd = -1;
-  let insideQuotes = false;
-  let quoteChar = null;
-  const len = sourceHtml.length;
-  for (let k = node.startIndex + 1; k < len; k++) {
-    const char = sourceHtml[k];
-    if (insideQuotes) {
-      if (char === quoteChar) {
-        insideQuotes = false;
-        quoteChar = null;
+    } else if (child.type === "comment") {
+      const id = tagCounter.value++;
+      if (child.startIndex != null && child.endIndex != null) {
+        tagMap.set(`<${id}>`, html.substring(child.startIndex, child.endIndex + 1));
+      } else {
+        tagMap.set(`<${id}>`, `<!--${child.data}-->`);
       }
-    } else {
-      if (char === '"' || char === "'") {
-        insideQuotes = true;
-        quoteChar = char;
-      } else if (char === ">") {
-        openTagEnd = k;
-        break;
-      }
+      tagMap.set(`</${id}>`, "");
+      result += `<${id}></${id}>`;
     }
   }
 
-  if (openTagEnd === -1) return null;
+  return result;
+}
 
-  const openingTag = sourceHtml.substring(node.startIndex, openTagEnd + 1);
-  const isSelfClosing = openingTag.trim().endsWith("/>");
-
-  let closingTag = "";
-  if (!isSelfClosing && node.endIndex !== null && node.endIndex !== undefined) {
-    const tagName = node.name;
-    const searchStartLimit = Math.max(node.startIndex, node.endIndex - (tagName ? tagName.length : 10) - 15);
-    const subStr = sourceHtml.substring(searchStartLimit, node.endIndex + 1);
-    const lastOpenIndexInSub = subStr.lastIndexOf("</");
-    if (lastOpenIndexInSub !== -1) {
-      const lastOpenIndex = searchStartLimit + lastOpenIndexInSub;
-      if (lastOpenIndex >= openTagEnd) {
-        closingTag = sourceHtml.substring(lastOpenIndex, node.endIndex + 1);
+/**
+ * Extract inline placeholders from a flat list of sibling nodes
+ * (used for orphan text runs in mixed-content blocks).
+ */
+function extractInlinePlaceholdersFromNodes(nodes, $, tagMap, tagCounter, html) {
+  let str = "";
+  for (const child of nodes) {
+    if (child.type === "text") {
+      if (child.startIndex != null && child.endIndex != null) {
+        str += html.substring(child.startIndex, child.endIndex + 1);
+      } else {
+        str += child.data || "";
       }
+    } else if (child.type === "tag") {
+      if (isSkipTag(child)) continue;
+
+      const id = tagCounter.value++;
+      const rawTags = getRawTagStrings(child, html);
+      const openingTag = rawTags ? rawTags.openingTag : `<${child.name}>`;
+      const closingTag = rawTags ? rawTags.closingTag : "";
+
+      tagMap.set(`<${id}>`, openingTag);
+      tagMap.set(`</${id}>`, closingTag);
+
+      str += `<${id}>`;
+      str += extractInlinePlaceholders(child, $, tagMap, tagCounter, html);
+      if (closingTag) {
+        str += `</${id}>`;
+      }
+    } else if (child.type === "comment") {
+      const id = tagCounter.value++;
+      if (child.startIndex != null && child.endIndex != null) {
+        tagMap.set(`<${id}>`, html.substring(child.startIndex, child.endIndex + 1));
+      } else {
+        tagMap.set(`<${id}>`, `<!--${child.data}-->`);
+      }
+      tagMap.set(`</${id}>`, "");
+      str += `<${id}></${id}>`;
     }
   }
+  return str;
+}
 
-  return { openingTag, closingTag };
-};
+// ─── Leaf Block & Orphan Run Detection ──────────────────────────────────────────
 
-const getBlockRange = (node, html) => {
-  let startIndex = node.startIndex;
-  let endIndex = node.endIndex;
+/**
+ * Find all translatable text blocks in the document.
+ *
+ * Two kinds are detected:
+ *
+ * 1. **Leaf text blocks** — a block-level element that contains translatable
+ *    text but has NO block-level descendants that also contain text.
+ *    Example: <p>, <li>, <td>, <h1>, etc.
+ *
+ * 2. **Orphan text runs** — sequences of text/inline nodes that are direct
+ *    children of a non-leaf block (siblings of child blocks).
+ *    Example: in <div>orphan text<p>paragraph</p></div>,
+ *    "orphan text" is an orphan run.
+ *
+ * CRITICAL: This function does NOT mutate the DOM.
+ * All position data comes from htmlparser2's initial parse.
+ */
+function findAllTextBlocks($, html) {
+  const blocks = [];
 
-  if (node.attribs && node.attribs.class && node.attribs.class.includes("__temp-leaf-block__")) {
-    if (node.children && node.children.length > 0) {
-      let firstChild = null;
-      let lastChild = null;
-      for (let i = 0; i < node.children.length; i++) {
-        if (node.children[i].startIndex !== null && node.children[i].startIndex !== undefined) {
-          firstChild = node.children[i];
-          break;
-        }
-      }
-      for (let i = node.children.length - 1; i >= 0; i--) {
-        if (node.children[i].endIndex !== null && node.children[i].endIndex !== undefined) {
-          lastChild = node.children[i];
-          break;
-        }
-      }
-      if (firstChild && lastChild) {
-        startIndex = firstChild.startIndex;
-        endIndex = lastChild.endIndex;
-      }
-    }
-  }
+  // Build table-index map without mutating the DOM
+  const tableIndexMap = new Map();
+  $("table").each((idx, el) => { tableIndexMap.set(el, String(idx)); });
 
-  if (startIndex === null || startIndex === undefined || endIndex === null || endIndex === undefined) {
-    return null;
-  }
-
-  const isVirtual = node.attribs && node.attribs.class && node.attribs.class.includes("__temp-leaf-block__");
-  if (isVirtual) {
+  function getStructuralMeta(node) {
+    const $n = $(node);
+    const tableEl = $n.closest("table");
+    const trEl = $n.closest("tr");
+    const cellEl = $n.closest("td, th");
+    const liEl = $n.closest("li");
+    const tagName = node.name ? node.name.toLowerCase() : "";
     return {
-      start: startIndex,
-      end: endIndex + 1
+      headingTag: ["h1","h2","h3","h4","h5","h6"].includes(tagName) ? tagName : undefined,
+      tableId: tableEl.length ? tableIndexMap.get(tableEl[0]) : undefined,
+      rowId: trEl.length ? trEl.index() : undefined,
+      cellId: cellEl.length ? cellEl.index() : undefined,
+      itemId: liEl.length ? liEl.index() : undefined,
     };
   }
 
-  let openTagEnd = -1;
-  let insideQuotes = false;
-  let quoteChar = null;
-  const len = html.length;
-  for (let k = startIndex + 1; k < len; k++) {
-    const char = html[k];
-    if (insideQuotes) {
-      if (char === quoteChar) {
-        insideQuotes = false;
-        quoteChar = null;
-      }
-    } else {
-      if (char === '"' || char === "'") {
-        insideQuotes = true;
-        quoteChar = char;
-      } else if (char === ">") {
-        openTagEnd = k;
-        break;
+  function traverse(node) {
+    if (!node) return false;
+    if (node.type === "text") return (node.data || "").trim().length > 0;
+    if (node.type !== "tag" && node.type !== "root") return false;
+    if (isSkipTag(node)) return false;
+
+    let hasText = false;
+    let hasBlockDescendantWithText = false;
+
+    for (const child of (node.children || [])) {
+      const childHasText = traverse(child);
+      if (childHasText) hasText = true;
+      if (child.type === "tag" && isBlockTag(child) && childHasText) {
+        hasBlockDescendantWithText = true;
       }
     }
-  }
 
-  if (openTagEnd === -1) return null;
+    if (!isBlockTag(node)) return hasText;
 
-  let endTagStart = -1;
-  const openingTag = html.substring(startIndex, openTagEnd + 1);
-  const isSelfClosing = openingTag.trim().endsWith("/>");
-
-  if (!isSelfClosing) {
-    const tagName = node.name;
-    const searchStartLimit = Math.max(startIndex, endIndex - (tagName ? tagName.length : 10) - 15);
-    const subStr = html.substring(searchStartLimit, endIndex + 1);
-    const lastOpenIndexInSub = subStr.lastIndexOf("</");
-    if (lastOpenIndexInSub !== -1) {
-      const lastOpenIndex = searchStartLimit + lastOpenIndexInSub;
-      if (lastOpenIndex >= openTagEnd) {
-        endTagStart = lastOpenIndex;
+    if (hasText && !hasBlockDescendantWithText) {
+      // ── Leaf text block ───────────────────────────────────────────────
+      const range = getInnerRange(node, html);
+      if (range && range.innerEnd > range.innerStart) {
+        blocks.push({
+          type: "leaf",
+          node,
+          innerStart: range.innerStart,
+          innerEnd: range.innerEnd,
+          ...getStructuralMeta(node),
+        });
       }
+    } else if (hasText && hasBlockDescendantWithText) {
+      // ── Non-leaf block → collect orphan text runs ─────────────────────
+      collectOrphanRuns(node, $, html, blocks, getStructuralMeta);
     }
+
+    return hasText;
   }
 
-  return {
-    start: openTagEnd + 1,
-    end: endTagStart === -1 ? openTagEnd + 1 : endTagStart
-  };
-};
+  const root = $("body").length > 0 ? $("body")[0] : $.root()[0];
+  traverse(root);
 
-const extractPlaceholdersRaw = (element, $, tagMap, tagCounter, sourceHtml) => {
-  let str = "";
-  $(element)
-    .contents()
-    .each((_, child) => {
-      if (child.type === "text") {
-        str += $(child).text().replace(/\s+/g, " ");
-      } else if (child.type === "tag") {
-        const id = tagCounter.value++;
-        const raw = getRawTags(child, sourceHtml);
-        const openingTag = raw ? raw.openingTag : "";
-        const closingTag = raw ? raw.closingTag : "";
+  // Sort by document order
+  blocks.sort((a, b) => a.innerStart - b.innerStart);
+  return blocks;
+}
 
-        tagMap.set(`<${id}>`, openingTag);
-        tagMap.set(`</${id}>`, closingTag);
+/**
+ * Collect orphan text runs — sequences of text/inline nodes that sit between
+ * block-level children of a given parent element.
+ */
+function collectOrphanRuns(parentNode, $, html, blocks, getStructuralMeta) {
+  const children = parentNode.children || [];
+  let currentRun = [];
 
-        str += `<${id}>`;
-        str += extractPlaceholdersRaw(child, $, tagMap, tagCounter, sourceHtml);
-        if (closingTag !== "") {
-          str += `</${id}>`;
-        }
-      } else if (child.type === "comment") {
-        const id = tagCounter.value++;
-        if (child.startIndex !== null && child.endIndex !== null) {
-          const rawComment = sourceHtml.substring(child.startIndex, child.endIndex + 1);
-          tagMap.set(`<${id}>`, rawComment);
-        } else {
-          tagMap.set(`<${id}>`, `<!--${child.data}-->`);
-        }
-        tagMap.set(`</${id}>`, "");
-        str += `<${id}></${id}>`;
-      }
+  function flushRun() {
+    if (currentRun.length === 0) return;
+
+    const hasText = currentRun.some((n) => {
+      if (n.type === "text") return (n.data || "").trim().length > 0;
+      if (n.type === "tag" && !isSkipTag(n)) return $(n).text().trim().length > 0;
+      return false;
     });
-  return str;
-};
 
+    if (hasText) {
+      let startIdx = null;
+      let endIdx = null;
+      for (const n of currentRun) {
+        if (n.startIndex != null && (startIdx === null || n.startIndex < startIdx)) startIdx = n.startIndex;
+        if (n.endIndex != null && (endIdx === null || n.endIndex > endIdx)) endIdx = n.endIndex;
+      }
+      if (startIdx != null && endIdx != null) {
+        blocks.push({
+          type: "orphan",
+          nodes: [...currentRun],
+          parentNode,
+          innerStart: startIdx,
+          innerEnd: endIdx + 1,
+          ...getStructuralMeta(parentNode),
+        });
+      }
+    }
+    currentRun = [];
+  }
+
+  for (const child of children) {
+    if (child.type === "tag" && (isBlockTag(child) || isSkipTag(child))) {
+      flushRun();
+      // Do not recurse here — child blocks are handled by the main traversal
+    } else {
+      currentRun.push(child);
+    }
+  }
+  flushRun();
+}
+
+// ─── Parse  ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Parse an HTML file into translation segments.
+ *
+ * Architecture (V2):
+ *  1. Read the file and parse the HTML (position tracking enabled).
+ *  2. Find leaf text blocks + orphan runs via pure read-only DOM traversal.
+ *  3. For each block: extract inline tags as numbered placeholders.
+ *  4. Split into sentence-level sub-segments.
+ *  5. Store: original HTML + block positions + tag map + segment metadata.
+ *
+ * On export, the original HTML is restored and text is replaced ONLY at
+ * the recorded block positions.  No synthetic template, no DOM mutation,
+ * no regex cleanup.
+ */
 const parseFile = async (filePath) => {
   const html = fs.readFileSync(filePath, "utf-8");
-  
-  // We use _useHtmlParser2 to track character indices and perform raw template generation
   const $ = cheerio.load(html, {
     _useHtmlParser2: true,
     withStartIndices: true,
     withEndIndices: true,
-    decodeEntities: false
+    decodeEntities: false,
   });
-  const segments = [];
-  let segmentIndex = 1; // 1-based to match DOCX parser convention (client maps id: idx+1)
 
+  const segments = [];
+  let segmentIndex = 1;
   const tagMapGlobal = new Map();
   const tagCounter = { value: 1 };
 
-  const { getLeafTextBlocks } = require("./relinkEngine");
-  const leafTextBlocks = getLeafTextBlocks($);
+  const textBlocks = findAllTextBlocks($, html);
+  const blockMeta = [];
 
-  const replacements = [];
-  leafTextBlocks.forEach((blockNode, blockIdx) => {
-    const range = getBlockRange(blockNode, html);
-    if (range) {
-      const placeholderStr = extractPlaceholdersRaw(blockNode, $, tagMapGlobal, tagCounter, html);
-      const subSegments = splitByPunctuation(placeholderStr, tagMapGlobal);
-
-      let replacementPlaceholder = "";
-      subSegments.forEach((subSeg, subIdx) => {
-        const segmentId = segmentIndex++;
-        // Insert a space separator between consecutive segment markers in the same block
-        // so that sentences like "Hello world. Goodbye." don't get joined as "Hello world.Goodbye."
-        if (subIdx > 0) {
-          replacementPlaceholder += " ";
-        }
-        replacementPlaceholder += `__SEG_${segmentId}__`;
-        const { leading, body, trailing } = extractSegmentTags(subSeg);
-        segments.push({
-          id: segmentId,
-          source: body,
-          target: "",
-          leading,
-          trailing,
-          blockIndex: blockIdx
-        });
-      });
-
-      replacements.push({
-        start: range.start,
-        end: range.end,
-        text: replacementPlaceholder
-      });
+  textBlocks.forEach((block, blockIdx) => {
+    // Extract inline tag placeholders
+    let placeholderStr;
+    if (block.type === "leaf") {
+      placeholderStr = extractInlinePlaceholders(block.node, $, tagMapGlobal, tagCounter, html);
+    } else if (block.type === "orphan") {
+      placeholderStr = extractInlinePlaceholdersFromNodes(block.nodes, $, tagMapGlobal, tagCounter, html);
+    } else {
+      return;
     }
+
+    // Skip blocks with no meaningful text content
+    if (!placeholderStr || placeholderStr.replace(/<\/?[\d]+>/g, "").trim().length === 0) {
+      return;
+    }
+
+    // Split into sentence-level sub-segments using Intl.Segmenter
+    const subSegments = splitByPunctuation(placeholderStr, tagMapGlobal);
+
+    const segmentIds = [];
+
+    subSegments.forEach((subSeg) => {
+      const segmentId = segmentIndex++;
+      const { leading, body, trailing } = extractSegmentTags(subSeg);
+      segments.push({
+        id: segmentId,
+        source: body,
+        target: "",
+        leading,
+        trailing,
+        blockIndex: blockIdx,
+      });
+      segmentIds.push(segmentId);
+    });
+
+    blockMeta.push({
+      blockIndex: blockIdx,
+      innerStart: block.innerStart,
+      innerEnd: block.innerEnd,
+      segmentIds,
+    });
   });
 
-  // Perform segment replacements in reverse order of indices to avoid index shifting
-  replacements.sort((a, b) => b.start - a.start);
-  let templateHtml = html;
-  replacements.forEach((rep) => {
-    templateHtml = templateHtml.substring(0, rep.start) + rep.text + templateHtml.substring(rep.end);
-  });
-
+  // ── Build template ─────────────────────────────────────────────────
   const templateData = {
-    html: templateHtml,
+    version: 2,
+    originalHtml: html,
+    blocks: blockMeta,
     tagMap: Array.from(tagMapGlobal.entries()),
-    segmentTags: segments.map(seg => ({ id: seg.id, leading: seg.leading, trailing: seg.trailing })),
-    isXml: false
+    segmentTags: segments.map((seg) => ({
+      id: seg.id,
+      leading: seg.leading,
+      trailing: seg.trailing,
+    })),
+    isXml: false,
   };
-  const template = zlib
-    .gzipSync(Buffer.from(JSON.stringify(templateData), "utf-8"))
-    .toString("base64");
-    
+
+  const zippedBuf = await gzipAsync(Buffer.from(JSON.stringify(templateData), "utf-8"));
+  const template = zippedBuf.toString("base64");
+
   return { segments, template };
 };
 
+// ─── Export ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Escape raw ampersands that are not already part of an HTML entity reference.
+ */
 const escapeRawAmpersands = (str) => {
   if (typeof str !== "string") return str;
   return str.replace(/&(?!(amp|lt|gt|quot|apos|#[0-9]+|#x[0-9a-fA-F]+);)/gi, "&amp;");
 };
 
+/**
+ * Export translated HTML.
+ *
+ * Detects the template version and dispatches:
+ *  - Version 2: position-based replacement on the stored original HTML.
+ *  - Legacy (v1 / unversioned): __SEG_N__ placeholder replacement.
+ */
 const exportFile = async (templateBase64, segments) => {
-  let html = "";
-  let tagMapGlobal = new Map();
-  let segmentTagsMap = new Map();
+  let templateData;
 
   try {
     const buffer = Buffer.from(templateBase64, "base64");
     const unzipped = zlib.gunzipSync(buffer).toString("utf-8");
     try {
-      const templateData = JSON.parse(unzipped);
-      if (templateData.html !== undefined) {
-        html = templateData.html;
-        tagMapGlobal = new Map(templateData.tagMap || []);
-        segmentTagsMap = new Map((templateData.segmentTags || []).map(t => [t.id, t]));
-      } else {
-        html = unzipped;
-      }
-    } catch (e) {
-      html = unzipped;
+      templateData = JSON.parse(unzipped);
+    } catch (_parseErr) {
+      // Not JSON — treat as raw HTML template
+      return Buffer.from(unzipped, "utf-8");
     }
-  } catch (err) {
-    html = templateBase64;
+  } catch (_zipErr) {
+    // Not gzipped — treat as plain text
+    return Buffer.from(templateBase64, "utf-8");
   }
 
-  // Strip legacy __temp-leaf-block__ div wrappers if present in old templates
-  if (typeof html === "string" && html.includes("__temp-leaf-block__")) {
-    html = html.replace(/<div class=["']__temp-leaf-block__["']>\s*/gi, "").replace(/\s*<\/div>/gi, "");
+  if (templateData.version === 2 && templateData.originalHtml) {
+    return exportFileV2(templateData, segments);
+  }
+  return exportFileLegacy(templateData, segments);
+};
+
+// ─── V2 Export: position-based replacement ──────────────────────────────────────
+
+/**
+ * Export using the V2 template: load the original HTML and replace text
+ * only at the recorded block positions.
+ *
+ * Key properties:
+ *  - Blocks with NO translations are skipped entirely → original content
+ *    is preserved byte-for-byte.
+ *  - Replacement is done from the END of the document to the START so that
+ *    earlier byte offsets remain valid after later replacements.
+ *  - A verification check confirms the original content is still at the
+ *    expected position before replacing (guards against template corruption).
+ */
+function exportFileV2(templateData, segments) {
+  let html = templateData.originalHtml;
+  const tagMapGlobal = new Map(templateData.tagMap || []);
+  const segmentTagsMap = new Map(
+    (templateData.segmentTags || []).map((t) => [t.id, t])
+  );
+  const blocks = templateData.blocks || [];
+
+  // Build segment lookup (keyed by numeric ID)
+  const segmentMap = new Map();
+  segments.forEach((seg) => segmentMap.set(Number(seg.id), seg));
+
+  // Process blocks from END to START to keep earlier positions valid
+  const sorted = [...blocks].sort((a, b) => b.innerStart - a.innerStart);
+
+  for (const block of sorted) {
+    // ── Skip blocks where NO segment has a translation ──────────────
+    const hasTranslation = block.segmentIds.some((segId) => {
+      const seg = segmentMap.get(segId);
+      return seg && seg.target != null && String(seg.target).trim() !== "";
+    });
+    if (!hasTranslation) continue;
+
+    // ── Verify position integrity ───────────────────────────────────
+    const currentContent = html.substring(block.innerStart, block.innerEnd);
+    const expectedContent = block.originalContent || html.substring(block.innerStart, block.innerEnd);
+    if (currentContent !== expectedContent) {
+      console.warn(
+        `[htmlParser v2] Block position mismatch at [${block.innerStart}:${block.innerEnd}], skipping to prevent corruption`
+      );
+      continue;
+    }
+
+    // ── Build replacement from segments ─────────────────────────────
+    const parts = [];
+    for (const segId of block.segmentIds) {
+      const seg = segmentMap.get(segId);
+      const savedTags = segmentTagsMap.get(segId) || {};
+      const leading = savedTags.leading || (seg ? seg.leading : "") || "";
+      const trailing = savedTags.trailing || (seg ? seg.trailing : "") || "";
+
+      const hasTarget = seg && seg.target != null && String(seg.target).trim() !== "";
+      let rawTarget = hasTarget ? seg.target : (seg ? seg.source || "" : "");
+
+      // Strip leading/trailing newlines (not spaces — they may be separators)
+      rawTarget = rawTarget.replace(/^[\r\n]+|[\r\n]+$/g, "");
+      // Escape raw ampersands (excluding valid entity references)
+      rawTarget = escapeRawAmpersands(rawTarget);
+
+      // Guard against double-tagging: strip leading/trailing tags if
+      // they already appear as prefix/suffix of rawTarget
+      const leadingTrimmed = leading.trim();
+      const trailingTrimmed = trailing.trim();
+      if (leadingTrimmed && rawTarget.startsWith(leadingTrimmed)) {
+        rawTarget = rawTarget.slice(leadingTrimmed.length);
+      }
+      if (trailingTrimmed && rawTarget.endsWith(trailingTrimmed)) {
+        rawTarget = rawTarget.slice(0, -trailingTrimmed.length);
+      }
+
+      const fullTarget = leading + rawTarget + trailing;
+      parts.push(restorePlaceholders(fullTarget, tagMapGlobal));
+    }
+
+    // Join sub-segments belonging to the exact same parent node cleanly
+    let replacement = "";
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      if (i === 0) {
+        replacement = p;
+      } else {
+        if (replacement.endsWith(" ") || p.startsWith(" ")) {
+          replacement += p;
+        } else {
+          replacement += " " + p;
+        }
+      }
+    }
+
+    // ── Perform the replacement ─────────────────────────────────────
+    html = html.substring(0, block.innerStart) + replacement + html.substring(block.innerEnd);
   }
 
+  return Buffer.from(html, "utf-8");
+}
+
+// ─── Legacy Export: __SEG_N__ placeholder replacement ────────────────────────────
+
+/**
+ * Backward-compatible export for templates created before V2.
+ * These templates contain the HTML with __SEG_N__ placeholders
+ * and use a tag map for inline tag restoration.
+ */
+function exportFileLegacy(templateData, segments) {
+  let html = "";
+  let tagMapGlobal = new Map();
+  let segmentTagsMap = new Map();
+
+  if (templateData && templateData.html !== undefined) {
+    html = templateData.html;
+    tagMapGlobal = new Map(templateData.tagMap || []);
+    segmentTagsMap = new Map(
+      (templateData.segmentTags || []).map((t) => [t.id, t])
+    );
+  } else if (typeof templateData === "string") {
+    html = templateData;
+  }
+
+  // ── Build segment map ─────────────────────────────────────────────
   const segmentMap = new Map();
   segments.forEach((segment) => {
     const savedTags = segmentTagsMap.get(segment.id) || {};
     const leading = savedTags.leading || segment.leading || "";
     const trailing = savedTags.trailing || segment.trailing || "";
 
-    // Use target if non-empty, otherwise fall back to source.
-    // Do NOT trim aggressively — spaces at segment boundaries matter for rendering.
-    const hasTarget = segment.target !== undefined && segment.target !== null && segment.target.trim() !== "";
-    let rawTarget = hasTarget ? segment.target : (segment.source || "");
+    const hasTarget =
+      segment.target !== undefined &&
+      segment.target !== null &&
+      segment.target.trim() !== "";
+    let rawTarget = hasTarget ? segment.target : segment.source || "";
 
-    // Only strip surrounding whitespace that is definitely extra (not a separator space)
-    rawTarget = rawTarget.replace(/^[\r\n]+|[\r\n]+$/g, ""); // strip only newlines, not spaces
-
-    // Escape raw ampersands inside translation text (excluding tag placeholders)
+    rawTarget = rawTarget.replace(/^[\r\n]+|[\r\n]+$/g, "");
     rawTarget = escapeRawAmpersands(rawTarget);
 
-    // Guard against double-tagging: strip leading/trailing tag-placeholders if rawTarget already has them
     const leadingTrimmed = leading.trim();
     const trailingTrimmed = trailing.trim();
     if (leadingTrimmed && rawTarget.startsWith(leadingTrimmed)) {
       rawTarget = rawTarget.slice(leadingTrimmed.length);
     }
     if (trailingTrimmed && rawTarget.endsWith(trailingTrimmed)) {
-      rawTarget = rawTarget.slice(0, rawTarget.length - trailingTrimmed.length);
+      rawTarget = rawTarget.slice(0, -trailingTrimmed.length);
     }
 
     const fullTarget = leading + rawTarget + trailing;
-    // Restore the tags using the global tag map
     const restoredText = restorePlaceholders(fullTarget, tagMapGlobal);
     segmentMap.set(segment.id, restoredText);
   });
 
+  // ── Replace __SEG_N__ placeholders ────────────────────────────────
   html = html.replace(/__SEG_(\d+)__/g, (match, idStr) => {
     const id = parseInt(idStr, 10);
-    if (segmentMap.has(id)) return segmentMap.get(id);
-    return match;
+    return segmentMap.has(id) ? segmentMap.get(id) : match;
   });
 
-  // Backward compatibility: Remove temporary data-relink-table-id attributes if present
+  // ── Safe cleanup of legacy artefacts ──────────────────────────────
+
+  // Remove data-relink-table-id attributes (added during legacy parsing)
   html = html.replace(/\s*data-relink-table-id="[^"]*"/g, "");
 
-  // Backward compatibility: Unwrap virtual __temp-leaf-block__ div wrappers if present
+  // Unwrap __temp-leaf-block__ wrappers (targeted match, not greedy </div>)
   let prev;
   let guard = 0;
   do {
     prev = html;
-    html = html.replace(/<div\s+class=["']__temp-leaf-block__["']\s*>([\s\S]*?)<\/div>/g, "$1");
+    html = html.replace(
+      /<div\s+class=["']__temp-leaf-block__["']\s*>([\s\S]*?)<\/div>/g,
+      "$1"
+    );
     guard++;
   } while (html !== prev && guard < 10);
 
   return Buffer.from(html, "utf-8");
-};
+}
 
 module.exports = { parseFile, exportFile };

@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Sanction Letter</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+        @page{
+            margin: 100px 25px 130px;
+
+            @bottom-center {
+                content: element(pageFooter);
+            }
+            
+            @top-right {
+                content: element(pageHeader);
+            }
+        }
+
+        #pageFooter {
+            position: running(pageFooter);
+            text-align: center;
+            padding-bottom: 100px;
+            width: 100%;
+        }
+
+        #pageHeader {
+            position: running(pageHeader);
+            text-align: right;
+            padding-bottom: 60px;
+        }
+    </style>
+</head>
+<body style="
+    font-size: 12px;
+    font-family: serif, sans-serif;
+    background-color: #fff;
+    margin: auto;
+    text-align: justify;
+    width: 100%;" th:with="rateAcronym=${isFirstSanctionOnOrAfterCutoff} ? 'FRR' : 'RPLR', rateLong=${isFirstSanctionOnOrAfterCutoff} ? 'Floating Reference Rate' : 'Retail Prime Lending Rate'">
+<header id="pageHeader"> <img src="https://cdn.pchf.in/logos/piramal_company_logo.png" height="150px" width="auto" />
+</header>
+<table>
+    <table style="width: 100%;">
+        <tr>
+            <td>
+                <table style="
+                        width: 100%;
+                        ">
+                    <tr>
+                        <td style="
+                            font-size: 14px;
+                            font-weight: bolder;
+                            padding-bottom: 16px;
+                            text-align: center;
+                            "> SANCTION LETTER
+                        </td>
+                    </tr>
+                </table>
+                <table style="width: 100%;">
+                    <tr>
+                        <td><b>Generated Date: </b><span th:text="${generatedDate}"></span></td>
+                    </tr>
+                    <tr>
+                        <td><b>Application Reference No: </b><span th:text="${applicationReferenceNumber}"></span></td>
+                    </tr>
+                </table>
+                <table >
+                    <tr>
+                        <td style="vertical-align: baseline;"><b>Applicants: <span th:text="${applicantNames}"></span></b></td>
+                    </tr>
+                    <tr th:if="${guarantorNames != null}">
+                        <td style="vertical-align: baseline;"><b>Name of guarantors: <span th:text="${guarantorNames}"></span></b></td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;"><span th:text="${address}"></span></td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">Regd. Mail ID: <span th:text="${email}"></span></td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">Regd. Contact No: <span th:text="${contactNo}"></span></td>
+                    </tr>
+                </table>
+                <table style="margin-top:10px">
+                    <tr>
+                        <td>Dear Sir/Madam
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding-top: 8px;">With reference to your loan application, we are pleased to inform you that your loan request has been approved in principle by Piramal Finance Limited (PFL), on the following terms and conditions:</td>
+                    </tr>
+                    <tr style="left: 20px;">
+                        <td style="padding-top: 12px;">
+                            <table style="border-collapse: collapse; width:75%; margin:auto; font-size: 9px; table-layout: fixed;">
+                                <colgroup>
+                                    <col style="width: 33%;" />
+                                    <col style="width: 33%;" />
+                                    <col style="width: 33%;" th:if="${topUpInfo != null}" />
+                                    <col style="width: 33%;" th:if="${insuranceInfo != null}" />
+                                </colgroup>
+                                <tr>
+                                    <th style="border: 1px solid black; text-align: center; padding: 2px;">Particulars</th>
+                                    <th style="border: 1px solid black; text-align: center; padding: 2px">Primary Loan</th>
+                                    <th style="border: 1px solid black; text-align: center; padding: 2px;" th:if="${topUpInfo != null}">Top up Loan</th>
+                                    <th style="border: 1px solid black; text-align: center; padding: 2px;" th:if="${insuranceInfo != null}">Insurance Loan</th>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid black; padding: 2px">Nature of Facility</td>
+                                    <td style="border: 1px solid black; padding: 2px"><span th:text="${primaryNatureOfFacility}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${topUpInfo != null}"><span th:text="${topUpInfo.topUpNatureOfFacility}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${insuranceInfo != null}"><span th:text="${insuranceInfo.insuranceNatureOfFacility}"></span></td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid black; padding: 2px">Transaction Type</td>
+                                    <td style="border: 1px solid black; padding: 2px"><span th:text="${primaryTransactionType}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${topUpInfo != null}"><span th:text="${topUpInfo.topUpTransactionType}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${insuranceInfo != null}"><span th:text="${insuranceInfo.insuranceTransactionType}"></span></td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid black; padding: 2px">Loan Amount</td>
+                                    <td style="border: 1px solid black; padding: 2px"><span th:text="${primaryLoanAmount}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${topUpInfo != null}"><span th:text="${topUpInfo.topUpLoanAmount}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${insuranceInfo != null}"><span th:text="${insuranceInfo.insuranceLoanAmount}"></span></td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid black; padding: 2px">Life Insurance Premium</td>
+                                    <td style="border: 1px solid black; padding: 2px"><span th:text="${primaryLifeInsurancePremium}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${topUpInfo != null}"><span th:text="${topUpInfo.topUpLifeInsurancePremium}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${insuranceInfo != null}"><span th:text="${insuranceInfo.insuranceLifeInsurancePremium}"></span></td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid black; padding: 2px">General Insurance Premium</td>
+                                    <td style="border: 1px solid black; padding: 2px"><span th:text="${primaryGeneralInsurancePremium}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${topUpInfo != null}"><span th:text="${topUpInfo.topUpGeneralInsurancePremium}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${insuranceInfo != null}"><span th:text="${insuranceInfo.insuranceGeneralInsurancePremium}"></span></td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid black; padding: 2px">Interest Rate Type</td>
+                                    <td style="border: 1px solid black; padding: 2px"><span th:text="${primaryInterestRateType}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${topUpInfo != null}"><span th:text="${topUpInfo.topUpInterestRateType}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${insuranceInfo != null}"><span th:text="${insuranceInfo.insuranceInterestRateType}"></span></td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid black; padding: 2px"><span th:text="${rateAcronym}">RPLR</span></td>
+                                    <td style="border: 1px solid black; padding: 2px"><span style="padding-right: 2px;" th:text="${primaryRPLR}"></span>% p.a.</td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${topUpInfo != null}"><span th:text="${topUpInfo.topUpRPLR}"></span>% p.a.</td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${insuranceInfo != null}"><span th:text="${insuranceInfo.insuranceRPLR}"></span>% p.a.</td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid black; padding: 2px">Spread +/(-)</td>
+                                    <td style="border: 1px solid black; padding: 2px"><span style="padding-right: 2px;" th:text="${primarySpread}"></span>% p.a.</td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${topUpInfo != null}"><span th:text="${topUpInfo.topUpSpread}"></span>% p.a.</td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${insuranceInfo != null}"><span th:text="${insuranceInfo.insuranceSpread}"></span>% p.a.</td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid black; padding: 2px">Rate of Interest</td>
+                                    <td style="border: 1px solid black; padding: 2px"><span style="padding-right: 2px;" th:text="${primaryRateOfInterest}"></span>% p.a.</td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${topUpInfo != null}"><span th:text="${topUpInfo.topUpRateOfInterest}"></span>% p.a.</td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${insuranceInfo != null}"><span th:text="${insuranceInfo.insuranceRateOfInterest}"></span>% p.a.</td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid black; padding: 2px">Rest Frequency</td>
+                                    <td style="border: 1px solid black; padding: 2px"><span th:text="${primaryRestFrequency}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${topUpInfo != null}"><span th:text="${topUpInfo.topUpRestFrequency}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${insuranceInfo != null}"><span th:text="${insuranceInfo.insuranceRestFrequency}"></span></td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid black; padding: 2px">Term of Loan</td>
+                                    <td style="border: 1px solid black; padding: 2px"><span th:text="${primaryTermOfLoan}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${topUpInfo != null}"><span th:text="${topUpInfo.topUpTermOfLoan}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${insuranceInfo != null}"><span th:text="${insuranceInfo.insuranceTermOfLoan}"></span></td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid black; padding: 2px">Installment</td>
+                                    <td style="border: 1px solid black; padding: 2px" th:if="${tenureSplitList==null and primaryEmiSplitInfoSuperLoan==null}"><span th:text="${primaryInstallment}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${topUpInfo != null and tenureSplitList==null and primaryEmiSplitInfoSuperLoan==null}"><span th:text="${topUpInfo.topUpInstallment}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${insuranceInfo != null and tenureSplitList==null and primaryEmiSplitInfoSuperLoan==null}"><span th:text="${insuranceInfo.insuranceInstallment}"></span></td>
+                                </tr>
+                                <!-- Advantage Loan Product variant-->
+                                <tr th:each="tenure, iterStat : ${tenureSplitList}">
+
+                                    <!-- Tenure label -->
+                                    <td style="border: 1px solid black; padding: 2px"
+                                        th:text="${iterStat.index == 0 ? 'First ' + tenure + ' months'
+                                                : (iterStat.index == tenureSplitList.size() - 1
+                                                    ? 'Remaining ' + tenure + ' months'
+                                                    : 'Next ' + tenure + ' months')}">
+                                    </td>
+
+                                    <!-- Primary EMI -->
+                                    <td style="border: 1px solid black; padding: 2px">
+                                        <span th:text="${primaryEmiSplitList[iterStat.index]}"></span>
+                                    </td>
+
+                                    
+                                    <td th:if="${topUpInfo != null
+                                                and topUpInfo.topUpLoanEmiSplit != null
+                                                and topUpInfo.topUpLoanEmiSplit.size() > iterStat.index}"
+                                        style="border: 1px solid black; padding: 2px">
+                                        <span th:text="${topUpInfo.topUpLoanEmiSplit[iterStat.index]}"></span>
+                                    </td>
+
+                                    
+                                    <td th:if="${insuranceInfo != null
+                                                and insuranceInfo.insuranceEmiSplit != null
+                                                and insuranceInfo.insuranceEmiSplit.size() > iterStat.index}"
+                                        style="border: 1px solid black; padding: 2px">
+                                        <span th:text="${insuranceInfo.insuranceEmiSplit[iterStat.index]}"></span>
+                                    </td>
+
+
+                                    <!-- <td style="border: 1px solid black; padding: 2px"></td> -->
+                                </tr>
+
+
+
+                                <tr>
+                                    <td style="border: 1px solid black; padding: 2px">Processing Fees (Inclusive of GST)</td>
+                                    <td style="border: 1px solid black; padding: 2px"><span th:text="${primaryProcessingFees}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${topUpInfo != null}"><span th:text="${topUpInfo.topUpProcessingFees}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${insuranceInfo != null}"><span th:text="${insuranceInfo.insurancProcessingFees}"></span></td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid black; padding: 2px">Cersai Charges (Inclusive of GST)</td>
+                                    <td style="border: 1px solid black; padding: 2px"><span th:text="${primaryCersaiCharges}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${topUpInfo != null}"><span th:text="${topUpInfo.topUpCersaiCharges}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${insuranceInfo != null}"><span th:text="${insuranceInfo.insuranceCersaiCharges}"></span></td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid black; padding: 2px">Admin Charges (Inclusive of GST)</td>
+                                    <td style="border: 1px solid black; padding: 2px"><span th:text="${primaryAdminCharges}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${topUpInfo != null}"><span th:text="${topUpInfo.topUpAdminCharges}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${insuranceInfo != null}"><span th:text="${insuranceInfo.insuranceAdminCharges}"></span></td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid black; padding: 2px">Cibil Charges (Inclusive of GST)</td>
+                                    <td style="border: 1px solid black; padding: 2px"><span th:text="${primaryCibilCharges}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${topUpInfo != null}"><span th:text="${topUpInfo.topUpCibilCharges}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${insuranceInfo != null}"><span th:text="${insuranceInfo.insuranceCibilCharges}"></span></td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid black; padding: 2px">Mode of Payment</td>
+                                    <td style="border: 1px solid black; padding: 2px"><span th:text="${primaryModeOfPayment}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${topUpInfo != null}"><span th:text="${topUpInfo.topUpModeOfPayment}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${insuranceInfo != null}"><span th:text="${insuranceInfo.insuranceModeOfPayment}"></span></td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid black; padding: 2px">Purpose of Loan</td>
+                                    <td style="border: 1px solid black; padding: 2px"><span th:text="${loanPurpose}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${topUpInfo != null}"><span th:text="${topUpInfo.topUploanPurpose}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${insuranceInfo != null}"><span th:text="${insuranceInfo.insuranceLoanPurpose}"></span></td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid black; padding: 2px">End Use</td>
+                                    <td style="border: 1px solid black; padding: 2px"><span th:text="${loanEndUse}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${topUpInfo != null}"><span th:text="${topUpInfo.topUploanEndUse}"></span></td>
+                                    <td style="border: 1px solid black; padding: 2px;" th:if="${insuranceInfo != null}"><span th:text="${insuranceInfo.insuranceLoanEndUse}"></span></td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+                <table style="margin-top: 10px;">
+                    <tr >
+                        <td><b>Collateral Address: <span th:text="${collateralAddress}"></span></b> </td>
+                    </tr>
+                    <tr th:if="${collateralSanctionCondition != null and collateralSanctionCondition.size() > 0}">
+                        <td>
+                            <div style="page-break-inside: avoid;">
+                                <div style="padding-top:10px; margin-bottom:2px;">
+                                    <b>Collateral Sanction Conditions:</b>
+                                </div>
+                                <table style="border-collapse: collapse; width: 75%; margin: auto; font-size: 9px; table-layout: fixed;">
+                                    <colgroup>
+                                        <col style="width: 40%;" />
+                                        <col style="width: 20%;" />
+                                        <col style="width: 20%;" />
+                                        <col style="width: 20%;" />
+                                    </colgroup>
+                                    <thead>
+                                        <tr>
+                                            <th style="border: 1px solid black; text-align: center; padding: 2px;">Details of Document</th>
+                                            <th style="border: 1px solid black; text-align: center; padding: 2px;">Verification Type</th>
+                                            <th style="border: 1px solid black; text-align: center; padding: 2px;">Original/Copy</th>
+                                            <th style="border: 1px solid black; text-align: center; padding: 2px;">Document Stage</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr th:each="condition : ${collateralSanctionCondition}">
+                                            <td style="border: 1px solid black; padding: 2px;">
+                                                <span th:text="${condition['DetailsofDocument']} ?: '-'">-</span>
+                                            </td>
+                                            <td style="border: 1px solid black; padding: 2px;">
+                                                <span th:text="${condition['VerificationType']} ?: '-'">-</span>
+                                            </td>
+                                            <td style="border: 1px solid black; padding: 2px;">
+                                                <span th:text="${condition['Original/Copy']} ?: '-'">-</span>
+                                            </td>
+                                            <td style="border: 1px solid black; padding: 2px;">
+                                                <span th:text="${condition['DocumentStage']} ?: '-'">-</span>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding-top:10px; margin-bottom:2px;"><b> Special Condition:</b></td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <table style=" min-height: 180px;">
+                                <tr th:each="item, stat : ${sanctionConditions}">
+                                    <td th:text="${stat.count}">1</td>
+                                    <td th:text="${item}">Item name</td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td> If the above terms and conditions and the General Terms and Conditions printed overleaf are acceptable to you, please return the duplicate copy of this Sanction Letter duly signed by all applicants as a token of your acceptance</td>
+                    </tr>
+                    <tr>
+                        <td>We look forward to disbursing this Loan and request you to complete all the formalities in this regard.</td>
+                    </tr>
+                    <tr>
+                        <td><b>This is auto generated letter and does not require signature by PFL Official</b></td>
+                    </tr>
+                    <tr>
+                        <td style="padding-top:10px">Accepted by :</td>
+                    </tr>
+                    <tr>
+                        <td><b><span th:text="${applicantNames}"></span></b></td>
+                    </tr>
+                </table>
+                <table style="font-size: 10px;">
+                    <tr>
+                        <td><b>Application Reference No: </b><span th:text="${applicationReferenceNumber}"></span></td>
+                    </tr>
+                    <tr>
+                        <td style="padding-top:5px; text-decoration: underline;"><b>General Terms &amp; Conditions:</b></td>
+                    </tr>
+                    <tr>
+                        <td style="padding-top:5px;">Sanction Expiry Date: <span th:text="${sanctionExpiryDate}"></span></td>
+                    </tr>
+                </table>
+                <table style="padding-top:5px; font-size: 9px;">
+                    <tr>
+                        <td style="vertical-align: baseline;">1.</td>
+                        <td style="padding-left: 12px;">Loan amount will be subject to valuation of the Property (being offered to PFL as a security) as assessed by PFL.</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">2.</td>
+                        <td style="padding-left: 12px;">Repayment of the Loan in EMIs will be from your primary operating/salary account, through the National Automated Clearing House (NACH) system. You will be required to provide a NACH Mandate Form duly signed by you and all the other bank account holders, authorizing your above bank to debit the above mentioned account with the amount of the EMI</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">3.</td>
+                        <td style="padding-left: 12px;">The rate of interest mentioned overleaf, is based on the current prevailing <span th:text="${rateLong}">Retail Prime Lending Rate</span> (<span th:text="${rateAcronym}">RPLR</span>) of PFL and the same may vary at the time of disbursement of the Loan or during the subsistence of the Loan as specified in the terms of the Loan Agreement.</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">4.</td>
+                        <td style="padding-left: 12px">PFL, at its sole judgment and discretion, may increase or decrease or change the interest rate based on applicable <span th:text="${rateAcronym}">RPLR</span> and PFL shall intimate or provide notice in this regard to you by updating on its web site. The revised <span th:text="${rateAcronym}">RPLR</span> applicable shall be as updated on the web site of Lender from time to time. Such varied Interest Rate shall become accrued and payable from a prospective date intimated by the Lender and shall be binding on you</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">5.</td>
+                        <td style="padding-left: 12px">Margin/Spread Change: PFL shall have a right to change the margin/spread (thereby change in rate of interest) at any time during the currency of the Loan in the scenarios including but not limited to i) upon occurrence of adverse change in money market condition ii) RBI revising the standard provision on assets, iii) RBI changing the risk weight for assets, iv) in the event of any downward change in your credit rating (both internal as well as external)/credit risk profile iv) Occurrence of an Event of Default on your part </td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">6.</td>
+                        <td style="padding-left: 12px">In case of PMAY, the assessment of your eligibility to avail the benefits under the PMAY scheme is at the sole discretion of Government of India and at no point of time PFLshall  be  held  liable/responsible  for  any  delay  in  getting  the  benefits  under  the  said  scheme  or  rejection  of  my  claim  by  the  Government  under  the  scheme.(Applicable  only  for PMAY cases)</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">7.</td>
+                        <td style="padding-left: 12px">As a result of variations in the Rate of Interest, the amount of the EMI and / or the number of EMIs is liable to vary from time to time</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">8.</td>
+                        <td style="padding-left: 12px">Processing fees are not refundable.</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">9.</td>
+                        <td style="padding-left: 12px">The Loan together with interest and other charges shall be secured by:</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">9(a).</td>
+                        <td style="padding-left: 12px">Exclusive first charge of PFL on the Property by way of Equitable Mortgage, unless otherwise specified in Special Conditions.</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">9(b).</td>
+                        <td style="padding-left: 12px">Such other security as PFL may stipulate.</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">10.</td>
+                        <td style="padding-left: 12px">Any disbursement under this Sanction Letter shall be made only after you have fully invested your own contribution</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">11.</td>
+                        <td style="padding-left: 12px">The Loan shall not exceed such percentage of the documented cost or realisable value of the Property whichever is lower, as prescribed under the applicable regulatory norms &amp; PFL Policy.</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">12.</td>
+                        <td style="padding-left: 12px">Sanction &amp; Disbursement of the Loan is subject to completion of legal and technical due diligence of the Property, compliance of KYC requirements &amp; execution/submission of necessary documents as required by PFL.</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">13.</td>
+                        <td style="padding-left: 12px">The KYC details submitted for the current loan application will be updated for all the existing loans, if any and will replace any previously provided details.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">14.</td>
+                        <td style="padding-left: 12px">Rate of Interest conversion charges (Fixed to Fixed or floating to floating or fixed to floating or floating to fixed, as applicable from time to time) : Upto 1% of principal outstanding + applicable taxes.</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">15.</td>
+                        <td style="padding-left: 12px">Loan will be disbursed in lump sum or in suitable instalments, considering the need and progress of construction as determined by PFL</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">16(a).</td>
+                        <td style="padding-left: 12px">Interest on the partially disbursed loan amount (PEMII) will be payable till the loan is fully disbursed or 36 months from the date of first disbursement whichever is earlier (theperiod may be extended at discretion of PFL) and payment of EMI shall start thereafter.</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">16(b).</td>
+                        <td style="padding-left: 12px">You shall be allowed to drawn down under the loan within the period of 36 months from the date of first disbursement (Availability Period) which may be extended at discretion of PFL</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">17(a).</td>
+                        <td style="padding-left: 12px">Property insurance is mandatory.The insurance premium is to be borne by You or can be added to the loan amount if required.</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">17(b).</td>
+                        <td style="padding-left: 12px">You shall fully insure the Property during the loan term against all losses, damages on account of fire, riots, and other hazards like earthquake, floods and any other insurable riskas required by PFL for the cost of the Property and such insurance policy obtained by you shall be assigned in favour of PFL. You shall submit the insurance policy to PFL.</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">17(c).</td>
+                        <td style="padding-left: 12px">Opting for the loan amount along with life/property insurance in the sanction letter is only Your intent and such selection is not binding on PFL. Such selection shall become effective only upon You explicitly instructing PFL in writing to disburse the premium to the insurance company directly and on complying with all the formalities as requiredby the insurance company. PFL shall not be liable for any consequences/damages/losses arising out of non-compliance of the same</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">17(d).</td>
+                        <td style="padding-left: 12px">You shall ensure that the insurance is for the entire term of the loan and accordingly renew the insurance from time to time and pay the premium for the same. PFL shall not be responsible for the renewal of the insurance</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">17(e).</td>
+                        <td style="padding-left: 12px">On cancellation of the loan amount and subsequently cancellation of the insurance policy, the rules of insurance company in respect of refund of premium shall be applied and PFL shall not be responsible and liable for any loss arising out of such cancellation.</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">17(f).</td>
+                        <td style="padding-left: 12px">Claims if arising out of any unfortunate eventualities is a matter between the insurer and borrower, PFL is not liable for the same.</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">18.</td>
+                        <td style="padding-left: 12px">This  offer  is  valid  for  a  period  of  90  days  from  the  date  of  this  letter  and  on  the  expiry  of  this  validity  period  this  sanction  shall  automatically  stand  cancelled  with  no  priorintimation from PFL. Restoring the sanction will be at the sole discretion of PFL including but not limited to any new conditions that PFL may require and payment of any additional fees for such restoration.</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">19.</td>
+                        <td style="padding-left: 12px">You will be required to bear and pay applicable stamp duty, CERSAI charges and all statutory and regulatory charges /taxes/GST, wherever imposed, levied, collected, withheld orassessed by any government authority, whether on Loan approved herein, transaction documents,acquisition or provision of Property, or otherwise, pursuant to the applicable laws,during the pendency of the Loan. These charges are non-refundable in nature and payable at the time of disbursement as and when due.</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">20.</td>
+                        <td style="padding-left: 12px">This Sanction Letter is in supersession of any other Sanction Letter that may have been issued by PFL for this purpose.</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">21.</td>
+                        <td style="padding-left: 12px">Kindly make payment of the balance processing fees as indicated overleaf through a cheque marked "Account Payee only" drawn on and payable at any bank in India in the nameof "Piramal Finance Limited" (If already paid, please ignore).</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">22.</td>
+                        <td style="padding-left: 12px">Notwithstanding anything contained in the loan documents, Interest shall begin to accrue in favour of PFL as and from the date of the disbursement of the loan. Disbursements shall be deemed to have been made to the Borrower on the date of the cheque or pay order, or on the date on which the loan amount is transferred by PFL to the designatedaccount by RTGS/NEFT as the case may be. Interest on the loan will begin to accrue in favour of PFL from the date of cheque or pay order or the date of the RTGS/NEFT asthe case may be, irrespective of the time taken in transit/collection/realization of the cheque by the Borrower or the payee of such cheque.</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">23.</td>
+                        <td style="padding-left: 12px">Interest Rate for each loan will be decided after considering various factors such as customer profile, tenure of loan, type of loan, value of security etc. Gradation of interest will bebased on factors such as Credit Bureau score, income, etc. For more details, please refer to our website www.piramalfinance.com.</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">24.</td>
+                        <td style="padding-left: 12px">The Borrower agrees to promptly notify the Lender of any changes in the information provided by the Borrower to the Lender at the time of establishing the business relationship or account-based relationship, or thereafter, as required by applicable laws and regulations, including but not limited to, changes in the Borrower's identification documents, address, contact information, or financial status. The Borrower shall provide the Lender with updated documentation within 30 days of any such change. The Borrower's failure to comply with this obligation may be considered a material breach of this Agreement and may result in the Lender taking appropriate action, including but not limited to, terminating the loan or taking other remedial measures.</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">25.</td>
+                        <td style="padding-left: 12px">On successful closure of the loan account, the original property documents will be released/handed over within 30 days from the loan closure date. In case the borrower/s haveavailed of any other loan against this property/collateral funded by the company, the documents will be released on the successful closure of all linked loan, wherever applicable.The original collateral /property documents can be collected from the loan originating branch or any other branch as per borrower’s choice at the time of placing the request for closure on the loan.</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">26.</td>
+                        <td style="padding-left: 12px">The Borrower understands and agrees that revision in <span th:text="${rateAcronym}">RPLR</span> may lead to changes in EMI and/or Loan Term or both.</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline; width: 3%;">27.</td>
+                        <td style="padding-left: 12px">The Borrower may, it has choice, to opt for (i) enhancement in EMI or (ii)elongation of Loan Term or a combination of both options.</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">28.</td>
+                        <td style="padding-left: 12px"><b>PENAL CHARGES</b> : 24% per annum i.e. 2% p.m. + applicable taxes on default of PEMII/EMI from the date of default till the date of actual payment.</td>
+                    </tr>
+                    <tr th:if="${isMortgageForeclosureChangesApplicable}==true">
+                        <td style="vertical-align: baseline;">29.</td>
+                        <td style="padding-left: 12px"><b>Part Payment/Pre-closure charges:</b>
+                            <ul>
+                                <li>Loans availed by Individual Borrower and / or Micro &amp; Small Enterprises (MSEs) at Floating Rate of Interest: <b>No prepayment or part-payment charges. (Housing Loans &amp; Non-Housing Loans)</b></li>
+                                <li>Loans availed by Non-Individuals (Other than MSEs) at Floating Rate of Interest: <b>4% of the principal amount being prepaid, plus applicable taxes. (Housing Loans &amp; Non-Housing Loans)</b></li>
+                                <li>Loans availed by Individuals at Fixed Rate of Interest: <b>2% of the principal amount being prepaid, plus applicable taxes. (Housing Loans)</b></li>
+                                <li>Loans availed by Individuals at Fixed Rate of Interest: <b>4% of the principal amount being prepaid, plus applicable taxes. (Non-Housing Loans)</b></li>
+                                <li>Loans availed by Non-Individuals at Fixed Rate of Interest: <b>4% of the principal amount being prepaid, plus applicable taxes. (Housing Loans &amp; Non-Housing Loans)</b></li>
+                            </ul>
+                            <div>
+                                <b>Part-Payment Terms:</b> The borrower may make part-payments towards the outstanding principal only once in a calendar month. Each such part-payment amount should exceed one (1) Equated Monthly Instalment (EMI) else any amount less than or equal to one (1) EMI shall be treated as an advance EMI and shall not be considered as a part-payment towards reduction of the principal.
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">
+                            <span th:text="${isMortgageForeclosureChangesApplicable} ? '30.' : '29.'"></span>
+                        </td>
+                                                <td style="padding-left: 12px">
+                            Classification of loan account as Special Mention Account (SMA) and Non-Performing Asset (NPA)
+                            <ol type="a">
+                                <li>
+                                    Upon the occurrence of any payment default under this Loan, the Lender shall classify Borrower’s loan
+                                    account held with the Lender (Loan Account) in accordance with the prevailing RBI norms and guidelines.
+                                    <ol>
+                                        <li>
+                                            As per the current prevailing guidelines of RBI, Loan Account shall be classified as Special
+                                            Mention
+                                            Account (SMA) on the following basis:
+                                            <table style="border-collapse: collapse; width:75%; margin:auto; table-layout: fixed;">
+                                                <colgroup>
+                                                    <col style="width: 30%;" />
+                                                    <col style="width: 70%;" />
+                                                </colgroup>
+                                                <tr>
+                                                    <th style="border: 1px solid black; text-align: center; padding: 2px;">SMA
+                                                        Sub-Categories
+                                                    </th>
+                                                    <th style="border: 1px solid black; text-align: center; padding: 2px">Basis for
+                                                        classification - Principal or interest payment or any other amount wholly or partly
+                                                        overdue</th>
+                                                </tr>
+                                                <tr>
+                                                    <td style="border: 1px solid black; padding: 2px">SMA-0</td>
+                                                    <td style="border: 1px solid black; padding: 2px">Upto 30 days</td>
+                                                </tr>
+                                                <tr>
+                                                    <td style="border: 1px solid black; padding: 2px">SMA-1</td>
+                                                    <td style="border: 1px solid black; padding: 2px">More than 30 days and upto 60 days
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td style="border: 1px solid black; padding: 2px">SMA-2</td>
+                                                    <td style="border: 1px solid black; padding: 2px">More than 60 days and upto 90 days
+                                                    </td>
+                                                </tr>
+                                            </table>
+                                        </li>
+                                        <li>Further, the Loan Account shall be classified as Non-Performing Asset (NPA) where interest
+                                            and/or
+                                            instalment of principal remains overdue for a period of more than 90 days in respect of a term
+                                            loan;
+                                        </li>
+                                        <li>Loan account classified as NPAs may be upgraded as standard asset only if entire arrears of
+                                            interest
+                                            and principal Loan are paid by the Borrower.</li>
+                                    </ol>
+                                </li>
+                                <li>
+                                    Examples of SMA/NPA classification dates:
+                                    <ol>
+                                        <li>If due date of a loan account is March 31, 2021, and full dues are not received before the
+                                            Lender
+                                            runs the day-end process for this date, the date of overdue shall be March 31, 2021. If it
+                                            continues
+                                            to remain overdue, then this account shall get tagged as SMA1 upon running day-end process on
+                                            April
+                                            30, 2021 i.e. upon completion of 30 days of being continuously overdue. Accordingly, the date of
+                                            SMA-1 classification for that account shall be April 30, 2021.</li>
+                                        <li>Similarly, if the account continues to remain overdue, it shall get tagged as SMA-2 upon running
+                                            day-end process on May 30, 2021 and if continues to remain overdue further, it shall get
+                                            classified
+                                            as NPA upon running day end process on June 29, 2021.</li>
+                                    </ol>
+                                </li>
+                            </ol>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline; width: 3%">
+                            <span th:text="${isMortgageForeclosureChangesApplicable} ? '31.' : '30.'"></span>
+                        </td>
+                        <td style="padding-left: 12px">In case of non-addressal of the complaint to the customer’s satisfaction within a period of 30 days from the above quarters, the Member may approach the RBI CMS portal by lodging a complaint online at the given link  https://cms.rbi.org.in or may write to below mentioned address: Centralised Receipt and Processing Centre, Reserve Bank of India, 4th Floor, Sector 17, Chandigarh – 160017, Toll Free No. 14448.</td>
+                    </tr>
+                </table>
+                <table>
+                    <tr>
+                        <td colspan="2" style="padding-left:18px ;padding-top:5px;">This sanction shall stand cancelled and revoked if:</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">1.</td>
+                        <td style="padding-left: 5px">There is any material change in the opinion of PFL on the basis of which the Loan had in principle, been sanctioned.</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">2.</td>
+                        <td style="padding-left: 5px">Any material facts regarding your income, employment, or ability to repay, or any other relevant aspect of your application for the Loan is suppressed, concealed misrepresented or not made known to us.</td>
+                    </tr>
+                    <tr>
+                        <td style="vertical-align: baseline;">3.</td>
+                        <td style="padding-left: 5px">Any statement made in the loan application or otherwise is found to be misleading, untrue or incorrect.</td>
+                    </tr>
+                    <tr>
+                        <td colspan="2" style="vertical-align: baseline; padding-top: 64px;">Accepted by :</td>
+                    </tr>
+                    <tr>
+                        <td colspan="2" style="vertical-align: baseline;"><b><span th:text="${applicantNames}"></span></b></td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</table>
+    <footer id="pageFooter">
+        <table style="width: 100%;">
+            <tr>
+                <td style="text-align: center; font-size: 8px; width: 100%;">Piramal Finance Limited <br />
+                    (Formerly known as Piramal Capital &amp; Housing Finance Limited) <br/>
+                    Sanction_Letter_V<span style="padding-right: 15px;" th:text="${sanctionLetterVersion}"></span>  CIN : L64910MH1984PLC032639 Registered office : 601, 6th Floor, Amiti Building, Agastya Corporate Park, Kamani Junction, Opp. Fire Station, LBS Marg, Kurla (West), Mumbai- 400070 <span style="padding-left: 20px;">Page 1 of 3</span> <br />
+                    <b>Toll Free Number : 1800 2666 444</b> <br />
+                    <span style="color: #ef4023;">www.piramalfinance.com | Emai ID: customercare@piramal.com</span>
+                </td>
+            </tr>
+        </table>
+    </footer>
+</body>
+</html>

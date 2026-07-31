@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Folder, User, Calendar, Trash2, Search, Filter, Globe, BookOpen, Settings, ChevronRight, LayoutDashboard, Users, Share2, MoreVertical, Copy, StickyNote, History, Check, XCircle, Sparkles, Layers, FileText, CheckCircle2, TrendingUp, LogOut } from "lucide-react";
-import { fetchProjects, createProject, deleteProject, duplicateProject } from "../services/api";
+import { Plus, Folder, User, Calendar, Trash2, Search, Filter, Globe, BookOpen, Settings, ChevronRight, LayoutDashboard, Users, Share2, MoreVertical, Copy, StickyNote, History, Check, XCircle, Sparkles, Layers, FileText, CheckCircle2, TrendingUp, LogOut, PauseCircle, Clock, ChevronDown, Archive } from "lucide-react";
+import { fetchProjects, createProject, deleteProject, duplicateProject, updateProjectDetails } from "../services/api";
 import { LANGUAGES } from "../constants/languages";
 import { ShareModal } from "./ShareModal";
 import { ProjectNotesModal } from "./ProjectNotesModal";
 import { SettingsModal } from "./SettingsModal";
 import { ProjectHistoryModal } from "./ProjectHistoryModal";
 import { CardGridSkeleton } from "./SkeletonLoader";
+import { normalizeStatus, formatStatusLabel, getStatusColorClass, getStatusDotColor, STATUS_OPTIONS } from "../utils/projectStatusUtils";
 
 import io from "socket.io-client";
 
@@ -16,12 +17,13 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
   const [searchQuery, setSearchQuery] = useState("");
   const [filterClient, setFilterClient] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [activeTab, setActiveTab] = useState("all"); // "all", "my", "shared"
+  const [activeTab, setActiveTab] = useState("active"); // default to "active" projects
   const [shareModalProject, setShareModalProject] = useState(null);
   const [notesModalProject, setNotesModalProject] = useState(null);
   const [settingsModalProjectId, setSettingsModalProjectId] = useState(null);
   const [showGlobalHistoryModal, setShowGlobalHistoryModal] = useState(false);
   const [openMenuProjectId, setOpenMenuProjectId] = useState(null);
+  const [openStatusMenuProjectId, setOpenStatusMenuProjectId] = useState(null);
 
   // Form states for Create Project
   const [projName, setProjName] = useState("");
@@ -47,9 +49,12 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
     };
   }, []);
 
-  // Click outside to close 3-dots dropdown
+  // Click outside to close dropdown menus
   useEffect(() => {
-    const handleGlobalClick = () => setOpenMenuProjectId(null);
+    const handleGlobalClick = () => {
+      setOpenMenuProjectId(null);
+      setOpenStatusMenuProjectId(null);
+    };
     window.addEventListener("click", handleGlobalClick);
     return () => window.removeEventListener("click", handleGlobalClick);
   }, []);
@@ -124,6 +129,18 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
     }
   };
 
+  const handleUpdateProjectStatus = async (id, newStatus) => {
+    try {
+      showToast(`Updating status to ${formatStatusLabel(newStatus)}...`);
+      await updateProjectDetails(id, { status: newStatus });
+      showToast(`Project status set to ${formatStatusLabel(newStatus)}`);
+      loadProjects();
+    } catch (err) {
+      console.error(err);
+      showToast(err.response?.data?.error || "Failed to update project status", "error");
+    }
+  };
+
   const toggleLanguageSelection = (langCode) => {
     if (selectedLangs.includes(langCode)) {
       setSelectedLangs(selectedLangs.filter((l) => l !== langCode));
@@ -138,8 +155,14 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
       l.code.toLowerCase().includes(langSearch.toLowerCase())
   );
 
-  // Filter projects by Tab and Search/Client queries
+  // Filter projects by Status/Tab and Search/Client queries
   const filteredProjects = projects.filter((p) => {
+    const pStatus = normalizeStatus(p.status || p.settings?.status);
+    
+    if (activeTab === "active" && pStatus !== "active") return false;
+    if (activeTab === "completed" && pStatus !== "completed") return false;
+    if (activeTab === "on_hold" && pStatus !== "on_hold") return false;
+    if (activeTab === "archived" && pStatus !== "archived") return false;
     if (activeTab === "my" && p.isShared) return false;
     if (activeTab === "shared" && !p.isShared) return false;
 
@@ -159,6 +182,10 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
     return true;
   });
 
+  const activeProjectsCount = projects.filter((p) => normalizeStatus(p.status || p.settings?.status) === "active").length;
+  const completedProjectsCount = projects.filter((p) => normalizeStatus(p.status || p.settings?.status) === "completed").length;
+  const onHoldProjectsCount = projects.filter((p) => normalizeStatus(p.status || p.settings?.status) === "on_hold").length;
+  const archivedProjectsCount = projects.filter((p) => normalizeStatus(p.status || p.settings?.status) === "archived").length;
   const myProjectsCount = projects.filter((p) => !p.isShared).length;
   const sharedProjectsCount = projects.filter((p) => p.isShared).length;
   const totalFilesCount = projects.reduce((sum, p) => sum + (p.fileCount || (p.documents?.length || 0)), 0);
@@ -236,47 +263,59 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
         
         {/* ── STATS HERO BANNER ── */}
         <section className="grid grid-cols-1 md:grid-cols-4 gap-5">
-          <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-5 shadow-sm flex items-center gap-4 relative overflow-hidden group">
-            <div className="absolute right-0 top-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl group-hover:bg-indigo-500/10 transition-all" />
-            <div className="h-11 w-11 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center border border-indigo-500/20 shrink-0">
+          <div 
+            onClick={() => setActiveTab("active")}
+            className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] hover:border-emerald-500/40 rounded-2xl p-5 shadow-sm flex items-center gap-4 relative overflow-hidden group cursor-pointer transition-all"
+          >
+            <div className="absolute right-0 top-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition-all" />
+            <div className="h-11 w-11 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20 shrink-0 group-hover:scale-110 transition-transform">
               <Folder size={20} />
             </div>
             <div>
-              <span className="text-[11px] font-extrabold uppercase text-[var(--text-muted)] tracking-wider">Total Projects</span>
-              <h4 className="text-xl font-black text-[var(--text-primary)] mt-1">{projects.length}</h4>
+              <span className="text-[11px] font-extrabold uppercase text-[var(--text-muted)] tracking-wider">Active Projects</span>
+              <h4 className="text-xl font-black text-emerald-400 mt-1">{activeProjectsCount}</h4>
             </div>
           </div>
 
-          <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-5 shadow-sm flex items-center gap-4 relative overflow-hidden group">
-            <div className="absolute right-0 top-0 w-24 h-24 bg-purple-500/5 rounded-full blur-2xl group-hover:bg-purple-500/10 transition-all" />
-            <div className="h-11 w-11 rounded-2xl bg-purple-500/10 text-purple-400 flex items-center justify-center border border-purple-500/20 shrink-0">
-              <Users size={20} />
+          <div 
+            onClick={() => setActiveTab("completed")}
+            className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] hover:border-blue-500/40 rounded-2xl p-5 shadow-sm flex items-center gap-4 relative overflow-hidden group cursor-pointer transition-all"
+          >
+            <div className="absolute right-0 top-0 w-24 h-24 bg-blue-500/5 rounded-full blur-2xl group-hover:bg-blue-500/10 transition-all" />
+            <div className="h-11 w-11 rounded-2xl bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20 shrink-0 group-hover:scale-110 transition-transform">
+              <CheckCircle2 size={20} />
             </div>
             <div>
-              <span className="text-[11px] font-extrabold uppercase text-[var(--text-muted)] tracking-wider">Shared Projects</span>
-              <h4 className="text-xl font-black text-[var(--text-primary)] mt-1">{sharedProjectsCount}</h4>
+              <span className="text-[11px] font-extrabold uppercase text-[var(--text-muted)] tracking-wider">Completed</span>
+              <h4 className="text-xl font-black text-blue-400 mt-1">{completedProjectsCount}</h4>
             </div>
           </div>
 
-          <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-5 shadow-sm flex items-center gap-4 relative overflow-hidden group">
-            <div className="absolute right-0 top-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition-all" />
-            <div className="h-11 w-11 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20 shrink-0">
-              <FileText size={20} />
-            </div>
-            <div>
-              <span className="text-[11px] font-extrabold uppercase text-[var(--text-muted)] tracking-wider">Total Files</span>
-              <h4 className="text-xl font-black text-[var(--text-primary)] mt-1">{totalFilesCount}</h4>
-            </div>
-          </div>
-
-          <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-5 shadow-sm flex items-center gap-4 relative overflow-hidden group">
+          <div 
+            onClick={() => setActiveTab("on_hold")}
+            className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] hover:border-amber-500/40 rounded-2xl p-5 shadow-sm flex items-center gap-4 relative overflow-hidden group cursor-pointer transition-all"
+          >
             <div className="absolute right-0 top-0 w-24 h-24 bg-amber-500/5 rounded-full blur-2xl group-hover:bg-amber-500/10 transition-all" />
-            <div className="h-11 w-11 rounded-2xl bg-amber-500/10 text-amber-400 flex items-center justify-center border border-amber-500/20 shrink-0">
-              <TrendingUp size={20} />
+            <div className="h-11 w-11 rounded-2xl bg-amber-500/10 text-amber-400 flex items-center justify-center border border-amber-500/20 shrink-0 group-hover:scale-110 transition-transform">
+              <PauseCircle size={20} />
             </div>
             <div>
-              <span className="text-[11px] font-extrabold uppercase text-[var(--text-muted)] tracking-wider">Workspace Mode</span>
-              <h4 className="text-sm font-black text-amber-400 mt-1">Enterprise active</h4>
+              <span className="text-[11px] font-extrabold uppercase text-[var(--text-muted)] tracking-wider">On Hold</span>
+              <h4 className="text-xl font-black text-amber-400 mt-1">{onHoldProjectsCount}</h4>
+            </div>
+          </div>
+
+          <div 
+            onClick={() => setActiveTab("archived")}
+            className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] hover:border-zinc-500/40 rounded-2xl p-5 shadow-sm flex items-center gap-4 relative overflow-hidden group cursor-pointer transition-all"
+          >
+            <div className="absolute right-0 top-0 w-24 h-24 bg-zinc-500/5 rounded-full blur-2xl group-hover:bg-zinc-500/10 transition-all" />
+            <div className="h-11 w-11 rounded-2xl bg-zinc-500/10 text-zinc-400 flex items-center justify-center border border-zinc-500/20 shrink-0 group-hover:scale-110 transition-transform">
+              <Archive size={20} />
+            </div>
+            <div>
+              <span className="text-[11px] font-extrabold uppercase text-[var(--text-muted)] tracking-wider">Archived</span>
+              <h4 className="text-xl font-black text-zinc-400 mt-1">{archivedProjectsCount}</h4>
             </div>
           </div>
         </section>
@@ -285,30 +324,69 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
         <section className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
           
           {/* Tab Selector */}
-          <div className="flex items-center gap-1.5 bg-[var(--bg-panel)] border border-[var(--border-subtle)] p-1.5 rounded-2xl shadow-xs">
+          <div className="flex items-center gap-1.5 bg-[var(--bg-panel)] border border-[var(--border-subtle)] p-1.5 rounded-2xl shadow-xs overflow-x-auto">
+            <button
+              onClick={() => setActiveTab("active")}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                activeTab === "active"
+                  ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/20"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              Active ({activeProjectsCount})
+            </button>
+
+            <button
+              onClick={() => setActiveTab("completed")}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                activeTab === "completed"
+                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/20"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+              }`}
+            >
+              <CheckCircle2 size={13} />
+              Completed ({completedProjectsCount})
+            </button>
+
+            <button
+              onClick={() => setActiveTab("on_hold")}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                activeTab === "on_hold"
+                  ? "bg-amber-600 text-white shadow-md shadow-amber-600/20"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+              }`}
+            >
+              <PauseCircle size={13} />
+              On Hold ({onHoldProjectsCount})
+            </button>
+
+            <button
+              onClick={() => setActiveTab("archived")}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                activeTab === "archived"
+                  ? "bg-zinc-600 text-white shadow-md shadow-zinc-600/20"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+              }`}
+            >
+              <Archive size={13} />
+              Archived ({archivedProjectsCount})
+            </button>
+
             <button
               onClick={() => setActiveTab("all")}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === "all"
                   ? "bg-indigo-500 text-white shadow-md shadow-indigo-500/20"
                   : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
               }`}
             >
-              All Projects ({projects.length})
+              All ({projects.length})
             </button>
-            <button
-              onClick={() => setActiveTab("my")}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeTab === "my"
-                  ? "bg-indigo-500 text-white shadow-md shadow-indigo-500/20"
-                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
-              }`}
-            >
-              My Projects ({myProjectsCount})
-            </button>
+
             <button
               onClick={() => setActiveTab("shared")}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                 activeTab === "shared"
                   ? "bg-indigo-500 text-white shadow-md shadow-indigo-500/20"
                   : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
@@ -345,6 +423,7 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
 
         </section>
 
+
         {/* ── PROJECTS CARDS GRID ── */}
         <section>
           {loading ? (
@@ -376,6 +455,7 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
                   : 0;
 
                 const notesCount = proj.notesCount || 0;
+                const projStatus = proj.status || proj.settings?.status || "Active";
 
                 return (
                   <div
@@ -480,8 +560,52 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
                         </div>
                       </div>
 
-                      {/* Client / Due Badges */}
+                      {/* Status Selector & Client / Due Badges */}
                       <div className="flex flex-wrap items-center gap-2 mt-3">
+                        {/* Dynamic Interactive Status Badge */}
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenStatusMenuProjectId(openStatusMenuProjectId === proj.id ? null : proj.id);
+                            }}
+                            className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-xl select-none cursor-pointer transition-all ${getStatusColorClass(projStatus)}`}
+                            title="Click to change project status"
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${getStatusDotColor(projStatus)}`} />
+                            <span>{formatStatusLabel(projStatus)}</span>
+                            <ChevronDown size={11} className="text-[var(--text-muted)]" />
+                          </button>
+
+                          {openStatusMenuProjectId === proj.id && (
+                            <div 
+                              className="absolute left-0 mt-1.5 w-36 bg-[var(--bg-elevated)] border border-[var(--border-medium)] rounded-2xl shadow-2xl z-50 py-1 flex flex-col text-xs select-none"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {STATUS_OPTIONS.map((st) => (
+                                <button
+                                  key={st.value}
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenStatusMenuProjectId(null);
+                                    handleUpdateProjectStatus(proj.id, st.value);
+                                  }}
+                                  className="w-full text-left px-3 py-1.5 hover:bg-[var(--bg-hover)] flex items-center justify-between font-bold text-[var(--text-primary)] cursor-pointer"
+                                >
+                                  <span className="flex items-center gap-2">
+                                    <span className={`w-2 h-2 rounded-full ${st.dotColor}`} />
+                                    {st.label}
+                                  </span>
+                                  {normalizeStatus(projStatus) === st.value && (
+                                    <Check size={12} className="text-indigo-400" />
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
                         {proj.isShared ? (
                           <span className="inline-flex items-center gap-1 bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[10px] font-bold px-2.5 py-0.5 rounded-lg">
                             <Users size={11} /> Shared ({proj.sharedBy || "Owner"})
@@ -493,6 +617,7 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
                             </span>
                           )
                         )}
+
 
                         {(() => {
                           const rawDueDate = proj.dueDate || proj.deadline || proj.settings?.dueDate;

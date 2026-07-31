@@ -7,7 +7,17 @@ let io = null;
 const activeUsers = new Map(); // Map<roomId, Map<socketId, userInfo>>
 const documentLocks = new Map(); // Map<roomId, Map<segmentIndex, lockInfo>>
 const onlineChatUsers = new Map(); // Map<userId, Set<socketId>>
+const socketAuthCache = new Map(); // Map<token, { user, profile, expiresAt }>
 
+// Clean up expired socket auth cache entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [token, cache] of socketAuthCache.entries()) {
+    if (cache.expiresAt < now) {
+      socketAuthCache.delete(token);
+    }
+  }
+}, 30000);
 
 const getDocumentRoomId = (documentId, targetLang = null) => `${documentId}:${targetLang || "default"}`;
 
@@ -25,6 +35,16 @@ function initSocket(server) {
       const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.split(" ")[1];
       if (!token) {
         return next(new Error("Authentication error: Missing token"));
+      }
+
+      // Check fast memory cache for recently validated token (30s TTL)
+      if (socketAuthCache.has(token)) {
+        const cached = socketAuthCache.get(token);
+        if (cached.expiresAt > Date.now()) {
+          socket.user = cached.user;
+          socket.profile = cached.profile;
+          return next();
+        }
       }
 
       // Verify token with Supabase Auth
@@ -47,6 +67,13 @@ function initSocket(server) {
       if (profile.status === "suspended") {
         return next(new Error("Authentication error: Account suspended"));
       }
+
+      // Cache validated authentication state for 30 seconds
+      socketAuthCache.set(token, {
+        user,
+        profile,
+        expiresAt: Date.now() + 30000
+      });
 
       socket.user = user;
       socket.profile = profile;

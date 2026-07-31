@@ -1,3 +1,4 @@
+const fs = require("fs");
 const { supabase } = require("../config/supabase");
 
 // Helper to count words in source segments
@@ -17,11 +18,21 @@ function countWordsInSegments(segments) {
   return count;
 }
 
+// Helper to clean up uploaded file if auth fails
+function cleanupUploadedFile(request) {
+  if (request.file && request.file.path) {
+    try {
+      if (fs.existsSync(request.file.path)) fs.unlinkSync(request.file.path);
+    } catch (_) {}
+  }
+}
+
 // 1. Verify User Session & Status
 async function checkAuth(request, response, next) {
   try {
     const authHeader = request.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      cleanupUploadedFile(request);
       return response.status(401).json({ error: "Missing authorization token" });
     }
 
@@ -31,6 +42,7 @@ async function checkAuth(request, response, next) {
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     
     if (authError || !user) {
+      cleanupUploadedFile(request);
       return response.status(401).json({ error: "Invalid or expired session token" });
     }
 
