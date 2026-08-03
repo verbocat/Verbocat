@@ -60,12 +60,19 @@ api.interceptors.request.use(async (config) => {
 
   // Inject active space subdomain header
   try {
-    const hostname = window.location.hostname;
-    const parts = hostname.split(".");
-    if (parts.length > 2 || (parts.length === 2 && parts[1] === "localhost")) {
-      const subdomain = parts[0];
-      if (subdomain && subdomain !== "www" && subdomain !== "app") {
-        config.headers["X-Tenant-Subdomain"] = subdomain;
+    const searchParams = new URLSearchParams(window.location.search);
+    const spaceParam = searchParams.get("space") || searchParams.get("tenant") || searchParams.get("org");
+    if (spaceParam) {
+      config.headers["X-Tenant-Subdomain"] = spaceParam;
+    } else {
+      const hostname = window.location.hostname;
+      const parts = hostname.split(".");
+      // test.centroid.verbolabs.com -> 4 parts; test.localhost -> 2 parts
+      if (parts.length > 3 || (parts.length === 2 && parts[1] === "localhost")) {
+        const subdomain = parts[0];
+        if (subdomain && !["www", "app", "centroid", "verbolabs"].includes(subdomain.toLowerCase())) {
+          config.headers["X-Tenant-Subdomain"] = subdomain;
+        }
       }
     }
   } catch (_) {}

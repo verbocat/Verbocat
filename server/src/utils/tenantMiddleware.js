@@ -86,15 +86,18 @@ async function resolveTenant(request, response, next) {
   try {
     let subdomain = "";
 
-    // 1. Explicit Header
+    // 1. Explicit Header or Query Parameter (?space=slug or ?tenant=slug)
     if (request.headers["x-tenant-subdomain"]) {
       subdomain = request.headers["x-tenant-subdomain"];
-    } 
-    // 2. Host header (e.g. acme.verbolabs.com or acme.localhost:5000)
+    } else if (request.query.space || request.query.tenant || request.query.org) {
+      subdomain = request.query.space || request.query.tenant || request.query.org;
+    }
+    // 2. Host header (e.g. test.centroid.verbolabs.com or test.localhost:5000)
     else if (request.headers.host) {
       const host = request.headers.host.split(":")[0]; // strip port
       const parts = host.split(".");
-      if (parts.length > 2 || (parts.length === 2 && parts[1] === "localhost")) {
+      // test.centroid.verbolabs.com -> 4 parts; test.localhost -> 2 parts
+      if (parts.length > 3 || (parts.length === 2 && parts[1] === "localhost")) {
         subdomain = parts[0];
       }
     } 
@@ -104,7 +107,7 @@ async function resolveTenant(request, response, next) {
         const urlStr = request.headers.origin || request.headers.referer;
         const parsedUrl = new URL(urlStr);
         const parts = parsedUrl.hostname.split(".");
-        if (parts.length > 2 || (parts.length === 2 && parts[1] === "localhost")) {
+        if (parts.length > 3 || (parts.length === 2 && parts[1] === "localhost")) {
           subdomain = parts[0];
         }
       } catch (_) {}
