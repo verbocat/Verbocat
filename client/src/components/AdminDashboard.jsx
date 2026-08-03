@@ -7,7 +7,11 @@ import {
   fetchAdminCreditLogs,
   fetchAdminTm,
   updateAdminTm,
-  deleteAdminTm
+  deleteAdminTm,
+  fetchAdminOrganizations,
+  createAdminOrganization,
+  updateAdminOrganization,
+  deleteAdminOrganization
 } from "../services/api";
 
 export const AdminDashboard = ({ onClose, theme }) => {
@@ -23,27 +27,110 @@ export const AdminDashboard = ({ onClose, theme }) => {
   const [logSearch, setLogSearch] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  
-  // Edit Modal State
-  const [editingUser, setEditingUser] = useState(null);
-  const [editRole, setEditRole] = useState("linguist");
-  const [editStatus, setEditStatus] = useState("active");
-  const [editCreditsAllowed, setEditCreditsAllowed] = useState(50000);
-  const [editTranslateAccess, setEditTranslateAccess] = useState(true);
-  const [editEmailConfirmed, setEditEmailConfirmed] = useState(false);
-  const [submittingEdit, setSubmittingEdit] = useState(false);
-
   const [tmList, setTmList] = useState([]);
   const [tmSearch, setTmSearch] = useState("");
   const [editingTm, setEditingTm] = useState(null);
   const [editingTmText, setEditingTmText] = useState("");
   const [submittingTmEdit, setSubmittingTmEdit] = useState(false);
 
+  // Client Spaces Organization State
+  const [organizations, setOrganizations] = useState([]);
+  const [orgSearch, setOrgSearch] = useState("");
+  const [showCreateOrgModal, setShowCreateOrgModal] = useState(false);
+  const [newOrgName, setNewOrgName] = useState("");
+  const [newOrgSubdomain, setNewOrgSubdomain] = useState("");
+  const [newOrgCredits, setNewOrgCredits] = useState(100000);
+  const [editingOrg, setEditingOrg] = useState(null);
+  const [editOrgName, setEditOrgName] = useState("");
+  const [editOrgCredits, setEditOrgCredits] = useState(100000);
+  const [editOrgStatus, setEditOrgStatus] = useState("active");
+  const [submittingOrg, setSubmittingOrg] = useState(false);
+
   useEffect(() => {
     if (activeTab === "tm") {
       loadTm();
+    } else if (activeTab === "spaces") {
+      loadOrganizations();
     }
   }, [activeTab]);
+
+  const loadOrganizations = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const res = await fetchAdminOrganizations();
+      setOrganizations(res.organizations || []);
+    } catch (err) {
+      console.error(err);
+      showToast(err.response?.data?.error || "Failed to load client space organizations", true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateOrganization = async (e) => {
+    e.preventDefault();
+    if (!newOrgName || !newOrgSubdomain) return;
+    try {
+      setSubmittingOrg(true);
+      await createAdminOrganization({
+        name: newOrgName,
+        subdomain: newOrgSubdomain,
+        credits_allowed: Number(newOrgCredits)
+      });
+      showToast("Client space created successfully!");
+      setShowCreateOrgModal(false);
+      setNewOrgName("");
+      setNewOrgSubdomain("");
+      setNewOrgCredits(100000);
+      loadOrganizations();
+    } catch (err) {
+      console.error(err);
+      showToast(err.response?.data?.error || "Failed to create client space", true);
+    } finally {
+      setSubmittingOrg(false);
+    }
+  };
+
+  const handleEditOrg = (org) => {
+    setEditingOrg(org);
+    setEditOrgName(org.name);
+    setEditOrgCredits(org.credits_allowed || 100000);
+    setEditOrgStatus(org.status || "active");
+  };
+
+  const handleSaveOrgEdit = async (e) => {
+    e.preventDefault();
+    if (!editingOrg) return;
+    try {
+      setSubmittingOrg(true);
+      await updateAdminOrganization(editingOrg.id, {
+        name: editOrgName,
+        credits_allowed: Number(editOrgCredits),
+        status: editOrgStatus
+      });
+      showToast("Client space updated successfully");
+      setEditingOrg(null);
+      loadOrganizations();
+    } catch (err) {
+      console.error(err);
+      showToast(err.response?.data?.error || "Failed to update client space", true);
+    } finally {
+      setSubmittingOrg(false);
+    }
+  };
+
+  const handleDeleteOrg = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this client space organization? All users & projects in this space will be affected.")) return;
+    try {
+      await deleteAdminOrganization(id);
+      setOrganizations(prev => prev.filter(org => org.id !== id));
+      showToast("Client space deleted");
+    } catch (err) {
+      console.error(err);
+      showToast(err.response?.data?.error || "Failed to delete client space", true);
+    }
+  };
 
   const loadTm = async () => {
     try {
@@ -164,6 +251,16 @@ export const AdminDashboard = ({ onClose, theme }) => {
     }
   };
 
+  // Edit Modal State
+  const [editingUser, setEditingUser] = useState(null);
+  const [editRole, setEditRole] = useState("linguist");
+  const [editStatus, setEditStatus] = useState("active");
+  const [editCreditsAllowed, setEditCreditsAllowed] = useState(50000);
+  const [editTranslateAccess, setEditTranslateAccess] = useState(true);
+  const [editEmailConfirmed, setEditEmailConfirmed] = useState(false);
+  const [editOrganizationId, setEditOrganizationId] = useState("");
+  const [submittingEdit, setSubmittingEdit] = useState(false);
+
   const handleOpenEdit = (user) => {
     setEditingUser(user);
     setEditRole(user.role);
@@ -171,6 +268,7 @@ export const AdminDashboard = ({ onClose, theme }) => {
     setEditCreditsAllowed(user.credits_allowed);
     setEditTranslateAccess(user.has_translate_access);
     setEditEmailConfirmed(!!user.email_confirmed);
+    setEditOrganizationId(user.organization_id || "");
   };
 
   const handleSaveEdit = async (e) => {
@@ -186,8 +284,13 @@ export const AdminDashboard = ({ onClose, theme }) => {
         has_translate_access: editTranslateAccess,
         email_confirmed: editEmailConfirmed
       };
+
+      if (currentUser?.role === "super_admin" && editOrganizationId) {
+        payload.organization_id = editOrganizationId;
+      }
       
       await updateAdminUser(editingUser.id, payload);
+      loadData();
       
       setUsers(prev =>
         prev.map(u => u.id === editingUser.id ? { ...u, ...payload } : u)
@@ -304,7 +407,7 @@ export const AdminDashboard = ({ onClose, theme }) => {
     showToast("Audit logs exported successfully!");
   };
 
-  const isAdmin = currentUser?.role === "admin";
+  const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_admin";
 
   return (
     <div className="fixed inset-0 z-[200] flex flex-col bg-[#05070c]/95 backdrop-blur-xl text-slate-100 overflow-hidden font-sans">
@@ -428,10 +531,33 @@ export const AdminDashboard = ({ onClose, theme }) => {
             >
               Translation Memory
             </button>
+            {currentUser?.role === "super_admin" && (
+              <button
+                onClick={() => setActiveTab("spaces")}
+                className={`px-4 py-2 rounded-xl text-xs font-black tracking-wide transition-all cursor-pointer ${
+                  activeTab === "spaces" 
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/15" 
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                Client Spaces
+              </button>
+            )}
           </div>
 
           {/* Controls Container */}
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto justify-end">
+            {activeTab === "spaces" && (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowCreateOrgModal(true)}
+                  className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 px-4 py-2.5 text-xs font-black tracking-wide text-white shadow-lg shadow-indigo-500/20 transition-all border border-indigo-500/30 cursor-pointer"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  New Client Space
+                </button>
+              </div>
+            )}
             {activeTab === "logs" && (
               <div className="flex flex-wrap items-center gap-3">
                 {/* Date Inputs Group */}
@@ -531,6 +657,78 @@ export const AdminDashboard = ({ onClose, theme }) => {
             </svg>
             <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Syncing database data...</p>
           </div>
+        ) : activeTab === "spaces" ? (
+          
+          /* Client Spaces (Organizations) Tab */
+          <div className="overflow-x-auto rounded-2xl border border-white/5 bg-slate-900/10 shadow-xl backdrop-blur-md">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-white/5 bg-slate-950/40 text-[10px] font-bold text-slate-500 uppercase tracking-widest select-none">
+                  <th className="px-6 py-4">Space Name</th>
+                  <th className="px-6 py-4">Subdomain URL</th>
+                  <th className="px-4 py-4">Total Users</th>
+                  <th className="px-6 py-4">AI Credits Pool</th>
+                  <th className="px-4 py-4">Status</th>
+                  <th className="px-6 py-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5 text-xs text-slate-300 font-sans font-semibold">
+                {organizations.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="px-6 py-12 text-center text-slate-500 font-bold uppercase tracking-wider select-none">
+                      No client spaces configured yet.
+                    </td>
+                  </tr>
+                ) : (
+                  organizations.map((org) => (
+                    <tr key={org.id} className="hover:bg-white/[0.02] transition-colors">
+                      <td className="px-6 py-4 font-bold text-white">
+                        {org.name}
+                      </td>
+                      <td className="px-6 py-4 font-mono text-indigo-400 select-all">
+                        {org.subdomain}.verbocat.com
+                      </td>
+                      <td className="px-4 py-4 text-slate-300 font-bold">
+                        {org.userCount || 0} users
+                      </td>
+                      <td className="px-6 py-4 font-bold text-slate-200">
+                        {(org.credits_consumed || 0).toLocaleString()} / {(org.credits_allowed || 0).toLocaleString()} words
+                      </td>
+                      <td className="px-4 py-4 select-none">
+                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                          org.status === "active" 
+                            ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+                            : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                        }`}>
+                          {org.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right select-none">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => handleEditOrg(org)}
+                            className="rounded-lg p-1.5 border border-white/5 bg-slate-950/20 hover:bg-slate-950/40 text-slate-400 hover:text-white transition-all cursor-pointer"
+                            title="Edit Client Space"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                          </button>
+                          {org.subdomain !== "verbolabs" && (
+                            <button
+                              onClick={() => handleDeleteOrg(org.id)}
+                              className="rounded-lg p-1.5 border border-rose-500/10 bg-rose-500/5 hover:bg-rose-500/15 text-rose-400 hover:text-rose-300 transition-all cursor-pointer"
+                              title="Delete Client Space"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         ) : activeTab === "users" ? (
           
           /* User Accounts Tab */
@@ -539,6 +737,7 @@ export const AdminDashboard = ({ onClose, theme }) => {
               <thead>
                 <tr className="border-b border-white/5 bg-slate-950/40 text-[10px] font-bold text-slate-500 uppercase tracking-widest select-none">
                   <th className="px-6 py-4">User Account</th>
+                  <th className="px-4 py-4">Client Space</th>
                   <th className="px-4 py-4">Role Badge</th>
                   <th className="px-4 py-4">Status</th>
                   <th className="px-4 py-4">Credit Allowance Usage</th>
@@ -549,7 +748,7 @@ export const AdminDashboard = ({ onClose, theme }) => {
               <tbody className="divide-y divide-white/5 text-xs text-slate-300">
                 {filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="px-6 py-10 text-center font-bold text-slate-600 uppercase tracking-wider">
+                    <td colSpan="7" className="px-6 py-10 text-center font-bold text-slate-600 uppercase tracking-wider">
                       No matching user profiles found
                     </td>
                   </tr>
@@ -581,6 +780,13 @@ export const AdminDashboard = ({ onClose, theme }) => {
                             )}
                           </div>
                           <span className="block text-[9px] text-slate-600 font-mono mt-0.5 select-none">{user.id}</span>
+                        </td>
+
+                        {/* Client Space Badge */}
+                        <td className="px-4 py-4 select-none">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-bold text-indigo-300 font-mono">
+                            {user.organization?.name || "VerboLabs"}
+                          </span>
                         </td>
 
                         {/* Role Badge */}
@@ -829,6 +1035,25 @@ export const AdminDashboard = ({ onClose, theme }) => {
 
             <form onSubmit={handleSaveEdit} className="space-y-4">
               
+              {/* Space Organization Option (Super Admin Only) */}
+              {currentUser?.role === "super_admin" && (
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-indigo-400 mb-1.5 select-none">
+                    Assigned Space Organization
+                  </label>
+                  <select
+                    value={editOrganizationId}
+                    onChange={(e) => setEditOrganizationId(e.target.value)}
+                    className="w-full rounded-xl border border-indigo-500/30 bg-black/50 px-3.5 py-2.5 text-slate-100 outline-none transition-all focus:border-indigo-500 text-sm cursor-pointer"
+                  >
+                    <option value="">Default (VerboLabs)</option>
+                    {organizations.map(org => (
+                      <option key={org.id} value={org.id}>{org.name} ({org.subdomain}.verbocat.com)</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {/* Role Option (Admin Only) */}
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 select-none">
@@ -1015,7 +1240,170 @@ export const AdminDashboard = ({ onClose, theme }) => {
                   ) : "Save Changes"}
                 </button>
               </div>
+            </form>
+          </div>
+        </div>
+      )}
 
+      {/* Create Client Space Modal Overlay */}
+      {showCreateOrgModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 transition-all duration-300 animate-fade-in">
+          <div className="relative w-full max-w-md overflow-hidden rounded-[28px] border border-white/10 bg-slate-900 p-7 shadow-2xl">
+            <div className="flex items-center justify-between pb-4 border-b border-white/5 mb-5">
+              <div>
+                <h3 className="text-base font-black text-white">Create New Client Space</h3>
+                <span className="text-[10px] text-slate-400 block font-bold mt-0.5">Provision an isolated client workspace & subdomain</span>
+              </div>
+              <button
+                onClick={() => setShowCreateOrgModal(false)}
+                className="rounded-lg p-1.5 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all cursor-pointer"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateOrganization} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 select-none">
+                  Client Organization Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Acme Corp"
+                  value={newOrgName}
+                  onChange={(e) => setNewOrgName(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-slate-100 outline-none focus:border-indigo-500/50 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 select-none">
+                  Subdomain Slug
+                </label>
+                <div className="flex items-center rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-sm">
+                  <input
+                    type="text"
+                    required
+                    placeholder="acme"
+                    value={newOrgSubdomain}
+                    onChange={(e) => setNewOrgSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                    className="w-full bg-transparent text-slate-100 outline-none text-sm font-mono"
+                  />
+                  <span className="text-slate-500 font-mono text-xs select-none">.verbocat.com</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 select-none">
+                  Initial AI Credits Pool (Words)
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  value={newOrgCredits}
+                  onChange={(e) => setNewOrgCredits(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-slate-100 outline-none focus:border-indigo-500/50 text-sm"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-white/5 mt-5">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateOrgModal(false)}
+                  className="rounded-xl px-4 py-2.5 text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingOrg}
+                  className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-indigo-500/15 transition-all hover:from-indigo-500 hover:to-violet-500 cursor-pointer"
+                >
+                  {submittingOrg ? "Creating..." : "Create Client Space"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Client Space Modal Overlay */}
+      {editingOrg && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 transition-all duration-300 animate-fade-in">
+          <div className="relative w-full max-w-md overflow-hidden rounded-[28px] border border-white/10 bg-slate-900 p-7 shadow-2xl">
+            <div className="flex items-center justify-between pb-4 border-b border-white/5 mb-5">
+              <div>
+                <h3 className="text-base font-black text-white">Edit Client Space</h3>
+                <span className="text-[10px] text-indigo-400 font-mono font-bold block mt-0.5">{editingOrg.subdomain}.verbocat.com</span>
+              </div>
+              <button
+                onClick={() => setEditingOrg(null)}
+                className="rounded-lg p-1.5 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all cursor-pointer"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveOrgEdit} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 select-none">
+                  Space Display Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editOrgName}
+                  onChange={(e) => setEditOrgName(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-slate-100 outline-none focus:border-indigo-500/50 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 select-none">
+                  Total AI Credits Pool (Words Allowance)
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  value={editOrgCredits}
+                  onChange={(e) => setEditOrgCredits(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-slate-100 outline-none focus:border-indigo-500/50 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 select-none">
+                  Space Operating Status
+                </label>
+                <select
+                  value={editOrgStatus}
+                  onChange={(e) => setEditOrgStatus(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-slate-100 outline-none focus:border-indigo-500/50 text-sm cursor-pointer"
+                >
+                  <option value="active">Active</option>
+                  <option value="suspended">Suspended</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-white/5 mt-5">
+                <button
+                  type="button"
+                  onClick={() => setEditingOrg(null)}
+                  className="rounded-xl px-4 py-2.5 text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingOrg}
+                  className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-indigo-500/15 transition-all hover:from-indigo-500 hover:to-violet-500 cursor-pointer"
+                >
+                  {submittingOrg ? "Saving..." : "Save Space Settings"}
+                </button>
+              </div>
             </form>
           </div>
         </div>

@@ -29,6 +29,17 @@ authRouter.post("/register", async (request, response) => {
       });
     }
 
+    const user = data.user;
+    const tenantId = request.tenant?.id;
+
+    if (user && tenantId) {
+      // Bind user profile to the current space organization
+      await supabase
+        .from("profiles")
+        .update({ organization_id: tenantId })
+        .eq("id", user.id);
+    }
+
     response.json({
       message: "Registration successful! Your account is automatically verified and ready for login.",
       user: data.user
@@ -69,19 +80,35 @@ authRouter.post("/login", async (request, response) => {
       });
     }
 
-    // Retrieve user profile role
-    const { data: profile, error: profileError } = await supabase
+    // Retrieve user profile role and organization details
+    let profile = null;
+    let { data: profileWithOrg, error: profileError } = await supabase
       .from("profiles")
-      .select("*")
+      .select("*, organization:organizations(*)")
       .eq("id", user.id)
       .single();
 
-    if (profileError || !profile) {
+    if (profileError || !profileWithOrg) {
+      const { data: simpleProfile } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single();
+      profile = simpleProfile;
+    } else {
+      profile = profileWithOrg;
+    }
+
+    if (!profile) {
       return response.status(401).json({ error: "User profile record missing" });
     }
 
     if (profile.status === "suspended") {
       return response.status(403).json({ error: "Your account is suspended. Contact VerboLabs." });
+    }
+
+    if (profile.organization && profile.organization.status === "suspended") {
+      return response.status(403).json({ error: "Your space workspace has been suspended. Contact VerboLabs." });
     }
 
     response.json({
@@ -96,7 +123,9 @@ authRouter.post("/login", async (request, response) => {
         hasTranslateAccess: profile.has_translate_access,
         creditsAllowed: profile.credits_allowed,
         creditsConsumed: profile.credits_consumed,
-        status: profile.status
+        status: profile.status,
+        organizationId: profile.organization_id || null,
+        organization: profile.organization || null
       }
     });
   } catch (error) {
@@ -122,18 +151,34 @@ authRouter.post("/refresh", async (request, response) => {
     }
 
     const user = data.user;
-    const { data: profile, error: profileError } = await supabase
+    let profile = null;
+    let { data: profileWithOrg, error: profileError } = await supabase
       .from("profiles")
-      .select("*")
+      .select("*, organization:organizations(*)")
       .eq("id", user.id)
       .single();
 
-    if (profileError || !profile) {
+    if (profileError || !profileWithOrg) {
+      const { data: simpleProfile } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single();
+      profile = simpleProfile;
+    } else {
+      profile = profileWithOrg;
+    }
+
+    if (!profile) {
       return response.status(401).json({ error: "User profile record missing" });
     }
 
     if (profile.status === "suspended") {
       return response.status(403).json({ error: "Your account is suspended. Contact VerboLabs." });
+    }
+
+    if (profile.organization && profile.organization.status === "suspended") {
+      return response.status(403).json({ error: "Your space workspace has been suspended. Contact VerboLabs." });
     }
 
     response.json({
@@ -148,7 +193,9 @@ authRouter.post("/refresh", async (request, response) => {
         hasTranslateAccess: profile.has_translate_access,
         creditsAllowed: profile.credits_allowed,
         creditsConsumed: profile.credits_consumed,
-        status: profile.status
+        status: profile.status,
+        organizationId: profile.organization_id,
+        organization: profile.organization
       }
     });
   } catch (error) {

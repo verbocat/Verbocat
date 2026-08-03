@@ -22,7 +22,8 @@ export const WorkspaceToolbar = ({
   isAllSelected, onToggleSelectAll, selectedCount = 0,
   onTranslateSelected, onVerifySelected, onUnverifySelected,
   onCopySourceToTargetSelected, onClearTargetSelected, onClearSelection,
-  showLivePreview = false, onToggleLivePreview, isPreviewLoading = false
+  showLivePreview = false, onToggleLivePreview, isPreviewLoading = false,
+  hasAutoTranslation = true, hasAutoQc = true
 }) => {
 
   const [showDocMenu, setShowDocMenu] = useState(false);
@@ -54,50 +55,56 @@ export const WorkspaceToolbar = ({
 
 
         {/* Auto-Translate */}
-        <button
-          onClick={onTranslate}
-          disabled={!canAct || isTranslating || !canTranslate}
-          className={`ab ${canAct && !isTranslating && canTranslate ? "ab-translate" : ""}`}
-        >
-          <RefreshCw
-            style={{ width: 12, height: 12, flexShrink: 0 }}
-            className={isTranslating ? "animate-spin" : ""}
-          />
-          <span>{isTranslating ? "Translating…" : "Auto-Translate"}</span>
-        </button>
+        {hasAutoTranslation && (
+          <button
+            onClick={onTranslate}
+            disabled={!canAct || isTranslating || !canTranslate}
+            className={`ab ${canAct && !isTranslating && canTranslate ? "ab-translate" : ""}`}
+          >
+            <RefreshCw
+              style={{ width: 12, height: 12, flexShrink: 0 }}
+              className={isTranslating ? "animate-spin" : ""}
+            />
+            <span>{isTranslating ? "Translating…" : "Auto-Translate"}</span>
+          </button>
+        )}
 
         {/* QA Check */}
-        <button onClick={onToggleQa} disabled={!canAct} className="ab">
-          <Sparkles style={{ width: 12, height: 12, color: "var(--amber)", flexShrink: 0 }} />
-          <span>QA Check</span>
-          {qaIssuesCount > 0 && (
-            <span style={{
-              background: "rgba(244,63,94,0.15)",
-              color: "var(--text-rose)",
-              border: "1px solid rgba(244,63,94,0.25)",
-              borderRadius: 99,
-              fontSize: 9,
-              fontWeight: 700,
-              padding: "0 5px",
-              lineHeight: "16px"
-            }}>
-              {qaIssuesCount}
-            </span>
-          )}
-        </button>
+        {hasAutoQc && (
+          <button onClick={onToggleQa} disabled={!canAct} className="ab">
+            <Sparkles style={{ width: 12, height: 12, color: "var(--amber)", flexShrink: 0 }} />
+            <span>QA Check</span>
+            {qaIssuesCount > 0 && (
+              <span style={{
+                background: "rgba(244,63,94,0.15)",
+                color: "var(--text-rose)",
+                border: "1px solid rgba(244,63,94,0.25)",
+                borderRadius: 99,
+                fontSize: 9,
+                fontWeight: 700,
+                padding: "0 5px",
+                lineHeight: "16px"
+              }}>
+                {qaIssuesCount}
+              </span>
+            )}
+          </button>
+        )}
 
         {/* Run QC */}
-        <button
-          onClick={onRunQc}
-          disabled={!canAct || isAuditing}
-          className={`ab ${canAct && !isAuditing ? "ab-qc" : ""}`}
-        >
-          <RefreshCw
-            style={{ width: 12, height: 12, color: "var(--indigo-400)", flexShrink: 0 }}
-            className={isAuditing ? "animate-spin" : ""}
-          />
-          <span>{isAuditing ? "Auditing…" : "Run QC"}</span>
-        </button>
+        {hasAutoQc && (
+          <button
+            onClick={onRunQc}
+            disabled={!canAct || isAuditing}
+            className={`ab ${canAct && !isAuditing ? "ab-qc" : ""}`}
+          >
+            <RefreshCw
+              style={{ width: 12, height: 12, color: "var(--indigo-400)", flexShrink: 0 }}
+              className={isAuditing ? "animate-spin" : ""}
+            />
+            <span>{isAuditing ? "Auditing…" : "Run QC"}</span>
+          </button>
+        )}
 
         {/* Live Preview Toggle */}
         <button
@@ -312,7 +319,7 @@ export const WorkspaceToolbar = ({
               {selectedCount} Selected
             </span>
 
-            {onTranslateSelected && (
+            {hasAutoTranslation && onTranslateSelected && (
               <button
                 type="button"
                 onClick={onTranslateSelected}

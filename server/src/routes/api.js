@@ -70,7 +70,8 @@ apiRouter.post("/upload", checkAuth, upload.single("file"), async (request, resp
         owner_id: userId,
         file_id: result.fileId,
         source_lang: request.body.source || "en",
-        target_lang: request.body.target || "hi"
+        target_lang: request.body.target || "hi",
+        organization_id: request.profile?.organization_id || request.tenant?.id || null
       });
 
     if (docError) {
@@ -675,6 +676,17 @@ apiRouter.get("/documents/:id", checkAuth, async (request, response) => {
 
     const fileExtension = await detectFileExtension(doc.file_id, doc.name);
 
+    let contextSettings = {};
+    if (doc.project_id) {
+      const { data: proj } = await supabase.from("projects").select("settings").eq("id", doc.project_id).maybeSingle();
+      if (proj && proj.settings) {
+        contextSettings = {
+          ...proj.settings,
+          customPrompt: proj.settings.customPrompt || proj.settings.referenceContext || ""
+        };
+      }
+    }
+
     response.json({
       documentId: doc.id,
       name: doc.name,
@@ -686,7 +698,8 @@ apiRouter.get("/documents/:id", checkAuth, async (request, response) => {
       trackChangesEnabled: doc.track_changes_enabled || false,
       publicAccess: doc.public_access || "none",
       segments: formattedSegments,
-      fileExtension
+      fileExtension,
+      contextSettings
     });
   } catch (error) {
     console.error(error);
@@ -971,10 +984,20 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
       return response.status(500).json({ error: "Failed to update segment." });
     }
 
-    // Save/Update human correction in Translation Memory as an ICE match
+    // Save/Update human correction in Translation Memory: ICE if approved, TM if draft/unverified
     if (targetText !== undefined && targetText !== null && String(targetText).trim() !== "") {
-      const { upsertLinguistIceMatch } = require("../services/translationService");
-      await upsertLinguistIceMatch(sourceText, targetText, doc.source_lang || "en", dbSegment.target_lang);
+      const { upsertLinguistIceMatch, upsertTranslationMemoryBatch } = require("../services/translationService");
+      if (status === "approved") {
+        await upsertLinguistIceMatch(sourceText, targetText, doc.source_lang || "en", dbSegment.target_lang);
+      } else {
+        await upsertTranslationMemoryBatch([{
+          source_text: sourceText,
+          target_text: targetText,
+          source_lang: doc.source_lang || "en",
+          target_lang: dbSegment.target_lang,
+          provider: "TM"
+        }]);
+      }
     }
 
     // Broadcast manual save update immediately via Socket.io
@@ -990,16 +1013,13 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
         // Compute resulting fields for broadcast
         let finalOriginal = seg.original_target_text;
         let finalTrackedBy = seg.tracked_by;
+        const isTrackInit = targetText !== (seg.target_text || "");
+        
         if (targetText !== undefined) {
           if (isTracking) {
             if (!seg.original_target_text) {
-              if (propagatedTarget !== (seg.target_text || "")) {
-                finalOriginal = seg.target_text || "";
-                finalTrackedBy = request.user.email;
-              } else {
-                finalOriginal = null;
-                finalTrackedBy = null;
-              }
+              finalOriginal = isTrackInit ? (seg.target_text || "") : null;
+              finalTrackedBy = isTrackInit ? request.user.email : null;
             } else {
               if (propagatedTarget === seg.original_target_text) {
                 finalOriginal = null;
@@ -1043,6 +1063,119 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
   } catch (error) {
     console.error(error);
     response.status(500).json({ error: "Internal server error." });
+  }
+});
+
+// Single Bulk Payload Route for instant multi-segment updates
+apiRouter.post("/documents/:id/segments/bulk", async (request, response) => {
+  try {
+    const documentId = request.params.id;
+    const { updates, autoPropagate = false } = request.body;
+
+    if (!updates || !Array.isArray(updates) || updates.length === 0) {
+      return response.status(400).json({ error: "No segment updates provided." });
+    }
+
+    const { data: doc, error: docErr } = await supabase
+      .from("documents")
+      .select("id, file_id, source_lang, target_lang")
+      .eq("id", documentId)
+      .single();
+
+    if (docErr || !doc) {
+      return response.status(404).json({ error: "Document not found." });
+    }
+
+    const { data: allSegs, error: segErr } = await supabase
+      .from("document_segments")
+      .select("*")
+      .eq("document_id", doc.id)
+      .order("segment_index", { ascending: true });
+
+    if (segErr || !allSegs) {
+      return response.status(500).json({ error: "Failed to fetch document segments." });
+    }
+
+    const segMap = new Map();
+    allSegs.forEach(s => segMap.set(s.segment_index, s));
+
+    const iceRows = [];
+    const tmRows = [];
+    const dbUpdates = [];
+    const socketBroadcasts = [];
+
+    for (const item of updates) {
+      const idx = item.segmentIndex;
+      const targetText = item.targetText;
+      const status = item.status || (targetText ? "translated" : "draft");
+
+      const existing = segMap.get(idx);
+      if (!existing) continue;
+
+      const sourceText = existing.source_text;
+      const updateFields = {
+        target_text: targetText !== undefined ? targetText : existing.target_text,
+        status: status
+      };
+
+      dbUpdates.push(
+        supabase
+          .from("document_segments")
+          .update(updateFields)
+          .eq("document_id", doc.id)
+          .eq("segment_index", idx)
+      );
+
+      if (targetText && String(targetText).trim() !== "") {
+        if (status === "approved") {
+          iceRows.push({ sourceText, targetText });
+        } else {
+          tmRows.push({
+            source_text: sourceText,
+            target_text: targetText,
+            source_lang: doc.source_lang || "en",
+            target_lang: doc.target_lang,
+            provider: "TM"
+          });
+        }
+      }
+
+      socketBroadcasts.push({
+        segmentIndex: idx,
+        targetText,
+        status,
+        targetLang: doc.target_lang
+      });
+    }
+
+    await Promise.all(dbUpdates);
+
+    const { upsertLinguistIceMatch, upsertTranslationMemoryBatch } = require("../services/translationService");
+    if (iceRows.length > 0) {
+      await Promise.all(
+        iceRows.map(r => upsertLinguistIceMatch(r.sourceText, r.targetText, doc.source_lang || "en", doc.target_lang))
+      );
+    }
+    if (tmRows.length > 0) {
+      await upsertTranslationMemoryBatch(tmRows);
+    }
+
+    const { getIo } = require("../services/socket");
+    const io = getIo();
+    if (io) {
+      socketBroadcasts.forEach(b => {
+        io.to(getDocumentRoomId(doc.id, doc.target_lang)).emit("segment-updated", b);
+      });
+    }
+
+    response.json({
+      success: true,
+      count: updates.length,
+      message: `Bulk updated ${updates.length} segments.`
+    });
+  } catch (error) {
+    console.error("Bulk segment update error:", error);
+    response.status(500).json({ error: "Failed to perform bulk segment update." });
   }
 });
 
@@ -1368,7 +1501,44 @@ Provide ONLY the raw JSON object, with no markdown formatting, explanations, or 
 
   } catch (error) {
     console.error("Auto-detect context failed:", error);
-    response.status(500).json({ error: error.message || "Failed to auto-detect context settings." });
+    response.status(500).json({ error: "Failed to analyze document context." });
+  }
+});
+
+// Endpoint to upload a reference file directly for a document
+apiRouter.post("/documents/:id/reference-file", checkAuth, upload.single("referenceFile"), async (request, response) => {
+  try {
+    const documentId = request.params.id;
+    const doc = await verifyDocumentAccess(request, response, "write");
+    if (!doc) return;
+
+    if (!request.file) {
+      return response.status(400).json({ error: "No reference file provided." });
+    }
+
+    const { analyzeReferenceContext } = require("../utils/referenceSampler");
+    const refResult = await analyzeReferenceContext(request.file.path, request.file.originalname);
+
+    if (doc.project_id) {
+      const { data: proj } = await supabase.from("projects").select("settings").eq("id", doc.project_id).maybeSingle();
+      const updatedSettings = {
+        ...(proj?.settings || {}),
+        referenceContext: refResult.referenceContext,
+        referenceFileName: request.file.originalname
+      };
+      await supabase.from("projects").update({ settings: updatedSettings }).eq("id", doc.project_id);
+    }
+
+    try { fs.unlinkSync(request.file.path); } catch (_) {}
+
+    response.json({
+      success: true,
+      referenceContext: refResult.referenceContext,
+      referenceFileName: request.file.originalname
+    });
+  } catch (err) {
+    console.error("Failed to process document reference file:", err);
+    response.status(500).json({ error: "Failed to process reference file." });
   }
 });
 
@@ -2357,16 +2527,43 @@ apiRouter.post("/documents/:id/accept-all-changes", checkAuth, async (request, r
 const JSZip = require("jszip");
 
 // 1. Create a Project
-apiRouter.post("/projects", checkAuth, async (request, response) => {
+apiRouter.post("/projects", checkAuth, upload.single("referenceFile"), async (request, response) => {
   try {
     const { name, client, description, sourceLanguage, targetLanguages, dueDate, settings } = request.body;
     if (!name) {
       return response.status(400).json({ error: "Project name is required" });
     }
 
-    const finalSettings = { ...(settings || {}) };
+    let parsedTargetLangs = targetLanguages;
+    if (typeof targetLanguages === "string") {
+      try { parsedTargetLangs = JSON.parse(targetLanguages); } catch (_) { parsedTargetLangs = [targetLanguages]; }
+    }
+    let parsedSettings = settings;
+    if (typeof settings === "string") {
+      try { parsedSettings = JSON.parse(settings); } catch (_) { parsedSettings = {}; }
+    }
+
+    const finalSettings = { ...(parsedSettings || {}) };
     if (dueDate) {
       finalSettings.dueDate = dueDate;
+    }
+
+    // Process reference file if attached during project creation
+    if (request.file) {
+      try {
+        const { analyzeReferenceContext } = require("../utils/referenceSampler");
+        const refResult = await analyzeReferenceContext(request.file.path, request.file.originalname);
+        const selectedUserDomain = parsedSettings?.domain;
+        Object.assign(finalSettings, refResult, { referenceFileName: request.file.originalname });
+        if (selectedUserDomain && selectedUserDomain !== "General") {
+          finalSettings.domain = selectedUserDomain;
+        }
+        console.log(`[REFERENCE CONTEXT EXTRACTED] File=${request.file.originalname}, Settings:`, finalSettings);
+      } catch (refErr) {
+        console.error("Failed to analyze reference context file:", refErr);
+      } finally {
+        try { fs.unlinkSync(request.file.path); } catch (_) {}
+      }
     }
 
     const { data: project, error } = await supabase
@@ -2376,8 +2573,9 @@ apiRouter.post("/projects", checkAuth, async (request, response) => {
         client: client || null,
         description: description || null,
         source_lang: sourceLanguage || "en",
-        target_languages: targetLanguages || [],
+        target_languages: parsedTargetLangs || [],
         owner_id: request.user.id,
+        organization_id: request.profile?.organization_id || request.tenant?.id || null,
         settings: finalSettings
       })
       .select()
@@ -2396,12 +2594,59 @@ apiRouter.post("/projects", checkAuth, async (request, response) => {
   }
 });
 
+// Route to upload/update a reference context file for an existing project
+apiRouter.post("/projects/:projectId/reference-file", checkAuth, upload.single("referenceFile"), async (request, response) => {
+  try {
+    const { projectId } = request.params;
+    const access = await verifyProjectAccess(request, response, "write");
+    if (!access) return;
+
+    if (!request.file) {
+      return response.status(400).json({ error: "No reference file provided." });
+    }
+
+    const { analyzeReferenceContext } = require("../utils/referenceSampler");
+    const refResult = await analyzeReferenceContext(request.file.path, request.file.originalname);
+
+    const updatedSettings = {
+      ...(access.project.settings || {}),
+      ...refResult,
+      referenceFileName: request.file.originalname
+    };
+
+    const { data: updatedProject, error } = await supabase
+      .from("projects")
+      .update({ settings: updatedSettings })
+      .eq("id", projectId)
+      .select()
+      .single();
+
+    if (error) {
+      return response.status(500).json({ error: error.message });
+    }
+
+    try { fs.unlinkSync(request.file.path); } catch (_) {}
+
+    await logProjectActivity(projectId, "REFERENCE_CONTEXT_UPDATED", { fileName: request.file.originalname }, request.user.email);
+
+    response.json({
+      success: true,
+      project: updatedProject,
+      referenceContext: refResult.referenceContext,
+      referenceFileName: request.file.originalname
+    });
+  } catch (err) {
+    console.error("Failed to upload project reference file:", err);
+    response.status(500).json({ error: "Failed to process reference file." });
+  }
+});
+
 // Helper to verify project access permissions
 async function verifyProjectAccess(request, response, requiredPermission = "read") {
   const { projectId } = request.params;
   const userId = request.user.id;
   const userEmail = request.user.email;
-  const isStaff = ["admin", "verbolabs_staff"].includes(request.profile?.role);
+  const isStaff = ["admin", "super_admin", "verbolabs_staff"].includes(request.profile?.role);
 
   const { data: project, error: projErr } = await supabase
     .from("projects")
@@ -2414,7 +2659,7 @@ async function verifyProjectAccess(request, response, requiredPermission = "read
     return null;
   }
 
-  // Owner & staff have full access
+  // Owner & staff/super_admin have full access
   if (isStaff || project.owner_id === userId) {
     return { project, isOwner: project.owner_id === userId, accessLevel: "owner" };
   }
@@ -2444,14 +2689,29 @@ async function verifyProjectAccess(request, response, requiredPermission = "read
 apiRouter.get("/projects", checkAuth, async (request, response) => {
   try {
     const userId = request.user.id;
-    const userEmail = request.user.email;
+    const isSuperAdmin = request.profile?.role === "super_admin";
+    const isAdmin = request.profile?.role === "admin";
+    const userOrgId = request.profile?.organization_id || request.tenant?.id;
+    const targetOrgId = request.query.organization_id || request.query.org_id;
 
-    // Fetch owned projects
-    const { data: ownedProjects, error: ownedErr } = await supabase
-      .from("projects")
-      .select("*")
-      .eq("owner_id", userId)
-      .order("created_at", { ascending: false });
+    // Build owned/org projects query
+    let ownedQuery = supabase.from("projects").select("*, organization:organizations(*)").order("created_at", { ascending: false });
+
+    if (isSuperAdmin) {
+      // Super Admin sees ALL projects across all client spaces, or filters by specific space
+      if (targetOrgId) {
+        ownedQuery = ownedQuery.eq("organization_id", targetOrgId);
+      }
+    } else if (isAdmin && userOrgId) {
+      // Client Admin sees all projects in their space organization
+      ownedQuery = ownedQuery.eq("organization_id", userOrgId);
+    } else {
+      // Regular users see their own projects in their space organization
+      ownedQuery = ownedQuery.eq("owner_id", userId);
+      if (userOrgId) ownedQuery = ownedQuery.eq("organization_id", userOrgId);
+    }
+
+    const { data: ownedProjects, error: ownedErr } = await ownedQuery;
 
     if (ownedErr) {
       return response.status(500).json({ error: ownedErr.message });
@@ -3512,6 +3772,12 @@ apiRouter.get("/jobs/:jobId/segments", checkAuth, async (request, response) => {
     // Fetch target language segments
     const segments = await fetchAllSegments(job.document_id, "*", job.target_lang);
 
+    const rawProjSettings = project.settings || {};
+    const contextSettings = {
+      ...rawProjSettings,
+      customPrompt: rawProjSettings.customPrompt || rawProjSettings.referenceContext || ""
+    };
+
     response.json({
       jobId: job.id,
       documentId: job.document_id,
@@ -3523,7 +3789,7 @@ apiRouter.get("/jobs/:jobId/segments", checkAuth, async (request, response) => {
       permission,
       ownerId: doc.owner_id,
       trackChangesEnabled: doc.track_changes_enabled,
-      contextSettings: project.settings || {},
+      contextSettings,
       projectName: project.name,
       jobStatus: job.status,
       jobProgress: job.progress,

@@ -11,6 +11,23 @@ import { normalizeStatus, formatStatusLabel, getStatusColorClass, getStatusDotCo
 
 import io from "socket.io-client";
 
+const DOMAINS = ["General", "Marketing", "Legal", "Medical", "Pharmaceutical", "Financial", "Banking", "Insurance", "Technical", "Software", "IT & Cybersecurity", "E-commerce", "Automotive", "Manufacturing", "Engineering", "Telecommunications", "Gaming", "Education", "Government", "HR & Recruitment", "Travel & Tourism", "Hospitality", "Retail", "Energy & Utilities", "Real Estate", "Life Sciences", "Healthcare", "Aerospace", "Agriculture", "Media & Entertainment"];
+
+const WORKFLOW_STEPS = [
+  { id: "auto_translation", label: "Auto Translation (AI)", desc: "AI machine translation" },
+  { id: "manual_translation", label: "Manual Translation (Human)", desc: "Human linguist manual translation" },
+  { id: "auto_qc", label: "Auto QC (AI Audit)", desc: "Automated MQM quality check" },
+  { id: "manual_qc", label: "Manual QC (Linguist Review)", desc: "Senior linguist verification" },
+  { id: "manual_qc_2", label: "Manual QC 2 (Final Proofing)", desc: "Final proofreading pass" }
+];
+
+const WORKFLOW_PRESETS = [
+  { name: "Full AI-Assisted", steps: ["auto_translation", "auto_qc", "manual_qc"] },
+  { name: "Human-First", steps: ["manual_translation", "auto_qc", "manual_qc", "manual_qc_2"] },
+  { name: "Fully Automated AI", steps: ["auto_translation", "auto_qc"] },
+  { name: "Pure Human", steps: ["manual_translation", "manual_qc", "manual_qc_2"] }
+];
+
 export default function ProjectDashboard({ onOpenProject, showToast, theme, userRole, onOpenAdmin, onOpenSettings, onLogout }) {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -33,6 +50,9 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
   const [selectedLangs, setSelectedLangs] = useState([]);
   const [langSearch, setLangSearch] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [referenceFile, setReferenceFile] = useState(null);
+  const [domain, setDomain] = useState("General");
+  const [workflowSteps, setWorkflowSteps] = useState(["auto_translation", "auto_qc", "manual_qc"]);
 
   useEffect(() => {
     loadProjects();
@@ -86,7 +106,9 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
         description,
         sourceLang,
         selectedLangs,
-        dueDate || null
+        dueDate || null,
+        { domain, workflow: workflowSteps },
+        referenceFile
       );
       showToast("Project created successfully!");
       setShowCreateModal(false);
@@ -96,6 +118,9 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
       setSourceLang("en");
       setSelectedLangs([]);
       setDueDate("");
+      setReferenceFile(null);
+      setDomain("General");
+      setWorkflowSteps(["auto_translation", "auto_qc", "manual_qc"]);
       loadProjects();
     } catch (err) {
       console.error(err);
@@ -220,7 +245,7 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
             <span>Activity Log</span>
           </button>
 
-          {userRole === "admin" && (
+          {(userRole === "admin" || userRole === "super_admin") && (
             <button
               onClick={onOpenAdmin}
               className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 text-xs font-bold text-indigo-400 transition-all cursor-pointer shadow-xs"
@@ -691,146 +716,303 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
       {/* ── CREATE NEW PROJECT MODAL ── */}
       {showCreateModal && (
         <div className="modal-overlay">
-          <div className="modal-card max-w-xl select-none text-left p-6 flex flex-col gap-5 max-h-[90vh] overflow-hidden" style={{ borderRadius: "20px" }}>
+          <div className="modal-card max-w-4xl select-none text-left p-7 flex flex-col gap-6 max-h-[92vh] overflow-hidden shadow-2xl" style={{ borderRadius: "24px" }}>
             
-            <div className="flex justify-between items-center pb-3 border-b border-[var(--border-subtle)]">
+            <div className="flex justify-between items-center pb-4 border-b border-[var(--border-subtle)]">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center border border-indigo-500/20">
-                  <Plus className="w-5 h-5" />
+                <div className="w-11 h-11 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center border border-indigo-500/20">
+                  <Plus className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-[var(--text-primary)] leading-snug">
-                    Create New Project
+                  <h3 className="text-lg font-black text-[var(--text-primary)] leading-snug">
+                    Create New Translation Project
                   </h3>
                   <p className="text-xs text-[var(--text-secondary)] font-medium">
-                    Configure project languages and settings
+                    Configure project workflow, language pairs, and domain settings
                   </p>
                 </div>
               </div>
 
               <button 
                 onClick={() => setShowCreateModal(false)}
-                className="p-1.5 rounded-full hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all cursor-pointer"
+                className="p-2 rounded-full hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all cursor-pointer"
               >
                 <XCircle className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateProject} className="space-y-4 overflow-y-auto pr-1">
-              <div>
-                <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1.5">Project Name *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Annual Legal Loan Agreement 2026"
-                  value={projName}
-                  onChange={(e) => setProjName(e.target.value)}
-                  className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] outline-none"
-                />
-              </div>
+            <form onSubmit={handleCreateProject} className="space-y-5 overflow-y-auto pr-1">
+              
+              {/* Section 1: Core Project Identity */}
+              <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-4.5 space-y-4">
+                <span className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
+                  <Folder size={14} className="text-indigo-400" /> Project Scope & Identity
+                </span>
 
-              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1.5">Client / Organization</label>
+                  <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1.5">Project Name *</label>
                   <input
                     type="text"
-                    placeholder="e.g. Acme Corp"
-                    value={clientName}
-                    onChange={(e) => setClientName(e.target.value)}
-                    className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] outline-none"
+                    required
+                    placeholder="e.g. Annual Legal Loan Agreement 2026"
+                    value={projName}
+                    onChange={(e) => setProjName(e.target.value)}
+                    className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] focus:border-indigo-500 rounded-xl px-4 py-2.5 text-xs text-[var(--text-primary)] outline-none font-medium"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1.5">Due Date</label>
-                  <input
-                    type="date"
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
-                    className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] outline-none"
-                  />
-                </div>
-              </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1.5">Client / Organization</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Acme Corp"
+                      value={clientName}
+                      onChange={(e) => setClientName(e.target.value)}
+                      className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] outline-none"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1.5">Description</label>
-                <textarea
-                  rows={2}
-                  placeholder="Brief summary of project scope..."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] outline-none resize-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1.5">Source Language</label>
-                  <select
-                    value={sourceLang}
-                    onChange={(e) => setSourceLang(e.target.value)}
-                    className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] focus:border-indigo-500 rounded-xl px-3 py-2.5 text-xs text-[var(--text-primary)] outline-none"
-                  >
-                    {LANGUAGES.map((l) => (
-                      <option key={l.code} value={l.code}>
-                        {l.flag} {l.name} ({l.code.toUpperCase()})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1.5">
-                    Target Languages ({selectedLangs.length})
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Search languages..."
-                    value={langSearch}
-                    onChange={(e) => setLangSearch(e.target.value)}
-                    className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] focus:border-indigo-500 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] outline-none mb-2"
-                  />
-                </div>
-              </div>
-
-              {/* Target Languages Multi-select Pills */}
-              <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-xl p-3 max-h-36 overflow-y-auto flex flex-wrap gap-1.5">
-                {filteredLanguages.map((l) => {
-                  const isSelected = selectedLangs.includes(l.code);
-                  return (
-                    <button
-                      key={l.code}
-                      type="button"
-                      onClick={() => toggleLanguageSelection(l.code)}
-                      className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${
-                        isSelected
-                          ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40"
-                          : "bg-[var(--bg-surface)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:border-zinc-600"
-                      }`}
+                  <div>
+                    <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1.5 flex items-center gap-1">
+                      <Globe size={12} className="text-indigo-400" /> Domain / Industry
+                    </label>
+                    <select
+                      value={domain}
+                      onChange={(e) => setDomain(e.target.value)}
+                      className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] focus:border-indigo-500 rounded-xl px-3 py-2.5 text-xs text-[var(--text-primary)] outline-none cursor-pointer font-medium"
                     >
-                      <span>{l.flag} {l.name}</span>
-                      {isSelected && <Check size={12} className="text-indigo-400 ml-1" />}
-                    </button>
-                  );
-                })}
+                      {DOMAINS.map((d) => (
+                        <option key={d} value={d}>
+                          {d}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1.5">Due Date</label>
+                    <input
+                      type="date"
+                      value={dueDate}
+                      onChange={(e) => setDueDate(e.target.value)}
+                      className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1.5">Description</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Brief summary of project scope..."
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] outline-none resize-none"
+                  />
+                </div>
+              </div>
+
+              {/* Section 2: Custom Workflow Pipeline Builder */}
+              <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-4.5 space-y-3.5">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <span className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
+                      <Layers size={14} className="text-indigo-400" /> Project Workflow Pipeline
+                    </span>
+                    <p className="text-[11px] text-[var(--text-secondary)] font-normal mt-0.5">
+                      Configure execution stages (Auto Translation, Manual Translation, Auto QC, Manual QC)
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {WORKFLOW_PRESETS.map((preset) => {
+                      const isPresetActive = JSON.stringify(workflowSteps) === JSON.stringify(preset.steps);
+                      return (
+                        <button
+                          key={preset.name}
+                          type="button"
+                          onClick={() => setWorkflowSteps(preset.steps)}
+                          className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                            isPresetActive
+                              ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40"
+                              : "bg-[var(--bg-surface)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:border-zinc-500"
+                          }`}
+                        >
+                          {preset.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Visual Pipeline Stepper */}
+                <div className="flex items-center gap-2 overflow-x-auto py-2.5 px-3 border border-indigo-500/20 rounded-xl bg-indigo-500/5">
+                  {workflowSteps.length === 0 ? (
+                    <span className="text-xs text-rose-400 font-semibold">
+                      ⚠️ Select at least 1 workflow step below
+                    </span>
+                  ) : (
+                    workflowSteps.map((stepId, idx) => {
+                      const stepObj = WORKFLOW_STEPS.find((s) => s.id === stepId) || { label: stepId };
+                      return (
+                        <React.Fragment key={stepId}>
+                          <div className="flex items-center gap-1.5 bg-[var(--bg-surface)] border border-indigo-500/40 text-indigo-300 text-xs font-bold px-3 py-1.5 rounded-xl shadow-xs shrink-0">
+                            <span className="w-4 h-4 rounded-full bg-indigo-500/20 text-indigo-400 text-[10px] flex items-center justify-center font-mono font-bold">
+                              {idx + 1}
+                            </span>
+                            <span>{stepObj.label}</span>
+                          </div>
+                          {idx < workflowSteps.length - 1 && (
+                            <ChevronRight size={14} className="text-indigo-400 shrink-0" />
+                          )}
+                        </React.Fragment>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Interactive Step Toggle Pills */}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {WORKFLOW_STEPS.map((step) => {
+                    const isSelected = workflowSteps.includes(step.id);
+                    return (
+                      <button
+                        key={step.id}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setWorkflowSteps(prev => prev.filter(s => s !== step.id));
+                          } else {
+                            setWorkflowSteps(prev => [...prev, step.id]);
+                          }
+                        }}
+                        className={`text-[11px] font-semibold px-3 py-1.5 rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 ${
+                          isSelected
+                            ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/50 shadow-xs"
+                            : "bg-[var(--bg-surface)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:border-zinc-500"
+                        }`}
+                      >
+                        <span>{step.label}</span>
+                        {isSelected ? <Check size={12} className="text-indigo-400" /> : <Plus size={12} className="text-zinc-500" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Section 3: Languages & Style Guidance */}
+              <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-4.5 space-y-4">
+                <span className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
+                  <Globe size={14} className="text-indigo-400" /> Languages & Style Guidance
+                </span>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1.5">Source Language</label>
+                    <select
+                      value={sourceLang}
+                      onChange={(e) => setSourceLang(e.target.value)}
+                      className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] outline-none font-medium"
+                    >
+                      {LANGUAGES.map((l) => (
+                        <option key={l.code} value={l.code}>
+                          {l.flag} {l.name} ({l.code.toUpperCase()})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1.5">
+                      Target Languages ({selectedLangs.length})
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Search languages..."
+                      value={langSearch}
+                      onChange={(e) => setLangSearch(e.target.value)}
+                      className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] focus:border-indigo-500 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] outline-none mb-2"
+                    />
+                  </div>
+                </div>
+
+                {/* Target Languages Multi-select Pills */}
+                <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl p-3 max-h-36 overflow-y-auto flex flex-wrap gap-1.5">
+                  {filteredLanguages.map((l) => {
+                    const isSelected = selectedLangs.includes(l.code);
+                    return (
+                      <button
+                        key={l.code}
+                        type="button"
+                        onClick={() => toggleLanguageSelection(l.code)}
+                        className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${
+                          isSelected
+                            ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40"
+                            : "bg-[var(--bg-panel)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:border-zinc-600"
+                        }`}
+                      >
+                        <span>{l.flag} {l.name}</span>
+                        {isSelected && <Check size={12} className="text-indigo-400 ml-1" />}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Reference Document Uploader (Low-Cost AI Context Extraction) */}
+                <div>
+                  <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1.5 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-indigo-400">
+                      <FileText size={14} /> Reference Document / Style Guide (Optional)
+                    </span>
+                    <span className="text-[10px] text-zinc-400 font-normal">Low-Cost AI Context Sampling</span>
+                  </label>
+                  <div className="relative border border-dashed border-indigo-500/30 hover:border-indigo-500/60 rounded-xl p-3 bg-indigo-500/5 transition-all text-center">
+                    <input
+                      type="file"
+                      accept=".pdf,.docx,.txt,.html,.md,.csv"
+                      onChange={(e) => setReferenceFile(e.target.files[0] || null)}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    />
+                    {referenceFile ? (
+                      <div className="flex items-center justify-between px-2">
+                        <span className="text-xs font-bold text-indigo-300 truncate">📄 {referenceFile.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => setReferenceFile(null)}
+                          className="text-xs text-rose-400 hover:text-rose-300 font-bold ml-2 cursor-pointer z-10"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-[var(--text-secondary)] flex flex-col items-center gap-1">
+                        <span className="font-semibold text-indigo-300">Click to upload reference PDF, DOCX, or TXT</span>
+                        <span className="text-[10px] text-zinc-400">AI will sample & extract domain context at minimal token cost</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
               </div>
 
               <div className="pt-4 border-t border-[var(--border-subtle)] flex justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer"
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/20 cursor-pointer"
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-6 py-2.5 rounded-xl shadow-lg hover:shadow-indigo-500/25 transition-all cursor-pointer flex items-center gap-2"
                 >
-                  Create Project
+                  <Plus size={15} />
+                  <span>Create Project</span>
                 </button>
               </div>
             </form>
+
           </div>
         </div>
       )}

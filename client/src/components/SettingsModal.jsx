@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import {
   X, LogOut, User, ShieldCheck, Sliders, Check,
-  Monitor, Sparkles, Keyboard, Activity, Folder
+  Monitor, Sparkles, Keyboard, Activity, Folder,
+  Layers, ChevronRight, Plus
 } from "lucide-react";
 import { fetchProjectDetails, updateProjectDetails } from "../services/api.js";
 import { LANGUAGES } from "../constants/languages.js";
@@ -23,6 +24,21 @@ const Toggle = ({ on, onToggle }) => (
     />
   </button>
 );
+
+const WORKFLOW_STEPS = [
+  { id: "auto_translation", label: "Auto Translation (AI)", desc: "AI machine translation" },
+  { id: "manual_translation", label: "Manual Translation (Human)", desc: "Human linguist manual translation" },
+  { id: "auto_qc", label: "Auto QC (AI Audit)", desc: "Automated MQM quality check" },
+  { id: "manual_qc", label: "Manual QC (Linguist Review)", desc: "Senior linguist verification" },
+  { id: "manual_qc_2", label: "Manual QC 2 (Final Proofing)", desc: "Final proofreading pass" }
+];
+
+const WORKFLOW_PRESETS = [
+  { name: "Full AI-Assisted", steps: ["auto_translation", "auto_qc", "manual_qc"] },
+  { name: "Human-First", steps: ["manual_translation", "auto_qc", "manual_qc", "manual_qc_2"] },
+  { name: "Fully Automated AI", steps: ["auto_translation", "auto_qc"] },
+  { name: "Pure Human", steps: ["manual_translation", "manual_qc", "manual_qc_2"] }
+];
 
 export const SettingsModal = ({
   show,
@@ -54,6 +70,7 @@ export const SettingsModal = ({
   const [localSourceLang, setLocalSourceLang] = useState("");
   const [localDeadline, setLocalDeadline] = useState("");
   const [localTranslationPrompt, setLocalTranslationPrompt] = useState("");
+  const [localWorkflow, setLocalWorkflow] = useState(["auto_translation", "auto_qc", "manual_qc"]);
   const [localAutoSave, setLocalAutoSave] = useState(true);
   const [localNotifications, setLocalNotifications] = useState(true);
   const [loadingProject, setLoadingProject] = useState(false);
@@ -98,6 +115,7 @@ export const SettingsModal = ({
         setLocalDeadline(data.project.dueDate || data.project.deadline || data.project.settings?.dueDate || data.project.settings?.deadline || "");
         const settings = data.project.settings || {};
         setLocalTranslationPrompt(settings.translationPrompt || "");
+        setLocalWorkflow(settings.workflow || ["auto_translation", "auto_qc", "manual_qc"]);
         setLocalAutoSave(settings.autoSave !== undefined ? settings.autoSave : true);
         setLocalNotifications(settings.notifications !== undefined ? settings.notifications : true);
       }
@@ -121,6 +139,7 @@ export const SettingsModal = ({
     if (projectId && projectSettings) {
       try {
         setSavingProject(true);
+        const existingSettings = projectSettings.settings || {};
         await updateProjectDetails(projectId, {
           name: localProjectName,
           client: localClientName,
@@ -131,6 +150,8 @@ export const SettingsModal = ({
           dueDate: localDeadline || null,
           deadline: localDeadline || null,
           settings: {
+            ...existingSettings,
+            workflow: localWorkflow,
             translationPrompt: localTranslationPrompt,
             autoSave: localAutoSave,
             notifications: localNotifications,
@@ -140,7 +161,16 @@ export const SettingsModal = ({
           }
         });
         if (onProjectUpdated) {
-          onProjectUpdated();
+          onProjectUpdated({
+            ...existingSettings,
+            workflow: localWorkflow,
+            translationPrompt: localTranslationPrompt,
+            autoSave: localAutoSave,
+            notifications: localNotifications,
+            dueDate: localDeadline || null,
+            deadline: localDeadline || null,
+            status: localStatus
+          });
         }
       } catch (err) {
         console.error("Failed to save project settings in modal:", err);
@@ -605,6 +635,105 @@ export const SettingsModal = ({
                       resize: "none"
                     }}
                   />
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, background: "var(--bg-active)", padding: 14, borderRadius: 12, border: "1px solid var(--border-medium)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                    <div>
+                      <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", tracking: "0.05em", color: "var(--indigo-400)", display: "flex", alignItems: "center", gap: 6 }}>
+                        <Layers size={13} /> Project Workflow Pipeline
+                      </span>
+                      <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                        Customize execution stages (Auto Translation, Manual Translation, Auto QC, Manual QC)
+                      </p>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {WORKFLOW_PRESETS.map((preset) => {
+                        const isPresetActive = JSON.stringify(localWorkflow) === JSON.stringify(preset.steps);
+                        return (
+                          <button
+                            key={preset.name}
+                            type="button"
+                            onClick={() => setLocalWorkflow(preset.steps)}
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              padding: "4px 8px",
+                              borderRadius: 6,
+                              border: "1px solid " + (isPresetActive ? "rgba(99,102,241,0.5)" : "var(--border-medium)"),
+                              background: isPresetActive ? "rgba(99,102,241,0.2)" : "var(--bg-surface)",
+                              color: isPresetActive ? "#a5b4fc" : "var(--text-muted)",
+                              cursor: "pointer"
+                            }}
+                          >
+                            {preset.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Visual Pipeline Stepper */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, overflowX: "auto", padding: "8px 10px", borderRadius: 8, background: "rgba(99,102,241,0.06)", border: "1px solid rgba(99,102,241,0.2)" }}>
+                    {localWorkflow.length === 0 ? (
+                      <span style={{ fontSize: 11, color: "#f43f5e", fontWeight: 600 }}>
+                        ⚠️ Select at least 1 workflow step below
+                      </span>
+                    ) : (
+                      localWorkflow.map((stepId, idx) => {
+                        const stepObj = WORKFLOW_STEPS.find((s) => s.id === stepId) || { label: stepId };
+                        return (
+                          <div key={stepId} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 5, background: "var(--bg-surface)", border: "1px solid rgba(99,102,241,0.4)", color: "#a5b4fc", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 8 }}>
+                              <span style={{ width: 16, height: 16, borderRadius: "50%", background: "rgba(99,102,241,0.2)", color: "#818cf8", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                {idx + 1}
+                              </span>
+                              <span>{stepObj.label}</span>
+                            </div>
+                            {idx < localWorkflow.length - 1 && (
+                              <ChevronRight size={13} style={{ color: "#818cf8", flexShrink: 0 }} />
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Interactive Step Toggle Pills */}
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {WORKFLOW_STEPS.map((step) => {
+                      const isSelected = localWorkflow.includes(step.id);
+                      return (
+                        <button
+                          key={step.id}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              setLocalWorkflow(prev => prev.filter(s => s !== step.id));
+                            } else {
+                              setLocalWorkflow(prev => [...prev, step.id]);
+                            }
+                          }}
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 600,
+                            padding: "4px 10px",
+                            borderRadius: 8,
+                            border: "1px solid " + (isSelected ? "rgba(99,102,241,0.5)" : "var(--border-medium)"),
+                            background: isSelected ? "rgba(99,102,241,0.2)" : "var(--bg-surface)",
+                            color: isSelected ? "#a5b4fc" : "var(--text-muted)",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4
+                          }}
+                        >
+                          <span>{step.label}</span>
+                          {isSelected ? <Check size={11} style={{ color: "#818cf8" }} /> : <Plus size={11} style={{ color: "var(--text-muted)" }} />}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 12, borderTop: "1px solid var(--border-subtle)", paddingTop: 14 }}>

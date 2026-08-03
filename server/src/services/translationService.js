@@ -320,12 +320,20 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
 
   const uniqueSources = [...new Set(segments.map((s) => s.source))];
 
-  // Fetch exact translations
-  const { data: existingTranslations } = await supabase
-    .from("translation_memory")
-    .select("*")
-    .in("source_text", uniqueSources)
-    .eq("target_lang", target);
+  // Fetch exact translations in chunks of 50 to prevent PostgREST query URL length overflow
+  let existingTranslations = [];
+  const CHUNK_SIZE = 50;
+  for (let i = 0; i < uniqueSources.length; i += CHUNK_SIZE) {
+    const chunk = uniqueSources.slice(i, i + CHUNK_SIZE);
+    const { data } = await supabase
+      .from("translation_memory")
+      .select("*")
+      .in("source_text", chunk)
+      .eq("target_lang", target);
+    if (data) {
+      existingTranslations.push(...data);
+    }
+  }
 
   // Fetch all translations for this target language to compute fuzzy matches
   const { data: allTmList } = await supabase

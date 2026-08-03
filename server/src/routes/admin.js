@@ -2,17 +2,158 @@ const express = require("express");
 const { supabase, supabaseAdmin } = require("../config/supabase");
 const { checkAuth, checkRole } = require("../utils/authMiddleware");
 
+const { clearTenantCache } = require("../utils/tenantMiddleware");
+
 const adminRouter = express.Router();
 
-// Apply checkAuth and checkRole guards globally on admin endpoints (Admin & Manager only)
+// Apply checkAuth and checkRole guards globally on admin endpoints (Admin & Super Admin only)
 adminRouter.use(checkAuth);
 adminRouter.use(checkRole(["admin"]));
 
-// 1. List All Registered Users
+// ==========================================
+// Super Admin Organization Space Management
+// ==========================================
+
+// 0a. List all client space organizations (Super Admin only)
+adminRouter.get("/organizations", checkRole(["super_admin"]), async (request, response) => {
+  try {
+    const { data: orgs, error } = await supabase
+      .from("organizations")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    // Retrieve user counts per organization
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, organization_id");
+
+    const userCountMap = new Map();
+    if (profiles) {
+      profiles.forEach(p => {
+        if (p.organization_id) {
+          userCountMap.set(p.organization_id, (userCountMap.get(p.organization_id) || 0) + 1);
+        }
+      });
+    }
+
+    const organizations = orgs.map(org => ({
+      ...org,
+      userCount: userCountMap.get(org.id) || 0
+    }));
+
+    response.json({ organizations });
+  } catch (error) {
+    console.error("Super Admin List Organizations Error:", error);
+    response.status(500).json({ error: "Failed to fetch client space organizations" });
+  }
+});
+
+// 0b. Create new client space organization (Super Admin only)
+adminRouter.post("/organizations", checkRole(["super_admin"]), async (request, response) => {
+  try {
+    const { name, subdomain, credits_allowed } = request.body;
+
+    if (!name || !subdomain) {
+      return response.status(400).json({ error: "Organization name and subdomain are required." });
+    }
+
+    const cleanSubdomain = subdomain.toLowerCase().trim().replace(/[^a-z0-9-]/g, "");
+
+    const { data: existing } = await supabase
+      .from("organizations")
+      .select("id")
+      .eq("subdomain", cleanSubdomain)
+      .single();
+
+    if (existing) {
+      return response.status(400).json({ error: `Subdomain '${cleanSubdomain}' is already taken.` });
+    }
+
+    const { data: newOrg, error } = await supabase
+      .from("organizations")
+      .insert({
+        name: name.trim(),
+        subdomain: cleanSubdomain,
+        credits_allowed: Number(credits_allowed) || 100000,
+        status: "active"
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    clearTenantCache();
+    response.json({ message: "Client space created successfully", organization: newOrg });
+  } catch (error) {
+    console.error("Create Organization Error:", error);
+    response.status(500).json({ error: "Failed to create client space organization" });
+  }
+});
+
+// 0c. Update organization space (Super Admin only)
+adminRouter.put("/organizations/:id", checkRole(["super_admin"]), async (request, response) => {
+  try {
+    const { id } = request.params;
+    const { name, credits_allowed, status } = request.body;
+
+    const updateData = {};
+    if (name !== undefined) updateData.name = name.trim();
+    if (credits_allowed !== undefined) updateData.credits_allowed = Number(credits_allowed);
+    if (status !== undefined) updateData.status = status;
+
+    const { data: updatedOrg, error } = await supabase
+      .from("organizations")
+      .update(updateData)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    clearTenantCache();
+    response.json({ message: "Client space updated successfully", organization: updatedOrg });
+  } catch (error) {
+    console.error("Update Organization Error:", error);
+    response.status(500).json({ error: "Failed to update client space organization" });
+  }
+});
+
+// 0d. Delete organization space (Super Admin only)
+adminRouter.delete("/organizations/:id", checkRole(["super_admin"]), async (request, response) => {
+  try {
+    const { id } = request.params;
+
+    const { error } = await supabase
+      .from("organizations")
+      .delete()
+      .eq("id", id);
+
+    if (error) throw error;
+
+    clearTenantCache();
+    response.json({ message: "Client space deleted successfully" });
+  } catch (error) {
+    console.error("Delete Organization Error:", error);
+    response.status(500).json({ error: "Failed to delete client space organization" });
+  }
+});
+
+// 1. List Registered Users (Scoped to user's Organization unless Super Admin)
 adminRouter.get("/users", async (request, response) => {
   try {
+    const isSuperAdmin = request.profile.role === "super_admin";
+    const userOrgId = request.profile.organization_id;
+
+    let query = supabase.from("profiles").select("*, organization:organizations(*)").order("email", { ascending: true });
+
+    if (!isSuperAdmin && userOrgId) {
+      query = query.eq("organization_id", userOrgId);
+    }
+
     const [profilesResult, authUsersResult] = await Promise.all([
-      supabase.from("profiles").select("*").order("email", { ascending: true }),
+      query,
       supabaseAdmin.auth.admin.listUsers()
     ]);
 
@@ -54,12 +195,20 @@ adminRouter.put("/users/:id", async (request, response) => {
       return response.status(404).json({ error: "User account not found" });
     }
 
+    // Non-super admins cannot update users outside their organization
+    if (currentUserRole !== "super_admin" && targetUser.organization_id !== request.profile.organization_id) {
+      return response.status(403).json({ error: "Access denied. Target user belongs to another space organization." });
+    }
+
     // Prepare update parameters
     const updateData = {};
-    if (role !== undefined) updateData.role = role;
+    if (role !== undefined && (currentUserRole === "super_admin" || role !== "super_admin")) updateData.role = role;
     if (credits_allowed !== undefined) updateData.credits_allowed = Number(credits_allowed);
     if (has_translate_access !== undefined) updateData.has_translate_access = !!has_translate_access;
     if (status !== undefined) updateData.status = status;
+    if (request.body.organization_id !== undefined && currentUserRole === "super_admin") {
+      updateData.organization_id = request.body.organization_id;
+    }
 
     const { error: updateError } = await supabase
       .from("profiles")

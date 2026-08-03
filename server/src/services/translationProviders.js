@@ -257,12 +257,19 @@ const buildUploadedContextInstructions = (contextSettings = null) => {
 
   const customPrompt = truncatePromptText(contextSettings.customPrompt, 8000);
   const contextFiles = normalizeContextFiles(contextSettings.contextFiles);
-  if (!customPrompt && contextFiles.length === 0) return "";
+  const referenceContext = contextSettings.referenceContext;
+  if (!customPrompt && contextFiles.length === 0 && !referenceContext) return "";
 
   let instructions = `\n\nUSER-PROVIDED PROJECT CONTEXT:
 - Treat this section as translation context and style guidance for the current document.
 - Use it to resolve terminology, product names, UI labels, tone, intended meaning, and design intent.
 - Do not translate this context section itself. Translate only the source segments provided later.`;
+
+  if (referenceContext) {
+    instructions += `\n\nAI REFERENCE CONTEXT & STYLE GUIDE (Extracted from Project Reference File):
+${referenceContext}
+STRICT INSTRUCTION: You MUST align all translations, terminology, tone, and domain vocabulary with this reference context!`;
+  }
 
   if (customPrompt) {
     instructions += `\n\nCustom Prompt:\n${customPrompt}`;

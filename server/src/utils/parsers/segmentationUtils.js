@@ -169,7 +169,7 @@ const splitByPunctuation = (str, tagMap) => {
   if (!str || !str.trim()) return [];
 
   // Fast path: no sentence-boundary characters present
-  if (!/[.!?।॥\r\n]/.test(str)) {
+  if (!/[.!?।॥]/.test(str)) {
     return [balanceSegmentTags(str, tagMap)];
   }
 

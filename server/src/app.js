@@ -6,6 +6,8 @@ const { adminRouter } = require("./routes/admin");
 const { apiRouter } = require("./routes/api");
 const { chatRouter } = require("./routes/chatRoutes");
 
+const { resolveTenant } = require("./utils/tenantMiddleware");
+
 const app = express();
 
 app.use(cors());
@@ -15,6 +17,9 @@ app.use(
     limit: "50mb"
   })
 );
+
+// Resolve organization space (tenant) for every request
+app.use(resolveTenant);
 
 // Mount authentication and administration routers
 app.use("/api/auth", authRouter);

@@ -50,7 +50,8 @@ import {
   acceptAllTrackedChanges,
   fetchJobSegmentsByPath,
   updateJobSegmentByPath,
-  translateJobSegmentContextByPath
+  translateJobSegmentContextByPath,
+  updateSegmentsBulk
 } from "./services/api.js";
 import { ExportModal } from "./components/ExportModal.jsx";
 import { ShareModal } from "./components/ShareModal.jsx";
@@ -221,14 +222,16 @@ export default function App() {
   const [documentId, setDocumentId] = useState(null);
 
   useEffect(() => {
-    if (currentRoute.screen === "editor") {
+    if (currentRoute?.screen === "editor") {
       setDocumentId(currentRoute.fileId);
-      setTargetLanguage(currentRoute.targetLang);
+      if (currentRoute.targetLang) {
+        setTargetLanguage(currentRoute.targetLang);
+      }
     } else {
       setDocumentId(null);
       setShowLivePreview(false);
     }
-  }, [currentRoute]);
+  }, [currentRoute?.screen, currentRoute?.fileId, currentRoute?.targetLang]);
 
 
   const [permission, setPermission] = useState("write");
@@ -352,10 +355,22 @@ export default function App() {
     return () => clearInterval(interval);
   }, [activeJob, documentId]);
 
+  const routeScreen = currentRoute?.screen;
+  const routeFileId = currentRoute?.fileId;
+  const routeTargetLang = currentRoute?.targetLang;
+
+  const loadedDocIdRef = useRef(null);
+
   // Load collaborative document from DB on startup/change
   const loadCollaborativeDocument = useCallback(async () => {
-    const activeDocId = documentId || (currentRoute.screen === "editor" ? currentRoute.fileId : null);
+    const activeDocId = (routeScreen === "editor" && routeFileId) ? routeFileId : documentId;
     if (!activeDocId || !token) return;
+
+    const currentDocKey = `${activeDocId}:${routeTargetLang || 'default'}`;
+    if (loadedDocIdRef.current === currentDocKey) {
+      return;
+    }
+    loadedDocIdRef.current = currentDocKey;
 
     setIsLoadingDocument(true);
     setHasNoAccess(false);
@@ -363,8 +378,8 @@ export default function App() {
     setAccessRequestMessage("");
     try {
       let doc;
-      if (currentRoute.screen === "editor" && currentRoute.targetLang) {
-        const jobData = await fetchJobSegmentsByPath(activeDocId, currentRoute.targetLang);
+      if (routeScreen === "editor" && routeTargetLang) {
+        const jobData = await fetchJobSegmentsByPath(activeDocId, routeTargetLang);
         doc = {
           id: jobData.documentId,
           name: jobData.fileName,
@@ -377,10 +392,21 @@ export default function App() {
           segments: jobData.segments
         };
         if (jobData.contextSettings) {
-          setContextSettings(jobData.contextSettings);
+          setContextSettings(prev => ({
+            ...prev,
+            ...jobData.contextSettings,
+            customPrompt: jobData.contextSettings.customPrompt || jobData.contextSettings.referenceContext || prev.customPrompt || ""
+          }));
         }
       } else {
         doc = await fetchDocument(activeDocId);
+        if (doc.contextSettings) {
+          setContextSettings(prev => ({
+            ...prev,
+            ...doc.contextSettings,
+            customPrompt: doc.contextSettings.customPrompt || doc.contextSettings.referenceContext || prev.customPrompt || ""
+          }));
+        }
       }
 
       setDocumentId(activeDocId);
@@ -405,10 +431,9 @@ export default function App() {
       setPermission(doc.permission || "write");
       setOwnerId(doc.ownerId);
       setTrackChangesEnabled(doc.trackChangesEnabled || false);
-      showToast(`Loaded document: ${doc.name}`);
 
       // Fetch pending requests if the user is owner or staff
-      const isOwnerOrStaff = doc.ownerId === userRef.current?.id || ["admin", "verbolabs_staff"].includes(userRef.current?.role);
+      const isOwnerOrStaff = doc.ownerId === userRef.current?.id || ["admin", "super_admin", "verbolabs_staff"].includes(userRef.current?.role);
       if (isOwnerOrStaff) {
         try {
           const reqs = await fetchAccessRequests(activeDocId);
@@ -440,13 +465,13 @@ export default function App() {
     } finally {
       setIsLoadingDocument(false);
     }
-  }, [documentId, token, currentRoute]);
+  }, [documentId, token, routeScreen, routeFileId, routeTargetLang]);
 
   useEffect(() => {
     if (isAuth && token) {
       loadCollaborativeDocument();
     }
-  }, [documentId, isAuth, token, loadCollaborativeDocument]);
+  }, [documentId, isAuth, token, routeScreen, routeFileId, routeTargetLang]);
 
   const socketRef = useRef(null);
 
@@ -1572,45 +1597,7 @@ export default function App() {
     }
   };
 
-  const handleVerifySelectedSegments = () => {
-    if (selectedSegmentIds.size === 0) return;
-    setSegments((prev) =>
-      prev.map((s) =>
-        selectedSegmentIds.has(s.id) ? { ...s, verified: true } : s
-      )
-    );
-    showToast(`Marked ${selectedSegmentIds.size} segments as verified!`);
-  };
 
-  const handleUnverifySelectedSegments = () => {
-    if (selectedSegmentIds.size === 0) return;
-    setSegments((prev) =>
-      prev.map((s) =>
-        selectedSegmentIds.has(s.id) ? { ...s, verified: false } : s
-      )
-    );
-    showToast(`Unverified ${selectedSegmentIds.size} segments!`);
-  };
-
-  const handleCopySourceToTargetSelected = () => {
-    if (selectedSegmentIds.size === 0) return;
-    setSegments((prev) =>
-      prev.map((s) =>
-        selectedSegmentIds.has(s.id) ? { ...s, target: s.source } : s
-      )
-    );
-    showToast(`Copied source to target for ${selectedSegmentIds.size} segments!`);
-  };
-
-  const handleClearTargetSelected = () => {
-    if (selectedSegmentIds.size === 0) return;
-    setSegments((prev) =>
-      prev.map((s) =>
-        selectedSegmentIds.has(s.id) ? { ...s, target: "", verified: false } : s
-      )
-    );
-    showToast(`Cleared target text for ${selectedSegmentIds.size} segments!`);
-  };
 
   const handleSourceLanguageChange = async (lang) => {
     setSourceLanguage(lang);
@@ -1900,134 +1887,204 @@ export default function App() {
     }
   };
 
-  const updateTranslation = async (id, value) => {
-    let sourceText = "";
-    setSegments((previous) => {
-      const targetSeg = previous.find((s) => s.id === id);
-      if (targetSeg) {
-        sourceText = targetSeg.source;
+  const pendingBulkSaveRef = useRef(new Map());
+  const pendingBulkSaveTimerRef = useRef(null);
+
+  const flushPendingBulkSave = useCallback(async () => {
+    if (!documentId || pendingBulkSaveRef.current.size === 0) return;
+    const itemsToSave = Array.from(pendingBulkSaveRef.current.values());
+    pendingBulkSaveRef.current.clear();
+
+    try {
+      const updates = itemsToSave
+        .map((seg) => {
+          const segIdx = segments.findIndex((s) => s.id === seg.id);
+          return {
+            segmentIndex: segIdx !== -1 ? segIdx : (typeof seg.id === "number" ? seg.id - 1 : 0),
+            targetText: seg.target,
+            status: seg.verified ? "approved" : (seg.target ? "translated" : "draft")
+          };
+        })
+        .filter((u) => u.segmentIndex >= 0);
+
+      if (updates.length > 0) {
+        await updateSegmentsBulk(documentId, updates, autoPropagateEnabled);
       }
+    } catch (err) {
+      console.error("Failed to bulk save segments to DB:", err);
+    }
+  }, [documentId, segments, autoPropagateEnabled]);
 
-      const cleanString = (str) => {
-        if (!str) return "";
-        return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
-      };
+  const persistBulkSegmentUpdates = useCallback((updatedSegmentsList, instant = true) => {
+    if (!updatedSegmentsList || updatedSegmentsList.length === 0) return;
 
-      const propagateTranslation = (targetA, sourceB) => {
-        if (!targetA) return "";
-        const tagsInSourceB = sourceB.match(/<[^>]+>/g) || [];
-        let tagIdx = 0;
-        let propagated = targetA.replace(/<[^>]+>/g, () => {
-          if (tagIdx < tagsInSourceB.length) {
-            return tagsInSourceB[tagIdx++];
-          }
-          return "";
-        });
-        while (tagIdx < tagsInSourceB.length) {
-          propagated += tagsInSourceB[tagIdx++];
-        }
-        return propagated;
-      };
+    updatedSegmentsList.forEach((seg) => {
+      pendingBulkSaveRef.current.set(seg.id, seg);
+    });
 
-      const cleanedSource = cleanString(sourceText);
+    if (pendingBulkSaveTimerRef.current) {
+      clearTimeout(pendingBulkSaveTimerRef.current);
+    }
 
+    if (instant) {
+      flushPendingBulkSave();
+    } else {
+      pendingBulkSaveTimerRef.current = setTimeout(() => {
+        flushPendingBulkSave();
+      }, 500);
+    }
+  }, [flushPendingBulkSave]);
+
+  const handleVerifySelectedSegments = () => {
+    if (selectedSegmentIds.size === 0) return;
+    const affected = segments
+      .filter((s) => selectedSegmentIds.has(s.id))
+      .map((s) => ({ ...s, verified: true }));
+
+    setSegments((prev) =>
+      prev.map((s) => (selectedSegmentIds.has(s.id) ? { ...s, verified: true } : s))
+    );
+    showToast(`Marked ${selectedSegmentIds.size} segments as verified!`);
+    persistBulkSegmentUpdates(affected, true);
+  };
+
+  const handleUnverifySelectedSegments = () => {
+    if (selectedSegmentIds.size === 0) return;
+    const affected = segments
+      .filter((s) => selectedSegmentIds.has(s.id))
+      .map((s) => ({ ...s, verified: false }));
+
+    setSegments((prev) =>
+      prev.map((s) => (selectedSegmentIds.has(s.id) ? { ...s, verified: false } : s))
+    );
+    showToast(`Unverified ${selectedSegmentIds.size} segments!`);
+    persistBulkSegmentUpdates(affected, true);
+  };
+
+  const handleCopySourceToTargetSelected = () => {
+    if (selectedSegmentIds.size === 0) return;
+    const affected = segments
+      .filter((s) => selectedSegmentIds.has(s.id))
+      .map((s) => ({ ...s, target: s.source, verified: false }));
+
+    setSegments((prev) =>
+      prev.map((s) => (selectedSegmentIds.has(s.id) ? { ...s, target: s.source, verified: false } : s))
+    );
+    showToast(`Copied source to target for ${selectedSegmentIds.size} segments!`);
+    persistBulkSegmentUpdates(affected, true);
+  };
+
+  const handleClearTargetSelected = () => {
+    if (selectedSegmentIds.size === 0) return;
+    const affected = segments
+      .filter((s) => selectedSegmentIds.has(s.id))
+      .map((s) => ({ ...s, target: "", verified: false }));
+
+    setSegments((prev) =>
+      prev.map((s) => (selectedSegmentIds.has(s.id) ? { ...s, target: "", verified: false } : s))
+    );
+    showToast(`Cleared target text for ${selectedSegmentIds.size} segments!`);
+    persistBulkSegmentUpdates(affected, true);
+  };
+
+  const updateTranslation = (id, value) => {
+    let sourceText = "";
+    const cleanString = (str) => {
+      if (!str) return "";
+      return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+    };
+
+    const propagateTranslation = (targetA, sourceB) => {
+      if (!targetA) return "";
+      const tagsInSourceB = sourceB.match(/<[^>]+>/g) || [];
+      let tagIdx = 0;
+      let propagated = targetA.replace(/<[^>]+>/g, () => {
+        if (tagIdx < tagsInSourceB.length) return tagsInSourceB[tagIdx++];
+        return "";
+      });
+      while (tagIdx < tagsInSourceB.length) {
+        propagated += tagsInSourceB[tagIdx++];
+      }
+      return propagated;
+    };
+
+    const targetSeg = segments.find((s) => s.id === id);
+    if (targetSeg) {
+      sourceText = targetSeg.source;
+    }
+    const cleanedSource = cleanString(sourceText);
+
+    const affected = [];
+    setSegments((previous) => {
       return previous.map((segment) => {
         if (segment.id === id) {
-          return { ...segment, target: value, verified: false };
+          const updated = { ...segment, target: value, verified: false };
+          affected.push(updated);
+          return updated;
         }
         if (autoPropagateEnabled && cleanedSource && cleanString(segment.source) === cleanedSource) {
-          return { ...segment, target: propagateTranslation(value, segment.source), verified: false };
+          const updated = { ...segment, target: propagateTranslation(value, segment.source), verified: false };
+          affected.push(updated);
+          return updated;
         }
         return segment;
       });
     });
 
-    if (documentId) {
-      const segmentIndex = segments.findIndex((s) => s.id === id);
-      if (segmentIndex !== -1) {
-        try {
-          await updateSegment(documentId, segmentIndex, value, "draft", undefined, undefined, autoPropagateEnabled);
-        } catch (err) {
-          console.error("Failed to update segment in database:", err);
-          showToast(`Failed to save translation to database: ${err.message || err}`, "error");
-        }
-      }
-    }
+    persistBulkSegmentUpdates(affected, false);
   };
 
-  const toggleVerify = async (id) => {
-    let nextVerified = false;
-    let sourceText = "";
-    setSegments((previous) => {
-      const targetSeg = previous.find((s) => s.id === id);
-      if (targetSeg) {
-        sourceText = targetSeg.source;
-        nextVerified = !targetSeg.verified;
-      }
-      
-      const cleanString = (str) => {
-        if (!str) return "";
-        return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
-      };
+  const toggleVerify = (id) => {
+    const targetSeg = segments.find((s) => s.id === id);
+    if (!targetSeg) return;
+    const sourceText = targetSeg.source;
+    const nextVerified = !targetSeg.verified;
 
-      const cleanedSource = cleanString(sourceText);
+    const cleanString = (str) => {
+      if (!str) return "";
+      return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+    };
+    const cleanedSource = cleanString(sourceText);
 
-      return previous.map((segment) => {
-        if (segment.id === id || (autoPropagateEnabled && cleanedSource && cleanString(segment.source) === cleanedSource)) {
-          return { ...segment, verified: nextVerified };
-        }
-        return segment;
-      });
-    });
+    const affected = segments
+      .filter((s) => s.id === id || (autoPropagateEnabled && cleanedSource && cleanString(s.source) === cleanedSource))
+      .map((s) => ({ ...s, verified: nextVerified }));
 
-    if (documentId) {
-      const segmentIndex = segments.findIndex((s) => s.id === id);
-      if (segmentIndex !== -1) {
-        try {
-          const targetText = segments[segmentIndex].target;
-          await updateSegment(documentId, segmentIndex, targetText, nextVerified ? "approved" : "draft", undefined, undefined, autoPropagateEnabled);
-        } catch (err) {
-          console.error("Failed to update verification in database:", err);
-          showToast(`Failed to save verification state: ${err.message || err}`, "error");
-        }
-      }
-    }
+    setSegments((previous) =>
+      previous.map((segment) =>
+        (segment.id === id || (autoPropagateEnabled && cleanedSource && cleanString(segment.source) === cleanedSource))
+          ? { ...segment, verified: nextVerified }
+          : segment
+      )
+    );
+
+    persistBulkSegmentUpdates(affected, true);
   };
 
-  const verifyAndNextSegment = async (id) => {
-    let sourceText = "";
-    setSegments((previous) => {
-      const targetSeg = previous.find((s) => s.id === id);
-      if (targetSeg) {
-        sourceText = targetSeg.source;
-      }
+  const verifyAndNextSegment = (id) => {
+    const targetSeg = segments.find((s) => s.id === id);
+    if (!targetSeg) return;
+    const sourceText = targetSeg.source;
 
-      const cleanString = (str) => {
-        if (!str) return "";
-        return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
-      };
+    const cleanString = (str) => {
+      if (!str) return "";
+      return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+    };
+    const cleanedSource = cleanString(sourceText);
 
-      const cleanedSource = cleanString(sourceText);
+    const affected = segments
+      .filter((s) => s.id === id || (autoPropagateEnabled && cleanedSource && cleanString(s.source) === cleanedSource))
+      .map((s) => ({ ...s, verified: true }));
 
-      return previous.map((segment) =>
+    setSegments((previous) =>
+      previous.map((segment) =>
         (segment.id === id || (autoPropagateEnabled && cleanedSource && cleanString(segment.source) === cleanedSource))
           ? { ...segment, verified: true }
           : segment
-      );
-    });
+      )
+    );
 
-    if (documentId) {
-      const segmentIndex = segments.findIndex((s) => s.id === id);
-      if (segmentIndex !== -1) {
-        try {
-          const targetText = segments[segmentIndex].target;
-          await updateSegment(documentId, segmentIndex, targetText, "approved", undefined, undefined, autoPropagateEnabled);
-        } catch (err) {
-          console.error("Failed to verify in database:", err);
-          showToast(`Failed to save verification state: ${err.message || err}`, "error");
-        }
-      }
-    }
+    persistBulkSegmentUpdates(affected, true);
 
     // Move focus to next segment
     const currentIndex = filteredSegments.findIndex((s) => s.id === id);
@@ -3096,7 +3153,15 @@ export default function App() {
         userEmail={user ? user.email : ""}
         theme={theme}
         projectId={currentRoute.projectId}
-        onProjectUpdated={() => setProjectRefreshTrigger(prev => prev + 1)}
+        onProjectUpdated={(newSettings) => {
+          setProjectRefreshTrigger(prev => prev + 1);
+          if (newSettings && typeof newSettings === "object") {
+            setContextSettings(prev => ({
+              ...prev,
+              ...newSettings
+            }));
+          }
+        }}
         userId={user ? user.id : null}
       />
 
@@ -3251,7 +3316,7 @@ export default function App() {
             onUpload={handleUpload}
             onOpenSettings={() => setShowSettingsModal(true)}
             collaborators={collaborators}
-            onOpenShare={ownerId && (ownerId === user?.id || ["admin", "verbolabs_staff"].includes(user?.role)) ? () => setShowShareModal(true) : null}
+            onOpenShare={ownerId && (ownerId === user?.id || ["admin", "super_admin", "verbolabs_staff"].includes(user?.role)) ? () => setShowShareModal(true) : null}
             onTeleport={handleTeleport}
             setDarkMode={setDarkMode}
             onExport={() => setShowExportModal(true)}
@@ -3310,6 +3375,8 @@ export default function App() {
                 forbiddenTermsCount={forbiddenTerms.filter(t => t.enabled !== false).length}
                 forbiddenTermsEnabled={forbiddenTermsEnabled}
                 onOpenForbiddenTerms={() => setShowForbiddenTermsModal(true)}
+                hasAutoTranslation={!contextSettings?.workflow || contextSettings.workflow.includes("auto_translation")}
+                hasAutoQc={!contextSettings?.workflow || contextSettings.workflow.includes("auto_qc")}
                 isOwner={ownerId === user?.id}
                 onAcceptAllChanges={handleAcceptAllChanges}
                 hasTrackedChanges={segments.some(s => s.originalTargetText && s.originalTargetText !== s.target)}

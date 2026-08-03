@@ -57,6 +57,19 @@ api.interceptors.request.use(async (config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  // Inject active space subdomain header
+  try {
+    const hostname = window.location.hostname;
+    const parts = hostname.split(".");
+    if (parts.length > 2 || (parts.length === 2 && parts[1] === "localhost")) {
+      const subdomain = parts[0];
+      if (subdomain && subdomain !== "www" && subdomain !== "app") {
+        config.headers["X-Tenant-Subdomain"] = subdomain;
+      }
+    }
+  } catch (_) {}
+
   return config;
 });
 
@@ -235,6 +248,14 @@ export const updateSegment = async (documentId, segmentIndex, targetText, status
   return response.data;
 };
 
+export const updateSegmentsBulk = async (documentId, updates, autoPropagate = true) => {
+  const response = await api.post(`/api/documents/${documentId}/segments/bulk`, {
+    updates,
+    autoPropagate
+  });
+  return response.data;
+};
+
 export const fetchDocumentAccess = async (documentId) => {
   const response = await api.get(`/api/documents/${documentId}/access`);
   return response.data;
@@ -405,7 +426,24 @@ export const deleteDocument = async (documentId) => {
 
 // ── PROJECT-BASED TRANSLATION MANAGEMENT SYSTEM CLIENT API ────────────────
 
-export const createProject = async (name, client, description, sourceLanguage, targetLanguages, deadline = null, settings = {}) => {
+export const createProject = async (name, client, description, sourceLanguage, targetLanguages, deadline = null, settings = {}, referenceFile = null) => {
+  if (referenceFile) {
+    const formData = new FormData();
+    formData.append("name", name);
+    if (client) formData.append("client", client);
+    if (description) formData.append("description", description);
+    formData.append("sourceLanguage", sourceLanguage);
+    formData.append("targetLanguages", JSON.stringify(targetLanguages));
+    if (deadline) formData.append("dueDate", deadline);
+    formData.append("settings", JSON.stringify(settings));
+    formData.append("referenceFile", referenceFile);
+
+    const response = await api.post("/api/projects", formData, {
+      headers: { "Content-Type": "multipart/form-data" }
+    });
+    return response.data;
+  }
+
   const response = await api.post("/api/projects", {
     name,
     client,
@@ -415,6 +453,15 @@ export const createProject = async (name, client, description, sourceLanguage, t
     deadline,
     dueDate: deadline,
     settings
+  });
+  return response.data;
+};
+
+export const uploadProjectReferenceFile = async (projectId, referenceFile) => {
+  const formData = new FormData();
+  formData.append("referenceFile", referenceFile);
+  const response = await api.post(`/api/projects/${projectId}/reference-file`, formData, {
+    headers: { "Content-Type": "multipart/form-data" }
   });
   return response.data;
 };
@@ -647,6 +694,27 @@ export const fetchDocumentPreview = async (documentId, segments = null, targetLa
     throw err;
   }
 };
+
+export const fetchAdminOrganizations = async () => {
+  const response = await api.get("/api/admin/organizations");
+  return response.data;
+};
+
+export const createAdminOrganization = async (data) => {
+  const response = await api.post("/api/admin/organizations", data);
+  return response.data;
+};
+
+export const updateAdminOrganization = async (id, data) => {
+  const response = await api.put(`/api/admin/organizations/${id}`, data);
+  return response.data;
+};
+
+export const deleteAdminOrganization = async (id) => {
+  const response = await api.delete(`/api/admin/organizations/${id}`);
+  return response.data;
+};
+
 
 
 

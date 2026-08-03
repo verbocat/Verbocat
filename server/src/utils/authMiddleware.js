@@ -53,13 +53,25 @@ async function checkAuth(request, response, next) {
     }
 
     // Retrieve custom profile information from public.profiles
-    const { data: profile, error: profileError } = await supabase
+    let profile = null;
+    let { data: profileWithOrg, error: profileError } = await supabase
       .from("profiles")
-      .select("*")
+      .select("*, organization:organizations(*)")
       .eq("id", user.id)
       .single();
 
-    if (profileError || !profile) {
+    if (profileError || !profileWithOrg) {
+      const { data: simpleProfile } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single();
+      profile = simpleProfile;
+    } else {
+      profile = profileWithOrg;
+    }
+
+    if (!profile) {
       return response.status(401).json({ error: "User profile not found in database" });
     }
 
@@ -67,9 +79,14 @@ async function checkAuth(request, response, next) {
       return response.status(403).json({ error: "Your account has been suspended. Please contact VerboLabs support." });
     }
 
+    if (profile.organization && profile.organization.status === "suspended") {
+      return response.status(403).json({ error: "Your workspace space has been suspended. Please contact VerboLabs support." });
+    }
+
     // Attach user credentials and roles to request
     request.user = user;
     request.profile = profile;
+    request.organization = profile.organization || request.tenant || null;
     
     next();
   } catch (err) {
@@ -89,13 +106,26 @@ async function checkTranslateAccess(request, response, next) {
 
     // Count words in translation batch request
     const wordCount = countWordsInSegments(request.body.segments);
-    
-    // Check credit limits (bypass word count block for Admins)
-    if (profile.role !== "admin") {
-      if (profile.credits_consumed + wordCount > profile.credits_allowed) {
-        return response.status(403).json({ 
-          error: `Credit limit exceeded. Reached ${profile.credits_consumed}/${profile.credits_allowed} words allowance. Contact admin.` 
-        });
+
+    // Bypass check for super_admin
+    if (profile.role !== "super_admin") {
+      // Check user individual credit limits for standard users
+      if (profile.role !== "admin") {
+        if (profile.credits_consumed + wordCount > profile.credits_allowed) {
+          return response.status(403).json({ 
+            error: `Credit limit exceeded. Reached ${profile.credits_consumed}/${profile.credits_allowed} words allowance. Contact space admin.` 
+          });
+        }
+      }
+
+      // Check overall organization credit limit
+      const org = request.organization || profile.organization;
+      if (org && org.credits_allowed > 0) {
+        if (org.credits_consumed + wordCount > org.credits_allowed) {
+          return response.status(403).json({
+            error: `Workspace credit limit exceeded for ${org.name}. Reached ${org.credits_consumed}/${org.credits_allowed} words allowance. Contact VerboLabs.`
+          });
+        }
       }
     }
 
@@ -110,11 +140,12 @@ async function checkTranslateAccess(request, response, next) {
 // 3. Admin / Manager Role Guards
 function checkRole(allowedRoles) {
   return (request, response, next) => {
-    const role = request.profile.role;
-    if (!allowedRoles.includes(role)) {
-      return response.status(403).json({ error: "Access denied. Insufficient permissions." });
+    const role = request.profile?.role;
+    // super_admin always passes admin checks
+    if (role === "super_admin" || allowedRoles.includes(role)) {
+      return next();
     }
-    next();
+    return response.status(403).json({ error: "Access denied. Insufficient permissions." });
   };
 }
 

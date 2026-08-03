@@ -445,14 +445,34 @@ export const ContextSettingsModal = ({ show, onClose, contextSettings, setContex
             </div>
           </div>
 
+          {/* Active AI Reference Context (If Reference File Was Uploaded) */}
+          {contextSettings.referenceContext && (
+            <div className="p-3.5 bg-indigo-500/10 border border-indigo-500/30 rounded-2xl space-y-1.5">
+              <div className="flex items-center justify-between text-xs font-bold text-indigo-400">
+                <span className="flex items-center gap-1.5">
+                  <Sparkles size={14} /> Active AI Reference Context
+                </span>
+                {contextSettings.referenceFileName && (
+                  <span className="text-[10px] bg-indigo-500/20 px-2 py-0.5 rounded border border-indigo-500/30 text-indigo-300 font-mono">
+                    📄 {contextSettings.referenceFileName}
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed whitespace-pre-line bg-[var(--bg-surface)] p-2.5 rounded-xl border border-[var(--border-subtle)] font-medium">
+                {contextSettings.referenceContext}
+              </p>
+            </div>
+          )}
+
           <div>
-            <span className="settings-section-label">Custom Translation Prompt</span>
+            <span className="settings-section-label">Custom Translation Prompt & File Context</span>
             <div style={{ marginTop: 8 }}>
               <textarea
                 className="context-textarea"
+                rows={4}
                 value={contextSettings.customPrompt || ""}
                 onChange={e => handleCustomPromptChange(e.target.value)}
-                placeholder="Add project-specific translation instructions, terminology rules, tone requirements, product context, or do-not-translate guidance."
+                placeholder="Add project-specific translation instructions, terminology rules, tone requirements, product context, or do-not-translate guidance. (Automatically pre-filled if a reference file is uploaded)"
               />
             </div>
           </div>

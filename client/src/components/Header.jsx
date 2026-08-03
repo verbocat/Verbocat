@@ -26,7 +26,7 @@ export const Header = ({
   userRole, onOpenAdmin, creditsAllowed, creditsConsumed, onLogout, onUpload,
   collaborators, onOpenShare, onTeleport
 }) => {
-  const isAdmin = userRole === "admin";
+  const isAdmin = userRole === "admin" || userRole === "super_admin";
   const hasFile = segmentsCount > 0;
   const srcLang = LANGUAGES.find(l => l.code === sourceLanguage);
   const tgtLang = LANGUAGES.find(l => l.code === targetLanguage);

@@ -8,7 +8,7 @@ import io from "socket.io-client";
 import { 
   fetchProjectDetails, uploadFileToProject, updateProjectLanguages, 
   controlJobQueue, downloadJobFile, downloadLanguageZip, downloadProjectZip, fetchProjectAnalytics, deleteDocument,
-  updateProjectDetails, renameDocument, duplicateDocument, deleteProject
+  updateProjectDetails, renameDocument, duplicateDocument, deleteProject, uploadProjectReferenceFile
 } from "../services/api";
 import { LANGUAGES } from "../constants/languages";
 import { ShareModal } from "./ShareModal";
@@ -156,6 +156,22 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
       setAnalytics(data);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleUploadReferenceFile = async (e) => {
+    const refFile = e.target.files[0];
+    if (!refFile) return;
+    showToast(`Analyzing reference context from ${refFile.name}...`, "info");
+    try {
+      const res = await uploadProjectReferenceFile(projectId, refFile);
+      if (res.success) {
+        showToast("AI Reference Context extracted & active for this project!", "success");
+        loadProjectDetails();
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to process reference file", "error");
     }
   };
 
@@ -722,7 +738,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
               <StickyNote size={14} />
             </button>
 
-            {userRole === "admin" && (
+            {(userRole === "admin" || userRole === "super_admin") && (
               <button
                 onClick={onOpenAdmin}
                 className="project-icon-action"
@@ -989,6 +1005,45 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
 
               </div>
 
+              {/* AI Reference Context & Style Guide Banner */}
+              <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] hover:border-indigo-500/40 rounded-3xl p-6 shadow-md space-y-3 transition-all">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-black uppercase text-indigo-400">
+                    <Sparkles size={16} /> AI Reference Context & Style Guide
+                  </div>
+                  <label className="relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-xs font-bold text-indigo-300 transition-all cursor-pointer">
+                    <Upload size={13} />
+                    <span>{project?.settings?.referenceContext ? "Change Reference File" : "Upload Reference File"}</span>
+                    <input
+                      type="file"
+                      accept=".pdf,.docx,.txt,.html,.md,.csv"
+                      onChange={handleUploadReferenceFile}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    />
+                  </label>
+                </div>
+
+                {project?.settings?.referenceContext ? (
+                  <div className="space-y-2">
+                    {project?.settings?.referenceFileName && (
+                      <div className="text-[11px] font-bold text-indigo-300 flex items-center gap-1.5">
+                        <FileText size={13} /> Active Reference File: <span className="underline">{project.settings.referenceFileName}</span>
+                      </div>
+                    )}
+                    <div className="text-xs text-[var(--text-primary)] font-medium whitespace-pre-line leading-relaxed bg-[var(--bg-surface)] p-4 rounded-2xl border border-[var(--border-subtle)]">
+                      {project.settings.referenceContext}
+                    </div>
+                    <p className="text-[10px] text-[var(--text-muted)] font-medium">
+                      ✨ Low-Cost AI Context Active: Sampled & applied automatically to all file translations in this project.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-[var(--text-muted)] font-medium">
+                    No reference document uploaded yet. Upload a style guide or reference PDF/DOCX to automatically extract domain context, tone, and terminology for all files in this project at minimal API token cost.
+                  </p>
+                )}
+              </div>
+
               {/* 2. Project Health Score & Velocity Dashboard */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
@@ -1053,7 +1108,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                 {/* Quick Shortcuts Bar */}
                 <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-3xl p-6 shadow-md space-y-3">
                   <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400">Quick Shortcuts</span>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className={`grid ${(!project?.settings?.workflow || project.settings.workflow.includes("auto_translation")) ? "grid-cols-2" : "grid-cols-1"} gap-2 text-xs`}>
                     <button
                       onClick={() => setActiveTab("files")}
                       className="flex items-center justify-center gap-1.5 bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-subtle)] p-2.5 rounded-2xl font-bold text-[var(--text-primary)] transition-all cursor-pointer"
@@ -1061,13 +1116,15 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                       <FileText size={14} className="text-indigo-400" />
                       <span>Files Hub</span>
                     </button>
-                    <button
-                      onClick={() => setShowBatchTranslateModal(true)}
-                      className="flex items-center justify-center gap-1.5 bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-subtle)] p-2.5 rounded-2xl font-bold text-[var(--text-primary)] transition-all cursor-pointer"
-                    >
-                      <Sparkles size={14} className="text-purple-400" />
-                      <span>Translate All</span>
-                    </button>
+                    {(!project?.settings?.workflow || project.settings.workflow.includes("auto_translation")) && (
+                      <button
+                        onClick={() => setShowBatchTranslateModal(true)}
+                        className="flex items-center justify-center gap-1.5 bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-subtle)] p-2.5 rounded-2xl font-bold text-[var(--text-primary)] transition-all cursor-pointer"
+                      >
+                        <Sparkles size={14} className="text-purple-400" />
+                        <span>Translate All</span>
+                      </button>
+                    )}
                   </div>
                 </div>
 
