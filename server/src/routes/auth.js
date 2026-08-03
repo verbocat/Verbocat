@@ -12,28 +12,67 @@ authRouter.post("/register", async (request, response) => {
       return response.status(400).json({ error: "Email and password are required" });
     }
 
-    // Call Supabase admin createUser to auto-verify email and avoid verification delays
+    const tenantId = request.tenant?.id;
+    const cleanEmail = email.toLowerCase().trim();
+
+    // Check if user already exists in Supabase Auth
+    let existingUser = null;
+    try {
+      const { data: authData } = await supabaseAdmin.auth.admin.listUsers();
+      if (authData?.users) {
+        existingUser = authData.users.find(u => u.email?.toLowerCase() === cleanEmail);
+      }
+    } catch (_) {}
+
+    if (existingUser) {
+      // User already exists in Supabase Auth. Verify password before adding membership for this space
+      const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password
+      });
+
+      if (loginError) {
+        return response.status(400).json({
+          error: `An account with this email address already exists. Please enter your correct password to join the '${request.tenant?.name || 'requested'}' space.`
+        });
+      }
+
+      // Password is valid! Add membership to user_tenant_memberships for this tenantId
+      if (tenantId) {
+        try {
+          await supabase
+            .from("user_tenant_memberships")
+            .upsert({
+              user_id: existingUser.id,
+              organization_id: tenantId,
+              role: "linguist",
+              credits_allowed: 50000,
+              status: "active"
+            }, { onConflict: "user_id,organization_id" });
+        } catch (_) {}
+      }
+
+      return response.json({
+        message: `Registration successful! Your account is now added to '${request.tenant?.name || 'this'}' space. You can now log in.`,
+        user: loginData.user
+      });
+    }
+
+    // Call Supabase admin createUser for new user
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
-      email,
+      email: cleanEmail,
       password,
       email_confirm: true
     });
 
     if (error) {
-      console.error("Supabase Admin Create User Error:");
-      console.error(JSON.stringify(error, null, 2));
-      return response.status(400).json({
-        error: error.message,
-        code: error.code,
-        details: error
-      });
+      return response.status(400).json({ error: error.message });
     }
 
     const user = data.user;
-    const tenantId = request.tenant?.id;
 
     if (user && tenantId) {
-      // Upsert user profile to guarantee binding to the current space organization
+      // Upsert base profile
       await supabase
         .from("profiles")
         .upsert({
@@ -44,10 +83,23 @@ authRouter.post("/register", async (request, response) => {
           credits_allowed: 50000,
           status: "active"
         }, { onConflict: "id" });
+
+      // Upsert space membership
+      try {
+        await supabase
+          .from("user_tenant_memberships")
+          .upsert({
+            user_id: user.id,
+            organization_id: tenantId,
+            role: "linguist",
+            credits_allowed: 50000,
+            status: "active"
+          }, { onConflict: "user_id,organization_id" });
+      } catch (_) {}
     }
 
     response.json({
-      message: "Registration successful! Your account is automatically verified and ready for login.",
+      message: "Registration successful! Your account is ready for login.",
       user: data.user
     });
   } catch (error) {
@@ -117,16 +169,40 @@ authRouter.post("/login", async (request, response) => {
       return response.status(403).json({ error: "Your space workspace has been suspended. Contact VerboLabs." });
     }
 
-    // Enforce workspace boundary: Non-superadmin users can only log in at their assigned workspace space
+    // Enforce workspace boundary: Resolve space membership from user_tenant_memberships
+    const activeTenantId = request.tenant?.id;
     const isSuperAdmin = profile.role === "super_admin";
     const activeSubdomain = request.tenant?.subdomain || "centroid";
     const isMainSpace = ["centroid", "verbolabs"].includes(activeSubdomain.toLowerCase());
 
-    if (!isSuperAdmin && !isMainSpace && request.tenant?.id && profile.organization_id) {
-      if (profile.organization_id !== request.tenant.id) {
+    if (!isSuperAdmin && !isMainSpace && activeTenantId) {
+      let membership = null;
+      try {
+        const { data: memData } = await supabase
+          .from("user_tenant_memberships")
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("organization_id", activeTenantId)
+          .maybeSingle();
+        membership = memData;
+      } catch (_) {}
+
+      if (membership) {
+        profile = {
+          ...profile,
+          role: membership.role || profile.role,
+          organization_id: activeTenantId,
+          credits_allowed: membership.credits_allowed ?? profile.credits_allowed,
+          credits_consumed: membership.credits_consumed ?? profile.credits_consumed,
+          has_translate_access: membership.has_translate_access ?? profile.has_translate_access,
+          status: membership.status || profile.status
+        };
+      } else if (!profile.organization_id || profile.organization_id === activeTenantId) {
+        // Direct legacy profile match
+      } else {
         await supabase.auth.signOut();
         return response.status(403).json({
-          error: "This user account belongs to a different workspace space. Please use your assigned workspace space link to log in."
+          error: `You are not registered in the '${request.tenant?.name || activeSubdomain}' space. Please sign up at https://centroid.verbolabs.com/?space=${activeSubdomain} to join this space with your account.`
         });
       }
     }

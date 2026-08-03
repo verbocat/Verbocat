@@ -57,3 +57,28 @@ BEGIN
         UPDATE activity_logs SET organization_id = default_org_id WHERE organization_id IS NULL;
     END IF;
 END $$;
+
+-- 9. Create user_tenant_memberships table for multi-space single-email access
+CREATE TABLE IF NOT EXISTS user_tenant_memberships (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  role TEXT NOT NULL DEFAULT 'linguist',
+  credits_allowed INTEGER DEFAULT 50000,
+  credits_consumed INTEGER DEFAULT 0,
+  has_translate_access BOOLEAN DEFAULT TRUE,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+  UNIQUE(user_id, organization_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_tenant_memberships_user ON user_tenant_memberships(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_tenant_memberships_org ON user_tenant_memberships(organization_id);
+
+-- Backfill profiles into user_tenant_memberships
+INSERT INTO user_tenant_memberships (user_id, organization_id, role, credits_allowed, credits_consumed, has_translate_access, status)
+SELECT id, organization_id, role, credits_allowed, credits_consumed, has_translate_access, status
+FROM profiles
+WHERE organization_id IS NOT NULL
+ON CONFLICT (user_id, organization_id) DO NOTHING;

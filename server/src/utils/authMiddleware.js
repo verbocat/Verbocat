@@ -83,15 +83,40 @@ async function checkAuth(request, response, next) {
       return response.status(403).json({ error: "Your workspace space has been suspended. Please contact VerboLabs support." });
     }
 
-    // Cross-workspace restriction: regular users & client admins can only access their assigned space
+    // Resolve space-specific membership from user_tenant_memberships
+    const activeTenantId = request.tenant_id || request.tenant?.id;
     const isSuperAdmin = profile.role === "super_admin";
     const activeSubdomain = request.tenant?.subdomain || "centroid";
     const isMainSpace = ["centroid", "verbolabs"].includes(activeSubdomain.toLowerCase());
 
-    if (!isSuperAdmin && !isMainSpace && request.tenant?.id && profile.organization_id) {
-      if (profile.organization_id !== request.tenant.id) {
+    if (!isSuperAdmin && !isMainSpace && activeTenantId) {
+      let membership = null;
+      try {
+        const { data: memData } = await supabase
+          .from("user_tenant_memberships")
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("organization_id", activeTenantId)
+          .maybeSingle();
+        membership = memData;
+      } catch (_) {}
+
+      if (membership) {
+        // Space-specific membership found! Attach space-scoped profile settings
+        profile = {
+          ...profile,
+          role: membership.role || profile.role,
+          organization_id: activeTenantId,
+          credits_allowed: membership.credits_allowed ?? profile.credits_allowed,
+          credits_consumed: membership.credits_consumed ?? profile.credits_consumed,
+          has_translate_access: membership.has_translate_access ?? profile.has_translate_access,
+          status: membership.status || profile.status
+        };
+      } else if (!profile.organization_id || profile.organization_id === activeTenantId) {
+        // Direct profile match or legacy unassigned user
+      } else {
         return response.status(403).json({
-          error: "Access denied. Your account is registered under another space organization. Please log in at your assigned space URL."
+          error: `You are not registered in the '${request.tenant.name}' space. Please sign up at https://centroid.verbolabs.com/?space=${request.tenant.subdomain} to join this space.`
         });
       }
     }

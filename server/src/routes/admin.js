@@ -140,45 +140,72 @@ adminRouter.delete("/organizations/:id", checkRole(["super_admin"]), async (requ
   }
 });
 
-// 1. List Registered Users (Scoped to user's Organization unless Super Admin)
+// 1. List Registered Users (Scoped to active tenant space via profiles & memberships)
 adminRouter.get("/users", async (request, response) => {
   try {
     const isSuperAdmin = request.profile.role === "super_admin";
     const activeTenantId = request.tenant?.id;
     const isMainSpace = ["centroid", "verbolabs"].includes(request.tenant?.subdomain?.toLowerCase() || "centroid");
 
-    let query = supabase.from("profiles").select("*, organization:organizations(*)").order("email", { ascending: true });
+    // Fetch profiles matching space
+    let profilesQuery = supabase.from("profiles").select("*, organization:organizations(*)").order("email", { ascending: true });
 
-    // Isolation: When inside a specific client space (e.g. ?space=test), list ONLY users belonging to space test!
     if (!isMainSpace && activeTenantId) {
-      query = query.eq("organization_id", activeTenantId);
+      profilesQuery = profilesQuery.eq("organization_id", activeTenantId);
     } else if (request.query.organization_id) {
-      query = query.eq("organization_id", request.query.organization_id);
+      profilesQuery = profilesQuery.eq("organization_id", request.query.organization_id);
     } else if (!isSuperAdmin) {
       const userOrgId = request.profile.organization_id || activeTenantId;
-      if (userOrgId) query = query.eq("organization_id", userOrgId);
+      if (userOrgId) profilesQuery = profilesQuery.eq("organization_id", userOrgId);
     }
 
-    const { data: profiles, error: profilesError } = await query;
-    if (profilesError) {
-      console.error("Admin List Users DB Query Error:", profilesError);
-      return response.status(500).json({ error: profilesError.message || "Failed to fetch user profiles" });
+    const { data: baseProfiles } = await profilesQuery;
+
+    // Fetch memberships matching active space
+    let membershipsMap = new Map();
+    if (activeTenantId) {
+      const { data: mems } = await supabase
+        .from("user_tenant_memberships")
+        .select("*, profile:profiles(*)")
+        .eq("organization_id", activeTenantId);
+
+      if (mems) {
+        mems.forEach(m => membershipsMap.set(m.user_id, m));
+      }
     }
+
+    // Merge base profiles and memberships
+    const userMap = new Map();
+    (baseProfiles || []).forEach(p => {
+      userMap.set(p.id, p);
+    });
+
+    membershipsMap.forEach((m, userId) => {
+      const existing = userMap.get(userId) || m.profile || { id: userId, email: m.user_id };
+      userMap.set(userId, {
+        ...existing,
+        role: m.role || existing.role,
+        organization_id: m.organization_id || existing.organization_id,
+        credits_allowed: m.credits_allowed ?? existing.credits_allowed,
+        credits_consumed: m.credits_consumed ?? existing.credits_consumed,
+        has_translate_access: m.has_translate_access ?? existing.has_translate_access,
+        status: m.status || existing.status
+      });
+    });
 
     let authUsersMap = new Map();
     try {
-      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.listUsers();
-      if (!authError && authData?.users) {
+      const { data: authData } = await supabaseAdmin.auth.admin.listUsers();
+      if (authData?.users) {
         authUsersMap = new Map(authData.users.map(u => [u.id, u]));
       }
-    } catch (aErr) {
-      console.warn("Notice: listUsers from authAdmin fallback:", aErr?.message || aErr);
-    }
+    } catch (_) {}
 
-    const users = (profiles || []).map(p => {
+    const users = Array.from(userMap.values()).map(p => {
       const authUser = authUsersMap.get(p.id);
       return {
         ...p,
+        email: p.email || authUser?.email || "User",
         email_confirmed: authUser ? !!(authUser.email_confirmed_at || authUser.confirmed_at) : true
       };
     });
@@ -196,48 +223,35 @@ adminRouter.put("/users/:id", async (request, response) => {
     const { id } = request.params;
     const { role, credits_allowed, has_translate_access, status, email_confirmed } = request.body;
     const currentUserRole = request.profile.role;
+    const activeTenantId = request.tenant?.id || request.profile.organization_id;
 
-    // Fetch original user profile details
-    const { data: targetUser, error: fetchError } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", id)
-      .single();
-
-    if (fetchError || !targetUser) {
-      return response.status(404).json({ error: "User account not found" });
-    }
-
-    // Non-super admins cannot update users outside their organization
-    if (currentUserRole !== "super_admin" && targetUser.organization_id !== request.profile.organization_id) {
-      return response.status(403).json({ error: "Access denied. Target user belongs to another space organization." });
-    }
-
-    // Prepare update parameters
+    // Prepare update data
     const updateData = {};
     if (role !== undefined && (currentUserRole === "super_admin" || role !== "super_admin")) updateData.role = role;
     if (credits_allowed !== undefined) updateData.credits_allowed = Number(credits_allowed);
     if (has_translate_access !== undefined) updateData.has_translate_access = !!has_translate_access;
     if (status !== undefined) updateData.status = status;
-    if (request.body.organization_id !== undefined && currentUserRole === "super_admin") {
-      updateData.organization_id = request.body.organization_id;
-    }
 
-    const { error: updateError } = await supabase
+    // Update in profiles table
+    await supabase
       .from("profiles")
       .update(updateData)
       .eq("id", id);
 
-    if (updateError) throw updateError;
+    // Also upsert into user_tenant_memberships for active space
+    if (activeTenantId) {
+      await supabase
+        .from("user_tenant_memberships")
+        .upsert({
+          user_id: id,
+          organization_id: activeTenantId,
+          ...updateData
+        }, { onConflict: "user_id,organization_id" });
+    }
 
     // Manually verify user in Supabase Auth if requested
     if (email_confirmed === true) {
-      const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(id, {
-        email_confirm: true
-      });
-      if (authError) {
-        console.error("Failed to manually verify user auth:", authError);
-      }
+      await supabaseAdmin.auth.admin.updateUserById(id, { email_confirm: true }).catch(() => {});
     }
 
     response.json({ message: "User account updated successfully" });
