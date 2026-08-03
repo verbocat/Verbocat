@@ -159,28 +159,34 @@ adminRouter.get("/users", async (request, response) => {
       if (userOrgId) query = query.eq("organization_id", userOrgId);
     }
 
-    const [profilesResult, authUsersResult] = await Promise.all([
-      query,
-      supabaseAdmin.auth.admin.listUsers()
-    ]);
+    const { data: profiles, error: profilesError } = await query;
+    if (profilesError) {
+      console.error("Admin List Users DB Query Error:", profilesError);
+      return response.status(500).json({ error: profilesError.message || "Failed to fetch user profiles" });
+    }
 
-    if (profilesResult.error) throw profilesResult.error;
-    if (authUsersResult.error) throw authUsersResult.error;
+    let authUsersMap = new Map();
+    try {
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.listUsers();
+      if (!authError && authData?.users) {
+        authUsersMap = new Map(authData.users.map(u => [u.id, u]));
+      }
+    } catch (aErr) {
+      console.warn("Notice: listUsers from authAdmin fallback:", aErr?.message || aErr);
+    }
 
-    const authUsersMap = new Map(authUsersResult.data.users.map(u => [u.id, u]));
-
-    const users = profilesResult.data.map(p => {
+    const users = (profiles || []).map(p => {
       const authUser = authUsersMap.get(p.id);
       return {
         ...p,
-        email_confirmed: authUser ? !!(authUser.email_confirmed_at || authUser.confirmed_at) : false
+        email_confirmed: authUser ? !!(authUser.email_confirmed_at || authUser.confirmed_at) : true
       };
     });
 
     response.json({ users });
   } catch (error) {
-    console.error("Admin List Users Error:", error);
-    response.status(500).json({ error: "Failed to fetch user accounts" });
+    console.error("Admin List Users Exception:", error);
+    response.status(500).json({ error: error.message || "Failed to fetch user accounts" });
   }
 });
 
@@ -312,11 +318,14 @@ adminRouter.get("/credit-logs", async (request, response) => {
 
     const { data: logs, error } = await query;
 
-    if (error) throw error;
-    response.json({ logs });
+    if (error) {
+      console.error("Credit logs fetch error:", error);
+      return response.json({ logs: [] });
+    }
+    response.json({ logs: logs || [] });
   } catch (error) {
-    console.error("Admin Credit Logs Error:", error);
-    response.status(500).json({ error: "Failed to fetch credit transaction logs" });
+    console.error("Admin Credit Logs Exception:", error);
+    response.json({ logs: [] });
   }
 });
 

@@ -189,10 +189,15 @@ export const AdminDashboard = ({ onClose, theme }) => {
       setLoading(true);
       setError("");
       
-      const [usersData, logsData] = await Promise.all([
-        fetchAdminUsers(),
-        fetchAdminCreditLogs()
-      ]);
+      const usersData = await fetchAdminUsers().catch(err => {
+        console.warn("fetchAdminUsers warning:", err?.response?.data || err?.message);
+        return { users: [] };
+      });
+
+      const logsData = await fetchAdminCreditLogs().catch(err => {
+        console.warn("fetchAdminCreditLogs warning:", err?.response?.data || err?.message);
+        return { logs: [] };
+      });
       
       setUsers(usersData.users || []);
       setLogs(logsData.logs || []);
