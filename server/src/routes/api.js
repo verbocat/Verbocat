@@ -2724,16 +2724,17 @@ apiRouter.get("/projects", checkAuth, async (request, response) => {
       .select("*, organization:organizations(*)")
       .order("created_at", { ascending: false });
 
-    // Isolation logic:
-    // If accessing a specific client space (e.g. ?space=test), filter STRICTLY by that space ID!
+    // Isolation & Ownership logic:
     if (!isMainSpace && activeTenantId) {
+      // In client tenant, filter strictly by tenant's organization_id
       ownedQuery = ownedQuery.eq("organization_id", activeTenantId);
     } else if (targetOrgId) {
       ownedQuery = ownedQuery.eq("organization_id", targetOrgId);
-    } else if (!isSuperAdmin) {
-      const userOrgId = request.profile?.organization_id || activeTenantId;
-      if (isAdmin && userOrgId) {
-        ownedQuery = ownedQuery.eq("organization_id", userOrgId);
+    } else {
+      // In main space (verbolabs / centroid):
+      // Return user's owned projects (unless explicitly requesting all_projects=true as Admin)
+      if (request.query.all_projects === "true" && (isSuperAdmin || isAdmin)) {
+        if (activeTenantId) ownedQuery = ownedQuery.eq("organization_id", activeTenantId);
       } else {
         ownedQuery = ownedQuery.eq("owner_id", userId);
       }

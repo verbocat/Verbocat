@@ -154,7 +154,8 @@ code, .font-mono { font-family: "IBM Plex Mono", monospace; }
   display: flex;
   flex-direction: column;
   height: 100dvh;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   background: var(--bg-base);
 }
 

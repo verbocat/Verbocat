@@ -216,7 +216,7 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
   const totalFilesCount = projects.reduce((sum, p) => sum + (p.fileCount || (p.documents?.length || 0)), 0);
 
   return (
-    <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] font-sans antialiased flex flex-col">
+    <div className="min-h-screen w-full flex-1 overflow-y-auto bg-[var(--bg-base)] text-[var(--text-primary)] font-sans antialiased flex flex-col">
       
       {/* ── TOP HEADER NAVBAR ── */}
       <header className="sticky top-0 z-30 border-b border-[var(--border-subtle)] bg-[var(--bg-panel)]/90 backdrop-blur-md px-8 py-4 flex items-center justify-between shadow-sm">
