@@ -59,14 +59,15 @@ export const useUserStore = create((set, get) => ({
       localStorage.setItem("centroid_user", JSON.stringify(response.data));
       set({ user: response.data, isAuth: true, loading: false });
     } catch (err) {
-      console.error("Failed to sync profile session:", err);
-      // Auto log out if token is expired or unauthorized
+      // Quiet warning for space-switching session verification
       if (err.response && (err.response.status === 401 || err.response.status === 403)) {
-        logout();
         const serverErr = err.response.data?.error;
         const errorText = typeof serverErr === "object" && serverErr !== null
           ? (serverErr.message || JSON.stringify(serverErr))
-          : (serverErr || "Session expired. Please log in again.");
+          : (serverErr || "Session expired for this space. Please log in.");
+        
+        console.warn("[Space Session Notice]", errorText);
+        logout();
         set({ error: errorText, loading: false });
       } else if (err.response && err.response.status === 502) {
         set({ 
@@ -74,6 +75,7 @@ export const useUserStore = create((set, get) => ({
           loading: false 
         });
       } else {
+        console.warn("[Profile Sync Notice]", err?.message || err);
         set({ error: "Failed to connect to authentication server", loading: false });
       }
     } finally {
