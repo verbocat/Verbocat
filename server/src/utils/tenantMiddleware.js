@@ -84,16 +84,19 @@ async function resolveTenant(request, response, next) {
   try {
     let subdomain = "";
 
-    // 1. Explicit API Header (for mobile or API clients)
-    if (request.headers["x-tenant-subdomain"]) {
+    // 1. URL Query Parameter at the back (e.g. ?space=branch or ?tenant=branch)
+    if (request.query.space || request.query.tenant || request.query.org) {
+      subdomain = (request.query.space || request.query.tenant || request.query.org).toLowerCase().trim();
+    }
+    // 2. Explicit API Header
+    else if (request.headers["x-tenant-subdomain"]) {
       subdomain = request.headers["x-tenant-subdomain"].toLowerCase().trim();
     }
-    // 2. Host header resolution
+    // 3. Host header resolution (e.g. branch.centroid.verbolabs.com or branch.lvh.me)
     else if (request.headers.host) {
       const host = request.headers.host.split(":")[0]; // strip port
       const parts = host.split(".");
       
-      // e.g. test.centroid.verbolabs.com -> 4 parts; test.lvh.me or test.localhost -> 2 or 3 parts
       if (parts.length >= 4) {
         subdomain = parts[0];
       } else if (parts.length === 3 && parts[1] === "lvh" && parts[2] === "me") {
@@ -102,18 +105,23 @@ async function resolveTenant(request, response, next) {
         subdomain = parts[0];
       }
     } 
-    // 3. Origin / Referer header fallback
+    // 4. Origin / Referer header fallback
     else if (request.headers.origin || request.headers.referer) {
       try {
         const urlStr = request.headers.origin || request.headers.referer;
         const parsedUrl = new URL(urlStr);
-        const parts = parsedUrl.hostname.split(".");
-        if (parts.length >= 4) {
-          subdomain = parts[0];
-        } else if (parts.length === 3 && parts[1] === "lvh" && parts[2] === "me") {
-          subdomain = parts[0];
-        } else if (parts.length === 2 && parts[1] === "localhost") {
-          subdomain = parts[0];
+        const searchParams = parsedUrl.searchParams;
+        if (searchParams.get("space") || searchParams.get("tenant")) {
+          subdomain = (searchParams.get("space") || searchParams.get("tenant")).toLowerCase().trim();
+        } else {
+          const parts = parsedUrl.hostname.split(".");
+          if (parts.length >= 4) {
+            subdomain = parts[0];
+          } else if (parts.length === 3 && parts[1] === "lvh" && parts[2] === "me") {
+            subdomain = parts[0];
+          } else if (parts.length === 2 && parts[1] === "localhost") {
+            subdomain = parts[0];
+          }
         }
       } catch (_) {}
     }
