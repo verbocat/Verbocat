@@ -475,6 +475,137 @@ authRouter.get("/me", checkAuth, async (request, response) => {
   }
 });
 
+// 6. List User's Joined Spaces
+authRouter.get("/my-spaces", checkAuth, async (request, response) => {
+  try {
+    const userId = request.user.id;
+    const isSuperAdmin = request.profile?.role === "super_admin";
+
+    if (isSuperAdmin) {
+      // Super Admin sees all spaces
+      const { data: orgs } = await supabase
+        .from("organizations")
+        .select("id, name, subdomain, status")
+        .order("name", { ascending: true });
+      return response.json({ spaces: orgs || [] });
+    }
+
+    // Fetch user memberships from user_tenant_memberships
+    let mems = null;
+    try {
+      const { data } = await supabase
+        .from("user_tenant_memberships")
+        .select("organization_id, role, status, organization:organizations(*)")
+        .eq("user_id", userId);
+      mems = data;
+    } catch (_) {}
+
+    const spaceMap = new Map();
+    if (mems) {
+      mems.forEach(m => {
+        if (m.organization) {
+          spaceMap.set(m.organization.id, {
+            id: m.organization.id,
+            name: m.organization.name,
+            subdomain: m.organization.subdomain,
+            role: m.role,
+            status: m.status
+          });
+        }
+      });
+    }
+
+    // Also check primary organization profile
+    if (request.profile?.organization_id) {
+      const orgId = request.profile.organization_id;
+      if (!spaceMap.has(orgId)) {
+        const { data: mainOrg } = await supabase
+          .from("organizations")
+          .select("id, name, subdomain, status")
+          .eq("id", orgId)
+          .maybeSingle();
+        if (mainOrg) {
+          spaceMap.set(mainOrg.id, {
+            ...mainOrg,
+            role: request.profile.role,
+            status: request.profile.status
+          });
+        }
+      }
+    }
+
+    // Always include default master space for logged in users
+    const { data: defaultOrg } = await supabase
+      .from("organizations")
+      .select("id, name, subdomain, status")
+      .in("subdomain", ["centroid", "verbolabs"])
+      .limit(1)
+      .maybeSingle();
+    if (defaultOrg && !spaceMap.has(defaultOrg.id)) {
+      spaceMap.set(defaultOrg.id, { ...defaultOrg, role: "linguist", status: "active" });
+    }
+
+    response.json({ spaces: Array.from(spaceMap.values()) });
+  } catch (error) {
+    console.error("List User Spaces Error:", error);
+    response.status(500).json({ error: "Failed to list joined spaces" });
+  }
+});
+
+// 7. Join Active Space (1-click space membership for logged-in or existing user)
+authRouter.post("/join-space", checkAuth, async (request, response) => {
+  try {
+    const userId = request.user.id;
+    const activeTenantId = request.tenant?.id;
+    const spaceSlug = request.body.spaceSlug || request.tenant?.subdomain;
+
+    if (!activeTenantId && !spaceSlug) {
+      return response.status(400).json({ error: "Target space is required" });
+    }
+
+    let targetOrg = request.tenant;
+    if (!targetOrg && spaceSlug) {
+      const { data: org } = await supabase
+        .from("organizations")
+        .select("*")
+        .eq("subdomain", spaceSlug.toLowerCase().trim())
+        .maybeSingle();
+      targetOrg = org;
+    }
+
+    if (!targetOrg) {
+      return response.status(404).json({ error: `Space '${spaceSlug}' not found.` });
+    }
+
+    // Upsert membership in user_tenant_memberships
+    try {
+      await supabase
+        .from("user_tenant_memberships")
+        .upsert({
+          user_id: userId,
+          organization_id: targetOrg.id,
+          role: "linguist",
+          credits_allowed: 50000,
+          status: "active"
+        }, { onConflict: "user_id,organization_id" });
+    } catch (dbErr) {
+      console.warn("Membership upsert warning:", dbErr?.message);
+    }
+
+    response.json({
+      message: `Successfully joined ${targetOrg.name} space!`,
+      space: {
+        id: targetOrg.id,
+        name: targetOrg.name,
+        subdomain: targetOrg.subdomain
+      }
+    });
+  } catch (error) {
+    console.error("Join Space Error:", error);
+    response.status(500).json({ error: "Failed to join space" });
+  }
+});
+
 module.exports = {
   authRouter
 };

@@ -2726,10 +2726,17 @@ apiRouter.get("/projects", checkAuth, async (request, response) => {
 
     // Isolation & Ownership logic:
     if (!isMainSpace && activeTenantId) {
-      // In client tenant, filter strictly by tenant's organization_id
+      // In client tenant (e.g. branch, test):
+      // Admins see all projects in this space. Regular users see projects they own or are shared with.
       ownedQuery = ownedQuery.eq("organization_id", activeTenantId);
+      if (!isSuperAdmin && !isAdmin) {
+        ownedQuery = ownedQuery.eq("owner_id", userId);
+      }
     } else if (targetOrgId) {
       ownedQuery = ownedQuery.eq("organization_id", targetOrgId);
+      if (!isSuperAdmin && !isAdmin) {
+        ownedQuery = ownedQuery.eq("owner_id", userId);
+      }
     } else {
       // In main space (verbolabs / centroid):
       // Return user's owned projects (unless explicitly requesting all_projects=true as Admin)

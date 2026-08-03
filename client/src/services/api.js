@@ -727,6 +727,16 @@ export const deleteAdminOrganization = async (id) => {
   return response.data;
 };
 
+export const fetchMySpaces = async () => {
+  const response = await api.get("/api/auth/my-spaces");
+  return response.data;
+};
+
+export const joinSpace = async (spaceSlug) => {
+  const response = await api.post("/api/auth/join-space", { spaceSlug });
+  return response.data;
+};
+
 
 
 
