@@ -13,30 +13,23 @@ async function getOrganizationBySubdomain(subdomain) {
 
   let org = null;
   try {
-    const { data } = await supabase
-      .from("organizations")
-      .select("*")
-      .or(`subdomain.eq.${cleanSubdomain},subdomain.eq.verbolabs,subdomain.eq.centroid`)
-      .maybeSingle();
-
-    if (data) {
-      org = data;
-    }
-  } catch (err) {
-    console.error("DB Query error fetching organization space:", err?.message || err);
-  }
-
-  // Fallback to default 'centroid' / 'verbolabs' organization
-  if (!org && !["centroid", "verbolabs"].includes(cleanSubdomain)) {
-    try {
-      const { data: defaultOrg } = await supabase
+    if (["centroid", "verbolabs"].includes(cleanSubdomain)) {
+      const { data } = await supabase
         .from("organizations")
         .select("*")
         .or("subdomain.eq.centroid,subdomain.eq.verbolabs")
+        .limit(1);
+      if (data && data.length > 0) org = data[0];
+    } else {
+      const { data } = await supabase
+        .from("organizations")
+        .select("*")
+        .eq("subdomain", cleanSubdomain)
         .maybeSingle();
-
-      if (defaultOrg) org = defaultOrg;
-    } catch (_) {}
+      if (data) org = data;
+    }
+  } catch (err) {
+    console.error("DB Query error fetching organization space:", err?.message || err);
   }
 
   // Ultimate fallback for main 'centroid' / 'verbolabs' space if DB table or row doesn't exist yet
@@ -86,11 +79,13 @@ async function resolveTenant(request, response, next) {
   try {
     let subdomain = "";
 
-    // 1. Explicit Header or Query Parameter (?space=slug or ?tenant=slug)
-    if (request.headers["x-tenant-subdomain"]) {
-      subdomain = request.headers["x-tenant-subdomain"];
-    } else if (request.query.space || request.query.tenant || request.query.org) {
+    // 1. URL Query Parameter (?space=slug or ?tenant=slug) taking top precedence
+    if (request.query.space || request.query.tenant || request.query.org) {
       subdomain = request.query.space || request.query.tenant || request.query.org;
+    } 
+    // 2. Explicit Header
+    else if (request.headers["x-tenant-subdomain"]) {
+      subdomain = request.headers["x-tenant-subdomain"];
     }
     // 2. Host header (e.g. test.centroid.verbolabs.com or test.localhost:5000)
     else if (request.headers.host) {

@@ -42,6 +42,17 @@ export const Header = ({
         <span className="topbar-brand-name font-black tracking-tight text-sm bg-gradient-to-r from-white via-neutral-200 to-neutral-400 bg-clip-text text-transparent">
           Centroid
         </span>
+        {(() => {
+          const spaceParam = new URLSearchParams(window.location.search).get("space");
+          if (spaceParam) {
+            return (
+              <span className="ml-2 px-2 py-0.5 rounded-lg bg-indigo-500/20 border border-indigo-500/30 text-[10px] font-black uppercase text-indigo-300 tracking-wider font-mono">
+                {spaceParam} space
+              </span>
+            );
+          }
+          return null;
+        })()}
       </div>
 
       <div className="topbar-divider" />
