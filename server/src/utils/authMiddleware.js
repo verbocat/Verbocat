@@ -86,7 +86,7 @@ async function checkAuth(request, response, next) {
     // Attach user credentials and roles to request
     request.user = user;
     request.profile = profile;
-    request.organization = profile.organization || request.tenant || null;
+    request.organization = request.tenant || profile.organization || null;
     
     next();
   } catch (err) {

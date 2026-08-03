@@ -2691,24 +2691,32 @@ apiRouter.get("/projects", checkAuth, async (request, response) => {
     const userId = request.user.id;
     const isSuperAdmin = request.profile?.role === "super_admin";
     const isAdmin = request.profile?.role === "admin";
-    const userOrgId = request.profile?.organization_id || request.tenant?.id;
     const targetOrgId = request.query.organization_id || request.query.org_id;
 
-    // Build owned/org projects query
-    let ownedQuery = supabase.from("projects").select("*, organization:organizations(*)").order("created_at", { ascending: false });
+    // Active Tenant Space precedence:
+    // If request.tenant is active (e.g. ?space=test or header), prioritize request.tenant.id!
+    const activeTenantId = request.tenant?.id;
+    const activeSubdomain = request.tenant?.subdomain || "centroid";
+    const isMainSpace = ["centroid", "verbolabs"].includes(activeSubdomain.toLowerCase());
 
-    if (isSuperAdmin) {
-      // Super Admin sees ALL projects across all client spaces, or filters by specific space
-      if (targetOrgId) {
-        ownedQuery = ownedQuery.eq("organization_id", targetOrgId);
+    let ownedQuery = supabase
+      .from("projects")
+      .select("*, organization:organizations(*)")
+      .order("created_at", { ascending: false });
+
+    // Isolation logic:
+    // If accessing a specific client space (e.g. ?space=test), filter STRICTLY by that space ID!
+    if (!isMainSpace && activeTenantId) {
+      ownedQuery = ownedQuery.eq("organization_id", activeTenantId);
+    } else if (targetOrgId) {
+      ownedQuery = ownedQuery.eq("organization_id", targetOrgId);
+    } else if (!isSuperAdmin) {
+      const userOrgId = request.profile?.organization_id || activeTenantId;
+      if (isAdmin && userOrgId) {
+        ownedQuery = ownedQuery.eq("organization_id", userOrgId);
+      } else {
+        ownedQuery = ownedQuery.eq("owner_id", userId);
       }
-    } else if (isAdmin && userOrgId) {
-      // Client Admin sees all projects in their space organization
-      ownedQuery = ownedQuery.eq("organization_id", userOrgId);
-    } else {
-      // Regular users see their own projects in their space organization
-      ownedQuery = ownedQuery.eq("owner_id", userId);
-      if (userOrgId) ownedQuery = ownedQuery.eq("organization_id", userOrgId);
     }
 
     const { data: ownedProjects, error: ownedErr } = await ownedQuery;

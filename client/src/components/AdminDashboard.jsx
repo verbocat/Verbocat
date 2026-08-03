@@ -686,10 +686,14 @@ export const AdminDashboard = ({ onClose, theme }) => {
                         {org.name}
                       </td>
                       <td className="px-6 py-4 font-mono select-all">
-                        <div className="flex flex-col">
-                          <span className="text-indigo-400 font-mono font-bold">centroid.verbolabs.com/?space={org.subdomain}</span>
-                          <span className="text-[10px] text-slate-500 font-mono">or {org.subdomain}.centroid.verbolabs.com</span>
-                        </div>
+                        <a
+                          href={`https://centroid.verbolabs.com/?space=${org.subdomain}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-indigo-400 font-mono font-bold hover:underline"
+                        >
+                          https://centroid.verbolabs.com/?space={org.subdomain}
+                        </a>
                       </td>
                       <td className="px-4 py-4 text-slate-300 font-bold">
                         {org.userCount || 0} users
@@ -1051,7 +1055,7 @@ export const AdminDashboard = ({ onClose, theme }) => {
                   >
                     <option value="">Default (VerboLabs)</option>
                     {organizations.map(org => (
-                      <option key={org.id} value={org.id}>{org.name} ({org.subdomain}.centroid.verbolabs.com)</option>
+                      <option key={org.id} value={org.id}>{org.name} (centroid.verbolabs.com/?space={org.subdomain})</option>
                     ))}
                   </select>
                 </div>
@@ -1282,18 +1286,18 @@ export const AdminDashboard = ({ onClose, theme }) => {
 
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 select-none">
-                  Subdomain Slug
+                  Space Identifier Slug
                 </label>
-                <div className="flex items-center rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-sm">
+                <div className="flex items-center rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-xs">
+                  <span className="text-slate-500 font-mono select-none shrink-0">https://centroid.verbolabs.com/?space=</span>
                   <input
                     type="text"
                     required
-                    placeholder="acme"
+                    placeholder="test"
                     value={newOrgSubdomain}
                     onChange={(e) => setNewOrgSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
-                    className="w-full bg-transparent text-slate-100 outline-none text-sm font-mono"
+                    className="w-full bg-transparent text-indigo-400 font-bold outline-none font-mono"
                   />
-                  <span className="text-slate-500 font-mono text-xs select-none">.centroid.verbolabs.com</span>
                 </div>
               </div>
 
