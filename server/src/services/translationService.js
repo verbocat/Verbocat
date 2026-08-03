@@ -243,16 +243,20 @@ const upsertTranslationMemoryBatch = async (rows) => {
   }
 };
 
-const upsertLinguistIceMatch = async (sourceText, targetText, sourceLang, targetLang) => {
+const upsertLinguistIceMatch = async (sourceText, targetText, sourceLang, targetLang, organizationId = null) => {
   if (!sourceText || !targetText) return;
   try {
-    const { data: existing } = await supabase
+    let query = supabase
       .from("translation_memory")
       .select("id")
       .eq("source_text", sourceText)
       .eq("source_lang", sourceLang)
-      .eq("target_lang", targetLang)
-      .limit(1);
+      .eq("target_lang", targetLang);
+    // Scope lookup to org space
+    if (organizationId) {
+      query = query.eq("organization_id", organizationId);
+    }
+    const { data: existing } = await query.limit(1);
 
     if (existing && existing.length > 0) {
       await supabase
@@ -270,7 +274,8 @@ const upsertLinguistIceMatch = async (sourceText, targetText, sourceLang, target
           target_text: targetText,
           source_lang: sourceLang,
           target_lang: targetLang,
-          provider: "Linguist (ICE)"
+          provider: "Linguist (ICE)",
+          organization_id: organizationId
         });
     }
   } catch (err) {
@@ -315,7 +320,7 @@ const findTmMatch = (source, targetLang, tmMap, allTmList) => {
   return null;
 };
 
-const translateSegments = async (segments, target, sourceLang, contextSettings, userId) => {
+const translateSegments = async (segments, target, sourceLang, contextSettings, userId, organizationId = null) => {
   const providerState = createProviderState();
 
   const uniqueSources = [...new Set(segments.map((s) => s.source))];
@@ -325,21 +330,30 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
   const CHUNK_SIZE = 50;
   for (let i = 0; i < uniqueSources.length; i += CHUNK_SIZE) {
     const chunk = uniqueSources.slice(i, i + CHUNK_SIZE);
-    const { data } = await supabase
+    let tmQuery = supabase
       .from("translation_memory")
       .select("*")
       .in("source_text", chunk)
       .eq("target_lang", target);
+    // Scope to org space (include null for legacy global entries)
+    if (organizationId) {
+      tmQuery = tmQuery.or(`organization_id.eq.${organizationId},organization_id.is.null`);
+    }
+    const { data } = await tmQuery;
     if (data) {
       existingTranslations.push(...data);
     }
   }
 
-  // Fetch all translations for this target language to compute fuzzy matches
-  const { data: allTmList } = await supabase
+  // Fetch all translations for this target language to compute fuzzy matches (scoped to org)
+  let allTmQuery = supabase
     .from("translation_memory")
     .select("*")
     .eq("target_lang", target);
+  if (organizationId) {
+    allTmQuery = allTmQuery.or(`organization_id.eq.${organizationId},organization_id.is.null`);
+  }
+  const { data: allTmList } = await allTmQuery;
 
   const tmMap = {};
   (existingTranslations || []).forEach((item) => {

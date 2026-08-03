@@ -195,8 +195,21 @@ export default function App() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
+  // Helper to get current space query param so it is preserved on navigation
+  const getSpaceQuery = () => {
+    const spaceParam = new URLSearchParams(window.location.search).get("space");
+    if (spaceParam && !["centroid", "verbolabs"].includes(spaceParam.toLowerCase())) {
+      return `?space=${spaceParam}`;
+    }
+    return "";
+  };
+
   const navigateTo = (path) => {
-    window.history.pushState(null, "", path);
+    // Preserve ?space= across navigation (e.g. /project/xyz -> /project/xyz?space=branch)
+    const spaceQuery = getSpaceQuery();
+    const alreadyHasQuery = path.includes("?");
+    const fullPath = spaceQuery ? (alreadyHasQuery ? path : `${path}${spaceQuery}`) : path;
+    window.history.pushState(null, "", fullPath);
     setCurrentRoute(parseUrlRoute());
   };
 

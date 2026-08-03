@@ -133,7 +133,8 @@ apiRouter.post("/translate-batch", checkAuth, checkTranslateAccess, async (reque
       }
     }
     const updatedContextSettings = { ...contextSettings, fileExtension };
-    const { results, wordCount } = await translateSegments(segments, target, source, updatedContextSettings, request.user.id);
+    const organizationId = request.tenant?.id || request.profile?.organization_id || null;
+    const { results, wordCount } = await translateSegments(segments, target, source, updatedContextSettings, request.user.id, organizationId);
     
     // Save translations to document_segments in DB if documentId is provided
     if (documentId && results && results.length > 0) {
@@ -997,15 +998,17 @@ apiRouter.put("/documents/:id/segments/:index", checkAuth, async (request, respo
     // Save/Update human correction in Translation Memory: ICE if approved, TM if draft/unverified
     if (targetText !== undefined && targetText !== null && String(targetText).trim() !== "") {
       const { upsertLinguistIceMatch, upsertTranslationMemoryBatch } = require("../services/translationService");
+      const tmOrgId = request.tenant?.id || request.profile?.organization_id || null;
       if (status === "approved") {
-        await upsertLinguistIceMatch(sourceText, targetText, doc.source_lang || "en", dbSegment.target_lang);
+        await upsertLinguistIceMatch(sourceText, targetText, doc.source_lang || "en", dbSegment.target_lang, tmOrgId);
       } else {
         await upsertTranslationMemoryBatch([{
           source_text: sourceText,
           target_text: targetText,
           source_lang: doc.source_lang || "en",
           target_lang: dbSegment.target_lang,
-          provider: "TM"
+          provider: "TM",
+          organization_id: tmOrgId
         }]);
       }
     }
@@ -2656,7 +2659,8 @@ async function verifyProjectAccess(request, response, requiredPermission = "read
   const { projectId } = request.params;
   const userId = request.user.id;
   const userEmail = request.user.email;
-  const isStaff = ["admin", "super_admin", "verbolabs_staff"].includes(request.profile?.role);
+  const isSuperAdmin = request.profile?.role === "super_admin";
+  const isAdmin = request.profile?.role === "admin";
 
   const { data: project, error: projErr } = await supabase
     .from("projects")
@@ -2669,22 +2673,40 @@ async function verifyProjectAccess(request, response, requiredPermission = "read
     return null;
   }
 
-  // Tenant Boundary Check: Reject project access if project organization_id does not match active tenant_id
-  const activeTenantId = request.tenant_id;
-  const isSuperAdmin = request.profile?.role === "super_admin";
-  const isMainSpace = ["centroid", "verbolabs"].includes(request.tenant?.subdomain?.toLowerCase() || "centroid");
+  // ── Strict Tenant Isolation ──────────────────────────────────────
+  // A project belongs to exactly one space (organization_id).
+  // Only super_admin can cross space boundaries.
+  // All other users (including main-space admins) are blocked from
+  // accessing projects that belong to a different space.
+  const activeTenantId = request.tenant_id || request.tenant?.id;
+  const activeSubdomain = request.tenant?.subdomain || "centroid";
+  const isMainSpace = ["centroid", "verbolabs"].includes(activeSubdomain.toLowerCase());
 
-  if (!isMainSpace && activeTenantId && project.organization_id && project.organization_id !== activeTenantId) {
-    response.status(403).json({ error: "Access denied. This project belongs to a different tenant workspace." });
-    return null;
+  if (!isSuperAdmin && project.organization_id) {
+    // If the project has an organization, the requesting user's space must match
+    if (activeTenantId && project.organization_id !== activeTenantId) {
+      response.status(403).json({ error: "Access denied. This project belongs to a different workspace space." });
+      return null;
+    }
+    // If no activeTenantId (main space user, no ?space= param) trying to access a space project
+    if (isMainSpace && !activeTenantId && project.organization_id) {
+      // Allow admin at main space to access for oversight; block regular users
+      if (!isAdmin) {
+        response.status(403).json({ error: "Access denied. This project belongs to a specific workspace space. Please open it from the correct space URL." });
+        return null;
+      }
+    }
   }
 
-  // Owner & staff/super_admin have full access
+  // ── User Access Check ──────────────────────────────────────────────
+  // Admin of the same space or project owner has full access
+  const isStaff = isSuperAdmin || (isAdmin && (!activeTenantId || project.organization_id === activeTenantId));
+
   if (isStaff || project.owner_id === userId) {
     return { project, isOwner: project.owner_id === userId, accessLevel: "owner" };
   }
 
-  // Check project_shares table
+  // Check project_shares table for collaboration access
   const { data: share } = await supabase
     .from("project_shares")
     .select("*")
@@ -4698,14 +4720,21 @@ apiRouter.get("/documents/:documentId/lang/:lang/segments", checkAuth, async (re
     const segments = await fetchAllSegments(documentId, "*", lang);
 
     // Dynamic TM lookup to assign fuzzyScore and matchType
+    // Scope TM to the active tenant space (organization_id) for isolation
+    const activeTenantId = request.tenant?.id || request.profile?.organization_id;
     const uniqueSources = [...new Set(segments.map(s => s.source_text).filter(Boolean))];
     let tmEntries = [];
     if (uniqueSources.length > 0) {
-      const { data } = await supabase
+      let tmQuery = supabase
         .from("translation_memory")
         .select("*")
         .in("source_text", uniqueSources)
         .eq("target_lang", lang);
+      // Filter by tenant org if available, otherwise fall back to global (legacy)
+      if (activeTenantId) {
+        tmQuery = tmQuery.or(`organization_id.eq.${activeTenantId},organization_id.is.null`);
+      }
+      const { data } = await tmQuery;
       tmEntries = data || [];
     }
 
@@ -4718,10 +4747,15 @@ apiRouter.get("/documents/:documentId/lang/:lang/segments", checkAuth, async (re
       }
     });
 
-    const { data: allTm } = await supabase
+    // Fetch all TM for fuzzy matching (scoped to tenant space)
+    let allTmQuery = supabase
       .from("translation_memory")
       .select("source_text, target_text, provider")
       .eq("target_lang", lang);
+    if (activeTenantId) {
+      allTmQuery = allTmQuery.or(`organization_id.eq.${activeTenantId},organization_id.is.null`);
+    }
+    const { data: allTm } = await allTmQuery;
 
     const stringSimilarity = require("string-similarity");
 

@@ -29,4 +29,3 @@ const getFuzzyMatch = (text, tmEntries) => {
 module.exports = {
   getFuzzyMatch
 };
-

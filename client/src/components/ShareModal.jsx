@@ -23,20 +23,31 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
   const [showSuggestions, setShowSuggestions] = useState(false);
   const dropdownRef = useRef(null);
 
+  // Build space-aware base URL so share links always carry the correct tenant
+  const getSpaceSuffix = () => {
+    const spaceParam = new URLSearchParams(window.location.search).get("space");
+    if (spaceParam && !["centroid", "verbolabs"].includes(spaceParam.toLowerCase())) {
+      return `?space=${spaceParam}`;
+    }
+    return "";
+  };
+
   const getShareUrl = () => {
+    const spaceSuffix = getSpaceSuffix();
     if (projectId && documentId && targetLang) {
-      return `${window.location.origin}/project/${projectId}/file/${documentId}/lang/${targetLang}`;
+      return `${window.location.origin}/project/${projectId}/file/${documentId}/lang/${targetLang}${spaceSuffix}`;
     }
     if (projectId) {
-      return `${window.location.origin}/project/${projectId}`;
+      return `${window.location.origin}/project/${projectId}${spaceSuffix}`;
     }
     if (documentId) {
-      return `${window.location.origin}/?doc=${documentId}`;
+      return `${window.location.origin}/?doc=${documentId}${spaceSuffix}`;
     }
     return window.location.origin;
   };
 
   const shareUrl = getShareUrl();
+
 
   // Fetch access list when modal is opened
   useEffect(() => {
