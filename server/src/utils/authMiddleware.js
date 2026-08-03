@@ -83,6 +83,19 @@ async function checkAuth(request, response, next) {
       return response.status(403).json({ error: "Your workspace space has been suspended. Please contact VerboLabs support." });
     }
 
+    // Cross-workspace restriction: regular users & client admins can only access their assigned space
+    const isSuperAdmin = profile.role === "super_admin";
+    const activeSubdomain = request.tenant?.subdomain || "centroid";
+    const isMainSpace = ["centroid", "verbolabs"].includes(activeSubdomain.toLowerCase());
+
+    if (!isSuperAdmin && !isMainSpace && request.tenant?.id && profile.organization_id) {
+      if (profile.organization_id !== request.tenant.id) {
+        return response.status(403).json({
+          error: "Access denied. Your account is registered under another space organization. Please log in at your assigned space URL."
+        });
+      }
+    }
+
     // Attach user credentials and roles to request
     request.user = user;
     request.profile = profile;

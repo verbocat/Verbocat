@@ -73,26 +73,32 @@ function clearTenantCache() {
 }
 
 /**
- * Express middleware to identify the current tenant space based on host, headers, or query params.
+ * Express middleware to identify the current tenant space strictly based on Host header, Origin, or X-Tenant-Subdomain header.
+ * 
+ * Examples:
+ * - Host: test.centroid.verbolabs.com -> tenant_slug = test
+ * - Host: test.lvh.me:5173 / test.localhost:5000 -> tenant_slug = test
+ * - Host: centroid.verbolabs.com / localhost:5000 -> tenant_slug = centroid (default master tenant)
  */
 async function resolveTenant(request, response, next) {
   try {
     let subdomain = "";
 
-    // 1. URL Query Parameter (?space=slug or ?tenant=slug) taking top precedence
-    if (request.query.space || request.query.tenant || request.query.org) {
-      subdomain = request.query.space || request.query.tenant || request.query.org;
-    } 
-    // 2. Explicit Header
-    else if (request.headers["x-tenant-subdomain"]) {
-      subdomain = request.headers["x-tenant-subdomain"];
+    // 1. Explicit API Header (for mobile or API clients)
+    if (request.headers["x-tenant-subdomain"]) {
+      subdomain = request.headers["x-tenant-subdomain"].toLowerCase().trim();
     }
-    // 2. Host header (e.g. test.centroid.verbolabs.com or test.localhost:5000)
+    // 2. Host header resolution
     else if (request.headers.host) {
       const host = request.headers.host.split(":")[0]; // strip port
       const parts = host.split(".");
-      // test.centroid.verbolabs.com -> 4 parts; test.localhost -> 2 parts
-      if (parts.length > 3 || (parts.length === 2 && parts[1] === "localhost")) {
+      
+      // e.g. test.centroid.verbolabs.com -> 4 parts; test.lvh.me or test.localhost -> 2 or 3 parts
+      if (parts.length >= 4) {
+        subdomain = parts[0];
+      } else if (parts.length === 3 && parts[1] === "lvh" && parts[2] === "me") {
+        subdomain = parts[0];
+      } else if (parts.length === 2 && parts[1] === "localhost") {
         subdomain = parts[0];
       }
     } 
@@ -102,7 +108,11 @@ async function resolveTenant(request, response, next) {
         const urlStr = request.headers.origin || request.headers.referer;
         const parsedUrl = new URL(urlStr);
         const parts = parsedUrl.hostname.split(".");
-        if (parts.length > 3 || (parts.length === 2 && parts[1] === "localhost")) {
+        if (parts.length >= 4) {
+          subdomain = parts[0];
+        } else if (parts.length === 3 && parts[1] === "lvh" && parts[2] === "me") {
+          subdomain = parts[0];
+        } else if (parts.length === 2 && parts[1] === "localhost") {
           subdomain = parts[0];
         }
       } catch (_) {}
@@ -123,6 +133,7 @@ async function resolveTenant(request, response, next) {
     }
 
     request.tenant = tenant;
+    request.tenant_id = tenant.id;
     next();
   } catch (err) {
     console.error("Tenant Resolution Error:", err);

@@ -33,11 +33,17 @@ authRouter.post("/register", async (request, response) => {
     const tenantId = request.tenant?.id;
 
     if (user && tenantId) {
-      // Bind user profile to the current space organization
+      // Upsert user profile to guarantee binding to the current space organization
       await supabase
         .from("profiles")
-        .update({ organization_id: tenantId })
-        .eq("id", user.id);
+        .upsert({
+          id: user.id,
+          email: user.email,
+          role: "linguist",
+          organization_id: tenantId,
+          credits_allowed: 50000,
+          status: "active"
+        }, { onConflict: "id" });
     }
 
     response.json({
@@ -109,6 +115,20 @@ authRouter.post("/login", async (request, response) => {
 
     if (profile.organization && profile.organization.status === "suspended") {
       return response.status(403).json({ error: "Your space workspace has been suspended. Contact VerboLabs." });
+    }
+
+    // Enforce workspace boundary: Non-superadmin users can only log in at their assigned workspace space
+    const isSuperAdmin = profile.role === "super_admin";
+    const activeSubdomain = request.tenant?.subdomain || "centroid";
+    const isMainSpace = ["centroid", "verbolabs"].includes(activeSubdomain.toLowerCase());
+
+    if (!isSuperAdmin && !isMainSpace && request.tenant?.id && profile.organization_id) {
+      if (profile.organization_id !== request.tenant.id) {
+        await supabase.auth.signOut();
+        return response.status(403).json({
+          error: "This user account belongs to a different workspace space. Please use your assigned workspace space link to log in."
+        });
+      }
     }
 
     response.json({
@@ -368,7 +388,9 @@ authRouter.get("/me", checkAuth, async (request, response) => {
       hasTranslateAccess: profile.has_translate_access,
       creditsAllowed: profile.credits_allowed,
       creditsConsumed: profile.credits_consumed,
-      status: profile.status
+      status: profile.status,
+      organizationId: request.tenant_id || profile.organization_id,
+      organization: request.tenant || profile.organization
     });
   } catch (error) {
     console.error("Get Session Profile Error:", error);

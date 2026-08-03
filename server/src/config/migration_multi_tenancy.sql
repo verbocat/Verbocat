@@ -30,7 +30,18 @@ CREATE INDEX IF NOT EXISTS idx_projects_organization_id ON projects(organization
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS idx_documents_organization_id ON documents(organization_id);
 
--- 6. Backfill existing records to default VerboLabs organization
+-- 6. Add organization_id foreign key to translation_memory
+ALTER TABLE translation_memory ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_translation_memory_organization_id ON translation_memory(organization_id);
+
+-- 7. Add organization_id foreign key to credit_logs and activity_logs
+ALTER TABLE credit_logs ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_credit_logs_organization_id ON credit_logs(organization_id);
+
+ALTER TABLE activity_logs ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_activity_logs_organization_id ON activity_logs(organization_id);
+
+-- 8. Backfill existing records to default VerboLabs organization
 DO $$
 DECLARE
     default_org_id UUID;
@@ -41,5 +52,8 @@ BEGIN
         UPDATE profiles SET organization_id = default_org_id WHERE organization_id IS NULL;
         UPDATE projects SET organization_id = default_org_id WHERE organization_id IS NULL;
         UPDATE documents SET organization_id = default_org_id WHERE organization_id IS NULL;
+        UPDATE translation_memory SET organization_id = default_org_id WHERE organization_id IS NULL;
+        UPDATE credit_logs SET organization_id = default_org_id WHERE organization_id IS NULL;
+        UPDATE activity_logs SET organization_id = default_org_id WHERE organization_id IS NULL;
     END IF;
 END $$;

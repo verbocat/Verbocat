@@ -58,22 +58,21 @@ api.interceptors.request.use(async (config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
-  // Inject active space subdomain header
+  // Inject tenant subdomain header strictly based on browser hostname
   try {
-    const searchParams = new URLSearchParams(window.location.search);
-    const spaceParam = searchParams.get("space") || searchParams.get("tenant") || searchParams.get("org");
-    if (spaceParam) {
-      config.headers["X-Tenant-Subdomain"] = spaceParam;
-    } else {
-      const hostname = window.location.hostname;
-      const parts = hostname.split(".");
-      // test.centroid.verbolabs.com -> 4 parts; test.localhost -> 2 parts
-      if (parts.length > 3 || (parts.length === 2 && parts[1] === "localhost")) {
-        const subdomain = parts[0];
-        if (subdomain && !["www", "app", "centroid", "verbolabs"].includes(subdomain.toLowerCase())) {
-          config.headers["X-Tenant-Subdomain"] = subdomain;
-        }
-      }
+    const hostname = window.location.hostname;
+    const parts = hostname.split(".");
+    let subdomain = "";
+    if (parts.length >= 4) {
+      subdomain = parts[0];
+    } else if (parts.length === 3 && parts[1] === "lvh" && parts[2] === "me") {
+      subdomain = parts[0];
+    } else if (parts.length === 2 && parts[1] === "localhost") {
+      subdomain = parts[0];
+    }
+
+    if (subdomain && !["www", "app", "centroid", "verbolabs", "localhost"].includes(subdomain.toLowerCase())) {
+      config.headers["X-Tenant-Subdomain"] = subdomain;
     }
   } catch (_) {}
 

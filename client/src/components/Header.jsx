@@ -43,11 +43,17 @@ export const Header = ({
           Centroid
         </span>
         {(() => {
-          const spaceParam = new URLSearchParams(window.location.search).get("space");
-          if (spaceParam) {
+          const hostname = window.location.hostname;
+          const parts = hostname.split(".");
+          let subdomain = "";
+          if (parts.length >= 4) subdomain = parts[0];
+          else if (parts.length === 3 && parts[1] === "lvh" && parts[2] === "me") subdomain = parts[0];
+          else if (parts.length === 2 && parts[1] === "localhost") subdomain = parts[0];
+
+          if (subdomain && !["www", "app", "centroid", "verbolabs", "localhost"].includes(subdomain.toLowerCase())) {
             return (
               <span className="ml-2 px-2 py-0.5 rounded-lg bg-indigo-500/20 border border-indigo-500/30 text-[10px] font-black uppercase text-indigo-300 tracking-wider font-mono">
-                {spaceParam} space
+                {subdomain} tenant
               </span>
             );
           }

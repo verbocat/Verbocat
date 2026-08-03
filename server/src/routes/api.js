@@ -71,7 +71,7 @@ apiRouter.post("/upload", checkAuth, upload.single("file"), async (request, resp
         file_id: result.fileId,
         source_lang: request.body.source || "en",
         target_lang: request.body.target || "hi",
-        organization_id: request.profile?.organization_id || request.tenant?.id || null
+        organization_id: request.tenant_id || request.organization?.id || request.profile?.organization_id || null
       });
 
     if (docError) {
@@ -503,6 +503,16 @@ async function verifyDocumentAccess(request, response, requiredPermission = "rea
 
   if (docError || !doc) {
     response.status(404).json({ error: "Document not found." });
+    return null;
+  }
+
+  // Tenant Boundary Check: Reject document access if document organization_id does not match active tenant_id
+  const activeTenantId = request.tenant_id;
+  const isSuperAdmin = request.profile?.role === "super_admin";
+  const isMainSpace = ["centroid", "verbolabs"].includes(request.tenant?.subdomain?.toLowerCase() || "centroid");
+
+  if (!isMainSpace && activeTenantId && doc.organization_id && doc.organization_id !== activeTenantId) {
+    response.status(403).json({ error: "Access denied. This document belongs to another tenant workspace." });
     return null;
   }
 
@@ -2575,7 +2585,7 @@ apiRouter.post("/projects", checkAuth, upload.single("referenceFile"), async (re
         source_lang: sourceLanguage || "en",
         target_languages: parsedTargetLangs || [],
         owner_id: request.user.id,
-        organization_id: request.profile?.organization_id || request.tenant?.id || null,
+        organization_id: request.tenant?.id || request.organization?.id || request.profile?.organization_id || null,
         settings: finalSettings
       })
       .select()
@@ -2656,6 +2666,16 @@ async function verifyProjectAccess(request, response, requiredPermission = "read
 
   if (projErr || !project) {
     response.status(404).json({ error: "Project not found." });
+    return null;
+  }
+
+  // Tenant Boundary Check: Reject project access if project organization_id does not match active tenant_id
+  const activeTenantId = request.tenant_id;
+  const isSuperAdmin = request.profile?.role === "super_admin";
+  const isMainSpace = ["centroid", "verbolabs"].includes(request.tenant?.subdomain?.toLowerCase() || "centroid");
+
+  if (!isMainSpace && activeTenantId && project.organization_id && project.organization_id !== activeTenantId) {
+    response.status(403).json({ error: "Access denied. This project belongs to a different tenant workspace." });
     return null;
   }
 
