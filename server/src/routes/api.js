@@ -3380,29 +3380,43 @@ apiRouter.delete("/projects/:projectId", checkAuth, async (request, response) =>
   try {
     const { projectId } = request.params;
 
-    const { data: project, error: checkErr } = await supabase
-      .from("projects")
-      .select("id")
-      .eq("id", projectId)
-      .eq("owner_id", request.user.id)
-      .single();
+    const access = await verifyProjectAccess(request, response, "write");
+    if (!access) return;
 
-    if (checkErr || !project) {
-      return response.status(404).json({ error: "Project not found or unauthorized." });
+    // 1. Fetch document IDs associated with this project
+    const { data: docs } = await supabase
+      .from("documents")
+      .select("id")
+      .eq("project_id", projectId);
+
+    const docIds = (docs || []).map(d => d.id);
+
+    // 2. Cleanly delete dependent records to avoid Foreign Key constraint blocks
+    if (docIds.length > 0) {
+      await supabase.from("document_segments").delete().in("document_id", docIds);
     }
 
+    await Promise.all([
+      supabase.from("documents").delete().eq("project_id", projectId),
+      supabase.from("project_shares").delete().eq("project_id", projectId),
+      supabase.from("project_notes").delete().eq("project_id", projectId),
+      supabase.from("project_history").delete().eq("project_id", projectId)
+    ]);
+
+    // 3. Delete the main project record
     const { error: delErr } = await supabase
       .from("projects")
       .delete()
       .eq("id", projectId);
 
     if (delErr) {
+      console.error("Delete Project Database Error:", delErr);
       return response.status(500).json({ error: delErr.message });
     }
 
-    response.json({ success: true });
+    response.json({ success: true, message: "Project deleted successfully." });
   } catch (err) {
-    console.error(err);
+    console.error("Delete Project Exception:", err);
     response.status(500).json({ error: "Failed to delete project." });
   }
 });
