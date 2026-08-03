@@ -686,7 +686,7 @@ export const AdminDashboard = ({ onClose, theme }) => {
                         {org.name}
                       </td>
                       <td className="px-6 py-4 font-mono text-indigo-400 select-all">
-                        {org.subdomain}.verbocat.com
+                        {org.subdomain}.verbolabs.com
                       </td>
                       <td className="px-4 py-4 text-slate-300 font-bold">
                         {org.userCount || 0} users
@@ -1048,7 +1048,7 @@ export const AdminDashboard = ({ onClose, theme }) => {
                   >
                     <option value="">Default (VerboLabs)</option>
                     {organizations.map(org => (
-                      <option key={org.id} value={org.id}>{org.name} ({org.subdomain}.verbocat.com)</option>
+                      <option key={org.id} value={org.id}>{org.name} ({org.subdomain}.verbolabs.com)</option>
                     ))}
                   </select>
                 </div>
@@ -1290,7 +1290,7 @@ export const AdminDashboard = ({ onClose, theme }) => {
                     onChange={(e) => setNewOrgSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
                     className="w-full bg-transparent text-slate-100 outline-none text-sm font-mono"
                   />
-                  <span className="text-slate-500 font-mono text-xs select-none">.verbocat.com</span>
+                  <span className="text-slate-500 font-mono text-xs select-none">.verbolabs.com</span>
                 </div>
               </div>
 
@@ -1336,7 +1336,7 @@ export const AdminDashboard = ({ onClose, theme }) => {
             <div className="flex items-center justify-between pb-4 border-b border-white/5 mb-5">
               <div>
                 <h3 className="text-base font-black text-white">Edit Client Space</h3>
-                <span className="text-[10px] text-indigo-400 font-mono font-bold block mt-0.5">{editingOrg.subdomain}.verbocat.com</span>
+                <span className="text-[10px] text-indigo-400 font-mono font-bold block mt-0.5">{editingOrg.subdomain}.verbolabs.com</span>
               </div>
               <button
                 onClick={() => setEditingOrg(null)}

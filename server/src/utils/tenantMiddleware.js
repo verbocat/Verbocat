@@ -5,7 +5,7 @@ const orgCache = new Map();
 const CACHE_TTL = 60 * 1000;
 
 async function getOrganizationBySubdomain(subdomain) {
-  const cleanSubdomain = (subdomain || "verbolabs").toLowerCase().trim();
+  const cleanSubdomain = (subdomain || "centroid").toLowerCase().trim();
   const cached = orgCache.get(cleanSubdomain);
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
     return cached.data;
@@ -13,10 +13,10 @@ async function getOrganizationBySubdomain(subdomain) {
 
   let org = null;
   try {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("organizations")
       .select("*")
-      .eq("subdomain", cleanSubdomain)
+      .or(`subdomain.eq.${cleanSubdomain},subdomain.eq.verbolabs,subdomain.eq.centroid`)
       .maybeSingle();
 
     if (data) {
@@ -26,27 +26,27 @@ async function getOrganizationBySubdomain(subdomain) {
     console.error("DB Query error fetching organization space:", err?.message || err);
   }
 
-  // Fallback to default 'verbolabs' organization
-  if (!org && cleanSubdomain !== "verbolabs") {
+  // Fallback to default 'centroid' / 'verbolabs' organization
+  if (!org && !["centroid", "verbolabs"].includes(cleanSubdomain)) {
     try {
       const { data: defaultOrg } = await supabase
         .from("organizations")
         .select("*")
-        .eq("subdomain", "verbolabs")
+        .or("subdomain.eq.centroid,subdomain.eq.verbolabs")
         .maybeSingle();
 
       if (defaultOrg) org = defaultOrg;
     } catch (_) {}
   }
 
-  // Ultimate fallback for 'verbolabs' space if DB table or row doesn't exist yet
-  if (!org && (cleanSubdomain === "verbolabs" || cleanSubdomain === "app" || cleanSubdomain === "www")) {
+  // Ultimate fallback for main 'centroid' / 'verbolabs' space if DB table or row doesn't exist yet
+  if (!org && ["centroid", "verbolabs", "app", "www"].includes(cleanSubdomain)) {
     try {
       const { data: newVerboLabs } = await supabase
         .from("organizations")
         .insert({
           name: "VerboLabs",
-          subdomain: "verbolabs",
+          subdomain: "centroid",
           credits_allowed: 10000000,
           status: "active"
         })
@@ -60,7 +60,7 @@ async function getOrganizationBySubdomain(subdomain) {
       org = {
         id: null,
         name: "VerboLabs",
-        subdomain: "verbolabs",
+        subdomain: "centroid",
         credits_allowed: 10000000,
         credits_consumed: 0,
         status: "active"
@@ -90,7 +90,7 @@ async function resolveTenant(request, response, next) {
     if (request.headers["x-tenant-subdomain"]) {
       subdomain = request.headers["x-tenant-subdomain"];
     } 
-    // 2. Host header (e.g. acme.verbocat.com or acme.localhost:5000)
+    // 2. Host header (e.g. acme.verbolabs.com or acme.localhost:5000)
     else if (request.headers.host) {
       const host = request.headers.host.split(":")[0]; // strip port
       const parts = host.split(".");
@@ -110,8 +110,8 @@ async function resolveTenant(request, response, next) {
       } catch (_) {}
     }
 
-    if (!subdomain || subdomain === "www" || subdomain === "app" || subdomain === "localhost") {
-      subdomain = "verbolabs";
+    if (!subdomain || ["www", "app", "centroid", "verbolabs", "localhost"].includes(subdomain.toLowerCase())) {
+      subdomain = "centroid";
     }
 
     const tenant = await getOrganizationBySubdomain(subdomain);

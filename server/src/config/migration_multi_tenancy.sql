@@ -13,9 +13,9 @@ CREATE TABLE IF NOT EXISTS organizations (
 -- Index for quick subdomain lookup
 CREATE INDEX IF NOT EXISTS idx_organizations_subdomain ON organizations(subdomain);
 
--- 2. Insert default Organization for VerboLabs
+-- 2. Insert default Organization for VerboLabs / Centroid
 INSERT INTO organizations (name, subdomain, credits_allowed, status)
-VALUES ('VerboLabs', 'verbolabs', 10000000, 'active')
+VALUES ('VerboLabs', 'centroid', 10000000, 'active')
 ON CONFLICT (subdomain) DO NOTHING;
 
 -- 3. Add organization_id foreign key to profiles
@@ -35,7 +35,7 @@ DO $$
 DECLARE
     default_org_id UUID;
 BEGIN
-    SELECT id INTO default_org_id FROM organizations WHERE subdomain = 'verbolabs' LIMIT 1;
+    SELECT id INTO default_org_id FROM organizations WHERE subdomain IN ('centroid', 'verbolabs') LIMIT 1;
     
     IF default_org_id IS NOT NULL THEN
         UPDATE profiles SET organization_id = default_org_id WHERE organization_id IS NULL;
