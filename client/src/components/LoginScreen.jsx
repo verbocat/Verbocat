@@ -1,11 +1,7 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
 import { useUserStore } from "../services/userStore";
+import { api } from "../services/api";
 import { Eye, EyeOff, LockKeyhole, ArrowRight, CheckCircle, AlertCircle, Sparkles, Mail } from "lucide-react";
-
-const API_URL = import.meta.env.VITE_API_URL 
-  ? `${import.meta.env.VITE_API_URL}/api` 
-  : "/api";
 
 export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => {
   const loginAction = useUserStore((state) => state.login);
@@ -20,6 +16,15 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [isMobile, setIsMobile] = useState(false);
+
+  // Derive active space name for user-facing messages
+  const getActiveSpaceName = () => {
+    const spaceParam = new URLSearchParams(window.location.search).get("space");
+    if (spaceParam && !["centroid", "verbolabs"].includes(spaceParam.toLowerCase())) {
+      return spaceParam;
+    }
+    return null;
+  };
 
   useEffect(() => {
     setMode(initialMode);
@@ -48,7 +53,8 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
 
     try {
       if (mode === "login") {
-        const response = await axios.post(`${API_URL}/auth/login`, { email, password });
+        // Use api instance so X-Tenant-Subdomain header is auto-injected
+        const response = await api.post("/api/auth/login", { email, password });
         loginAction(
           response.data.token, 
           response.data.refreshToken, 
@@ -63,7 +69,8 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
         if (password.length < 6) {
           throw new Error("Password must be at least 6 characters long");
         }
-        const response = await axios.post(`${API_URL}/auth/register`, { email, password });
+        // Use api instance so X-Tenant-Subdomain header is auto-injected
+        const response = await api.post("/api/auth/register", { email, password });
         setSuccessMsg(response.data.message);
         setEmail("");
         setPassword("");
@@ -75,7 +82,7 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
         }, 3000);
       } 
       else if (mode === "forgot") {
-        const response = await axios.post(`${API_URL}/auth/forgot-password`, { email });
+        const response = await api.post("/api/auth/forgot-password", { email });
         setSuccessMsg(response.data.message);
         setEmail("");
       }
@@ -87,7 +94,7 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
           throw new Error("Password must be at least 6 characters long");
         }
         const token = localStorage.getItem("centroid_token");
-        const response = await axios.post(`${API_URL}/auth/reset-password`, 
+        const response = await api.post("/api/auth/reset-password", 
           { password },
           { headers: { Authorization: `Bearer ${token}` } }
         );
@@ -104,7 +111,6 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
         }, 3000);
       }
     } catch (err) {
-      console.error("DEBUG LOGINSCREEN ERROR:", err);
       const serverErr = err.response?.data?.error;
       const errorText = typeof serverErr === "object" && serverErr !== null
         ? (serverErr.message || JSON.stringify(serverErr))
@@ -114,6 +120,7 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
       setLoading(false);
     }
   };
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-auth-space p-4 transition-all duration-500 overflow-y-auto custom-scrollbar">
@@ -148,9 +155,15 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
                 CENTROID_
               </span>
             </div>
-            <div className="flex items-center gap-1.5 bg-neutral-950/40 border border-white/5 rounded-full px-2.5 py-1 text-[10px] text-neutral-400 font-mono">
+            <div className="flex items-center gap-1.5 bg-neutral-950/40 border border-white/5 rounded-full px-2.5 py-1 text-[10px] font-mono">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              SECURE_SYS
+              {(() => {
+                const spaceParam = new URLSearchParams(window.location.search).get("space");
+                if (spaceParam && !["centroid", "verbolabs"].includes(spaceParam.toLowerCase())) {
+                  return <span className="text-indigo-400 font-bold uppercase">{spaceParam} space</span>;
+                }
+                return <span className="text-neutral-400">VERBOLABS MAIN</span>;
+              })()}
             </div>
           </div>
 
@@ -169,8 +182,15 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
                 Sign In
               </h3>
               <p className="text-xs text-neutral-400 mb-6 leading-relaxed">
-                Enter your workspace credentials to access your translation projects.
+                {(() => {
+                  const spaceParam = new URLSearchParams(window.location.search).get("space");
+                  if (spaceParam && !["centroid", "verbolabs"].includes(spaceParam.toLowerCase())) {
+                    return `Enter your credentials to access the '${spaceParam}' space.`;
+                  }
+                  return "Enter your workspace credentials to access your translation projects.";
+                })()}
               </p>
+
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Email Input */}

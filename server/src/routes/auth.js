@@ -4,7 +4,7 @@ const { checkAuth } = require("../utils/authMiddleware");
 
 const authRouter = express.Router();
 
-// 1. User Account Registration
+// 1. User Account Registration / Join Space
 authRouter.post("/register", async (request, response) => {
   try {
     const { email, password } = request.body;
@@ -13,6 +13,9 @@ authRouter.post("/register", async (request, response) => {
     }
 
     const tenantId = request.tenant?.id;
+    const tenantName = request.tenant?.name || "this";
+    const tenantSubdomain = request.tenant?.subdomain || "centroid";
+    const isMainSpace = ["centroid", "verbolabs"].includes(tenantSubdomain.toLowerCase());
     const cleanEmail = email.toLowerCase().trim();
 
     // Check if user already exists in Supabase Auth
@@ -25,7 +28,7 @@ authRouter.post("/register", async (request, response) => {
     } catch (_) {}
 
     if (existingUser) {
-      // User already exists in Supabase Auth. Verify password before adding membership for this space
+      // User already has a Supabase Auth account. Verify password then add space membership.
       const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password
@@ -33,12 +36,38 @@ authRouter.post("/register", async (request, response) => {
 
       if (loginError) {
         return response.status(400).json({
-          error: `An account with this email address already exists. Please enter your correct password to join the '${request.tenant?.name || 'requested'}' space.`
+          error: "Incorrect password. Please try again with your existing account password."
         });
       }
 
-      // Password is valid! Add membership to user_tenant_memberships for this tenantId
-      if (tenantId) {
+      // Password valid. Check if they're already a member of this space
+      if (tenantId && !isMainSpace) {
+        let alreadyMember = false;
+        try {
+          const { data: existingMem } = await supabase
+            .from("user_tenant_memberships")
+            .select("id")
+            .eq("user_id", existingUser.id)
+            .eq("organization_id", tenantId)
+            .maybeSingle();
+          alreadyMember = !!existingMem;
+        } catch (_) {}
+
+        if (alreadyMember) {
+          // Already a member — just log them in
+          return response.json({
+            message: `Welcome back! Logging you into '${tenantName}' space.`,
+            token: loginData.session.access_token,
+            refreshToken: loginData.session.refresh_token,
+            expiresAt: Date.now() + (loginData.session.expires_in || 3600) * 1000,
+            user: {
+              id: loginData.user.id,
+              email: loginData.user.email
+            }
+          });
+        }
+
+        // Not yet a member — add them
         try {
           await supabase
             .from("user_tenant_memberships")
@@ -53,12 +82,12 @@ authRouter.post("/register", async (request, response) => {
       }
 
       return response.json({
-        message: `Registration successful! Your account is now added to '${request.tenant?.name || 'this'}' space. You can now log in.`,
-        user: loginData.user
+        message: `Successfully joined '${tenantName}' space! You can now log in.`,
+        user: { id: loginData.user.id, email: loginData.user.email }
       });
     }
 
-    // Call Supabase admin createUser for new user
+    // Brand new user — create Supabase Auth account
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
       email: cleanEmail,
       password,
@@ -99,14 +128,15 @@ authRouter.post("/register", async (request, response) => {
     }
 
     response.json({
-      message: "Registration successful! Your account is ready for login.",
-      user: data.user
+      message: "Registration successful! You can now log in.",
+      user: { id: user.id, email: user.email }
     });
   } catch (error) {
     console.error("Register Router Exception:", error);
     response.status(500).json({ error: "Registration failed on server" });
   }
 });
+
 
 // 2. User Sign In (Login)
 authRouter.post("/login", async (request, response) => {
@@ -171,23 +201,34 @@ authRouter.post("/login", async (request, response) => {
 
     // Enforce workspace boundary: Resolve space membership from user_tenant_memberships
     const activeTenantId = request.tenant?.id;
-    const isSuperAdmin = profile.role === "super_admin";
+    const activeSpaceName = request.tenant?.name || "this";
     const activeSubdomain = request.tenant?.subdomain || "centroid";
+    const isSuperAdmin = profile.role === "super_admin";
     const isMainSpace = ["centroid", "verbolabs"].includes(activeSubdomain.toLowerCase());
 
     if (!isSuperAdmin && !isMainSpace && activeTenantId) {
       let membership = null;
+      let tableExists = true;
+
       try {
-        const { data: memData } = await supabase
+        const { data: memData, error: memError } = await supabase
           .from("user_tenant_memberships")
           .select("*")
           .eq("user_id", user.id)
           .eq("organization_id", activeTenantId)
           .maybeSingle();
-        membership = memData;
-      } catch (_) {}
+
+        if (memError && (memError.code === "42P01" || memError.message?.includes("does not exist"))) {
+          tableExists = false;
+        } else {
+          membership = memData;
+        }
+      } catch (_) {
+        tableExists = false;
+      }
 
       if (membership) {
+        // Found space-specific membership — use its role/credits
         profile = {
           ...profile,
           role: membership.role || profile.role,
@@ -197,12 +238,13 @@ authRouter.post("/login", async (request, response) => {
           has_translate_access: membership.has_translate_access ?? profile.has_translate_access,
           status: membership.status || profile.status
         };
-      } else if (!profile.organization_id || profile.organization_id === activeTenantId) {
-        // Direct legacy profile match
+      } else if (!tableExists || !profile.organization_id || profile.organization_id === activeTenantId) {
+        // Table doesn't exist yet, or user's primary profile already belongs to this space — allow login
       } else {
+        // No membership found and profile belongs to a different space — reject login
         await supabase.auth.signOut();
         return response.status(403).json({
-          error: `You are not registered in the '${request.tenant?.name || activeSubdomain}' space. Please sign up at https://centroid.verbolabs.com/?space=${activeSubdomain} to join this space with your account.`
+          error: `You are not registered in the '${activeSpaceName}' space. To join this space, go to https://centroid.verbolabs.com/?space=${activeSubdomain} and click Sign Up.`
         });
       }
     }

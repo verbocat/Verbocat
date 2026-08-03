@@ -85,24 +85,34 @@ async function checkAuth(request, response, next) {
 
     // Resolve space-specific membership from user_tenant_memberships
     const activeTenantId = request.tenant_id || request.tenant?.id;
-    const isSuperAdmin = profile.role === "super_admin";
+    const activeSpaceName = request.tenant?.name || "this";
     const activeSubdomain = request.tenant?.subdomain || "centroid";
+    const isSuperAdmin = profile.role === "super_admin";
     const isMainSpace = ["centroid", "verbolabs"].includes(activeSubdomain.toLowerCase());
 
     if (!isSuperAdmin && !isMainSpace && activeTenantId) {
       let membership = null;
+      let tableExists = true;
+
       try {
-        const { data: memData } = await supabase
+        const { data: memData, error: memError } = await supabase
           .from("user_tenant_memberships")
           .select("*")
           .eq("user_id", user.id)
           .eq("organization_id", activeTenantId)
           .maybeSingle();
-        membership = memData;
-      } catch (_) {}
+
+        if (memError && (memError.code === "42P01" || memError.message?.includes("does not exist"))) {
+          tableExists = false;
+        } else {
+          membership = memData;
+        }
+      } catch (_) {
+        tableExists = false;
+      }
 
       if (membership) {
-        // Space-specific membership found! Attach space-scoped profile settings
+        // Space-specific membership found — use its role/credits for this space
         profile = {
           ...profile,
           role: membership.role || profile.role,
@@ -112,11 +122,12 @@ async function checkAuth(request, response, next) {
           has_translate_access: membership.has_translate_access ?? profile.has_translate_access,
           status: membership.status || profile.status
         };
-      } else if (!profile.organization_id || profile.organization_id === activeTenantId) {
-        // Direct profile match or legacy unassigned user
+      } else if (!tableExists || !profile.organization_id || profile.organization_id === activeTenantId) {
+        // Table doesn't exist yet, or user's primary profile belongs to this space — allow access
       } else {
+        // No membership found and profile belongs to a different space — block
         return response.status(403).json({
-          error: `You are not registered in the '${request.tenant.name}' space. Please sign up at https://centroid.verbolabs.com/?space=${request.tenant.subdomain} to join this space.`
+          error: `You are not registered in the '${activeSpaceName}' space. To join this space, go to https://centroid.verbolabs.com/?space=${activeSubdomain} and click Sign Up.`
         });
       }
     }
