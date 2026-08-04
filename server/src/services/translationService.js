@@ -344,7 +344,15 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
     if (organizationId) {
       tmQuery = tmQuery.or(`organization_id.eq.${organizationId},organization_id.is.null`);
     }
-    const { data } = await tmQuery;
+    let { data, error } = await tmQuery;
+    if (error && (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('organization_id'))) {
+      const fallback = await supabase
+        .from("translation_memory")
+        .select("*")
+        .in("source_text", chunk)
+        .eq("target_lang", target);
+      data = fallback.data;
+    }
     if (data) {
       existingTranslations.push(...data);
     }
@@ -358,7 +366,14 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
   if (organizationId) {
     allTmQuery = allTmQuery.or(`organization_id.eq.${organizationId},organization_id.is.null`);
   }
-  const { data: allTmList } = await allTmQuery;
+  let { data: allTmList, error: allTmErr } = await allTmQuery;
+  if (allTmErr && (allTmErr.code === '42703' || allTmErr.code === 'PGRST204' || allTmErr.message?.includes('organization_id'))) {
+    const fallback = await supabase
+      .from("translation_memory")
+      .select("*")
+      .eq("target_lang", target);
+    allTmList = fallback.data;
+  }
 
   const tmMap = {};
   (existingTranslations || []).forEach((item) => {

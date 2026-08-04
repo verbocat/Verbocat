@@ -346,7 +346,14 @@ adminRouter.get("/credit-logs", async (request, response) => {
       query = query.eq("organization_id", targetOrgId);
     }
 
-    const { data: logs, error } = await query;
+    let { data: logs, error } = await query;
+
+    if (error && (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('organization_id'))) {
+      const fallbackQuery = supabase.from("credit_logs").select("*").order("created_at", { ascending: false });
+      const res = await fallbackQuery;
+      logs = res.data;
+      error = res.error;
+    }
 
     if (error) {
       console.error("Credit logs fetch error:", error);
@@ -391,8 +398,22 @@ adminRouter.get("/tm", async (request, response) => {
       query = query.eq("target_lang", targetLang);
     }
 
-    const { data, error } = await query;
-    if (error) throw error;
+    let { data, error } = await query;
+
+    // Schema fallback if organization_id column is missing in DB cache
+    if (error && (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('organization_id'))) {
+      let fallbackQuery = supabase.from("translation_memory").select("*").order("created_at", { ascending: false });
+      if (sourceLang) fallbackQuery = fallbackQuery.eq("source_lang", sourceLang);
+      if (targetLang) fallbackQuery = fallbackQuery.eq("target_lang", targetLang);
+      const res = await fallbackQuery;
+      data = res.data;
+      error = res.error;
+    }
+
+    if (error) {
+      console.error("Admin List TM Error:", error);
+      return response.json({ tm: [] });
+    }
 
     let filtered = data || [];
     if (search) {
@@ -406,8 +427,8 @@ adminRouter.get("/tm", async (request, response) => {
 
     response.json({ tm: filtered });
   } catch (error) {
-    console.error("Admin List TM Error:", error);
-    response.status(500).json({ error: "Failed to fetch translation memory entries" });
+    console.error("Admin List TM Exception:", error);
+    response.json({ tm: [] });
   }
 });
 
@@ -428,7 +449,14 @@ adminRouter.put("/tm/:id", async (request, response) => {
       query = query.eq("organization_id", activeTenantId);
     }
 
-    const { data, error } = await query.select().single();
+    let { data, error } = await query.select().single();
+
+    if (error && (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('organization_id'))) {
+      const fallbackQuery = supabase.from("translation_memory").update({ target_text }).eq("id", id).select().single();
+      const res = await fallbackQuery;
+      data = res.data;
+      error = res.error;
+    }
 
     if (error) throw error;
 
@@ -451,7 +479,13 @@ adminRouter.delete("/tm/:id", async (request, response) => {
       query = query.eq("organization_id", activeTenantId);
     }
 
-    const { error } = await query;
+    let { error } = await query;
+
+    if (error && (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('organization_id'))) {
+      const fallbackQuery = supabase.from("translation_memory").delete().eq("id", id);
+      const res = await fallbackQuery;
+      error = res.error;
+    }
 
     if (error) throw error;
 

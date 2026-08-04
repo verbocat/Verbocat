@@ -4752,7 +4752,15 @@ apiRouter.get("/documents/:documentId/lang/:lang/segments", checkAuth, async (re
       if (activeTenantId) {
         tmQuery = tmQuery.or(`organization_id.eq.${activeTenantId},organization_id.is.null`);
       }
-      const { data } = await tmQuery;
+      let { data, error } = await tmQuery;
+      if (error && (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('organization_id'))) {
+        const fallback = await supabase
+          .from("translation_memory")
+          .select("*")
+          .in("source_text", uniqueSources)
+          .eq("target_lang", lang);
+        data = fallback.data;
+      }
       tmEntries = data || [];
     }
 
@@ -4773,7 +4781,14 @@ apiRouter.get("/documents/:documentId/lang/:lang/segments", checkAuth, async (re
     if (activeTenantId) {
       allTmQuery = allTmQuery.or(`organization_id.eq.${activeTenantId},organization_id.is.null`);
     }
-    const { data: allTm } = await allTmQuery;
+    let { data: allTm, error: allTmErr } = await allTmQuery;
+    if (allTmErr && (allTmErr.code === '42703' || allTmErr.code === 'PGRST204' || allTmErr.message?.includes('organization_id'))) {
+      const fallback = await supabase
+        .from("translation_memory")
+        .select("source_text, target_text, provider")
+        .eq("target_lang", lang);
+      allTm = fallback.data;
+    }
 
     const stringSimilarity = require("string-similarity");
 
