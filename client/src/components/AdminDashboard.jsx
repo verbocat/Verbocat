@@ -428,8 +428,25 @@ export const AdminDashboard = ({ onClose, theme }) => {
             </svg>
           </div>
           <div>
-            <h1 className="text-lg font-black tracking-tight text-white">Centroid Admin Center</h1>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-black tracking-tight text-white">Centroid Admin Center</h1>
+              {(() => {
+                const spaceParam = new URLSearchParams(window.location.search).get("space");
+                if (spaceParam && !["centroid", "verbolabs"].includes(spaceParam.toLowerCase())) {
+                  return (
+                    <span className="rounded-full bg-indigo-500/20 border border-indigo-500/30 px-2.5 py-0.5 text-[10px] font-black text-indigo-400 uppercase tracking-wide">
+                      {spaceParam} space
+                    </span>
+                  );
+                }
+                return (
+                  <span className="rounded-full bg-slate-800 border border-slate-700 px-2.5 py-0.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                    Master Admin
+                  </span>
+                );
+              })()}
+            </div>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
               Access level: <span className="text-indigo-400 font-black">{currentUser?.role}</span>
             </p>
           </div>

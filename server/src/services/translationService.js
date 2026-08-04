@@ -220,13 +220,18 @@ const upsertTranslationMemoryBatch = async (rows) => {
     if (error) {
       // Fallback for tables without composite unique index
       for (const row of rows) {
-        const { data: existing } = await supabase
+        let query = supabase
           .from("translation_memory")
           .select("id")
           .eq("source_text", row.source_text)
           .eq("source_lang", row.source_lang)
-          .eq("target_lang", row.target_lang)
-          .limit(1);
+          .eq("target_lang", row.target_lang);
+
+        if (row.organization_id) {
+          query = query.eq("organization_id", row.organization_id);
+        }
+
+        const { data: existing } = await query.limit(1);
 
         if (existing && existing.length > 0) {
           await supabase

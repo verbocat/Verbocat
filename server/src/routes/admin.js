@@ -140,38 +140,45 @@ adminRouter.delete("/organizations/:id", checkRole(["super_admin"]), async (requ
   }
 });
 
-// 1. List Registered Users (Scoped to active tenant space via profiles & memberships)
+// 1. List Registered Users (Strictly isolated by client space)
 adminRouter.get("/users", async (request, response) => {
   try {
-    const isSuperAdmin = request.profile.role === "super_admin";
+    const isSuperAdmin = request.profile?.role === "super_admin";
     const activeTenantId = request.tenant?.id;
-    const isMainSpace = ["centroid", "verbolabs"].includes(request.tenant?.subdomain?.toLowerCase() || "centroid");
+    const activeSubdomain = request.tenant?.subdomain || "centroid";
+    const isMainSpace = ["centroid", "verbolabs"].includes(activeSubdomain.toLowerCase());
 
-    // Fetch profiles matching space
-    let profilesQuery = supabase.from("profiles").select("*, organization:organizations(*)").order("email", { ascending: true });
-
+    // Resolve target organization ID for space boundary isolation
+    let targetOrgId = null;
     if (!isMainSpace && activeTenantId) {
-      profilesQuery = profilesQuery.eq("organization_id", activeTenantId);
+      targetOrgId = activeTenantId;
     } else if (request.query.organization_id) {
-      profilesQuery = profilesQuery.eq("organization_id", request.query.organization_id);
+      targetOrgId = request.query.organization_id;
     } else if (!isSuperAdmin) {
-      const userOrgId = request.profile.organization_id || activeTenantId;
-      if (userOrgId) profilesQuery = profilesQuery.eq("organization_id", userOrgId);
+      targetOrgId = request.profile?.organization_id || activeTenantId;
+    }
+
+    let profilesQuery = supabase
+      .from("profiles")
+      .select("*, organization:organizations(*)")
+      .order("email", { ascending: true });
+
+    if (targetOrgId) {
+      profilesQuery = profilesQuery.eq("organization_id", targetOrgId);
     }
 
     const { data: baseProfiles } = await profilesQuery;
 
-    // Fetch memberships matching active space
+    // Fetch memberships matching space
     let membershipsMap = new Map();
-    if (activeTenantId) {
-      const { data: mems } = await supabase
-        .from("user_tenant_memberships")
-        .select("*, profile:profiles(*)")
-        .eq("organization_id", activeTenantId);
+    let memsQuery = supabase.from("user_tenant_memberships").select("*, profile:profiles(*)");
+    if (targetOrgId) {
+      memsQuery = memsQuery.eq("organization_id", targetOrgId);
+    }
+    const { data: mems } = await memsQuery;
 
-      if (mems) {
-        mems.forEach(m => membershipsMap.set(m.user_id, m));
-      }
+    if (mems) {
+      mems.forEach(m => membershipsMap.set(m.user_id, m));
     }
 
     // Merge base profiles and memberships
@@ -201,7 +208,7 @@ adminRouter.get("/users", async (request, response) => {
       }
     } catch (_) {}
 
-    const users = Array.from(userMap.values()).map(p => {
+    let users = Array.from(userMap.values()).map(p => {
       const authUser = authUsersMap.get(p.id);
       return {
         ...p,
@@ -209,6 +216,11 @@ adminRouter.get("/users", async (request, response) => {
         email_confirmed: authUser ? !!(authUser.email_confirmed_at || authUser.confirmed_at) : true
       };
     });
+
+    // Enforce strict space boundary: if viewing a space, only include users associated with that space
+    if (targetOrgId) {
+      users = users.filter(u => u.organization_id === targetOrgId || membershipsMap.has(u.id));
+    }
 
     response.json({ users });
   } catch (error) {
@@ -289,7 +301,6 @@ adminRouter.delete("/users/:id", checkRole(["admin"]), async (request, response)
     }
 
     // Explicitly delete from profiles to ensure complete cleanup
-    // (in case DB cascade triggers didn't fire or there are orphaned profiles)
     const { error: profileDeleteError } = await supabase
       .from("profiles")
       .delete()
@@ -312,22 +323,27 @@ adminRouter.delete("/users/:id", checkRole(["admin"]), async (request, response)
   }
 });
 
-// 4. Retrieve Credits Transaction Logs
+// 4. Retrieve Credits Transaction Logs (Strictly isolated by space)
 adminRouter.get("/credit-logs", async (request, response) => {
   try {
+    const isSuperAdmin = request.profile?.role === "super_admin";
     const activeTenantId = request.tenant?.id;
-    const isSuperAdmin = request.profile.role === "super_admin";
-    const isMainSpace = ["centroid", "verbolabs"].includes(request.tenant?.subdomain?.toLowerCase() || "centroid");
+    const activeSubdomain = request.tenant?.subdomain || "centroid";
+    const isMainSpace = ["centroid", "verbolabs"].includes(activeSubdomain.toLowerCase());
+
+    let targetOrgId = null;
+    if (!isMainSpace && activeTenantId) {
+      targetOrgId = activeTenantId;
+    } else if (request.query.organization_id) {
+      targetOrgId = request.query.organization_id;
+    } else if (!isSuperAdmin) {
+      targetOrgId = request.profile?.organization_id || activeTenantId;
+    }
 
     let query = supabase.from("credit_logs").select("*").order("created_at", { ascending: false });
 
-    if (!isMainSpace && activeTenantId) {
-      query = query.eq("organization_id", activeTenantId);
-    } else if (request.query.organization_id) {
-      query = query.eq("organization_id", request.query.organization_id);
-    } else if (!isSuperAdmin) {
-      const userOrgId = request.profile.organization_id || activeTenantId;
-      if (userOrgId) query = query.eq("organization_id", userOrgId);
+    if (targetOrgId) {
+      query = query.eq("organization_id", targetOrgId);
     }
 
     const { data: logs, error } = await query;
@@ -343,24 +359,29 @@ adminRouter.get("/credit-logs", async (request, response) => {
   }
 });
 
-// 5. List/Search Translation Memory (TM)
+// 5. List/Search Translation Memory (TM) (Strictly isolated by space)
 adminRouter.get("/tm", async (request, response) => {
   try {
     const { search, sourceLang, targetLang } = request.query;
-    const activeTenantId = request.tenant?.id;
     const isSuperAdmin = request.profile?.role === "super_admin";
-    const isMainSpace = ["centroid", "verbolabs"].includes(request.tenant?.subdomain?.toLowerCase() || "centroid");
+    const activeTenantId = request.tenant?.id;
+    const activeSubdomain = request.tenant?.subdomain || "centroid";
+    const isMainSpace = ["centroid", "verbolabs"].includes(activeSubdomain.toLowerCase());
+
+    let targetOrgId = null;
+    if (!isMainSpace && activeTenantId) {
+      targetOrgId = activeTenantId;
+    } else if (request.query.organization_id) {
+      targetOrgId = request.query.organization_id;
+    } else if (!isSuperAdmin) {
+      targetOrgId = request.profile?.organization_id || activeTenantId;
+    }
 
     let query = supabase.from("translation_memory").select("*").order("created_at", { ascending: false });
 
     // Isolation logic: filter TM entries strictly by active tenant space
-    if (!isMainSpace && activeTenantId) {
-      query = query.eq("organization_id", activeTenantId);
-    } else if (request.query.organization_id) {
-      query = query.eq("organization_id", request.query.organization_id);
-    } else if (!isSuperAdmin) {
-      const userOrgId = request.profile?.organization_id || activeTenantId;
-      if (userOrgId) query = query.eq("organization_id", userOrgId);
+    if (targetOrgId) {
+      query = query.eq("organization_id", targetOrgId);
     }
 
     if (sourceLang) {
@@ -395,17 +416,19 @@ adminRouter.put("/tm/:id", async (request, response) => {
   try {
     const { id } = request.params;
     const { target_text } = request.body;
+    const isSuperAdmin = request.profile?.role === "super_admin";
+    const activeTenantId = request.tenant?.id || request.profile?.organization_id;
 
     if (target_text === undefined || target_text === null) {
       return response.status(400).json({ error: "Target text is required" });
     }
 
-    const { data, error } = await supabase
-      .from("translation_memory")
-      .update({ target_text })
-      .eq("id", id)
-      .select()
-      .single();
+    let query = supabase.from("translation_memory").update({ target_text }).eq("id", id);
+    if (!isSuperAdmin && activeTenantId) {
+      query = query.eq("organization_id", activeTenantId);
+    }
+
+    const { data, error } = await query.select().single();
 
     if (error) throw error;
 
@@ -420,11 +443,15 @@ adminRouter.put("/tm/:id", async (request, response) => {
 adminRouter.delete("/tm/:id", async (request, response) => {
   try {
     const { id } = request.params;
+    const isSuperAdmin = request.profile?.role === "super_admin";
+    const activeTenantId = request.tenant?.id || request.profile?.organization_id;
 
-    const { error } = await supabase
-      .from("translation_memory")
-      .delete()
-      .eq("id", id);
+    let query = supabase.from("translation_memory").delete().eq("id", id);
+    if (!isSuperAdmin && activeTenantId) {
+      query = query.eq("organization_id", activeTenantId);
+    }
+
+    const { error } = await query;
 
     if (error) throw error;
 

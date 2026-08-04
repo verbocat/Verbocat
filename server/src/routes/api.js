@@ -228,12 +228,14 @@ apiRouter.post("/translate-batch", checkAuth, checkTranslateAccess, async (reque
       const actionName = isSeo ? "translate-batch (SEO)" : "translate-batch";
 
       // 1. Log credit entry in credit_logs
+      const logOrgId = request.tenant?.id || request.profile.organization_id || null;
       await supabase.from("credit_logs").insert({
         user_id: userId,
         email: email,
         action: actionName,
         word_count: wordCount,
-        file_name: fileName || "document"
+        file_name: fileName || "document",
+        organization_id: logOrgId
       });
 
       // 2. Increment credits_consumed in profiles
@@ -330,11 +332,18 @@ apiRouter.get("/export-global-tm", async (request, response) => {
       return response.status(400).json({ error: "Missing source or target language parameter" });
     }
 
-    const { data, error } = await supabase
+    let query = supabase
       .from("translation_memory")
       .select("*")
       .eq("target_lang", target)
       .eq("source_lang", source);
+
+    const activeTenantId = request.tenant?.id || request.profile?.organization_id;
+    if (activeTenantId) {
+      query = query.eq("organization_id", activeTenantId);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
 
@@ -390,13 +399,16 @@ apiRouter.post("/import-tmx", upload.single("file"), async (request, response) =
       return response.json({ count: 0 });
     }
 
-    // Insert translation memory rows to Supabase database
+    const activeTenantId = request.tenant?.id || request.profile?.organization_id || null;
+
+    // Insert translation memory rows to Supabase database with organization_id
     const insertRows = entries.map((item) => ({
       source_text: item.sourceText,
       target_text: item.targetText,
       source_lang: item.sourceLang,
       target_lang: item.targetLang,
-      provider: "Imported TMX"
+      provider: "Imported TMX",
+      organization_id: activeTenantId
     }));
 
     // Perform upsert or batch insert
@@ -1312,12 +1324,14 @@ apiRouter.post(
       if (wordCount > 0) {
         const isSeo = contextSettings?.purpose === "SEO";
         const actionName = isSeo ? "translate-context (SEO)" : "translate-context";
+        const logOrgId = request.tenant?.id || request.profile.organization_id || null;
         await supabase.from("credit_logs").insert({
           user_id: request.profile.id,
           email: request.profile.email,
           action: actionName,
           word_count: wordCount,
-          file_name: doc.name || "document"
+          file_name: doc.name || "document",
+          organization_id: logOrgId
         });
 
         const newConsumed = request.profile.credits_consumed + wordCount;
@@ -1491,12 +1505,14 @@ Provide ONLY the raw JSON object, with no markdown formatting, explanations, or 
 
     // Deduct credits and log
     if (wordCount > 0) {
+      const logOrgId = request.tenant?.id || request.profile.organization_id || null;
       await supabase.from("credit_logs").insert({
         user_id: request.profile.id,
         email: request.profile.email,
         action: "auto-detect-context",
         word_count: wordCount,
-        file_name: doc.name || "document"
+        file_name: doc.name || "document",
+        organization_id: logOrgId
       });
 
       const newConsumed = request.profile.credits_consumed + wordCount;
@@ -1675,12 +1691,14 @@ apiRouter.post("/documents/:id/audit/start", checkAuth, async (request, response
     if (wordCount > 0) {
       const isSeo = request.body.contextSettings?.purpose === "SEO";
       const actionName = isSeo ? "qc-audit (SEO)" : "qc-audit";
+      const logOrgId = request.tenant?.id || request.profile.organization_id || null;
       await supabase.from("credit_logs").insert({
         user_id: request.profile.id,
         email: request.profile.email,
         action: actionName,
         word_count: wordCount,
-        file_name: doc.name || "document"
+        file_name: doc.name || "document",
+        organization_id: logOrgId
       });
 
       const newConsumed = request.profile.credits_consumed + wordCount;
