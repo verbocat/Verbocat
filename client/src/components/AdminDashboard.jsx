@@ -1088,16 +1088,39 @@ export const AdminDashboard = ({ onClose, theme }) => {
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 select-none">
                   User Role Badge {!isAdmin && <span className="text-[9px] text-rose-400/80 font-bold lowercase tracking-normal">(Admin permission required)</span>}
                 </label>
-                <select
-                  value={editRole}
-                  onChange={(e) => setEditRole(e.target.value)}
-                  disabled={!isAdmin}
-                  className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-slate-100 outline-none transition-all focus:border-indigo-500/50 disabled:opacity-50 text-sm cursor-pointer"
-                >
-                   <option value="linguist">Linguist</option>
-                   <option value="verbolabs_staff">VerboLabs Staff</option>
-                   <option value="admin">Administrator</option>
-                </select>
+                {(() => {
+                  const spaceParam = new URLSearchParams(window.location.search).get("space");
+                  const isClientWorkspace = !!spaceParam && !["centroid", "verbolabs"].includes(spaceParam.toLowerCase());
+
+                  if (isClientWorkspace) {
+                    return (
+                      <select
+                        value={editRole}
+                        onChange={(e) => setEditRole(e.target.value)}
+                        disabled={!isAdmin}
+                        className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-slate-100 outline-none transition-all focus:border-indigo-500/50 disabled:opacity-50 text-sm cursor-pointer"
+                      >
+                         <option value="admin">Admin</option>
+                         <option value="in_region_reviewer">In-Region Reviewer</option>
+                         <option value="linguist">Linguist</option>
+                      </select>
+                    );
+                  }
+
+                  return (
+                    <select
+                      value={editRole}
+                      onChange={(e) => setEditRole(e.target.value)}
+                      disabled={!isAdmin}
+                      className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-slate-100 outline-none transition-all focus:border-indigo-500/50 disabled:opacity-50 text-sm cursor-pointer"
+                    >
+                       {currentUser?.role === "super_admin" && <option value="super_admin">Super Admin</option>}
+                       <option value="admin">Admin</option>
+                       <option value="verbolabs_staff">Verbolabs Staff</option>
+                       <option value="linguist">Linguist</option>
+                    </select>
+                  );
+                })()}
               </div>
 
               {/* Status Option (Admin Only) */}

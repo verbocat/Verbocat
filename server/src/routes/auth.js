@@ -28,7 +28,7 @@ authRouter.post("/register", async (request, response) => {
     } catch (_) {}
 
     if (existingUser) {
-      // User already has a Supabase Auth account. Verify password then add space membership.
+      // User already has a Supabase Auth account. Verify password then check space account.
       const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password
@@ -40,8 +40,8 @@ authRouter.post("/register", async (request, response) => {
         });
       }
 
-      // Password valid. Check if they're already a member of this space
-      if (tenantId && !isMainSpace) {
+      // Password valid. Check if they already have an account created for this workspace
+      if (tenantId) {
         let alreadyMember = false;
         try {
           const { data: existingMem } = await supabase
@@ -50,24 +50,27 @@ authRouter.post("/register", async (request, response) => {
             .eq("user_id", existingUser.id)
             .eq("organization_id", tenantId)
             .maybeSingle();
-          alreadyMember = !!existingMem;
+          
+          if (existingMem) {
+            alreadyMember = true;
+          } else {
+            const { data: profileCheck } = await supabase
+              .from("profiles")
+              .select("id")
+              .eq("id", existingUser.id)
+              .eq("organization_id", tenantId)
+              .maybeSingle();
+            if (profileCheck) alreadyMember = true;
+          }
         } catch (_) {}
 
         if (alreadyMember) {
-          // Already a member — just log them in
-          return response.json({
-            message: `Welcome back! Logging you into '${tenantName}' space.`,
-            token: loginData.session.access_token,
-            refreshToken: loginData.session.refresh_token,
-            expiresAt: Date.now() + (loginData.session.expires_in || 3600) * 1000,
-            user: {
-              id: loginData.user.id,
-              email: loginData.user.email
-            }
+          return response.status(400).json({
+            error: `An account for ${cleanEmail} already exists in '${tenantName}' workspace. Please log in.`
           });
         }
 
-        // Not yet a member — add them
+        // Register independent account membership for this specific workspace
         try {
           await supabase
             .from("user_tenant_memberships")
@@ -76,13 +79,15 @@ authRouter.post("/register", async (request, response) => {
               organization_id: tenantId,
               role: "linguist",
               credits_allowed: 50000,
+              credits_consumed: 0,
+              has_translate_access: true,
               status: "active"
             }, { onConflict: "user_id,organization_id" });
         } catch (_) {}
       }
 
       return response.json({
-        message: `Successfully joined '${tenantName}' space! You can now log in.`,
+        message: `Account registered successfully for '${tenantName}' workspace! You can now log in.`,
         user: { id: loginData.user.id, email: loginData.user.email }
       });
     }
@@ -101,7 +106,7 @@ authRouter.post("/register", async (request, response) => {
     const user = data.user;
 
     if (user && tenantId) {
-      // Upsert base profile
+      // Upsert base profile for this tenant
       await supabase
         .from("profiles")
         .upsert({
@@ -128,7 +133,7 @@ authRouter.post("/register", async (request, response) => {
     }
 
     response.json({
-      message: "Registration successful! You can now log in.",
+      message: `Account registered successfully for '${tenantName}' workspace! You can now log in.`,
       user: { id: user.id, email: user.email }
     });
   } catch (error) {
@@ -192,43 +197,35 @@ authRouter.post("/login", async (request, response) => {
     }
 
     if (profile.status === "suspended") {
-      return response.status(403).json({ error: "Your account is suspended. Contact VerboLabs." });
+      return response.status(403).json({ error: "Your account is suspended. Contact workspace administrator." });
     }
 
     if (profile.organization && profile.organization.status === "suspended") {
-      return response.status(403).json({ error: "Your space workspace has been suspended. Contact VerboLabs." });
+      return response.status(403).json({ error: "Your workspace has been suspended. Contact VerboLabs support." });
     }
 
-    // Enforce workspace boundary: Resolve space membership from user_tenant_memberships
+    // Enforce workspace boundary: Resolve space membership from user_tenant_memberships or profile
     const activeTenantId = request.tenant?.id;
     const activeSpaceName = request.tenant?.name || "this";
     const activeSubdomain = request.tenant?.subdomain || "centroid";
     const isSuperAdmin = profile.role === "super_admin";
-    const isMainSpace = ["centroid", "verbolabs"].includes(activeSubdomain.toLowerCase());
 
-    if (!isSuperAdmin && !isMainSpace && activeTenantId) {
+    if (!isSuperAdmin && activeTenantId) {
       let membership = null;
-      let tableExists = true;
 
       try {
-        const { data: memData, error: memError } = await supabase
+        const { data: memData } = await supabase
           .from("user_tenant_memberships")
           .select("*")
           .eq("user_id", user.id)
           .eq("organization_id", activeTenantId)
           .maybeSingle();
 
-        if (memError && (memError.code === "42P01" || memError.message?.includes("does not exist"))) {
-          tableExists = false;
-        } else {
-          membership = memData;
-        }
-      } catch (_) {
-        tableExists = false;
-      }
+        membership = memData;
+      } catch (_) {}
 
       if (membership) {
-        // Found space-specific membership — use its role/credits
+        // Space-specific membership found — use its role/credits for this workspace
         profile = {
           ...profile,
           role: membership.role || profile.role,
@@ -238,13 +235,13 @@ authRouter.post("/login", async (request, response) => {
           has_translate_access: membership.has_translate_access ?? profile.has_translate_access,
           status: membership.status || profile.status
         };
-      } else if (!tableExists || !profile.organization_id || profile.organization_id === activeTenantId) {
-        // Table doesn't exist yet, or user's primary profile already belongs to this space — allow login
+      } else if (profile.organization_id === activeTenantId) {
+        // Profile belongs directly to this workspace
       } else {
-        // No membership found and profile belongs to a different space — reject login
+        // No account registered for this workspace — reject login
         await supabase.auth.signOut();
         return response.status(403).json({
-          error: `You are not registered in the '${activeSpaceName}' space. To join this space, go to https://centroid.verbolabs.com/?space=${activeSubdomain} and click Sign Up.`
+          error: `No account found for '${activeSpaceName}' workspace. Please register an account on this workspace URL first.`
         });
       }
     }

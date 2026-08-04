@@ -50,13 +50,20 @@ adminRouter.get("/organizations", checkRole(["super_admin"]), async (request, re
   }
 });
 
-// 0b. Create new client space organization (Super Admin only)
+// 0b. Create new client space organization (Super Admin on Root Workspace only)
 adminRouter.post("/organizations", checkRole(["super_admin"]), async (request, response) => {
   try {
+    const activeSubdomain = request.tenant?.subdomain || "centroid";
+    const isMainSpace = ["centroid", "verbolabs"].includes(activeSubdomain.toLowerCase());
+
+    if (!isMainSpace) {
+      return response.status(403).json({ error: "Workspaces can only be created from the root Centroid admin panel (centroid.verbolabs.com)." });
+    }
+
     const { name, subdomain, credits_allowed } = request.body;
 
     if (!name || !subdomain) {
-      return response.status(400).json({ error: "Organization name and subdomain are required." });
+      return response.status(400).json({ error: "Workspace name and subdomain are required." });
     }
 
     const cleanSubdomain = subdomain.toLowerCase().trim().replace(/[^a-z0-9-]/g, "");
@@ -65,7 +72,7 @@ adminRouter.post("/organizations", checkRole(["super_admin"]), async (request, r
       .from("organizations")
       .select("id")
       .eq("subdomain", cleanSubdomain)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       return response.status(400).json({ error: `Subdomain '${cleanSubdomain}' is already taken.` });
@@ -85,16 +92,23 @@ adminRouter.post("/organizations", checkRole(["super_admin"]), async (request, r
     if (error) throw error;
 
     clearTenantCache();
-    response.json({ message: "Client space created successfully", organization: newOrg });
+    response.json({ message: "Workspace created successfully with fresh tenant scope (no sample data copied).", organization: newOrg });
   } catch (error) {
     console.error("Create Organization Error:", error);
-    response.status(500).json({ error: "Failed to create client space organization" });
+    response.status(500).json({ error: "Failed to create workspace organization" });
   }
 });
 
-// 0c. Update organization space (Super Admin only)
+// 0c. Update organization space (Super Admin on Root Workspace only)
 adminRouter.put("/organizations/:id", checkRole(["super_admin"]), async (request, response) => {
   try {
+    const activeSubdomain = request.tenant?.subdomain || "centroid";
+    const isMainSpace = ["centroid", "verbolabs"].includes(activeSubdomain.toLowerCase());
+
+    if (!isMainSpace) {
+      return response.status(403).json({ error: "Workspace operations are restricted to the root Centroid admin panel." });
+    }
+
     const { id } = request.params;
     const { name, credits_allowed, status } = request.body;
 
@@ -113,16 +127,23 @@ adminRouter.put("/organizations/:id", checkRole(["super_admin"]), async (request
     if (error) throw error;
 
     clearTenantCache();
-    response.json({ message: "Client space updated successfully", organization: updatedOrg });
+    response.json({ message: "Workspace updated successfully", organization: updatedOrg });
   } catch (error) {
     console.error("Update Organization Error:", error);
-    response.status(500).json({ error: "Failed to update client space organization" });
+    response.status(500).json({ error: "Failed to update workspace organization" });
   }
 });
 
-// 0d. Delete organization space (Super Admin only)
+// 0d. Delete organization space (Super Admin on Root Workspace only)
 adminRouter.delete("/organizations/:id", checkRole(["super_admin"]), async (request, response) => {
   try {
+    const activeSubdomain = request.tenant?.subdomain || "centroid";
+    const isMainSpace = ["centroid", "verbolabs"].includes(activeSubdomain.toLowerCase());
+
+    if (!isMainSpace) {
+      return response.status(403).json({ error: "Workspace deletion is strictly restricted to the Super Admin on the root Centroid panel." });
+    }
+
     const { id } = request.params;
 
     const { error } = await supabase
@@ -133,10 +154,10 @@ adminRouter.delete("/organizations/:id", checkRole(["super_admin"]), async (requ
     if (error) throw error;
 
     clearTenantCache();
-    response.json({ message: "Client space deleted successfully" });
+    response.json({ message: "Workspace deleted successfully" });
   } catch (error) {
     console.error("Delete Organization Error:", error);
-    response.status(500).json({ error: "Failed to delete client space organization" });
+    response.status(500).json({ error: "Failed to delete workspace organization" });
   }
 });
 
@@ -232,10 +253,23 @@ adminRouter.get("/users", async (request, response) => {
 // 2. Modify User Permissions & Credit Limits
 adminRouter.put("/users/:id", async (request, response) => {
   try {
-    const { id } = request.params;
-    const { role, credits_allowed, has_translate_access, status, email_confirmed } = request.body;
-    const currentUserRole = request.profile.role;
-    const activeTenantId = request.tenant?.id || request.profile.organization_id;
+    const activeSubdomain = request.tenant?.subdomain || "centroid";
+    const isMainSpace = ["centroid", "verbolabs"].includes(activeSubdomain.toLowerCase());
+
+    // Validate workspace-specific roles
+    if (role !== undefined) {
+      if (isMainSpace) {
+        const allowedRoles = ["super_admin", "admin", "verbolabs_staff", "linguist"];
+        if (!allowedRoles.includes(role)) {
+          return response.status(400).json({ error: `Invalid role '${role}' for Root Workspace. Allowed roles: Super Admin, Admin, Verbolabs Staff, Linguist.` });
+        }
+      } else {
+        const allowedRoles = ["admin", "in_region_reviewer", "linguist"];
+        if (!allowedRoles.includes(role)) {
+          return response.status(400).json({ error: `Invalid role '${role}' for Client Workspace. Allowed roles: Admin, In-Region Reviewer, Linguist. 'Verbolabs Staff' does not exist in client workspace.` });
+        }
+      }
+    }
 
     // Prepare update data
     const updateData = {};
