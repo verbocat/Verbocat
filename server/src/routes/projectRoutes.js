@@ -98,7 +98,27 @@ projectRouter.get(["/projects/:id", "/api/projects/:id"], checkAuth, async (requ
       return response.status(404).json({ error: "Project not found or access denied" });
     }
 
-    response.json({ project });
+    // Fetch documents belonging to this project
+    const { data: docs } = await supabase
+      .from("documents")
+      .select("*")
+      .eq("project_id", id)
+      .order("created_at", { ascending: false });
+
+    // Fetch jobs belonging to this project
+    const { data: jobs } = await supabase
+      .from("jobs")
+      .select("*, documents(*)")
+      .eq("project_id", id)
+      .order("created_at", { ascending: false });
+
+    const filesList = docs && docs.length > 0 ? docs : (project.documents || []);
+
+    response.json({
+      project,
+      files: filesList,
+      jobs: jobs || []
+    });
   } catch (error) {
     console.error("Get Project Error:", error);
     response.status(500).json({ error: "Failed to fetch project details" });
