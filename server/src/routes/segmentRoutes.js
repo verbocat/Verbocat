@@ -8,7 +8,7 @@ const { calculateProgress } = require("../utils/segmentProgress");
 const segmentRouter = express.Router();
 
 // 1. Batch AI Translate
-segmentRouter.post("/translate-batch", checkAuth, checkTranslateAccess, async (request, response) => {
+segmentRouter.post(["/translate-batch", "/api/translate-batch"], checkAuth, checkTranslateAccess, async (request, response) => {
   try {
     const { segments, target, source, contextSettings, fileName, documentId } = request.body;
     let fileExtension = "";
@@ -129,11 +129,16 @@ segmentRouter.post("/translate-batch", checkAuth, checkTranslateAccess, async (r
   }
 });
 
-// 2. Fetch Document Segments
-segmentRouter.get("/documents/:id/segments", checkAuth, async (request, response) => {
+// 2. Fetch Document Segments (Supports both /documents/:id/segments and /documents/:id/lang/:lang/segments)
+segmentRouter.get([
+  "/documents/:id/segments", 
+  "/api/documents/:id/segments",
+  "/documents/:id/lang/:lang/segments",
+  "/api/documents/:id/lang/:lang/segments"
+], checkAuth, async (request, response) => {
   try {
-    const { id } = request.params;
-    const targetLang = request.query.target || "hi";
+    const { id, lang } = request.params;
+    const targetLang = lang || request.query.target || "hi";
 
     const segments = await fetchAllSegments(id, "*", targetLang);
     response.json({ segments });
@@ -143,11 +148,17 @@ segmentRouter.get("/documents/:id/segments", checkAuth, async (request, response
   }
 });
 
-// 3. Update Single Segment
-segmentRouter.put("/documents/:id/segments/:index", checkAuth, async (request, response) => {
+// 3. Update Single Segment (Supports both /documents/:id/segments/:index and /documents/:id/lang/:lang/segments/:index)
+segmentRouter.put([
+  "/documents/:id/segments/:index", 
+  "/api/documents/:id/segments/:index",
+  "/documents/:id/lang/:lang/segments/:index",
+  "/api/documents/:id/lang/:lang/segments/:index"
+], checkAuth, async (request, response) => {
   try {
-    const { id, index } = request.params;
-    const { targetText, status, mqmAccuracyScore, mqmReport, targetLang = "hi" } = request.body;
+    const { id, index, lang } = request.params;
+    const { targetText, status, mqmAccuracyScore, mqmReport, targetLang: bodyLang } = request.body;
+    const targetLang = lang || bodyLang || "hi";
 
     const updateFields = {
       target_text: targetText,
