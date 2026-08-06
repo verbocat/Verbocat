@@ -87,32 +87,61 @@ function ensureDocx2PdfInstalled() {
 }
 
 async function convertDocxToPdf(docxPath, pdfPath) {
-  ensureDocx2PdfInstalled();
   const pythonCmd = getPythonCommand();
   
   const escapedDocxPath = docxPath.replace(/\\/g, '\\\\');
   const escapedPdfPath = pdfPath.replace(/\\/g, '\\\\');
   
-  const pyScript = `from docx2pdf import convert; convert('${escapedDocxPath}', '${escapedPdfPath}')`;
-  
   console.log(`Converting DOCX to PDF: ${docxPath} -> ${pdfPath}`);
+  
+  // 1. Try docx2pdf (Windows with MS Word)
   try {
+    ensureDocx2PdfInstalled();
+    const pyScript = `from docx2pdf import convert; convert('${escapedDocxPath}', '${escapedPdfPath}')`;
     execSync(`"${pythonCmd}" -c "${pyScript}"`, { stdio: 'ignore' });
-    if (fs.existsSync(pdfPath)) return;
+    if (fs.existsSync(pdfPath) && fs.statSync(pdfPath).size > 0) return;
   } catch (err) {
-    console.error("docx2pdf conversion failed, checking libreoffice fallback:", err.message);
-    try {
-      execSync(`libreoffice --headless --convert-to pdf --outdir "${path.dirname(pdfPath)}" "${docxPath}"`, { stdio: 'ignore' });
-      if (fs.existsSync(pdfPath)) return;
-    } catch (loErr) {
-      try {
-        execSync(`soffice --headless --convert-to pdf --outdir "${path.dirname(pdfPath)}" "${docxPath}"`, { stdio: 'ignore' });
-        if (fs.existsSync(pdfPath)) return;
-      } catch (_) {
-        throw new Error(`Failed to convert DOCX to PDF: ${err.message}`);
-      }
-    }
+    console.warn("docx2pdf unavailable or failed (expected on Linux Render):", err.message);
   }
+
+  // 2. Try LibreOffice / soffice (Linux server with libreoffice installed)
+  try {
+    execSync(`libreoffice --headless --convert-to pdf --outdir "${path.dirname(pdfPath)}" "${docxPath}"`, { stdio: 'ignore' });
+    if (fs.existsSync(pdfPath) && fs.statSync(pdfPath).size > 0) return;
+  } catch (_) {}
+
+  try {
+    execSync(`soffice --headless --convert-to pdf --outdir "${path.dirname(pdfPath)}" "${docxPath}"`, { stdio: 'ignore' });
+    if (fs.existsSync(pdfPath) && fs.statSync(pdfPath).size > 0) return;
+  } catch (_) {}
+
+  // 3. Fallback: Generate PDF directly via PyMuPDF + python-docx (Cross-platform Linux fallback)
+  try {
+    const pyFallback = `import fitz, docx
+d = docx.Document('${escapedDocxPath}')
+pdf = fitz.open()
+page = pdf.new_page(width=595.28, height=841.89)
+y = 50
+for p in d.paragraphs:
+    txt = p.text.strip()
+    if not txt: continue
+    rect = fitz.Rect(50, y, 545, y + 100)
+    tw = fitz.TextWriter(page.rect)
+    tw.fill_textbox(rect, txt, fontsize=11, font=fitz.Font('helv'))
+    tw.write_text(page, color=(0,0,0))
+    y += 28
+    if y > 780:
+        page = pdf.new_page(width=595.28, height=841.89)
+        y = 50
+pdf.save('${escapedPdfPath}')
+pdf.close()`;
+    execSync(`"${pythonCmd}" -c "${pyFallback}"`, { stdio: 'ignore' });
+    if (fs.existsSync(pdfPath) && fs.statSync(pdfPath).size > 0) return;
+  } catch (fbErr) {
+    console.error("PyMuPDF DOCX->PDF fallback error:", fbErr.message);
+  }
+
+  throw new Error("Unable to convert DOCX to PDF on server environment.");
 }
 
 const xliffParser = {
@@ -348,9 +377,16 @@ const exportHtml = async (fileId, segments, ext = '.html', targetLang = 'hi', te
     try {
       const docxBuffer = await docxParser.exportFile(templateContent, normalizedSegments, targetLang);
       fs.writeFileSync(tempDocxPath, docxBuffer);
-      await convertDocxToPdf(tempDocxPath, tempPdfPath);
-      const pdfResultBuffer = fs.readFileSync(tempPdfPath);
-      return pdfResultBuffer;
+      try {
+        await convertDocxToPdf(tempDocxPath, tempPdfPath);
+        if (fs.existsSync(tempPdfPath) && fs.statSync(tempPdfPath).size > 0) {
+          const pdfResultBuffer = fs.readFileSync(tempPdfPath);
+          return pdfResultBuffer;
+        }
+      } catch (convErr) {
+        console.warn("convertDocxToPdf failed on server, returning DOCX buffer as safety fallback:", convErr.message);
+      }
+      return docxBuffer;
     } finally {
       for (const p of [tempDocxPath, tempPdfPath]) {
         try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch (_) {}
