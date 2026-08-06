@@ -111,7 +111,11 @@ class ParagraphBuilder:
                     prev_height = prev_bbox[3] - prev_bbox[1]
 
                     should_split = (
-                        (prev_is_centered != curr_is_centered) or
+                        # Only split on alignment change if BOTH lines are wide enough
+                        # to have meaningful alignment. Short ending lines are normal
+                        # in any paragraph and should not trigger a split.
+                        (prev_is_centered != curr_is_centered 
+                         and (curr_bbox[2] - curr_bbox[0]) > (page_width * 0.4)) or
                         (abs(prev_font_size - curr_font_size) > 3.5) or
                         (gap > max(8.0, prev_height * 1.4))
                     )
@@ -126,10 +130,16 @@ class ParagraphBuilder:
                 line_groups.append(current_group)
 
             for g_idx, group in enumerate(line_groups):
-                # Recompute bbox for this group
-                min_x = min(l.get("bbox", [0, 0, 0, 0])[0] for l in group)
+                # Use block's x-coordinates for paragraph width to ensure
+                # the full text column width is preserved, even when the last
+                # line of a paragraph is shorter than the others.
+                block_bbox = block.get("bbox", [0, 0, 0, 0])
+                group_min_x = min(l.get("bbox", [0, 0, 0, 0])[0] for l in group)
+                group_max_x = max(l.get("bbox", [0, 0, 0, 0])[2] for l in group)
+                min_x = min(group_min_x, block_bbox[0])
                 min_y = min(l.get("bbox", [0, 0, 0, 0])[1] for l in group)
-                max_x = max(l.get("bbox", [0, 0, 0, 0])[2] for l in group)
+                # Use block width for multi-line groups, group width for single-line
+                max_x = max(group_max_x, block_bbox[2]) if len(group) > 1 else group_max_x
                 max_y = max(l.get("bbox", [0, 0, 0, 0])[3] for l in group)
                 bbox = [min_x, min_y, max_x, max_y]
 
@@ -301,8 +311,13 @@ class ParagraphBuilder:
         
         paragraph_text = ""
         span_idx = 0
+        prev_line_idx = -1
         
-        for line in paragraph.lines:
+        for line_idx, line in enumerate(paragraph.lines):
+            # Add space between lines to prevent word-joining at line boundaries
+            if line_idx > 0 and paragraph_text and not paragraph_text.endswith(' '):
+                paragraph_text += ' '
+            
             for span in line.spans:
                 # Check if it differs from the base style
                 differs = (span.font != base_style["font"] or 

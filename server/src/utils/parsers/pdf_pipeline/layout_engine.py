@@ -164,10 +164,12 @@ class LayoutEngine:
         
     def adapt_layout(self, paragraph: Paragraph, translated_text: str, target_lang: str) -> Dict[str, Any]:
         """
-        Unified layout adaptation: tries to fit translated text within the original
-        bounding box by gradually scaling down the font size. Only expands the
-        bounding box as a last resort, with a strict cap.
+        Unified layout adaptation using TextWriter.fill_textbox for measurement.
+        This uses the same PDF-native text engine as the renderer, ensuring
+        measurement and rendering produce identical results (no HTML/CSS mismatch).
         """
+        import fitz
+
         bbox = list(paragraph.bbox)
         original_width = bbox[2] - bbox[0]
         original_height = bbox[3] - bbox[1]
@@ -178,63 +180,103 @@ class LayoutEngine:
         if original_height < 5.0:
             original_height = 5.0
 
+        # Generate HTML at scale 1.0 (needed for font list and fallback rendering)
+        html_1x, fonts = self.parse_translation_to_html(translated_text, paragraph, target_lang, 1.0)
+        
+        # Extract plain text for TextWriter measurement
+        # Replace tags with spaces (not empty string) to prevent word joining
+        text_no_style = re.sub(r'<style>.*?</style>', ' ', html_1x, flags=re.DOTALL)
+        plain_text = re.sub(r'<[^>]+>', ' ', text_no_style)
+        plain_text = re.sub(r'\s+', ' ', plain_text).strip()
+        
+        if not plain_text:
+            return {
+                "html": html_1x, "fonts": fonts, "scale": 1.0,
+                "bbox": bbox, "status": "Fits", "height_needed": 0
+            }
+        
+        # Get primary font size from original paragraph spans
+        primary_size = self._get_primary_font_size(paragraph)
+        font_path = fonts[0] if fonts else self.font_manager.get_font_path(target_lang)
+        alignment_int = self._alignment_to_int(paragraph.alignment)
+        
+        try:
+            font = fitz.Font(fontfile=font_path)
+        except Exception:
+            # Font loading failed - return scale 1.0 and let renderer handle it
+            return {
+                "html": html_1x, "fonts": fonts, "scale": 1.0,
+                "bbox": bbox, "status": "Fits", "height_needed": original_height
+            }
+        
         # Graduated scaling: try 1.0 -> 0.95 -> 0.90 -> ... -> 0.70
+        # Uses TextWriter.fill_textbox (same engine as renderer) for consistent measurement
         font_scale = 1.0
         min_scale = 0.70
         step = 0.05
-        
-        best_html = ""
-        best_fonts = []
-        best_height_needed = original_height
         best_scale = 1.0
         
         while font_scale >= min_scale:
-            html, fonts = self.parse_translation_to_html(translated_text, paragraph, target_lang, font_scale)
-            import fitz
+            current_size = primary_size * font_scale
+            tw = fitz.TextWriter(fitz.Rect(0, 0, 10000, 10000))
             try:
-                archive_dir = os.path.dirname(fonts[0]) if fonts else None
-                archive = fitz.Archive(archive_dir) if archive_dir else None
-                story = fitz.Story(html, archive=archive)
-                status, rect_used = story.place(fitz.Rect(0, 0, original_width, 9999))
-                height_needed = rect_used[3] - rect_used[1]
-                
-                if height_needed <= original_height + 2.0:  # 2pt tolerance
+                # Use generous height tolerance (50% extra) to prevent font scaling
+                # caused by minor font metric differences between original and mapped fonts.
+                # Priority: preserve exact font size over fitting in exact original height.
+                # The renderer will naturally clip at page boundaries if needed.
+                fit_height = max(original_height * 1.5, original_height + 20.0)
+                overflow = tw.fill_textbox(
+                    fitz.Rect(0, 0, original_width, fit_height),
+                    plain_text, font=font, fontsize=current_size,
+                    align=alignment_int
+                )
+                if not overflow:
+                    # Text fits at this scale
+                    if font_scale < 1.0:
+                        html_scaled, fonts = self.parse_translation_to_html(
+                            translated_text, paragraph, target_lang, font_scale
+                        )
+                    else:
+                        html_scaled = html_1x
                     return {
-                        "html": html,
-                        "fonts": fonts,
-                        "scale": font_scale,
-                        "bbox": bbox,
-                        "status": "Fits",
-                        "height_needed": height_needed
+                        "html": html_scaled, "fonts": fonts, "scale": font_scale,
+                        "bbox": bbox, "status": "Fits",
+                        "height_needed": original_height
                     }
-                
-                # Track the best (smallest overflow) result
-                if font_scale == 1.0 or height_needed < best_height_needed:
-                    best_html = html
-                    best_fonts = fonts
-                    best_height_needed = height_needed
-                    best_scale = font_scale
+                best_scale = font_scale
             except Exception as e:
-                print("LayoutEngine warning during placement testing:", e)
-                if font_scale == 1.0:
-                    best_html = html
-                    best_fonts = fonts
-                    best_scale = font_scale
-                
+                print("LayoutEngine: TextWriter measurement warning:", e)
+            
             font_scale -= step
-            font_scale = round(font_scale, 2)  # Avoid floating point drift
+            font_scale = round(font_scale, 2)
         
         # Text doesn't fit even at minimum scale - allow limited expansion
-        # Cap expansion to 30% of original height to prevent overlap with next paragraph
         max_expansion = original_height * 0.3
-        expanded_height = min(best_height_needed, original_height + max_expansion)
-        expanded_bbox = [bbox[0], bbox[1], bbox[2], bbox[1] + expanded_height]
+        expanded_bbox = [bbox[0], bbox[1], bbox[2], bbox[1] + original_height + max_expansion]
+        html_best, fonts = self.parse_translation_to_html(
+            translated_text, paragraph, target_lang, best_scale
+        )
         
         return {
-            "html": best_html,
-            "fonts": best_fonts,
-            "scale": best_scale,
-            "bbox": expanded_bbox,
-            "status": "Expanded" if expanded_height > original_height else "Fits",
-            "height_needed": best_height_needed
+            "html": html_best, "fonts": fonts, "scale": best_scale,
+            "bbox": expanded_bbox, "status": "Expanded",
+            "height_needed": original_height + max_expansion
         }
+
+    def _get_primary_font_size(self, paragraph: Paragraph) -> float:
+        """Get the majority font size from paragraph spans."""
+        if not paragraph.lines:
+            return 11.0
+        size_counts = {}
+        for line in paragraph.lines:
+            for span in line.spans:
+                size_counts[span.size] = size_counts.get(span.size, 0) + len(span.text)
+        if not size_counts:
+            return 11.0
+        return max(size_counts, key=size_counts.get)
+
+    def _alignment_to_int(self, align_str: str) -> int:
+        """Convert alignment string to PyMuPDF integer code."""
+        a = (align_str or "left").lower()
+        return {"left": 0, "center": 1, "right": 2, "justify": 3}.get(a, 0)
+
