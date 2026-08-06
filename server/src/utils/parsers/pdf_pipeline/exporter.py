@@ -211,8 +211,10 @@ class PDFExporter:
                     continue
                     
                 layout_result = layout_data["layout_result"]
-                shifted_bbox = layout_data["shifted_bbox"]
-                
+                shifted_bbox = list(layout_data["shifted_bbox"])
+                height_needed = layout_result.get("height_needed", 0.0)
+                if height_needed > 0:
+                    shifted_bbox[3] = max(shifted_bbox[3], shifted_bbox[1] + height_needed + 2.0)
                 layout_result["bbox"] = shifted_bbox
                 success = self.renderer.render_paragraph(page, para, layout_result, target_lang)
 

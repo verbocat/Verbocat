@@ -152,9 +152,9 @@ class LayoutEngine:
                     clean_lang = str(target_lang or "").lower().split("-")[0]
                     if clean_lang in ["hi", "mr", "bn", "ta", "te", "gu", "pa", "kn", "ml"]:
                         # Indic scripts need extra space to prevent overlapping matras (vowels)
-                        line_height_factor = max(1.45, metrics_lh * 1.20)
+                        line_height_factor = max(1.35, metrics_lh * 1.15)
                     else:
-                        line_height_factor = max(1.25, metrics_lh * 1.15)
+                        line_height_factor = 1.15
             except Exception as e:
                 print("Error calculating font line height metrics:", e)
 

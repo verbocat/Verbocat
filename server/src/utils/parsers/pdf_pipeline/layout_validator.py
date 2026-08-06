@@ -83,7 +83,8 @@ class LayoutValidator:
                         "message": f"Overlap detected between {id_i} and {id_j} of size {round(overlap_x)}x{round(overlap_y)}"
                     })
 
-        is_valid = len(issues) == 0
+        has_fatal_error = any(issue.get("type") in ["text_overlap", "boundary_overflow"] for issue in issues)
+        is_valid = not has_fatal_error
         return {
             "is_valid": is_valid,
             "issues": issues,

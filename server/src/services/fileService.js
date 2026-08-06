@@ -268,6 +268,38 @@ const exportHtml = async (fileId, segments, ext = '.html', targetLang = 'hi', te
   }));
 
 
+  // Handle PDF to DOCX export conversion if requested
+  if (ext === '.docx') {
+    let isPdfTemplate = false;
+    try {
+      const zlib = require('zlib');
+      const buf = Buffer.from(templateContent, 'base64');
+      let rawJson;
+      try { rawJson = zlib.gunzipSync(buf).toString('utf-8'); } catch (_) { rawJson = Buffer.from(templateContent, 'base64').toString('utf-8'); }
+      const parsedData = JSON.parse(rawJson);
+      if (parsedData && (parsedData.pdfBytes || parsedData.document_model)) {
+        isPdfTemplate = true;
+      }
+    } catch (_) {}
+
+    if (isPdfTemplate) {
+      const os = require('os');
+      const tempPdfPath = path.join(os.tmpdir(), `matecat_export_pdf_${uuidv4()}.pdf`);
+      const tempDocxPath = path.join(os.tmpdir(), `matecat_export_docx_${uuidv4()}.docx`);
+      try {
+        const pdfBuffer = await pdfParser.exportFile(templateContent, normalizedSegments, targetLang);
+        fs.writeFileSync(tempPdfPath, pdfBuffer);
+        await convertPdfToDocx(tempPdfPath, tempDocxPath);
+        const docxBuffer = fs.readFileSync(tempDocxPath);
+        return docxBuffer;
+      } finally {
+        for (const p of [tempPdfPath, tempDocxPath]) {
+          try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch (_) {}
+        }
+      }
+    }
+  }
+
   const buffer = await parser.exportFile(templateContent, normalizedSegments, targetLang);
   return buffer;
 };
