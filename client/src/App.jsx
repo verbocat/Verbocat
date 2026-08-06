@@ -423,12 +423,12 @@ export default function App() {
       }
 
       setDocumentId(activeDocId);
-      const rawSegments = doc.segments || [];
+      const rawSegments = Array.isArray(doc.segments) ? doc.segments : (Array.isArray(doc.segments?.segments) ? doc.segments.segments : []);
       const cleanSegs = rawSegments.map((s, idx) => ({
         ...s,
         id: idx + 1,
         segment_index: idx + 1,
-        uniqueKey: s.uniqueKey || `seg-${activeDocId}-${idx + 1}`
+        uniqueKey: s?.uniqueKey || `seg-${activeDocId}-${idx + 1}`
       }));
       setSegments(cleanSegs);
       // Extract and set the file extension dynamically from the document name or server metadata
@@ -510,12 +510,12 @@ export default function App() {
     });
 
     socket.on("room-state", ({ users, locks }) => {
-      setCollaborators(users.filter(u => u.socketId !== socket.id));
+      setCollaborators(Array.isArray(users) ? users.filter(u => u.socketId !== socket.id) : []);
       setCellLocks(new Map(locks));
     });
 
     socket.on("presence-update", (users) => {
-      setCollaborators(users.filter(u => u.socketId !== socket.id));
+      setCollaborators(Array.isArray(users) ? users.filter(u => u.socketId !== socket.id) : []);
     });
 
     socket.on("lock-update", (locks) => {
