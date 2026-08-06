@@ -1,0 +1,196 @@
+const express = require("express");
+const { supabase, fetchAllSegments } = require("../config/supabase");
+const { checkAuth, checkTranslateAccess } = require("../utils/authMiddleware");
+const { translateSegments } = require("../services/translationService");
+const { getDocumentRoomId } = require("../services/socket");
+const { calculateProgress } = require("../utils/segmentProgress");
+
+const segmentRouter = express.Router();
+
+// 1. Batch AI Translate
+segmentRouter.post("/translate-batch", checkAuth, checkTranslateAccess, async (request, response) => {
+  try {
+    const { segments, target, source, contextSettings, fileName, documentId } = request.body;
+    let fileExtension = "";
+    if (documentId) {
+      const { data: doc } = await supabase.from("documents").select("file_extension").eq("id", documentId).single();
+      if (doc) {
+        fileExtension = doc.file_extension || "";
+      }
+    }
+    const updatedContextSettings = { ...contextSettings, fileExtension };
+    const organizationId = request.tenant?.id || request.profile?.organization_id || null;
+    const { results, wordCount } = await translateSegments(segments, target, source, updatedContextSettings, request.user.id, organizationId);
+    
+    if (documentId && results && results.length > 0) {
+      const { getIo } = require("../services/socket");
+      const io = getIo();
+
+      const updatePromises = results.map(async (item) => {
+        const segmentIndex = item.id - 1;
+
+        const { isLegitimatelyIdentical } = require("../services/translationProviders");
+        const cleanSource = String(item.source || "").replace(/<[^>]+>/g, "").trim();
+        const cleanTranslated = String(item.translated || "").replace(/<[^>]+>/g, "").trim();
+
+        const isFallback = target !== source &&
+          item.translated &&
+          item.source &&
+          cleanTranslated.toLowerCase() === cleanSource.toLowerCase() &&
+          /\p{L}/u.test(cleanSource) &&
+          !isLegitimatelyIdentical(cleanSource);
+
+        const updateFields = {
+          target_text: isFallback ? "" : item.translated,
+          status: isFallback ? "draft" : "translated",
+          updated_at: new Date().toISOString()
+        };
+
+        if (!isFallback) {
+          updateFields.mqm_accuracy_score = item.mqmAccuracyScore !== undefined ? item.mqmAccuracyScore : 100;
+          updateFields.mqm_report = item.mqmReport || null;
+        }
+
+        const { error } = await supabase
+          .from("document_segments")
+          .update(updateFields)
+          .eq("document_id", documentId)
+          .eq("target_lang", target)
+          .eq("segment_index", segmentIndex);
+
+        if (!error && io) {
+          io.to(getDocumentRoomId(documentId, target)).emit("segment-updated", {
+            segmentIndex,
+            targetText: updateFields.target_text,
+            status: updateFields.status,
+            mqmAccuracyScore: updateFields.mqm_accuracy_score,
+            mqmReport: updateFields.mqm_report,
+            updatedBy: request.user.email,
+            targetLang: target
+          });
+        }
+      });
+
+      await Promise.all(updatePromises);
+
+      try {
+        const segmentsInDb = await fetchAllSegments(documentId, "source_text, status, target_text", target);
+        const progress = calculateProgress(segmentsInDb).progress;
+        const newStatus = progress === 100 ? "completed" : "running";
+
+        const { data: job } = await supabase
+          .from("translation_jobs")
+          .select("id")
+          .eq("document_id", documentId)
+          .eq("target_lang", target)
+          .single();
+
+        if (job) {
+          await supabase
+            .from("translation_jobs")
+            .update({ progress, status: newStatus })
+            .eq("id", job.id);
+
+          const { broadcastJobStatus } = require("../services/jobQueue");
+          broadcastJobStatus(job.id, documentId, newStatus, progress);
+        }
+      } catch (jobUpdateErr) {
+        console.error("Failed to update job stats in translate-batch:", jobUpdateErr);
+      }
+    }
+
+    if (wordCount > 0) {
+      const email = request.profile.email;
+      const userId = request.profile.id;
+      const isSeo = contextSettings?.purpose === "SEO";
+      const actionName = isSeo ? "translate-batch (SEO)" : "translate-batch";
+
+      const logOrgId = request.tenant?.id || request.profile.organization_id || null;
+      await supabase.from("credit_logs").insert({
+        user_id: userId,
+        email: email,
+        action: actionName,
+        word_count: wordCount,
+        file_name: fileName || "document",
+        organization_id: logOrgId
+      });
+
+      const newConsumed = request.profile.credits_consumed + wordCount;
+      await supabase
+        .from("profiles")
+        .update({ credits_consumed: newConsumed })
+        .eq("id", userId);
+    }
+
+    response.json({ results });
+  } catch (error) {
+    console.error("Batch Translate Error:", error);
+    response.status(500).json({ error: error.message || "Failed batch translation" });
+  }
+});
+
+// 2. Fetch Document Segments
+segmentRouter.get("/documents/:id/segments", checkAuth, async (request, response) => {
+  try {
+    const { id } = request.params;
+    const targetLang = request.query.target || "hi";
+
+    const segments = await fetchAllSegments(id, "*", targetLang);
+    response.json({ segments });
+  } catch (error) {
+    console.error("Fetch Segments Error:", error);
+    response.status(500).json({ error: "Failed to fetch document segments" });
+  }
+});
+
+// 3. Update Single Segment
+segmentRouter.put("/documents/:id/segments/:index", checkAuth, async (request, response) => {
+  try {
+    const { id, index } = request.params;
+    const { targetText, status, mqmAccuracyScore, mqmReport, targetLang = "hi" } = request.body;
+
+    const updateFields = {
+      target_text: targetText,
+      status: status || "draft",
+      updated_at: new Date().toISOString()
+    };
+
+    if (mqmAccuracyScore !== undefined) updateFields.mqm_accuracy_score = mqmAccuracyScore;
+    if (mqmReport !== undefined) updateFields.mqm_report = mqmReport;
+
+    const { data, error } = await supabase
+      .from("document_segments")
+      .update(updateFields)
+      .eq("document_id", id)
+      .eq("target_lang", targetLang)
+      .eq("segment_index", Number(index))
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Broadcast socket event
+    const { getIo } = require("../services/socket");
+    const io = getIo();
+    if (io) {
+      io.to(getDocumentRoomId(id, targetLang)).emit("segment-updated", {
+        segmentIndex: Number(index),
+        targetText: updateFields.target_text,
+        status: updateFields.status,
+        mqmAccuracyScore: updateFields.mqm_accuracy_score,
+        mqmReport: updateFields.mqm_report,
+        updatedBy: request.user.email,
+        targetLang
+      });
+    }
+
+    response.json({ segment: data });
+  } catch (error) {
+    console.error("Update Segment Error:", error);
+    response.status(500).json({ error: "Failed to update segment" });
+  }
+});
+
+module.exports = {
+  segmentRouter
+};

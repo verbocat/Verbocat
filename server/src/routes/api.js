@@ -16,26 +16,19 @@ const {
   parseTmx
 } = require("../utils/exporters");
 
+const { documentRouter } = require("./documentRoutes");
+const { segmentRouter } = require("./segmentRoutes");
+const { projectRouter } = require("./projectRoutes");
+const { tmRouter } = require("./tmRoutes");
+const { glossaryRouter } = require("./glossaryRoutes");
+
 const apiRouter = express.Router();
 
-const uploadDir = path.join(__dirname, "../../uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const upload = multer({
-  dest: uploadDir
-});
-
-const countWords = (text) => {
-  if (!text) return 0;
-  const clean = String(text)
-    .replace(/<[^>]+>/g, "")
-    .replace(/__TAG_\d+__/g, "")
-    .trim();
-  if (!clean) return 0;
-  return clean.split(/\s+/).filter(w => w.length > 0).length;
-};
+apiRouter.use(documentRouter);
+apiRouter.use(segmentRouter);
+apiRouter.use(projectRouter);
+apiRouter.use(tmRouter);
+apiRouter.use(glossaryRouter);
 
 apiRouter.get("/", (request, response) => {
   response.json({
