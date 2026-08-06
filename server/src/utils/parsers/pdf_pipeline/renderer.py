@@ -35,19 +35,18 @@ class PDFRenderer:
         if not use_direct:
             try:
                 archive = fitz.Archive(archive_dir) if archive_dir else None
-                page_rect = page.rect
-                margin_left = max(20.0, min(paragraph.bbox[0], page_rect.width * 0.06))
-                margin_right = min(page_rect.width - 20.0, max(paragraph.bbox[2], page_rect.width * 0.94))
                 
-                # Expand rect horizontally to full alignment margin and add 4pt vertical padding for line boxes
+                # Use exact original paragraph bounding box for rendering
+                # This preserves the original layout positioning precisely
                 render_rect = fitz.Rect(
-                    margin_left if paragraph.alignment in ["center", "justify"] else rect.x0,
+                    rect.x0,
                     rect.y0,
-                    margin_right if paragraph.alignment in ["center", "justify"] else max(rect.x1, margin_right),
-                    max(rect.y1 + 4.0, rect.y0 + 16.0)
+                    rect.x1,
+                    max(rect.y1, rect.y0 + 12.0)  # minimum height of 12pt
                 )
                 
-                page.insert_htmlbox(render_rect, html, archive=archive, scale_low=scale)
+                # scale_low allows PyMuPDF to shrink text if it doesn't fit
+                page.insert_htmlbox(render_rect, html, archive=archive, scale_low=0.5)
                 return True
             except Exception as e:
                 print(f"Renderer warning: insert_htmlbox rendering failed, falling back to direct drawing: {e}")

@@ -186,6 +186,26 @@ class ParagraphBuilder:
 
                 alignment = ParagraphBuilder._detect_alignment(lines_list, bbox, page_width)
 
+                # Compute actual line height from consecutive line baselines
+                actual_line_height = 1.2  # default fallback
+                if len(lines_list) >= 2:
+                    baselines = []
+                    sizes = []
+                    for line_obj in lines_list:
+                        if line_obj.spans:
+                            baselines.append(line_obj.spans[0].origin[1])
+                            sizes.append(max(s.size for s in line_obj.spans))
+                    if len(baselines) >= 2:
+                        gaps = [baselines[i+1] - baselines[i] for i in range(len(baselines)-1)]
+                        # Filter out negative/zero gaps (can happen with reordered lines)
+                        positive_gaps = [g for g in gaps if g > 0]
+                        avg_size = sum(sizes) / len(sizes) if sizes else 12.0
+                        if positive_gaps and avg_size > 0:
+                            avg_gap = sum(positive_gaps) / len(positive_gaps)
+                            actual_line_height = round(avg_gap / avg_size, 3)
+                            # Clamp to reasonable range
+                            actual_line_height = max(1.0, min(actual_line_height, 3.0))
+
                 reconstructed_paragraphs.append(Paragraph(
                     bbox=bbox,
                     lines=lines_list,
@@ -193,7 +213,7 @@ class ParagraphBuilder:
                     paragraph_id=paragraph_id,
                     alignment=alignment,
                     indentation=max(0.0, bbox[0] - 50.0),
-                    line_height=1.2,
+                    line_height=actual_line_height,
                     paragraph_spacing=6.0,
                     rotation=0.0
                 ))
@@ -231,12 +251,12 @@ class ParagraphBuilder:
         page_center_x = page_width / 2.0
         block_width = bbox[2] - bbox[0]
 
-        if abs(block_center_x - page_center_x) < (page_width * 0.08) and block_width < (page_width * 0.85):
+        if abs(block_center_x - page_center_x) < (page_width * 0.12) and block_width < (page_width * 0.80):
             return "center"
 
         if len(lines) <= 1:
             line_center_x = (lines[0].bbox[0] + lines[0].bbox[2]) / 2.0
-            if abs(line_center_x - page_center_x) < (page_width * 0.08) and (lines[0].bbox[2] - lines[0].bbox[0]) < (page_width * 0.85):
+            if abs(line_center_x - page_center_x) < (page_width * 0.12) and (lines[0].bbox[2] - lines[0].bbox[0]) < (page_width * 0.80):
                 return "center"
             return "left"
 
@@ -253,11 +273,11 @@ class ParagraphBuilder:
         mean_left = sum(left_diffs) / len(left_diffs) if left_diffs else 0
         mean_right = sum(right_diffs) / len(right_diffs) if right_diffs else 0
 
-        if mean_left < 3.0 and mean_right < 3.0:
+        if mean_left < 5.0 and mean_right < 5.0:
             return "justify"
-        elif mean_left < 3.0:
+        elif mean_left < 5.0:
             return "left"
-        elif mean_right < 3.0:
+        elif mean_right < 5.0:
             return "right"
         elif abs(mean_left - mean_right) < (block_width * 0.05):
             return "center"
