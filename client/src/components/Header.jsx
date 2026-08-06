@@ -42,13 +42,22 @@ export const Header = ({
     <header className="topbar shadow-xs">
 
       {/* Brand Logo & Name */}
-      <div className="topbar-brand cursor-pointer hover:opacity-90 transition-opacity">
+      <div 
+        className="topbar-brand cursor-pointer hover:opacity-90 transition-opacity flex items-center gap-2"
+        onClick={() => window.location.href = "/"}
+        title="Go to Home"
+      >
         <div className="h-7 w-7 rounded-xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-indigo-400 flex items-center justify-center shadow-md shadow-indigo-500/20 shrink-0">
           <Sparkles className="h-4 w-4 text-white animate-pulse" />
         </div>
-        <span className="topbar-brand-name font-black tracking-tight text-sm bg-gradient-to-r from-white via-neutral-200 to-neutral-400 bg-clip-text text-transparent">
-          Centroid
-        </span>
+        <div className="flex flex-col">
+          <span className="topbar-brand-name font-black tracking-tight text-sm bg-gradient-to-r from-white via-neutral-200 to-neutral-400 bg-clip-text text-transparent leading-none">
+            Centroid
+          </span>
+          <span className="text-[9px] font-semibold text-indigo-300/80 tracking-normal mt-0.5">
+            Next-Gen Enterprise Language Intelligence Platform
+          </span>
+        </div>
         {(() => {
           const spaceParam = new URLSearchParams(window.location.search).get("space");
           let subdomain = spaceParam || "";

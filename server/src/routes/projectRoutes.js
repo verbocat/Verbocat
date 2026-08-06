@@ -53,6 +53,11 @@ projectRouter.post(["/projects", "/api/projects"], checkAuth, async (request, re
 
     const sLang = source_lang || sourceLanguage || "en";
     const tLang = target_lang || targetLanguages || ["hi"];
+    const tLangsArray = Array.isArray(tLang) ? tLang : [tLang];
+
+    if (tLangsArray.includes(sLang)) {
+      return response.status(400).json({ error: "Source and target language cannot be the same." });
+    }
 
     const { data: project, error } = await supabase
       .from("projects")

@@ -632,7 +632,9 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
 
           {/* Professional security metadata footer */}
           <div className="hidden md:flex items-center justify-between text-[11px] text-neutral-400 font-medium select-none border-t border-white/5 pt-4">
-            <span className="flex items-center gap-1.5"><Sparkles className="h-3 w-3 text-indigo-400" /> Centroid CAT Platform v2.4</span>
+            <span className="flex items-center gap-1.5 cursor-pointer hover:text-white transition-colors" onClick={() => window.location.href = '/'} title="Go to Home">
+              <Sparkles className="h-3 w-3 text-indigo-400" /> Centroid — Next-Gen Enterprise Language Intelligence Platform
+            </span>
             <span className="flex items-center gap-1"><LockKeyhole className="h-3 w-3 text-emerald-400" /> 256-Bit Encrypted</span>
           </div>
         </div>

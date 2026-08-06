@@ -28,6 +28,13 @@ documentRouter.post(["/upload", "/api/upload"], checkAuth, upload.single("file")
     const documentId = result.fileId;
     const activeTenantId = request.tenant?.id || request.organization?.id || request.profile?.organization_id || null;
 
+    const srcLang = request.body.source || "en";
+    const tgtLang = request.body.target || "hi";
+
+    if (srcLang === tgtLang) {
+      return response.status(400).json({ error: "Source and target language cannot be the same." });
+    }
+
     // Create document record
     const { error: docError } = await supabase
       .from("documents")
@@ -36,8 +43,8 @@ documentRouter.post(["/upload", "/api/upload"], checkAuth, upload.single("file")
         name: result.originalName || request.file.originalname || "Untitled Document",
         owner_id: userId,
         file_id: result.fileId,
-        source_lang: request.body.source || "en",
-        target_lang: request.body.target || "hi",
+        source_lang: srcLang,
+        target_lang: tgtLang,
         organization_id: activeTenantId
       });
 

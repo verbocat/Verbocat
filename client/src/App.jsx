@@ -1601,6 +1601,10 @@ export default function App() {
 
 
   const handleSourceLanguageChange = async (lang) => {
+    if (lang === targetLanguage) {
+      showToast("Source and target language cannot be the same.", "error");
+      return;
+    }
     setSourceLanguage(lang);
     if (documentId) {
       try {
@@ -1613,6 +1617,10 @@ export default function App() {
   };
 
   const handleTargetLanguageChange = async (lang) => {
+    if (lang === sourceLanguage) {
+      showToast("Source and target language cannot be the same.", "error");
+      return;
+    }
     setTargetLanguage(lang);
     if (documentId) {
       try {

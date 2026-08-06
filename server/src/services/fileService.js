@@ -92,9 +92,9 @@ async function convertDocxToPdf(docxPath, pdfPath) {
   const escapedDocxPath = docxPath.replace(/\\/g, '\\\\');
   const escapedPdfPath = pdfPath.replace(/\\/g, '\\\\');
   
-  console.log(`Converting DOCX to PDF: ${docxPath} -> ${pdfPath}`);
+  console.log(`Converting DOCX to PDF (native Word layout engine): ${docxPath} -> ${pdfPath}`);
   
-  // 1. Try docx2pdf (Windows with MS Word)
+  // 1. Try docx2pdf (Windows with MS Word engine)
   try {
     ensureDocx2PdfInstalled();
     const pyScript = `from docx2pdf import convert; convert('${escapedDocxPath}', '${escapedPdfPath}')`;
@@ -104,7 +104,7 @@ async function convertDocxToPdf(docxPath, pdfPath) {
     console.warn("docx2pdf unavailable or failed (expected on Linux Render):", err.message);
   }
 
-  // 2. Try LibreOffice / soffice (Linux server with libreoffice installed)
+  // 2. Try LibreOffice / soffice (Linux server with libreoffice engine)
   try {
     execSync(`libreoffice --headless --convert-to pdf --outdir "${path.dirname(pdfPath)}" "${docxPath}"`, { stdio: 'ignore' });
     if (fs.existsSync(pdfPath) && fs.statSync(pdfPath).size > 0) return;
@@ -115,16 +115,13 @@ async function convertDocxToPdf(docxPath, pdfPath) {
     if (fs.existsSync(pdfPath) && fs.statSync(pdfPath).size > 0) return;
   } catch (_) {}
 
-  // 3. High-Fidelity Structured DOCX->PDF Renderer (Cross-platform Linux Render fallback)
+  // 3. Try unoconv fallback
   try {
-    const engineScript = path.join(__dirname, "../utils/parsers/pdf_pipeline/docx_to_pdf_engine.py");
-    execSync(`"${pythonCmd}" "${engineScript}" "${docxPath}" "${pdfPath}"`, { stdio: 'inherit' });
+    execSync(`unoconv -f pdf -o "${pdfPath}" "${docxPath}"`, { stdio: 'ignore' });
     if (fs.existsSync(pdfPath) && fs.statSync(pdfPath).size > 0) return;
-  } catch (fbErr) {
-    console.error("docx_to_pdf_engine error:", fbErr.message);
-  }
+  } catch (_) {}
 
-  throw new Error("Unable to convert DOCX to PDF on server environment.");
+  throw new Error("Word-to-PDF conversion requires Microsoft Word (Windows) or LibreOffice (Linux server). Please install LibreOffice via 'apt-get install -y libreoffice'.");
 }
 
 const xliffParser = {

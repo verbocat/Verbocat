@@ -25,7 +25,7 @@ const WORKFLOW_PRESETS = [
   { name: "Full AI-Assisted", steps: ["auto_translation", "auto_qc", "manual_qc"] },
   { name: "Human-First", steps: ["manual_translation", "auto_qc", "manual_qc", "manual_qc_2"] },
   { name: "Fully Automated AI", steps: ["auto_translation", "auto_qc"] },
-  { name: "Pure Human", steps: ["manual_translation", "manual_qc", "manual_qc_2"] }
+  { name: "Human-Only Translation Workflow", steps: ["manual_translation", "manual_qc", "manual_qc_2"] }
 ];
 
 export default function ProjectDashboard({ onOpenProject, showToast, theme, userRole, onOpenAdmin, onOpenSettings, onLogout }) {
@@ -99,6 +99,11 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
       return;
     }
 
+    if (selectedLangs.includes(sourceLang)) {
+      showToast("Source and target language cannot be the same.", "error");
+      return;
+    }
+
     try {
       await createProject(
         projName,
@@ -167,6 +172,10 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
   };
 
   const toggleLanguageSelection = (langCode) => {
+    if (langCode === sourceLang) {
+      showToast("Source and target language cannot be the same.", "error");
+      return;
+    }
     if (selectedLangs.includes(langCode)) {
       setSelectedLangs(selectedLangs.filter((l) => l !== langCode));
     } else {
@@ -223,16 +232,20 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
       
       {/* ── TOP HEADER NAVBAR ── */}
       <header className="sticky top-0 z-30 border-b border-[var(--border-subtle)] bg-[var(--bg-panel)]/90 backdrop-blur-md px-8 py-4 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-3">
+        <div 
+          className="flex items-center gap-3 cursor-pointer hover:opacity-90 transition-opacity"
+          onClick={() => window.location.href = "/"}
+          title="Go to Home"
+        >
           <div className="h-9 w-9 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
             <Sparkles className="h-5 w-5 text-white" />
           </div>
           <div>
             <h1 className="text-base font-extrabold bg-gradient-to-r from-indigo-400 via-purple-300 to-emerald-400 bg-clip-text text-transparent leading-none">
-              Centroid Studio
+              Centroid
             </h1>
-            <p className="text-[11px] font-semibold text-[var(--text-muted)] mt-1 tracking-wide">
-              Enterprise Translation Workspace
+            <p className="text-[10px] font-semibold text-indigo-300/80 mt-1 tracking-wide">
+              Next-Gen Enterprise Language Intelligence Platform
             </p>
           </div>
         </div>

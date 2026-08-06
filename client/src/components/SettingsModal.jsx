@@ -37,7 +37,7 @@ const WORKFLOW_PRESETS = [
   { name: "Full AI-Assisted", steps: ["auto_translation", "auto_qc", "manual_qc"] },
   { name: "Human-First", steps: ["manual_translation", "auto_qc", "manual_qc", "manual_qc_2"] },
   { name: "Fully Automated AI", steps: ["auto_translation", "auto_qc"] },
-  { name: "Pure Human", steps: ["manual_translation", "manual_qc", "manual_qc_2"] }
+  { name: "Human-Only Translation Workflow", steps: ["manual_translation", "manual_qc", "manual_qc_2"] }
 ];
 
 export const SettingsModal = ({

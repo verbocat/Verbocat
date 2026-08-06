@@ -419,7 +419,11 @@ export const AdminDashboard = ({ onClose, theme }) => {
       
       {/* Header Bar */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-slate-900/50 backdrop-blur-md">
-        <div className="flex items-center gap-3">
+        <div 
+          className="flex items-center gap-3 cursor-pointer hover:opacity-90 transition-opacity"
+          onClick={() => window.location.href = "/"}
+          title="Go to Home"
+        >
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/20">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -446,8 +450,8 @@ export const AdminDashboard = ({ onClose, theme }) => {
                 );
               })()}
             </div>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
-              Access level: <span className="text-indigo-400 font-black">{currentUser?.role}</span>
+            <p className="text-[10px] text-indigo-300/80 font-semibold tracking-wide mt-0.5">
+              Next-Gen Enterprise Language Intelligence Platform
             </p>
           </div>
         </div>
