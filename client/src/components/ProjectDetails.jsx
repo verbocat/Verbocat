@@ -262,9 +262,10 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
   const handleDownloadJob = async (job) => {
     try {
       showToast(`Exporting translated file (${job.target_lang.toUpperCase()})...`);
-      const extIndex = job.documents.name.lastIndexOf(".");
-      const ext = extIndex !== -1 ? job.documents.name.substring(extIndex) : ".html";
-      await downloadJobFile(job.id, job.documents.name.replace(/\.[^/.]+$/, ""), job.target_lang, ext);
+      const docName = job.documents?.name || "translated_file.html";
+      const extIndex = docName.lastIndexOf(".");
+      const ext = extIndex !== -1 ? docName.substring(extIndex) : ".html";
+      await downloadJobFile(job.id, docName.replace(/\.[^/.]+$/, ""), job.target_lang, ext);
       showToast("Download started!");
     } catch (err) {
       console.error(err);

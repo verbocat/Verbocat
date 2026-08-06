@@ -3,8 +3,9 @@ const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
 const { processUploadedFile } = require("../services/fileService");
-const { supabase } = require("../config/supabase");
+const { supabase, fetchAllSegments } = require("../config/supabase");
 const { checkAuth } = require("../utils/authMiddleware");
+const { getDocumentRoomId } = require("../services/socket");
 
 const documentRouter = express.Router();
 
@@ -32,7 +33,7 @@ documentRouter.post(["/upload", "/api/upload"], checkAuth, upload.single("file")
       .from("documents")
       .insert({
         id: documentId,
-        name: result.originalName || "Untitled Document",
+        name: result.originalName || request.file.originalname || "Untitled Document",
         owner_id: userId,
         file_id: result.fileId,
         source_lang: request.body.source || "en",
@@ -79,8 +80,129 @@ documentRouter.post(["/upload", "/api/upload"], checkAuth, upload.single("file")
   }
 });
 
-// 2. Delete Document
-documentRouter.delete("/documents/:id", checkAuth, async (request, response) => {
+// 2. Get Single Document Metadata and Segments
+documentRouter.get(["/documents/:id", "/api/documents/:id"], checkAuth, async (request, response) => {
+  try {
+    const { id } = request.params;
+    const activeTenantId = request.tenant?.id || request.profile?.organization_id;
+    const isSuperAdmin = request.profile?.role === "super_admin";
+
+    let query = supabase
+      .from("documents")
+      .select("*")
+      .eq("id", id);
+
+    if (!isSuperAdmin && activeTenantId) {
+      query = query.eq("organization_id", activeTenantId);
+    }
+
+    const { data: doc, error } = await query.single();
+    if (error || !doc) {
+      return response.status(404).json({ error: "Document not found or access denied." });
+    }
+
+    const targetLang = request.query.target || doc.target_lang || "hi";
+    const segments = await fetchAllSegments(id, "*", targetLang);
+
+    const docName = doc.name || "Untitled Document";
+    const extIndex = docName.lastIndexOf(".");
+    const computedExt = doc.file_extension || (extIndex !== -1 ? docName.substring(extIndex) : ".html");
+
+    response.json({
+      id: doc.id,
+      name: docName,
+      fileId: doc.file_id || doc.id,
+      fileExtension: computedExt,
+      sourceLang: doc.source_lang || "en",
+      targetLang: doc.target_lang || "hi",
+      ownerId: doc.owner_id,
+      permission: "write",
+      trackChangesEnabled: doc.track_changes_enabled || false,
+      contextSettings: doc.context_settings || {},
+      segments: segments || []
+    });
+  } catch (error) {
+    console.error("Get Document Error:", error);
+    response.status(500).json({ error: "Failed to fetch document." });
+  }
+});
+
+// 3. Rename Document
+documentRouter.put(["/documents/:id/rename", "/api/documents/:id/rename"], checkAuth, async (request, response) => {
+  try {
+    const { id } = request.params;
+    const { name } = request.body;
+    if (!name) return response.status(400).json({ error: "Name is required" });
+
+    const { data, error } = await supabase
+      .from("documents")
+      .update({ name: name.trim(), updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    response.json({ document: data });
+  } catch (error) {
+    console.error("Rename Document Error:", error);
+    response.status(500).json({ error: "Failed to rename document" });
+  }
+});
+
+// 4. Track Changes Toggle & Approvals
+documentRouter.post(["/documents/:id/track-changes", "/api/documents/:id/track-changes"], checkAuth, async (request, response) => {
+  try {
+    const { id } = request.params;
+    const { enabled } = request.body;
+    await supabase.from("documents").update({ track_changes_enabled: !!enabled }).eq("id", id);
+    response.json({ success: true, enabled: !!enabled });
+  } catch (error) {
+    response.status(500).json({ error: "Failed to update track changes" });
+  }
+});
+
+documentRouter.post(["/documents/:id/accept-all-changes", "/api/documents/:id/accept-all-changes"], checkAuth, async (request, response) => {
+  try {
+    const { id } = request.params;
+    const { data: segs } = await supabase.from("document_segments").select("*").eq("document_id", id);
+    if (segs) {
+      for (const s of segs) {
+        if (s.proposed_text) {
+          await supabase.from("document_segments").update({
+            target_text: s.proposed_text,
+            proposed_text: null,
+            status: "approved"
+          }).eq("id", s.id);
+        }
+      }
+    }
+    response.json({ success: true });
+  } catch (error) {
+    response.status(500).json({ error: "Failed to accept all changes" });
+  }
+});
+
+// 5. Access Management Endpoints
+documentRouter.get(["/documents/:id/access", "/api/documents/:id/access"], checkAuth, async (request, response) => {
+  try {
+    const { id } = request.params;
+    const { data: shares } = await supabase.from("document_access").select("*, profiles(*)").eq("document_id", id);
+    response.json({ access: shares || [] });
+  } catch (error) {
+    response.json({ access: [] });
+  }
+});
+
+documentRouter.get(["/documents/:id/request-status", "/api/documents/:id/request-status"], checkAuth, async (request, response) => {
+  response.json({ status: "none" });
+});
+
+documentRouter.get(["/documents/:id/access-requests", "/api/documents/:id/access-requests"], checkAuth, async (request, response) => {
+  response.json({ requests: [] });
+});
+
+// 6. Delete Document
+documentRouter.delete(["/documents/:id", "/api/documents/:id"], checkAuth, async (request, response) => {
   try {
     const { id } = request.params;
     const activeTenantId = request.tenant?.id || request.profile?.organization_id;

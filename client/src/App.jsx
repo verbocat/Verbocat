@@ -432,11 +432,12 @@ export default function App() {
       }));
       setSegments(cleanSegs);
       // Extract and set the file extension dynamically from the document name or server metadata
-      const extIndex = doc.name.lastIndexOf(".");
-      const ext = doc.fileExtension || (extIndex !== -1 ? doc.name.substring(extIndex) : ".html");
+      const docName = doc.name || "Untitled Document";
+      const extIndex = docName.lastIndexOf(".");
+      const ext = doc.fileExtension || (extIndex !== -1 ? docName.substring(extIndex) : ".html");
       setFileExtension(ext);
       // Clean/strip extension from the display fileName
-      const cleanName = doc.name.replace(/\.[^/.]+$/, "");
+      const cleanName = docName.replace(/\.[^/.]+$/, "");
       setFileName(cleanName);
       setFileId(doc.fileId);
       setSourceLanguage(doc.sourceLang === "pt" ? "pt-BR" : doc.sourceLang);
