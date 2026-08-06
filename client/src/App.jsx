@@ -390,44 +390,24 @@ export default function App() {
     setDocLoadError(null);
     setAccessRequestMessage("");
     try {
-      let doc;
-      if (routeScreen === "editor" && routeTargetLang) {
-        const jobData = await fetchJobSegmentsByPath(activeDocId, routeTargetLang);
-        doc = {
-          id: jobData.documentId,
-          name: jobData.fileName,
-          fileId: jobData.fileId,
-          sourceLang: jobData.sourceLang,
-          targetLang: jobData.targetLang,
-          permission: jobData.permission,
-          ownerId: jobData.ownerId,
-          trackChangesEnabled: jobData.trackChangesEnabled,
-          segments: jobData.segments
-        };
-        if (jobData.contextSettings) {
-          setContextSettings(prev => ({
-            ...prev,
-            ...jobData.contextSettings,
-            customPrompt: jobData.contextSettings.customPrompt || jobData.contextSettings.referenceContext || prev.customPrompt || ""
-          }));
-        }
-      } else {
-        doc = await fetchDocument(activeDocId);
-        if (doc.contextSettings) {
-          setContextSettings(prev => ({
-            ...prev,
-            ...doc.contextSettings,
-            customPrompt: doc.contextSettings.customPrompt || doc.contextSettings.referenceContext || prev.customPrompt || ""
-          }));
-        }
+      let doc = await fetchDocument(activeDocId, routeScreen === "editor" ? routeTargetLang : null);
+
+      if (doc.contextSettings) {
+        setContextSettings(prev => ({
+          ...prev,
+          ...doc.contextSettings,
+          customPrompt: doc.contextSettings.customPrompt || doc.contextSettings.referenceContext || prev.customPrompt || ""
+        }));
       }
 
       setDocumentId(activeDocId);
       const rawSegments = Array.isArray(doc.segments) ? doc.segments : (Array.isArray(doc.segments?.segments) ? doc.segments.segments : []);
       const cleanSegs = rawSegments.map((s, idx) => ({
         ...s,
+        source: s.source !== undefined && s.source !== null ? s.source : (s.source_text !== undefined && s.source_text !== null ? s.source_text : ""),
+        target: s.target !== undefined && s.target !== null ? s.target : (s.target_text !== undefined && s.target_text !== null ? s.target_text : ""),
         id: idx + 1,
-        segment_index: idx + 1,
+        segment_index: s.segment_index !== undefined ? s.segment_index : idx + 1,
         uniqueKey: s?.uniqueKey || `seg-${activeDocId}-${idx + 1}`
       }));
       setSegments(cleanSegs);
@@ -1194,9 +1174,12 @@ export default function App() {
       }
       
       const newSegments = data.segments.map((newSeg, i) => {
+        const src = newSeg.source !== undefined && newSeg.source !== null ? newSeg.source : (newSeg.source_text !== undefined && newSeg.source_text !== null ? newSeg.source_text : "");
+        const tgt = mappedTargets[i] !== undefined && mappedTargets[i] !== null ? mappedTargets[i] : (newSeg.target !== undefined && newSeg.target !== null ? newSeg.target : (newSeg.target_text !== undefined && newSeg.target_text !== null ? newSeg.target_text : ""));
         return {
           ...newSeg,
-          target: mappedTargets[i],
+          source: src,
+          target: tgt,
           verified: isVerifiedArr[i],
           isMerged: isMergedArr[i]
         };

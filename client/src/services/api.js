@@ -249,8 +249,9 @@ export const deleteAdminTm = async (id) => {
   return response.data;
 };
 
-export const fetchDocument = async (documentId) => {
-  const response = await api.get(`/api/documents/${documentId}`);
+export const fetchDocument = async (documentId, targetLang = null) => {
+  const url = targetLang ? `/api/documents/${documentId}?target=${targetLang}` : `/api/documents/${documentId}`;
+  const response = await api.get(url);
   return response.data;
 };
 
