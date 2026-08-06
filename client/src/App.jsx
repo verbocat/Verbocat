@@ -874,13 +874,14 @@ export default function App() {
       return source.toLowerCase() !== "waiting for translation";
     };
 
+    const safeSegs = Array.isArray(segments) ? segments : [];
     let words = 0;
     let uniqueWords = 0;
     let duplicateWords = 0;
     const seenSourceTexts = new Set();
 
-    segments.forEach((seg) => {
-      const cleanedSource = cleanString(seg.source);
+    safeSegs.forEach((seg) => {
+      const cleanedSource = cleanString(seg?.source || "");
       if (!cleanedSource) return;
 
       const wordList = cleanedSource.split(" ").filter((w) => w.length > 0);
@@ -896,22 +897,24 @@ export default function App() {
       }
     });
 
-    const targetText = segments.map((segment) => cleanString(segment.target || segment.translation)).join(" ");
+    const targetText = safeSegs.map((segment) => cleanString(segment?.target || segment?.translation || "")).join(" ");
     const countWords = (text) =>
       text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
 
+    const countableSegs = safeSegs.filter(isCountableSegment);
+
     return {
-      segments: segments.length,
+      segments: safeSegs.length,
       words,
       uniqueWords,
       duplicateWords,
-      characters: segments.map((seg) => cleanString(seg.source)).join(" ").length,
+      characters: safeSegs.map((seg) => cleanString(seg?.source || "")).join(" ").length,
       translatedWords: countWords(targetText),
       progress:
-        segments.filter(isCountableSegment).length > 0
+        countableSegs.length > 0
           ? Math.round(
-              (segments.filter((segment) => isCountableSegment(segment) && segment.verified).length /
-                segments.filter(isCountableSegment).length) *
+              (countableSegs.filter((segment) => segment?.verified).length /
+                countableSegs.length) *
                 100
             )
           : 0
@@ -939,20 +942,21 @@ export default function App() {
         return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
       };
 
+      const safeSegs = Array.isArray(segments) ? segments : [];
       const sourceCounts = {};
       if (filterStatus === "duplicate") {
-        segments.forEach((seg) => {
-          if (seg.isMerged || isJunkSegment(seg.source)) return;
-          const cleaned = cleanString(seg.source);
+        safeSegs.forEach((seg) => {
+          if (seg?.isMerged || isJunkSegment(seg?.source)) return;
+          const cleaned = cleanString(seg?.source);
           if (cleaned) {
             sourceCounts[cleaned] = (sourceCounts[cleaned] || 0) + 1;
           }
         });
       }
 
-      const filtered = segments.filter(
+      const filtered = safeSegs.filter(
         (segment) => {
-          if (segment.isMerged || isJunkSegment(segment.source)) return false;
+          if (!segment || segment.isMerged || isJunkSegment(segment.source)) return false;
           
           const matchesSearch = segment.source.toLowerCase().includes(searchQuery.toLowerCase()) ||
             (segment.target || "").toLowerCase().includes(searchQuery.toLowerCase());
