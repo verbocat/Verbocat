@@ -1,7 +1,5 @@
 const fs = require('fs');
 const JSZip = require('jszip');
-const cheerio = require('cheerio');
-const { splitTextIntoSentences } = require('../sentenceSplitter');
 
 // Helper to escape XML special characters
 const escapeXml = (text) => {
@@ -14,16 +12,6 @@ const escapeXml = (text) => {
     .replace(/'/g, '&apos;');
 };
 
-// Helper to strip any raw tag markers or placeholders if present in text
-const stripTagMarkers = (text) => {
-  if (!text) return "";
-  return String(text)
-    .replace(/<\/?\d+>/g, "") // Strip <1>, </1>, <2>
-    .replace(/__TAG_\d+__/gi, "") // Strip __TAG_0__
-    .replace(/__SEG_\d+__/gi, "") // Strip __SEG_0__
-    .trim();
-};
-
 // Helper to unescape XML special characters
 const unescapeXml = (text) => {
   if (!text) return "";
@@ -34,6 +22,16 @@ const unescapeXml = (text) => {
     .replace(/&apos;/g, "'")
     .replace(/&#39;/g, "'")
     .replace(/&amp;/g, '&');
+};
+
+// Helper to strip any raw tag markers or placeholders if present in text
+const stripTagMarkers = (text) => {
+  if (!text) return "";
+  return String(text)
+    .replace(/<\/?\d+>/g, "")
+    .replace(/__TAG_\d+__/gi, "")
+    .replace(/__SEG_\d+__/gi, "")
+    .trim();
 };
 
 const parseFile = async (filePath) => {
@@ -65,6 +63,7 @@ const parseFile = async (filePath) => {
     let xmlContent = await zip.file(xmlFile).async('string');
 
     xmlContent = xmlContent.replace(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/gi, (pBlock) => {
+      // Extract runs and text inside this paragraph
       const textTagRegex = /<w:t\b([^>]*)>([\s\S]*?)<\/w:t>|<w:t\b([^>]*)\/>/gi;
       let fullText = "";
       let hasTextTag = false;
@@ -76,36 +75,29 @@ const parseFile = async (filePath) => {
         fullText += unescapeXml(rawText);
       }
 
-      const cleanText = fullText.trim();
-      if (!cleanText || !hasTextTag) {
+      const cleanText = fullText;
+      if (!cleanText.trim() || !hasTextTag) {
         return pBlock;
       }
 
-      const sentencesToUse = splitTextIntoSentences(cleanText, 35);
-      const paragraphSegIds = [];
-
-      sentencesToUse.forEach(sentenceText => {
-        const currentSegId = segmentId++;
-        paragraphSegIds.push(currentSegId);
-        segments.push({
-          id: currentSegId,
-          source: sentenceText,
-          target: "",
-          leading: "",
-          trailing: ""
-        });
+      const currentSegId = segmentId++;
+      segments.push({
+        id: currentSegId,
+        source: cleanText.trim(),
+        target: "",
+        leading: "",
+        trailing: ""
       });
 
-      const segPlaceholders = paragraphSegIds.map(id => `__SEG_${id}__`).join(" ");
-
+      // Replace text inside paragraph while preserving all paragraph properties (w:pPr) and run properties (w:rPr)
       let matchIdx = 0;
-      return pBlock.replace(/<w:t\b[^>]*>[\s\S]*?<\/w:t>|<w:t\b[^>]*\/>/gi, () => {
+      return pBlock.replace(/<w:t\b[^>]*>[\s\S]*?<\/w:t>|<w:t\b([^>]*)\/>/gi, () => {
         if (matchIdx === 0) {
           matchIdx++;
-          return `<w:t xml:space="preserve">${segPlaceholders}</w:t>`;
+          return `<w:t xml:space="preserve">__SEG_${currentSegId}__</w:t>`;
         }
         matchIdx++;
-        return `<w:t></w:t>`;
+        return `<w:t xml:space="preserve"></w:t>`;
       });
     });
 
@@ -114,7 +106,6 @@ const parseFile = async (filePath) => {
 
   const modifiedZipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
   
-  // Package template inside JSZip without redundant outer DEFLATE compression
   const packageZip = new JSZip();
   packageZip.file('template.zip', modifiedZipBuffer);
   
@@ -135,7 +126,6 @@ const exportFile = async (templateBase64, segments) => {
   try {
     const rawBuffer = Buffer.from(templateBase64, 'base64');
     
-    // Check for binary template package ZIP (starts with PK 0x50 0x4b)
     if (rawBuffer.length >= 2 && rawBuffer[0] === 0x50 && rawBuffer[1] === 0x4b) {
       const packageZip = await JSZip.loadAsync(rawBuffer);
       const modifiedZipBuffer = await packageZip.file('template.zip').async('nodebuffer');
@@ -160,48 +150,15 @@ const exportFile = async (templateBase64, segments) => {
     return a.localeCompare(b, undefined, { numeric: true });
   });
 
-  // Collect all unique placeholder IDs present in template XML files
-  const placeholderSet = new Set();
-  for (const xmlFile of docXmlFiles) {
-    const xmlContent = await zip.file(xmlFile).async('string');
-    const matches = Array.from(xmlContent.matchAll(/__SEG_(\d+)__/g));
-    matches.forEach(m => placeholderSet.add(parseInt(m[1], 10)));
-  }
-
-  const sortedPlaceholders = Array.from(placeholderSet).sort((a, b) => a - b);
   const segmentMap = new Map();
-
-  if (sortedPlaceholders.length > 0 && segments.length > sortedPlaceholders.length) {
-    // Smart proportional mapping when segments count > template placeholders count
-    const N_placeholders = sortedPlaceholders.length;
-    const N_segments = segments.length;
-
-    sortedPlaceholders.forEach((phId, idx) => {
-      const startSeg = Math.floor(idx * N_segments / N_placeholders);
-      const endSeg = Math.floor((idx + 1) * N_segments / N_placeholders);
-      const segSlice = segments.slice(startSeg, endSeg);
-
-      const combinedText = segSlice.map(seg => {
-        const rawText = (seg.target !== undefined && seg.target !== null && seg.target !== "")
-          ? seg.target : (seg.source || "");
-        return stripTagMarkers(rawText);
-      }).filter(Boolean).join(" ");
-
-      segmentMap.set(phId, escapeXml(combinedText));
-    });
-  } else {
-    const minPlaceholder = sortedPlaceholders.length > 0 ? sortedPlaceholders[0] : 0;
-    segments.forEach((seg, arrayIdx) => {
-      const rawText = (seg.target !== undefined && seg.target !== null && seg.target !== "") 
-        ? seg.target 
-        : (seg.source || "");
-      const cleanText = stripTagMarkers(rawText);
-
-      // Align segment arrayIdx cleanly with template XML placeholders (0-indexed or 1-indexed)
-      const phKey = arrayIdx + minPlaceholder;
-      segmentMap.set(phKey, escapeXml(cleanText));
-    });
-  }
+  segments.forEach((seg, arrayIdx) => {
+    const rawText = (seg.target !== undefined && seg.target !== null && seg.target !== "") 
+      ? seg.target 
+      : (seg.source || "");
+    const cleanText = stripTagMarkers(rawText);
+    const key = seg.id !== undefined && seg.id !== null ? seg.id : (arrayIdx + 1);
+    segmentMap.set(Number(key), escapeXml(cleanText));
+  });
 
   for (const xmlFile of docXmlFiles) {
     let xmlContent = await zip.file(xmlFile).async('string');
