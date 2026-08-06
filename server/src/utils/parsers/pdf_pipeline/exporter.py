@@ -16,10 +16,9 @@ class PDFExporter:
                            para_flat_indices: Dict[str, int], target_lang: str,
                            page_scale_multiplier: float) -> Dict[str, Dict[str, Any]]:
         # Sort paragraphs by original top coordinate
-        sorted_paras = sorted(paragraphs, key=lambda p: p.bbox[1])
+        sorted_paras = sorted(paragraphs, key=lambda p: (p.bbox[1], p.bbox[0]))
         
         results = {}
-        shift_bottoms = {}  # para_id -> shift_bottom
         
         for para in sorted_paras:
             flat_idx = para_flat_indices.get(para.paragraph_id)
@@ -30,63 +29,19 @@ class PDFExporter:
                 from .paragraph_builder import ParagraphBuilder
                 translated_text = ParagraphBuilder.generate_tagged_text(para)
                 
-            is_fixed = self.layout_engine.is_fixed_region(para)
-            original_bbox = para.bbox
-            original_width = original_bbox[2] - original_bbox[0]
-            original_height = original_bbox[3] - original_bbox[1]
+            original_bbox = list(para.bbox)
             
-            # Compute shift_top based on overlapping paragraphs above
-            shift_top = 0.0
-            if not is_fixed:
-                overlapping_shifts = []
-                for other_para in sorted_paras:
-                    if other_para.paragraph_id == para.paragraph_id:
-                        continue
-                    # Check if other_para was originally above para
-                    if other_para.bbox[3] - 2.0 <= original_bbox[1]:
-                        # Check horizontal overlap with epsilon tolerance
-                        overlap_x = min(other_para.bbox[2], original_bbox[2]) - max(other_para.bbox[0], original_bbox[0])
-                        if overlap_x > 2.0:
-                            other_shift_bottom = shift_bottoms.get(other_para.paragraph_id, 0.0)
-                            overlapping_shifts.append(other_shift_bottom)
-                if overlapping_shifts:
-                    shift_top = max(overlapping_shifts)
-            
-            shifted_bbox = [
-                original_bbox[0],
-                original_bbox[1] + shift_top,
-                original_bbox[2],
-                original_bbox[3] + shift_top
-            ]
-            
-            # Temporarily set para bbox for adapt_layout
-            temp_bbox = para.bbox
-            para.bbox = shifted_bbox
-            
+            # Adapt layout for this paragraph using font-scaling and fitting
             layout_result = self.layout_engine.adapt_layout(para, translated_text, target_lang)
             
-            # Apply attempts page multiplier scaling
+            # Apply page multiplier scaling
             if page_scale_multiplier < 1.0:
                 layout_result["scale"] *= page_scale_multiplier
                 layout_result["height_needed"] *= page_scale_multiplier
                 
-            para.bbox = temp_bbox
-            
-            height_needed = layout_result["height_needed"]
-            growth = max(0.0, height_needed - original_height)
-            
-            if not is_fixed:
-                # Update bottom coordinate of shifted box
-                shifted_bbox[3] = shifted_bbox[1] + height_needed
-                shift_bottom = shift_top + growth
-            else:
-                shift_bottom = 0.0  # Fixed blocks don't push anything
-                
-            shift_bottoms[para.paragraph_id] = shift_bottom
-            
             results[para.paragraph_id] = {
                 "layout_result": layout_result,
-                "shifted_bbox": shifted_bbox
+                "shifted_bbox": original_bbox
             }
             
         return results
@@ -98,7 +53,7 @@ class PDFExporter:
         1. Loads original PDF bytes in memory.
         2. Computes Y-reflow layout pass using a Directed Acyclic Graph (DAG) flow solver.
         3. Runs an iterative validation solver to reduce page-wide scale factors if overlaps are detected.
-        4. Applies transparent text redactions on original coordinates (fill=None).
+        4. Applies transparent text redactions and whiteout on original coordinates.
         5. Overlays translated text blocks at their reflowed/shifted coordinates.
         6. Validates layout and returns final PDF bytes.
         """
@@ -155,7 +110,6 @@ class PDFExporter:
                 continue
 
             # ─── ITERATIVE VALIDATION SOLVER LOOP ─────────────────────────
-            # Adjusts page scale factors if text overlaps or overflows are detected.
             page_scale_multiplier = 1.0
             page_layout_results = {}
             validation_result = {"is_valid": True, "issues": []}
@@ -163,7 +117,7 @@ class PDFExporter:
             for attempt in range(3):
                 page_layout_results = {}
                 
-                # Reflow standard page paragraphs using the DAG algorithm
+                # Reflow standard page paragraphs
                 std_results = self._reflow_paragraphs(
                     page_model.paragraphs, segment_map, para_flat_indices, target_lang, page_scale_multiplier
                 )
@@ -201,7 +155,6 @@ class PDFExporter:
                     if orig_para:
                         orig_h = orig_para.bbox[3] - orig_para.bbox[1]
                         
-                    # Extract line height factor using regex from HTML
                     lh_factor = 1.2
                     lh_match = re.search(r'line-height:\s*([0-9.]+)', l_res.get("html", ""))
                     if lh_match:
@@ -222,23 +175,29 @@ class PDFExporter:
                 if validation_result["is_valid"]:
                     break
                 else:
-                    # Scale down layout font scale by 10% and retry solver
                     page_scale_multiplier -= 0.10
                     print(f"Exporter: Overlap/degradation detected on page {page_idx}. Retrying with scale factor {round(page_scale_multiplier, 2)}...")
 
-            # ─── STEP 1: SAFE REDACTION ON ORIGINAL COORDINATES ────────────
-            # Redact standard paragraphs
+            # ─── STEP 1: SAFE REDACTION & WHITEOUT ON ORIGINAL COORDINATES ────
+            # 1. Erase standard paragraphs background and apply redaction
             for para in page_model.paragraphs:
-                page.add_redact_annot(fitz.Rect(para.bbox), fill=None)
-            # Redact table cell paragraphs
+                rect = fitz.Rect(para.bbox)
+                padded_rect = fitz.Rect(rect.x0 - 1.5, rect.y0 - 1.5, rect.x1 + 1.5, rect.y1 + 1.5)
+                page.draw_rect(padded_rect, color=(1, 1, 1), fill=(1, 1, 1))
+                page.add_redact_annot(rect, fill=(1, 1, 1))
+
+            # 2. Erase table cell paragraphs background and apply redaction
             for table in page_model.tables:
                 for cell in table.cells:
                     for para in cell.paragraphs:
-                        page.add_redact_annot(fitz.Rect(para.bbox), fill=None)
+                        rect = fitz.Rect(para.bbox)
+                        padded_rect = fitz.Rect(rect.x0 - 1.5, rect.y0 - 1.5, rect.x1 + 1.5, rect.y1 + 1.5)
+                        page.draw_rect(padded_rect, color=(1, 1, 1), fill=(1, 1, 1))
+                        page.add_redact_annot(rect, fill=(1, 1, 1))
                         
             page.apply_redactions(images=0)
 
-            # ─── STEP 2: OVERLAY REFLOWED TRANSLATED TEXTS ────────────────
+            # ─── STEP 2: OVERLAY TRANSLATED TEXTS ─────────────────────────────
             # Overlay standard paragraphs
             for para in page_model.paragraphs:
                 layout_data = page_layout_results.get(para.paragraph_id)
@@ -248,7 +207,6 @@ class PDFExporter:
                 layout_result = layout_data["layout_result"]
                 shifted_bbox = layout_data["shifted_bbox"]
                 
-                # Render using reflowed bounding box coordinates
                 layout_result["bbox"] = shifted_bbox
                 success = self.renderer.render_paragraph(page, para, layout_result, target_lang)
 
@@ -266,7 +224,6 @@ class PDFExporter:
                         layout_result["bbox"] = shifted_bbox
                         success = self.renderer.render_paragraph(page, para, layout_result, target_lang)
 
-            # Log layout warnings if the final iteration still degraded
             if not validation_result["is_valid"]:
                 print(f"Layout Validator Warning on page {page_idx}:")
                 for issue in validation_result["issues"]:
