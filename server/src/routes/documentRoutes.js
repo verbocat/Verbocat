@@ -45,7 +45,7 @@ documentRouter.post(["/upload", "/api/upload"], checkAuth, upload.single("file")
       return response.status(500).json({ error: `Failed to create document record: ${docError.message || "Database error"}` });
     }
 
-    // Persist parsed template segments to DB in batches (target_lang: null)
+    // Persist parsed template segments to DB in parallel batches (target_lang: null)
     const segmentInserts = result.segments.map((seg, idx) => ({
       document_id: documentId,
       segment_index: idx + 1,
@@ -55,17 +55,20 @@ documentRouter.post(["/upload", "/api/upload"], checkAuth, upload.single("file")
       status: "draft"
     }));
 
-    const BATCH_SIZE = 500;
+    const BATCH_SIZE = 1000;
+    const batches = [];
     for (let i = 0; i < segmentInserts.length; i += BATCH_SIZE) {
-      const batch = segmentInserts.slice(i, i + BATCH_SIZE);
-      const { error: segError } = await supabase
-        .from("document_segments")
-        .insert(batch);
+      batches.push(segmentInserts.slice(i, i + BATCH_SIZE));
+    }
 
-      if (segError) {
-        await supabase.from("documents").delete().eq("id", documentId);
-        return response.status(500).json({ error: `Failed to persist segments: ${segError.message || "Database error"}` });
-      }
+    const batchResults = await Promise.all(
+      batches.map(batch => supabase.from("document_segments").insert(batch))
+    );
+
+    const failed = batchResults.find(res => res.error);
+    if (failed) {
+      await supabase.from("documents").delete().eq("id", documentId);
+      return response.status(500).json({ error: `Failed to persist segments: ${failed.error.message || "Database error"}` });
     }
 
     response.json({

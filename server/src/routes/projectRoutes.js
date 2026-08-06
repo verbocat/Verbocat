@@ -176,7 +176,7 @@ projectRouter.post(
         return response.status(500).json({ error: `Failed to create document: ${docError.message}` });
       }
 
-      // 4. Persist parsed template segments to DB in batches (target_lang: null)
+      // 4. Persist parsed template segments to DB in parallel batches (target_lang: null)
       const segmentInserts = result.segments.map((seg, idx) => ({
         document_id: documentId,
         segment_index: idx + 1,
@@ -186,18 +186,21 @@ projectRouter.post(
         status: "draft"
       }));
 
-      const BATCH_SIZE = 500;
+      const BATCH_SIZE = 1000;
+      const batches = [];
       for (let i = 0; i < segmentInserts.length; i += BATCH_SIZE) {
-        const batch = segmentInserts.slice(i, i + BATCH_SIZE);
-        const { error: segError } = await supabase
-          .from("document_segments")
-          .insert(batch);
+        batches.push(segmentInserts.slice(i, i + BATCH_SIZE));
+      }
 
-        if (segError) {
-          console.error("Project Segments Persist Error:", segError);
-          await supabase.from("documents").delete().eq("id", documentId);
-          return response.status(500).json({ error: `Failed to persist segments: ${segError.message}` });
-        }
+      const batchResults = await Promise.all(
+        batches.map(batch => supabase.from("document_segments").insert(batch))
+      );
+
+      const failed = batchResults.find(res => res.error);
+      if (failed) {
+        console.error("Project Segments Persist Error:", failed.error);
+        await supabase.from("documents").delete().eq("id", documentId);
+        return response.status(500).json({ error: `Failed to persist segments: ${failed.error.message}` });
       }
 
       // 5. Create job records for target languages

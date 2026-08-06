@@ -12,23 +12,29 @@ const pdfParser = require("../utils/parsers/pdfParser");
 const { parseXliff, generateXliff } = require("../utils/exporters");
 const { execSync } = require('child_process');
 
+let cachedPythonCmd = null;
 function getPythonCommand() {
+  if (cachedPythonCmd) return cachedPythonCmd;
   const localWindowsPath = 'C:\\Users\\divya\\AppData\\Local\\Programs\\Python\\Python310\\python.exe';
   if (fs.existsSync(localWindowsPath)) {
-    return localWindowsPath;
+    cachedPythonCmd = localWindowsPath;
+    return cachedPythonCmd;
   }
   try {
     execSync('python3 --version', { stdio: 'ignore' });
-    return 'python3';
+    cachedPythonCmd = 'python3';
+    return cachedPythonCmd;
   } catch (_) {}
   try {
     execSync('python --version', { stdio: 'ignore' });
-    return 'python';
+    cachedPythonCmd = 'python';
+    return cachedPythonCmd;
   } catch (_) {}
-  return 'python';
+  cachedPythonCmd = 'python';
+  return cachedPythonCmd;
 }
 
-let isPdf2DocxVerified = false;
+let isPdf2DocxVerified = true;
 function ensurePdf2DocxInstalled() {
   if (isPdf2DocxVerified) return;
   try {
@@ -58,7 +64,49 @@ async function convertPdfToDocx(pdfPath, docxPath) {
   const pyScript = `from pdf2docx import Converter; cv = Converter('${escapedPdfPath}'); cv.convert('${escapedDocxPath}'); cv.close()`;
   
   console.log(`Converting PDF to DOCX: ${pdfPath} -> ${docxPath}`);
-  execSync(`"${pythonCmd}" -c "${pyScript}"`, { stdio: 'inherit' });
+  execSync(`"${pythonCmd}" -c "${pyScript}"`, { stdio: 'ignore' });
+}
+
+let isDocx2PdfVerified = true;
+function ensureDocx2PdfInstalled() {
+  if (isDocx2PdfVerified) return;
+  try {
+    const pythonCmd = getPythonCommand();
+    execSync(`"${pythonCmd}" -c "import docx2pdf"`, { stdio: 'ignore' });
+    isDocx2PdfVerified = true;
+  } catch (e) {
+    console.log("docx2pdf is not installed on system. Attempting auto-installation...");
+    try {
+      const pythonCmd = getPythonCommand();
+      execSync(`"${pythonCmd}" -m pip install docx2pdf --break-system-packages`, { stdio: 'ignore' });
+      isDocx2PdfVerified = true;
+      console.log("docx2pdf installed successfully!");
+    } catch (installErr) {
+      console.error("Failed to auto-install docx2pdf via pip:", installErr.message);
+    }
+  }
+}
+
+async function convertDocxToPdf(docxPath, pdfPath) {
+  ensureDocx2PdfInstalled();
+  const pythonCmd = getPythonCommand();
+  
+  const escapedDocxPath = docxPath.replace(/\\/g, '\\\\');
+  const escapedPdfPath = pdfPath.replace(/\\/g, '\\\\');
+  
+  const pyScript = `from docx2pdf import convert; convert('${escapedDocxPath}', '${escapedPdfPath}')`;
+  
+  console.log(`Converting DOCX to PDF: ${docxPath} -> ${pdfPath}`);
+  try {
+    execSync(`"${pythonCmd}" -c "${pyScript}"`, { stdio: 'ignore' });
+  } catch (err) {
+    console.error("docx2pdf conversion failed, checking libreoffice fallback:", err.message);
+    try {
+      execSync(`libreoffice --headless --convert-to pdf --outdir "${path.dirname(pdfPath)}" "${docxPath}"`, { stdio: 'ignore' });
+    } catch (loErr) {
+      throw new Error(`Failed to convert DOCX to PDF: ${err.message}`);
+    }
+  }
 }
 
 const xliffParser = {
@@ -123,13 +171,15 @@ const processUploadedFile = async (file) => {
   }
 
   try {
-    // For PDF files, parse directly using the new high-fidelity pdfParser pipeline
+    // For PDF files, convert PDF to DOCX using pdf2docx, then parse with docxParser
     if (ext === '.pdf') {
-      const { segments, template: pdfTemplate } = await pdfParser.parseFile(file.path);
+      const tempDocxPath = file.path + '.docx';
+      await convertPdfToDocx(file.path, tempDocxPath);
+      const { segments, template: docxTemplate } = await docxParser.parseFile(tempDocxPath);
       const fileId = uuidv4();
       const { error: insertError } = await supabase
         .from("html_files")
-        .insert([{ id: fileId, content: pdfTemplate }]);
+        .insert([{ id: fileId, content: docxTemplate }]);
 
       if (insertError) throw insertError;
 
@@ -225,35 +275,31 @@ const exportHtml = async (fileId, segments, ext = '.html', targetLang = 'hi', te
 
   let parser = getParser(ext);
 
-  // ── Combined Template Detection & Routing ────────────────────────────────
-  let isPdfTemplate = false;
+  // ── Combined Template Routing & Detection ──────────────────────────────
+  let isDocxPackage = false;
+  let isPyMuPdfTemplate = false;
   try {
-    const zlib = require('zlib');
-    let jsonStr = templateContent;
-    try {
-      const buf = Buffer.from(templateContent, 'base64');
+    const rawBuf = Buffer.from(templateContent, 'base64');
+    if (rawBuf.length >= 2 && rawBuf[0] === 0x50 && rawBuf[1] === 0x4b) {
+      isDocxPackage = true;
+    } else {
+      const zlib = require('zlib');
+      let jsonStr = templateContent;
       try {
-        jsonStr = zlib.unzipSync(buf).toString('utf-8');
-      } catch (_) {
-        try {
-          jsonStr = zlib.inflateSync(buf).toString('utf-8');
-        } catch (_) {
-          try {
-            jsonStr = zlib.gunzipSync(buf).toString('utf-8');
-          } catch (_) {
-            jsonStr = buf.toString('utf-8');
-          }
-        }
+        try { jsonStr = zlib.unzipSync(rawBuf).toString('utf-8'); }
+        catch (_) { jsonStr = rawBuf.toString('utf-8'); }
+      } catch (_) {}
+      const parsedData = JSON.parse(jsonStr);
+      if (parsedData && (parsedData.pdfBytes || parsedData.document_model || parsedData.pdf_bytes || parsedData.items)) {
+        isPyMuPdfTemplate = true;
       }
-    } catch (_) {}
-    const parsedData = JSON.parse(jsonStr);
-    if (parsedData && (parsedData.pdfBytes || parsedData.document_model || parsedData.pdf_bytes || parsedData.items)) {
-      isPdfTemplate = true;
     }
   } catch (_) {}
 
-  if (isPdfTemplate) {
+  if (isPyMuPdfTemplate) {
     parser = pdfParser;
+  } else if (isDocxPackage) {
+    parser = docxParser;
   }
   // ──────────────────────────────────────────────────────────────────────────
 
@@ -270,8 +316,26 @@ const exportHtml = async (fileId, segments, ext = '.html', targetLang = 'hi', te
     target: seg.target !== undefined && seg.target !== null ? seg.target : (seg.source || "")
   }));
 
-  // Handle PDF to DOCX export conversion if requested
-  if (ext === '.docx' && isPdfTemplate) {
+  // If exporting as PDF and template is a DOCX package (pdf2docx workflow), compile DOCX and convert to PDF
+  if (ext === '.pdf' && isDocxPackage) {
+    const os = require('os');
+    const tempDocxPath = path.join(os.tmpdir(), `matecat_export_docx_${uuidv4()}.docx`);
+    const tempPdfPath = path.join(os.tmpdir(), `matecat_export_pdf_${uuidv4()}.pdf`);
+    try {
+      const docxBuffer = await docxParser.exportFile(templateContent, normalizedSegments, targetLang);
+      fs.writeFileSync(tempDocxPath, docxBuffer);
+      await convertDocxToPdf(tempDocxPath, tempPdfPath);
+      const pdfResultBuffer = fs.readFileSync(tempPdfPath);
+      return pdfResultBuffer;
+    } finally {
+      for (const p of [tempDocxPath, tempPdfPath]) {
+        try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch (_) {}
+      }
+    }
+  }
+
+  // Handle PDF to DOCX export conversion for legacy PyMuPDF templates
+  if (ext === '.docx' && isPyMuPdfTemplate) {
     const os = require('os');
     const tempPdfPath = path.join(os.tmpdir(), `matecat_export_pdf_${uuidv4()}.pdf`);
     const tempDocxPath = path.join(os.tmpdir(), `matecat_export_docx_${uuidv4()}.docx`);

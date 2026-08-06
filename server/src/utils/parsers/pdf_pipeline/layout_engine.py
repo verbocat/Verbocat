@@ -220,11 +220,12 @@ class LayoutEngine:
             current_size = primary_size * font_scale
             tw = fitz.TextWriter(fitz.Rect(0, 0, 10000, 10000))
             try:
-                # Use generous height tolerance (50% extra) to prevent font scaling
-                # caused by minor font metric differences between original and mapped fonts.
-                # Priority: preserve exact font size over fitting in exact original height.
-                # The renderer will naturally clip at page boundaries if needed.
-                fit_height = max(original_height * 1.5, original_height + 20.0)
+                # Moderate height tolerance (15% or 8pt extra) to account for
+                # font metric differences between original and mapped fonts.
+                # This prevents aggressive font scaling while keeping text within bounds.
+                # The renderer will render within the EXACT original bbox, so text
+                # that fits here with tolerance will definitely render without overlapping.
+                fit_height = max(original_height * 1.15, original_height + 8.0)
                 overflow = tw.fill_textbox(
                     fitz.Rect(0, 0, original_width, fit_height),
                     plain_text, font=font, fontsize=current_size,

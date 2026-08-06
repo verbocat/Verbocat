@@ -58,12 +58,9 @@ class PDFRenderer:
             print(f"Renderer: Font loading failed ({font_path}): {e}")
             return self._fallback_htmlbox(page, rect, html, archive_dir, paragraph)
         
-        # Try rendering at the layout engine's determined scale
-        # Use generous height to prevent font scaling from minor metric differences.
-        # Priority: exact font size preservation over exact vertical fit.
-        render_height = max(rect.height * 1.5, rect.height + 20.0)
-        render_rect = fitz.Rect(rect.x0, rect.y0, rect.x1, rect.y0 + render_height)
-        
+        # Render within the EXACT original paragraph bbox.
+        # Never extend beyond the original rect — that causes overlap with adjacent paragraphs.
+        # The layout engine already determined the right scale to fit text within this bbox.
         for reduction in [1.0, 0.95, 0.90, 0.85, 0.80, 0.75, 0.70]:
             current_size = font_size * reduction
             if current_size < 4.0:
@@ -71,21 +68,22 @@ class PDFRenderer:
             tw = fitz.TextWriter(page.rect)
             try:
                 overflow = tw.fill_textbox(
-                    render_rect, plain_text,
+                    rect, plain_text,
                     font=font, fontsize=current_size,
                     align=alignment
                 )
-                if not overflow:  # All text fit
+                if not overflow:  # All text fit within original bbox
                     tw.write_text(page, color=color)
                     return True
             except Exception as e:
                 print(f"Renderer: fill_textbox error at size {current_size:.1f}: {e}")
                 break
         
-        # Text didn't fit at any reduction - render at original size with generous rect
+        # Text didn't fit at any reduction - render at smallest tried size
+        # (text will be clipped at bbox boundary, which is better than overlapping)
         try:
             tw = fitz.TextWriter(page.rect)
-            tw.fill_textbox(render_rect, plain_text, font=font, fontsize=font_size, align=alignment)
+            tw.fill_textbox(rect, plain_text, font=font, fontsize=max(font_size * 0.70, 5.0), align=alignment)
             tw.write_text(page, color=color)
             return True
         except Exception:
