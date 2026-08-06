@@ -68,7 +68,7 @@ class LayoutEngine:
             font_files_to_load.append(mapped_path)
 
         # Base / majority style for plain text parts that don't have span tags
-        majority_font = "Helvetica"
+        majority_font = flat_spans[0].font if flat_spans else "Times-Roman"
         majority_size = 11.0
         majority_color = 0
         majority_bold = False

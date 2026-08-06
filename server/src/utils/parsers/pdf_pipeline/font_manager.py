@@ -194,16 +194,20 @@ class FontManager:
         if not os.path.exists(sys_fonts_dir):
             return None
 
+        if "times" in f or "roman" in f or "serif" in f or "century" in f or "schoolbook" in f or "book" in f:
+            if bold:
+                return os.path.join(sys_fonts_dir, "timesbd.ttf")
+            return os.path.join(sys_fonts_dir, "times.ttf")
+        if "georgia" in f:
+            if bold:
+                return os.path.join(sys_fonts_dir, "georgiab.ttf")
+            return os.path.join(sys_fonts_dir, "georgia.ttf")
         if "arial" in f:
             return os.path.join(sys_fonts_dir, "arialbd.ttf" if bold else "arial.ttf")
         if "calibri" in f:
             if bold:
                 return os.path.join(sys_fonts_dir, "calibrib.ttf")
             return os.path.join(sys_fonts_dir, "calibri.ttf")
-        if "times" in f:
-            if bold:
-                return os.path.join(sys_fonts_dir, "timesbd.ttf")
-            return os.path.join(sys_fonts_dir, "times.ttf")
         if "courier" in f:
             if bold:
                 return os.path.join(sys_fonts_dir, "courbd.ttf")

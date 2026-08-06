@@ -226,31 +226,34 @@ const exportHtml = async (fileId, segments, ext = '.html', targetLang = 'hi', te
   let parser = getParser(ext);
 
   // ── Combined Template Detection & Routing ────────────────────────────────
+  let isPdfTemplate = false;
   try {
-    const rawJson = Buffer.from(templateContent, 'base64').toString('utf-8');
-    const combinedData = JSON.parse(rawJson);
-    
-    if (combinedData && combinedData.originalPdfBytes && combinedData.docxTemplate) {
-      if (ext === '.docx') {
-        parser = docxParser;
-        templateContent = combinedData.docxTemplate;
-      } else {
-        parser = pdfParser;
-        templateContent = combinedData.originalPdfBytes;
-      }
-    }
-  } catch (_) {
-    // If it's not a JSON object, fallback to checking if it's a raw gzip PDF template
+    const zlib = require('zlib');
+    let jsonStr = templateContent;
     try {
-      const zlib = require('zlib');
       const buf = Buffer.from(templateContent, 'base64');
-      let rawJson;
-      try { rawJson = zlib.gunzipSync(buf).toString('utf-8'); } catch (_) { rawJson = templateContent; }
-      const templateData = JSON.parse(rawJson);
-      if (templateData && templateData.pdfBytes && templateData.items) {
-        parser = pdfParser;
+      try {
+        jsonStr = zlib.unzipSync(buf).toString('utf-8');
+      } catch (_) {
+        try {
+          jsonStr = zlib.inflateSync(buf).toString('utf-8');
+        } catch (_) {
+          try {
+            jsonStr = zlib.gunzipSync(buf).toString('utf-8');
+          } catch (_) {
+            jsonStr = buf.toString('utf-8');
+          }
+        }
       }
     } catch (_) {}
+    const parsedData = JSON.parse(jsonStr);
+    if (parsedData && (parsedData.pdfBytes || parsedData.document_model || parsedData.pdf_bytes || parsedData.items)) {
+      isPdfTemplate = true;
+    }
+  } catch (_) {}
+
+  if (isPdfTemplate) {
+    parser = pdfParser;
   }
   // ──────────────────────────────────────────────────────────────────────────
 
@@ -267,35 +270,20 @@ const exportHtml = async (fileId, segments, ext = '.html', targetLang = 'hi', te
     target: seg.target !== undefined && seg.target !== null ? seg.target : (seg.source || "")
   }));
 
-
   // Handle PDF to DOCX export conversion if requested
-  if (ext === '.docx') {
-    let isPdfTemplate = false;
+  if (ext === '.docx' && isPdfTemplate) {
+    const os = require('os');
+    const tempPdfPath = path.join(os.tmpdir(), `matecat_export_pdf_${uuidv4()}.pdf`);
+    const tempDocxPath = path.join(os.tmpdir(), `matecat_export_docx_${uuidv4()}.docx`);
     try {
-      const zlib = require('zlib');
-      const buf = Buffer.from(templateContent, 'base64');
-      let rawJson;
-      try { rawJson = zlib.gunzipSync(buf).toString('utf-8'); } catch (_) { rawJson = Buffer.from(templateContent, 'base64').toString('utf-8'); }
-      const parsedData = JSON.parse(rawJson);
-      if (parsedData && (parsedData.pdfBytes || parsedData.document_model)) {
-        isPdfTemplate = true;
-      }
-    } catch (_) {}
-
-    if (isPdfTemplate) {
-      const os = require('os');
-      const tempPdfPath = path.join(os.tmpdir(), `matecat_export_pdf_${uuidv4()}.pdf`);
-      const tempDocxPath = path.join(os.tmpdir(), `matecat_export_docx_${uuidv4()}.docx`);
-      try {
-        const pdfBuffer = await pdfParser.exportFile(templateContent, normalizedSegments, targetLang);
-        fs.writeFileSync(tempPdfPath, pdfBuffer);
-        await convertPdfToDocx(tempPdfPath, tempDocxPath);
-        const docxBuffer = fs.readFileSync(tempDocxPath);
-        return docxBuffer;
-      } finally {
-        for (const p of [tempPdfPath, tempDocxPath]) {
-          try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch (_) {}
-        }
+      const pdfBuffer = await pdfParser.exportFile(templateContent, normalizedSegments, targetLang);
+      fs.writeFileSync(tempPdfPath, pdfBuffer);
+      await convertPdfToDocx(tempPdfPath, tempDocxPath);
+      const docxBuffer = fs.readFileSync(tempDocxPath);
+      return docxBuffer;
+    } finally {
+      for (const p of [tempPdfPath, tempDocxPath]) {
+        try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch (_) {}
       }
     }
   }
