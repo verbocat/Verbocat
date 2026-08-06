@@ -210,7 +210,9 @@ export const bulkActionSegments = async (documentId, lang, segmentIndices, actio
 
 export const fetchAdminUsers = async () => {
   const response = await api.get("/api/admin/users");
-  return response.data;
+  if (Array.isArray(response.data)) return response.data;
+  if (response.data && Array.isArray(response.data.users)) return response.data.users;
+  return [];
 };
 
 export const updateAdminUser = async (id, data) => {
@@ -225,12 +227,16 @@ export const deleteAdminUser = async (id) => {
 
 export const fetchAdminCreditLogs = async () => {
   const response = await api.get("/api/admin/credit-logs");
-  return response.data;
+  if (Array.isArray(response.data)) return response.data;
+  if (response.data && Array.isArray(response.data.logs)) return response.data.logs;
+  return [];
 };
 
 export const fetchAdminTm = async (search = "", sourceLang = "", targetLang = "") => {
   const response = await api.get(`/api/admin/tm?search=${search}&sourceLang=${sourceLang}&targetLang=${targetLang}`);
-  return response.data;
+  if (Array.isArray(response.data)) return response.data;
+  if (response.data && Array.isArray(response.data.tm)) return response.data.tm;
+  return [];
 };
 
 export const updateAdminTm = async (id, targetText) => {
@@ -479,17 +485,23 @@ export const uploadProjectReferenceFile = async (projectId, referenceFile) => {
 
 export const fetchProjects = async () => {
   const response = await api.get("/api/projects");
-  return response.data;
+  if (Array.isArray(response.data)) return response.data;
+  if (response.data && Array.isArray(response.data.projects)) return response.data.projects;
+  return [];
 };
 
 export const fetchGlobalHistory = async () => {
   const response = await api.get("/api/projects/history");
-  return response.data;
+  if (Array.isArray(response.data)) return response.data;
+  if (response.data && Array.isArray(response.data.history)) return response.data.history;
+  return [];
 };
 
 export const fetchProjectActivities = async (projectId) => {
   const response = await api.get(`/api/projects/${projectId}/activities`);
-  return response.data;
+  if (Array.isArray(response.data)) return response.data;
+  if (response.data && Array.isArray(response.data.activities)) return response.data.activities;
+  return [];
 };
 
 export const fetchProjectDetails = async (projectId) => {
@@ -708,7 +720,9 @@ export const fetchDocumentPreview = async (documentId, segments = null, targetLa
 
 export const fetchAdminOrganizations = async () => {
   const response = await api.get("/api/admin/organizations");
-  return response.data;
+  if (Array.isArray(response.data)) return response.data;
+  if (response.data && Array.isArray(response.data.organizations)) return response.data.organizations;
+  return [];
 };
 
 export const createAdminOrganization = async (data) => {
@@ -728,7 +742,9 @@ export const deleteAdminOrganization = async (id) => {
 
 export const fetchMySpaces = async () => {
   const response = await api.get("/api/auth/my-spaces");
-  return response.data;
+  if (Array.isArray(response.data)) return response.data;
+  if (response.data && Array.isArray(response.data.spaces)) return response.data.spaces;
+  return [];
 };
 
 export const joinSpace = async (spaceSlug) => {

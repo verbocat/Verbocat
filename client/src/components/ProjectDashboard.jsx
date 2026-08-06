@@ -180,8 +180,11 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
       l.code.toLowerCase().includes(langSearch.toLowerCase())
   );
 
+  // Safe array fallback for projects state
+  const safeProjects = Array.isArray(projects) ? projects : (projects?.projects && Array.isArray(projects.projects) ? projects.projects : []);
+
   // Filter projects by Status/Tab and Search/Client queries
-  const filteredProjects = projects.filter((p) => {
+  const filteredProjects = safeProjects.filter((p) => {
     const pStatus = normalizeStatus(p.status || p.settings?.status);
     
     if (activeTab === "active" && pStatus !== "active") return false;
@@ -193,7 +196,7 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      const matchName = p.name.toLowerCase().includes(q);
+      const matchName = (p.name || "").toLowerCase().includes(q);
       const matchDesc = (p.description || "").toLowerCase().includes(q);
       if (!matchName && !matchDesc) return false;
     }
@@ -207,13 +210,13 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
     return true;
   });
 
-  const activeProjectsCount = projects.filter((p) => normalizeStatus(p.status || p.settings?.status) === "active").length;
-  const completedProjectsCount = projects.filter((p) => normalizeStatus(p.status || p.settings?.status) === "completed").length;
-  const onHoldProjectsCount = projects.filter((p) => normalizeStatus(p.status || p.settings?.status) === "on_hold").length;
-  const archivedProjectsCount = projects.filter((p) => normalizeStatus(p.status || p.settings?.status) === "archived").length;
-  const myProjectsCount = projects.filter((p) => !p.isShared).length;
-  const sharedProjectsCount = projects.filter((p) => p.isShared).length;
-  const totalFilesCount = projects.reduce((sum, p) => sum + (p.fileCount || (p.documents?.length || 0)), 0);
+  const activeProjectsCount = safeProjects.filter((p) => normalizeStatus(p.status || p.settings?.status) === "active").length;
+  const completedProjectsCount = safeProjects.filter((p) => normalizeStatus(p.status || p.settings?.status) === "completed").length;
+  const onHoldProjectsCount = safeProjects.filter((p) => normalizeStatus(p.status || p.settings?.status) === "on_hold").length;
+  const archivedProjectsCount = safeProjects.filter((p) => normalizeStatus(p.status || p.settings?.status) === "archived").length;
+  const myProjectsCount = safeProjects.filter((p) => !p.isShared).length;
+  const sharedProjectsCount = safeProjects.filter((p) => p.isShared).length;
+  const totalFilesCount = safeProjects.reduce((sum, p) => sum + (p.fileCount || (p.documents?.length || 0)), 0);
 
   return (
     <div className="min-h-screen w-full flex-1 overflow-y-auto bg-[var(--bg-base)] text-[var(--text-primary)] font-sans antialiased flex flex-col">
