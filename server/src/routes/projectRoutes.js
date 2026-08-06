@@ -176,12 +176,13 @@ projectRouter.post(
         return response.status(500).json({ error: `Failed to create document: ${docError.message}` });
       }
 
-      // 4. Persist parsed segments to DB in batches
+      // 4. Persist parsed template segments to DB in batches (target_lang: null)
       const segmentInserts = result.segments.map((seg, idx) => ({
         document_id: documentId,
-        segment_index: idx,
+        segment_index: idx + 1,
+        target_lang: null,
         source_text: seg.source || "",
-        target_text: seg.target || "",
+        target_text: "",
         status: "draft"
       }));
 
