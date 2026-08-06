@@ -115,30 +115,13 @@ async function convertDocxToPdf(docxPath, pdfPath) {
     if (fs.existsSync(pdfPath) && fs.statSync(pdfPath).size > 0) return;
   } catch (_) {}
 
-  // 3. Fallback: Generate PDF directly via PyMuPDF + python-docx (Cross-platform Linux fallback)
+  // 3. High-Fidelity Structured DOCX->PDF Renderer (Cross-platform Linux Render fallback)
   try {
-    const pyFallback = `import fitz, docx
-d = docx.Document('${escapedDocxPath}')
-pdf = fitz.open()
-page = pdf.new_page(width=595.28, height=841.89)
-y = 50
-for p in d.paragraphs:
-    txt = p.text.strip()
-    if not txt: continue
-    rect = fitz.Rect(50, y, 545, y + 100)
-    tw = fitz.TextWriter(page.rect)
-    tw.fill_textbox(rect, txt, fontsize=11, font=fitz.Font('helv'))
-    tw.write_text(page, color=(0,0,0))
-    y += 28
-    if y > 780:
-        page = pdf.new_page(width=595.28, height=841.89)
-        y = 50
-pdf.save('${escapedPdfPath}')
-pdf.close()`;
-    execSync(`"${pythonCmd}" -c "${pyFallback}"`, { stdio: 'ignore' });
+    const engineScript = path.join(__dirname, "../utils/parsers/pdf_pipeline/docx_to_pdf_engine.py");
+    execSync(`"${pythonCmd}" "${engineScript}" "${docxPath}" "${pdfPath}"`, { stdio: 'inherit' });
     if (fs.existsSync(pdfPath) && fs.statSync(pdfPath).size > 0) return;
   } catch (fbErr) {
-    console.error("PyMuPDF DOCX->PDF fallback error:", fbErr.message);
+    console.error("docx_to_pdf_engine error:", fbErr.message);
   }
 
   throw new Error("Unable to convert DOCX to PDF on server environment.");

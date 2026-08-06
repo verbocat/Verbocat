@@ -71,20 +71,90 @@ export const ExportModal = ({
             {fileExtension?.toLowerCase() === ".pdf" ? "Download PDF" : "Download"}
           </ExportOption>
 
-          {/* High-fidelity Word Document for PDF uploads */}
+          {/* Highlighted PDF-to-Word Conversion Section for PDF uploads */}
           {fileExtension?.toLowerCase() === ".pdf" && (
-            <ExportOption
-              title="Editable Word Document (.docx)"
-              desc="Export as a Word document to preserve formatting and edit layout."
-              accentColor="var(--text-emerald)"
-              btnBg="rgba(34,197,94,0.08)"
-              btnBorder="rgba(34,197,94,0.25)"
-              btnColor="var(--text-emerald)"
-              onAction={() => { onExportDocument(".docx"); onClose(); }}
-            >
-              <Download style={{ width: 12, height: 12 }} />
-              Download Word
-            </ExportOption>
+            <div style={{
+              background: "linear-gradient(135deg, rgba(99,102,241,0.12) 0%, rgba(16,185,129,0.12) 100%)",
+              border: "1.5px solid rgba(99,102,241,0.4)",
+              borderRadius: 12,
+              padding: "14px 16px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+              boxShadow: "0 4px 20px -4px rgba(99,102,241,0.15)",
+              margin: "4px 0"
+            }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <FileText style={{ width: 18, height: 18, color: "#6366f1" }} />
+                  <span style={{ fontWeight: 700, fontSize: 14, color: "var(--text-primary)" }}>
+                    Export Converted PDF into Word (.docx)
+                  </span>
+                </div>
+                <span style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  padding: "3px 8px",
+                  borderRadius: 20,
+                  background: "linear-gradient(135deg, #6366f1 0%, #10b981 100%)",
+                  color: "#ffffff",
+                  letterSpacing: "0.5px",
+                  textTransform: "uppercase"
+                }}>
+                  LAYOUT VERIFICATION
+                </span>
+              </div>
+
+              <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.4 }}>
+                Download the reconstructed Word document to verify page layout, paragraph structure, font metrics, and formatting converted from PDF objects.
+              </div>
+
+              <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                <button
+                  className="export-btn"
+                  onClick={() => { onExportDocument(".docx"); onClose(); }}
+                  style={{
+                    flex: 1,
+                    background: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
+                    color: "#ffffff",
+                    border: "none",
+                    fontWeight: 600,
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    cursor: "pointer",
+                    boxShadow: "0 2px 10px rgba(99,102,241,0.3)"
+                  }}
+                >
+                  <Download style={{ width: 14, height: 14 }} />
+                  Export Translated Word (.docx)
+                </button>
+
+                <button
+                  className="export-btn"
+                  onClick={() => { onExportSourceDocument(".docx"); onClose(); }}
+                  style={{
+                    background: "rgba(255,255,255,0.08)",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    color: "var(--text-primary)",
+                    fontWeight: 500,
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    cursor: "pointer"
+                  }}
+                >
+                  <Download style={{ width: 14, height: 14 }} />
+                  Export Source Word (.docx)
+                </button>
+              </div>
+            </div>
           )}
 
           {/* Source Document */}
