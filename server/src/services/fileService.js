@@ -34,22 +34,22 @@ function getPythonCommand() {
   return cachedPythonCmd;
 }
 
-let isPdf2DocxVerified = true;
+let isPdf2DocxVerified = false;
 function ensurePdf2DocxInstalled() {
   if (isPdf2DocxVerified) return;
+  const pythonCmd = getPythonCommand();
   try {
-    const pythonCmd = getPythonCommand();
     execSync(`"${pythonCmd}" -c "import pdf2docx"`, { stdio: 'ignore' });
     isPdf2DocxVerified = true;
   } catch (e) {
     console.log("pdf2docx is not installed on system. Attempting auto-installation...");
     try {
-      const pythonCmd = getPythonCommand();
       execSync(`"${pythonCmd}" -m pip install pdf2docx --break-system-packages`, { stdio: 'ignore' });
       isPdf2DocxVerified = true;
       console.log("pdf2docx installed successfully!");
     } catch (installErr) {
       console.error("Failed to auto-install pdf2docx via pip:", installErr.message);
+      throw installErr;
     }
   }
 }
@@ -64,20 +64,19 @@ async function convertPdfToDocx(pdfPath, docxPath) {
   const pyScript = `from pdf2docx import Converter; cv = Converter('${escapedPdfPath}'); cv.convert('${escapedDocxPath}'); cv.close()`;
   
   console.log(`Converting PDF to DOCX: ${pdfPath} -> ${docxPath}`);
-  execSync(`"${pythonCmd}" -c "${pyScript}"`, { stdio: 'ignore' });
+  execSync(`"${pythonCmd}" -c "${pyScript}"`, { stdio: 'inherit' });
 }
 
-let isDocx2PdfVerified = true;
+let isDocx2PdfVerified = false;
 function ensureDocx2PdfInstalled() {
   if (isDocx2PdfVerified) return;
+  const pythonCmd = getPythonCommand();
   try {
-    const pythonCmd = getPythonCommand();
     execSync(`"${pythonCmd}" -c "import docx2pdf"`, { stdio: 'ignore' });
     isDocx2PdfVerified = true;
   } catch (e) {
     console.log("docx2pdf is not installed on system. Attempting auto-installation...");
     try {
-      const pythonCmd = getPythonCommand();
       execSync(`"${pythonCmd}" -m pip install docx2pdf --break-system-packages`, { stdio: 'ignore' });
       isDocx2PdfVerified = true;
       console.log("docx2pdf installed successfully!");
@@ -99,12 +98,19 @@ async function convertDocxToPdf(docxPath, pdfPath) {
   console.log(`Converting DOCX to PDF: ${docxPath} -> ${pdfPath}`);
   try {
     execSync(`"${pythonCmd}" -c "${pyScript}"`, { stdio: 'ignore' });
+    if (fs.existsSync(pdfPath)) return;
   } catch (err) {
     console.error("docx2pdf conversion failed, checking libreoffice fallback:", err.message);
     try {
       execSync(`libreoffice --headless --convert-to pdf --outdir "${path.dirname(pdfPath)}" "${docxPath}"`, { stdio: 'ignore' });
+      if (fs.existsSync(pdfPath)) return;
     } catch (loErr) {
-      throw new Error(`Failed to convert DOCX to PDF: ${err.message}`);
+      try {
+        execSync(`soffice --headless --convert-to pdf --outdir "${path.dirname(pdfPath)}" "${docxPath}"`, { stdio: 'ignore' });
+        if (fs.existsSync(pdfPath)) return;
+      } catch (_) {
+        throw new Error(`Failed to convert DOCX to PDF: ${err.message}`);
+      }
     }
   }
 }
@@ -171,24 +177,42 @@ const processUploadedFile = async (file) => {
   }
 
   try {
-    // For PDF files, convert PDF to DOCX using pdf2docx, then parse with docxParser
+    // For PDF files, try converting PDF to DOCX using pdf2docx; fall back to direct pdfParser if pdf2docx is unavailable or fails
     if (ext === '.pdf') {
       const tempDocxPath = file.path + '.docx';
-      await convertPdfToDocx(file.path, tempDocxPath);
-      const { segments, template: docxTemplate } = await docxParser.parseFile(tempDocxPath);
-      const fileId = uuidv4();
-      const { error: insertError } = await supabase
-        .from("html_files")
-        .insert([{ id: fileId, content: docxTemplate }]);
+      try {
+        await convertPdfToDocx(file.path, tempDocxPath);
+        const { segments, template: docxTemplate } = await docxParser.parseFile(tempDocxPath);
+        const fileId = uuidv4();
+        const { error: insertError } = await supabase
+          .from("html_files")
+          .insert([{ id: fileId, content: docxTemplate }]);
 
-      if (insertError) throw insertError;
+        if (insertError) throw insertError;
 
-      return {
-        type: 'pdf',
-        fileId,
-        segments,
-        originalName: file.originalname
-      };
+        return {
+          type: 'pdf',
+          fileId,
+          segments,
+          originalName: file.originalname
+        };
+      } catch (pdf2docxErr) {
+        console.warn("pdf2docx processing failed on server, falling back to direct pdfParser:", pdf2docxErr.message);
+        const { segments, template: pdfTemplate } = await pdfParser.parseFile(file.path);
+        const fileId = uuidv4();
+        const { error: insertError } = await supabase
+          .from("html_files")
+          .insert([{ id: fileId, content: pdfTemplate }]);
+
+        if (insertError) throw insertError;
+
+        return {
+          type: 'pdf',
+          fileId,
+          segments,
+          originalName: file.originalname
+        };
+      }
     }
 
     // Default parser path for non-PDFs
