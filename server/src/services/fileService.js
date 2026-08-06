@@ -260,8 +260,12 @@ const exportHtml = async (fileId, segments, ext = '.html', targetLang = 'hi', te
     throw error;
   }
 
-  // Normalize segment IDs as numbers
-  const normalizedSegments = segments.map(seg => ({ ...seg, id: Number(seg.id) }));
+  // Normalize segment IDs safely without corrupting string UUIDs to NaN
+  const normalizedSegments = segments.map((seg, idx) => ({
+    ...seg,
+    id: (seg.id !== undefined && seg.id !== null && !isNaN(Number(seg.id))) ? Number(seg.id) : (seg.id || idx + 1),
+    target: seg.target !== undefined && seg.target !== null ? seg.target : (seg.source || "")
+  }));
 
 
   const buffer = await parser.exportFile(templateContent, normalizedSegments, targetLang);

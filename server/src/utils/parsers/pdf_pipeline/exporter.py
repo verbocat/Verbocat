@@ -25,6 +25,8 @@ class PDFExporter:
             translated_text = segment_map.get(para.paragraph_id)
             if not translated_text and flat_idx is not None:
                 translated_text = segment_map.get(str(flat_idx))
+            if not translated_text and flat_idx is not None:
+                translated_text = segment_map.get(str(flat_idx + 1))
             if not translated_text:
                 from .paragraph_builder import ParagraphBuilder
                 translated_text = ParagraphBuilder.generate_tagged_text(para)
@@ -72,10 +74,14 @@ class PDFExporter:
         
         # Build segment translations map (Segment ID/Index -> Target Text)
         segment_map = {}
-        for seg in segments:
+        for idx, seg in enumerate(segments):
             seg_id = str(seg.get("id", ""))
             target_text = seg.get("target", "") or seg.get("source", "")
-            segment_map[seg_id] = target_text
+            if seg_id and seg_id != "NaN":
+                segment_map[seg_id] = target_text
+            # Map both 0-based and 1-based index strings to ensure robust fallback matching
+            segment_map[str(idx)] = target_text
+            segment_map[str(idx + 1)] = target_text
 
         # Pre-compute flat paragraph indices across the entire document
         para_flat_indices = {}
