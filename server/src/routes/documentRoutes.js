@@ -16,7 +16,7 @@ if (!fs.existsSync(uploadDir)) {
 const upload = multer({ dest: uploadDir });
 
 // 1. Single File Upload
-documentRouter.post("/upload", checkAuth, upload.single("file"), async (request, response) => {
+documentRouter.post(["/upload", "/api/upload"], checkAuth, upload.single("file"), async (request, response) => {
   try {
     if (!request.file) {
       return response.status(400).json({ error: "No file was uploaded." });

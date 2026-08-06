@@ -1,10 +1,11 @@
 import axios from "axios";
 import { useUserStore } from "./userStore";
 
+const rawBaseUrl = (import.meta.env.VITE_API_URL || "").trim();
+const cleanBaseUrl = rawBaseUrl.replace(/\/+$/, "").replace(/\/api$/, "");
+
 export const api = axios.create({
-  // If VITE_API_URL is set at build/runtime, use it. Otherwise use
-  // an empty baseURL so requests go to the current origin.
-  baseURL: import.meta.env.VITE_API_URL || ""
+  baseURL: cleanBaseUrl
 });
 
 let refreshPromise = null;
@@ -15,9 +16,7 @@ const refreshSessionToken = async () => {
 
   if (refreshPromise) return refreshPromise;
 
-  const API_URL = import.meta.env.VITE_API_URL 
-    ? `${import.meta.env.VITE_API_URL}/api` 
-    : "/api";
+  const API_URL = cleanBaseUrl ? `${cleanBaseUrl}/api` : "/api";
 
   refreshPromise = axios.post(`${API_URL}/auth/refresh`, { refreshToken })
     .then((response) => {
