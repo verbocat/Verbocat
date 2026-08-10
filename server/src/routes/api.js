@@ -6,6 +6,7 @@ const aiProjectRouter = require("./aiProjectRoutes");
 const { tmRouter } = require("./tmRoutes");
 const { glossaryRouter } = require("./glossaryRoutes");
 const { exportRouter } = require("./exportRoutes");
+const { screenshotRouter } = require("./screenshotRoutes");
 
 const apiRouter = express.Router();
 
@@ -17,6 +18,7 @@ apiRouter.use(aiProjectRouter);
 apiRouter.use(tmRouter);
 apiRouter.use(glossaryRouter);
 apiRouter.use(exportRouter);
+apiRouter.use(screenshotRouter);
 
 apiRouter.get("/", (request, response) => {
   response.json({

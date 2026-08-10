@@ -23,6 +23,13 @@ documentRouter.post(["/upload", "/api/upload"], checkAuth, upload.single("file")
       return response.status(400).json({ error: "No file was uploaded." });
     }
 
+    const ext = path.extname(request.file.originalname).toLowerCase();
+    const DANGEROUS_EXTS = [".exe", ".php", ".sh", ".bat", ".cmd", ".js", ".py", ".vbs", ".ps1", ".dll", ".so", ".app", ".cgi", ".msi", ".scr", ".pif"];
+    if (DANGEROUS_EXTS.includes(ext)) {
+      if (fs.existsSync(request.file.path)) fs.unlinkSync(request.file.path);
+      return response.status(400).json({ error: `Security Error: Executable or script files (${ext}) are not permitted.` });
+    }
+
     const result = await processUploadedFile(request.file);
     const userId = request.user.id;
     const documentId = result.fileId;

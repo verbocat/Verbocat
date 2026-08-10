@@ -780,6 +780,38 @@ export const joinSpace = async (spaceSlug) => {
   return response.data;
 };
 
+// --- SCREENSHOT LINKING API HELPERS ---
+export const uploadDocumentScreenshot = async (documentId, file, caption = "") => {
+  const formData = new FormData();
+  formData.append("screenshot", file);
+  if (caption) formData.append("caption", caption);
+
+  const response = await api.post(`/api/documents/${documentId}/screenshots`, formData, {
+    headers: { "Content-Type": "multipart/form-data" }
+  });
+  return response.data;
+};
+
+export const fetchDocumentScreenshots = async (documentId) => {
+  const response = await api.get(`/api/documents/${documentId}/screenshots`);
+  return response.data;
+};
+
+export const linkSegmentScreenshot = async (segmentId, documentId, screenshotId, boundingBox = null, unlink = false) => {
+  const response = await api.post(`/api/segments/${segmentId}/screenshot-link`, {
+    documentId,
+    screenshotId,
+    boundingBox,
+    unlink
+  });
+  return response.data;
+};
+
+export const deleteScreenshot = async (screenshotId) => {
+  const response = await api.delete(`/api/screenshots/${screenshotId}`);
+  return response.data;
+};
+
 
 
 

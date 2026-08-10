@@ -1,11 +1,12 @@
 const express = require("express");
 const { supabase, supabaseAdmin } = require("../config/supabase");
 const { checkAuth } = require("../utils/authMiddleware");
+const { authRateLimiter } = require("../utils/rateLimiter");
 
 const authRouter = express.Router();
 
 // 1. User Account Registration / Join Space
-authRouter.post("/register", async (request, response) => {
+authRouter.post("/register", authRateLimiter, async (request, response) => {
   try {
     const { email, password } = request.body;
     if (!email || !password) {
@@ -144,7 +145,7 @@ authRouter.post("/register", async (request, response) => {
 
 
 // 2. User Sign In (Login)
-authRouter.post("/login", async (request, response) => {
+authRouter.post("/login", authRateLimiter, async (request, response) => {
   try {
     const { email, password } = request.body;
     if (!email || !password) {

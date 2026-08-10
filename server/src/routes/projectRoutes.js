@@ -18,6 +18,10 @@ const upload = multer({ dest: uploadDir });
 // 1. List Projects (Strictly scoped by organization tenant)
 projectRouter.get(["/projects", "/api/projects"], checkAuth, async (request, response) => {
   try {
+    if (request.profile?.role === "linguist") {
+      return response.status(403).json({ error: "Access denied. Linguist accounts do not have access to project management lists." });
+    }
+
     const activeTenantId = request.tenant?.id || request.profile?.organization_id;
     const isSuperAdmin = request.profile?.role === "super_admin";
 

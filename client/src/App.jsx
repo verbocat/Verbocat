@@ -18,6 +18,7 @@ import { SearchReplaceModal } from "./components/SearchReplaceModal.jsx";
 import { ForbiddenTermsModal } from "./components/ForbiddenTermsModal.jsx";
 import { SettingsModal } from "./components/SettingsModal.jsx";
 import { LiveDocumentViewer } from "./components/LiveDocumentViewer.jsx";
+import { ScreenshotContextModal } from "./components/ScreenshotContextModal.jsx";
 import { LANGUAGES } from "./constants/languages.js";
 import { useGlossaryManager } from "./hooks/useGlossaryManager.js";
 import { useUserStore } from "./services/userStore.js";
@@ -120,6 +121,10 @@ export default function App() {
   const [previewBuffer, setPreviewBuffer] = useState(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const previewDebounceRef = useRef(null);
+
+  // Screenshot Context Modal State
+  const [showScreenshotModal, setShowScreenshotModal] = useState(false);
+  const [activeSegmentForScreenshot, setActiveSegmentForScreenshot] = useState(null);
 
 
 
@@ -3301,6 +3306,14 @@ export default function App() {
             theme={theme}
           />
 
+          <ScreenshotContextModal
+            show={showScreenshotModal}
+            onClose={() => setShowScreenshotModal(false)}
+            documentId={documentId}
+            currentSegment={activeSegmentForScreenshot}
+            showToast={showToast}
+          />
+
           {/* ── Zone 1: Topbar (always visible) ── */}
           <Header
             currentProvider={currentProvider}
@@ -3477,6 +3490,10 @@ export default function App() {
                         forbiddenTerms={forbiddenTerms}
                         forbiddenTermsEnabled={forbiddenTermsEnabled}
                         onOpenForbiddenTerms={() => setShowForbiddenTermsModal(true)}
+                        onOpenScreenshotContext={(seg) => {
+                          setActiveSegmentForScreenshot(seg);
+                          setShowScreenshotModal(true);
+                        }}
                       />
                     )}
                   />

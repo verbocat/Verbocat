@@ -302,7 +302,7 @@ export const SegmentCard = ({
   onSaveContext, onTranslateWithContext, onTyping,
   isOwner, onAcceptChange, onRejectChange, autocompleteEnabled = true,
   isSelected, onToggleSelect, lengthRestrictionEnabled, onUpdateSegmentMaxWords,
-  forbiddenTerms = [], forbiddenTermsEnabled = true, onOpenForbiddenTerms
+  forbiddenTerms = [], forbiddenTermsEnabled = true, onOpenForbiddenTerms, onOpenScreenshotContext
 }) => {
   const editorRef = useRef(null);
   const lastSaved = useRef(segment.target || "");
@@ -1064,6 +1064,37 @@ export const SegmentCard = ({
                   >
                     <AlertTriangle style={{ width: 11, height: 11 }} />
                     <span>Tag Mismatch ({missingTags.length ? `-${missingTags.length}` : `+${extraTags.length}`})</span>
+                  </button>
+                )}
+
+                {/* Screenshot Context Badge */}
+                {onOpenScreenshotContext && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenScreenshotContext(segment);
+                    }}
+                    style={{
+                      fontSize: "9px",
+                      fontWeight: 700,
+                      fontFamily: "'Inter', sans-serif",
+                      color: "#38bdf8",
+                      background: "rgba(56,189,248,0.12)",
+                      border: "1px solid rgba(56,189,248,0.3)",
+                      borderRadius: "6px",
+                      padding: "3px 6px",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      transition: "all 0.2s ease",
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.2)"
+                    }}
+                    title="View & link visual UI screenshots for this segment"
+                  >
+                    <Image style={{ width: 11, height: 11, color: "#38bdf8" }} />
+                    <span>Context Screenshots</span>
                   </button>
                 )}
 

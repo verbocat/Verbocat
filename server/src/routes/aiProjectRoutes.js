@@ -1,5 +1,6 @@
 const express = require("express");
 const { checkAuth } = require("../utils/authMiddleware");
+const { aiRateLimiter } = require("../utils/rateLimiter");
 const {
   processAICommand,
   duplicateProjectAction,
@@ -12,11 +13,19 @@ const aiProjectRouter = express.Router();
 // Require authentication for all AI Project endpoints
 aiProjectRouter.use(checkAuth);
 
+// Linguist role check middleware
+aiProjectRouter.use((req, res, next) => {
+  if (req.profile?.role === "linguist") {
+    return res.status(403).json({ error: "Access denied. Linguist accounts cannot execute AI project orchestration commands." });
+  }
+  next();
+});
+
 /**
  * 1. Process Natural Language AI Command for Projects
  * Request body: { prompt: string, fileIds?: string[], projectId?: string }
  */
-aiProjectRouter.post(["/projects/ai-command", "/api/projects/ai-command"], async (req, res) => {
+aiProjectRouter.post(["/projects/ai-command", "/api/projects/ai-command"], aiRateLimiter, async (req, res) => {
   try {
     const { prompt, fileIds, projectId } = req.body;
     const userId = req.user.id;

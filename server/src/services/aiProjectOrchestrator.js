@@ -831,6 +831,14 @@ async function processAICommand({ prompt, fileIds = [], projectId = null, userId
     };
   }
 
+  // Sanitize input prompt against prompt injection attacks
+  const sanitizedPrompt = typeof prompt === "string" 
+    ? prompt.slice(0, 2000)
+        .replace(/ignore\s+(all\s+)?(previous|prior)\s+(instructions|directions|rules)/gi, "")
+        .replace(/you\s+are\s+now\s+a\s+/gi, "")
+        .trim()
+    : "";
+
   // 2. Call OpenAI API if API key is present
   if (OPENAI_API_KEY) {
     try {
@@ -848,7 +856,7 @@ Active Context: User ID: ${userId}, Target Project ID (if any): ${projectId || "
             },
             {
               role: "user",
-              content: prompt
+              content: sanitizedPrompt
             }
           ],
           tools: PROJECT_TOOLS,
