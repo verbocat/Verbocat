@@ -9,6 +9,9 @@ import { ProjectHistoryModal } from "./ProjectHistoryModal";
 import { CardGridSkeleton } from "./SkeletonLoader";
 import { normalizeStatus, formatStatusLabel, getStatusColorClass, getStatusDotColor, STATUS_OPTIONS } from "../utils/projectStatusUtils";
 
+import { DuplicateProjectModal } from "./DuplicateProjectModal";
+import { SmartAIProjectBar } from "./SmartAIProjectBar";
+
 import io from "socket.io-client";
 
 const DOMAINS = ["General", "Marketing", "Legal", "Medical", "Pharmaceutical", "Financial", "Banking", "Insurance", "Technical", "Software", "IT & Cybersecurity", "E-commerce", "Automotive", "Manufacturing", "Engineering", "Telecommunications", "Gaming", "Education", "Government", "HR & Recruitment", "Travel & Tourism", "Hospitality", "Retail", "Energy & Utilities", "Real Estate", "Life Sciences", "Healthcare", "Aerospace", "Agriculture", "Media & Entertainment"];
@@ -41,6 +44,7 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
   const [showGlobalHistoryModal, setShowGlobalHistoryModal] = useState(false);
   const [openMenuProjectId, setOpenMenuProjectId] = useState(null);
   const [openStatusMenuProjectId, setOpenStatusMenuProjectId] = useState(null);
+  const [duplicateModalProject, setDuplicateModalProject] = useState(null);
 
   // Form states for Create Project
   const [projName, setProjName] = useState("");
@@ -361,6 +365,16 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
           </div>
         </section>
 
+        {/* ── SMART AI PROJECT ASSISTANT ── */}
+        <SmartAIProjectBar
+          onSuccess={() => loadProjects()}
+          showToast={showToast}
+          onOpenDuplicateModal={(projId) => {
+            const found = projects.find((p) => String(p.id) === String(projId));
+            setDuplicateModalProject(found || { id: projId, name: "Selected Project", target_lang: ["hi"] });
+          }}
+        />
+
         {/* ── TOOLBAR: TABS & FILTERS ── */}
         <section className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
           
@@ -575,7 +589,10 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
 
                                 <button
                                   type="button"
-                                  onClick={() => handleDuplicateProject(proj.id)}
+                                  onClick={() => {
+                                    setDuplicateModalProject(proj);
+                                    setOpenMenuProjectId(null);
+                                  }}
                                   className="w-full text-left px-3.5 py-2 hover:bg-[var(--bg-hover)] flex items-center gap-2.5 font-bold text-[var(--text-primary)] cursor-pointer"
                                 >
                                   <Copy size={14} className="text-emerald-400" /> Duplicate Project
@@ -758,7 +775,20 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
             </div>
 
             <form onSubmit={handleCreateProject} className="space-y-5 overflow-y-auto pr-1">
-              
+              {/* AI Quick Create Bar */}
+              <SmartAIProjectBar
+                onSuccess={() => {
+                  setShowCreateModal(false);
+                  loadProjects();
+                }}
+                showToast={showToast}
+                onOpenDuplicateModal={(projId) => {
+                  setShowCreateModal(false);
+                  const found = projects.find((p) => String(p.id) === String(projId));
+                  setDuplicateModalProject(found || { id: projId, name: "Selected Project", target_lang: ["hi"] });
+                }}
+              />
+
               {/* Section 1: Core Project Identity */}
               <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-4.5 space-y-4">
                 <span className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
@@ -1075,6 +1105,16 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
           onClose={() => setShowGlobalHistoryModal(false)}
           projectId={null}
           projectName="Global Workspace"
+          showToast={showToast}
+        />
+      )}
+
+      {/* Interactive Project Duplication Scope Modal */}
+      {duplicateModalProject && (
+        <DuplicateProjectModal
+          project={duplicateModalProject}
+          onClose={() => setDuplicateModalProject(null)}
+          onSuccess={() => loadProjects()}
           showToast={showToast}
         />
       )}

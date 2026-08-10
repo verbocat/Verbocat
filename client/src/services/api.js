@@ -310,8 +310,35 @@ export const revokeProjectShare = async (projectId, targetId) => {
   return response.data;
 };
 
-export const duplicateProject = async (projectId) => {
-  const response = await api.post(`/api/projects/${projectId}/duplicate`);
+export const duplicateProject = async (projectId, scope = "source_only", newName = null, addTargetLangs = []) => {
+  const response = await api.post(`/api/projects/${projectId}/duplicate`, {
+    scope,
+    newName,
+    addTargetLangs
+  });
+  return response.data;
+};
+
+export const executeAIProjectCommand = async (prompt, fileIds = [], projectId = null) => {
+  const response = await api.post("/api/projects/ai-command", {
+    prompt,
+    fileIds,
+    projectId
+  });
+  return response.data;
+};
+
+export const addProjectTargetLanguages = async (projectId, targetLangs) => {
+  const response = await api.post(`/api/projects/${projectId}/add-languages`, {
+    targetLangs
+  });
+  return response.data;
+};
+
+export const setProjectContextNotes = async (projectId, contextNotes) => {
+  const response = await api.post(`/api/projects/${projectId}/context`, {
+    contextNotes
+  });
   return response.data;
 };
 
