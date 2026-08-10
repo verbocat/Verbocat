@@ -104,9 +104,82 @@ async function runTests() {
       throw new Error("Clarification signal failed!");
     }
 
+    // Test 7: AI Project Deletion Action
+    console.log("\n--- Test 7: AI Project Deletion Action ---");
+    const { deleteProjectAction, updateProjectStatusAction, getProjectSummaryAction } = require("./src/services/aiProjectOrchestrator");
+
+    const deleteRes = await deleteProjectAction({
+      projectId: dupSourceRes.duplicatedProject.id,
+      userId: testUserId
+    });
+    console.log("Delete Action Result:", deleteRes);
+    if (!deleteRes.success || deleteRes.deletedProjectId !== dupSourceRes.duplicatedProject.id) {
+      throw new Error("Project deletion action failed!");
+    }
+
+    // Test 8: Update Project Status Action
+    console.log("\n--- Test 8: Update Project Status Action ---");
+    const statusRes = await updateProjectStatusAction({
+      projectId: testProjId,
+      status: "completed",
+      userId: testUserId
+    });
+    console.log("Status Update Result:", statusRes);
+    if (!statusRes.success || statusRes.project.settings?.status !== "completed") {
+      throw new Error("Project status update failed!");
+    }
+
+    // Test 9: Get Project Summary Action
+    console.log("\n--- Test 9: Get Project Summary Action ---");
+    const summaryRes = await getProjectSummaryAction({
+      projectId: testProjId,
+      userId: testUserId
+    });
+    console.log("Project Summary Result:", summaryRes);
+    if (!summaryRes.success || summaryRes.projects.length === 0) {
+      throw new Error("Get project summary failed!");
+    }
+
+    // Test 10: AI Batch Due Date / Deadline Updater
+    console.log("\n--- Test 10: AI Batch Due Date Action ---");
+    const { updateDueDateAction } = require("./src/services/aiProjectOrchestrator");
+    const dueDateRes = await updateDueDateAction({
+      projectId: testProjId,
+      dueDate: "2026-09-30",
+      userId: testUserId
+    });
+    console.log("Due Date Update Result:", dueDateRes);
+    if (!dueDateRes.success || dueDateRes.dueDate !== "2026-09-30") {
+      throw new Error("Due date update failed!");
+    }
+
+    // Test 11: Natural Language AI Deletion Command
+    console.log("\n--- Test 11: Natural Language AI Deletion Command ---");
+    const aiDelRes = await processAICommand({
+      prompt: `Delete project ${dupFullRes.duplicatedProject.id}`,
+      projectId: dupFullRes.duplicatedProject.id,
+      userId: testUserId
+    });
+    console.log("AI Delete Prompt Result:", aiDelRes);
+    const deletedId = aiDelRes.deletedProjectId || aiDelRes.results?.[0]?.deletedProjectId;
+    if (!aiDelRes.success || !deletedId) {
+      throw new Error("AI deletion prompt execution failed!");
+    }
+
+    // Test 12: Bulk Deletion AI Prompt ("delete all active projects")
+    console.log("\n--- Test 12: Bulk Deletion AI Prompt ---");
+    const bulkDelRes = await processAICommand({
+      prompt: "delete all active projects",
+      userId: testUserId
+    });
+    console.log("Bulk Delete Result:", bulkDelRes);
+    if (!bulkDelRes.success) {
+      throw new Error("Bulk deletion failed!");
+    }
+
     // Clean up created test projects
     console.log("\n--- Cleaning up test records ---");
-    await supabase.from("projects").delete().in("id", [testProjId, dupSourceRes.duplicatedProject.id, dupFullRes.duplicatedProject.id]);
+    await supabase.from("projects").delete().in("id", [testProjId]);
     console.log("Cleaned up test projects successfully.");
 
     console.log("\n=============================================");

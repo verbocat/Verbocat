@@ -373,6 +373,273 @@ async function setProjectContextAction({ projectId, contextNotes, userId }) {
 }
 
 /**
+ * 5. Action: Delete Project (Single or Bulk)
+ */
+async function deleteProjectAction({ projectId = null, projectName = null, deleteAll = false, filterStatus = null, userId, organizationId = null }) {
+  const nameLower = (projectName || "").toLowerCase().trim();
+  const isBulkAll = deleteAll || nameLower.includes("all projects") || nameLower === "all" || nameLower.includes("all active") || nameLower.includes("all completed") || nameLower.includes("every project");
+
+  // Handle Bulk Deletion ("delete all active projects", "delete all projects", etc.)
+  if (isBulkAll) {
+    let query = supabase.from("projects").select("id, name, settings");
+    if (organizationId) {
+      query = query.eq("organization_id", organizationId);
+    }
+    const { data: allProjects, error: fetchErr } = await query;
+    if (fetchErr || !allProjects || allProjects.length === 0) {
+      return {
+        success: true,
+        action: "delete_project",
+        deletedCount: 0,
+        message: "No projects found to delete in your workspace."
+      };
+    }
+
+    let targetProjects = allProjects;
+    if (nameLower.includes("active") || filterStatus === "active") {
+      targetProjects = allProjects.filter((p) => (p.settings?.status || p.status || "active") === "active");
+    } else if (nameLower.includes("completed") || filterStatus === "completed") {
+      targetProjects = allProjects.filter((p) => (p.settings?.status || p.status) === "completed");
+    } else if (nameLower.includes("archived") || filterStatus === "archived") {
+      targetProjects = allProjects.filter((p) => (p.settings?.status || p.status) === "archived");
+    }
+
+    if (targetProjects.length === 0) {
+      return {
+        success: true,
+        action: "delete_project",
+        deletedCount: 0,
+        message: `No matching projects found to delete.`
+      };
+    }
+
+    const idsToDelete = targetProjects.map((p) => p.id);
+    let delQuery = supabase.from("projects").delete().in("id", idsToDelete);
+    if (organizationId) {
+      delQuery = delQuery.eq("organization_id", organizationId);
+    }
+    const { error: delErr } = await delQuery;
+    if (delErr) {
+      throw new Error(`Failed to bulk delete projects: ${delErr.message}`);
+    }
+
+    return {
+      success: true,
+      action: "delete_project",
+      deletedCount: targetProjects.length,
+      deletedProjectIds: idsToDelete,
+      message: `Successfully deleted ${targetProjects.length} project(s) (${targetProjects.map((p) => p.name).join(", ")}).`
+    };
+  }
+
+  // Handle Single Project Deletion
+  let targetId = projectId;
+
+  if (!targetId && projectName) {
+    const cleanSearchName = projectName.replace(/^(the|a|an|project|application|named|called)\s+/gi, "").trim();
+    let { data: found } = await supabase
+      .from("projects")
+      .select("id, name")
+      .ilike("name", `%${cleanSearchName}%`)
+      .limit(1);
+
+    if (found && found.length > 0) {
+      targetId = found[0].id;
+    }
+  }
+
+  if (!targetId) {
+    let { data: latest } = await supabase
+      .from("projects")
+      .select("id, name")
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (latest && latest.length > 0) {
+      targetId = latest[0].id;
+    }
+  }
+
+  if (!targetId) {
+    throw new Error(`Could not find project matching name or ID '${projectId || projectName}'.`);
+  }
+
+  const { data: proj } = await supabase.from("projects").select("name").eq("id", targetId).single();
+
+  let query = supabase.from("projects").delete().eq("id", targetId);
+  if (organizationId) {
+    query = query.eq("organization_id", organizationId);
+  }
+
+  const { error } = await query;
+  if (error) {
+    throw new Error(`Failed to delete project: ${error.message}`);
+  }
+
+  return {
+    success: true,
+    action: "delete_project",
+    deletedProjectId: targetId,
+    message: `Project '${proj?.name || targetId}' successfully deleted.`
+  };
+}
+
+/**
+ * 6. Action: Archive / Unarchive Project
+ */
+async function archiveProjectAction({ projectId, archive = true, userId, organizationId = null }) {
+  if (!projectId) {
+    throw new Error("Project ID is required for archiving.");
+  }
+
+  const status = archive ? "archived" : "active";
+
+  const { data: currProject } = await supabase.from("projects").select("settings").eq("id", projectId).single();
+  const updatedSettings = { ...(currProject?.settings || {}), status };
+
+  const { data: updatedProject, error } = await supabase
+    .from("projects")
+    .update({ settings: updatedSettings, updated_at: new Date().toISOString() })
+    .eq("id", projectId)
+    .select()
+    .single();
+
+  if (error || !updatedProject) {
+    throw new Error(`Failed to update project archive status: ${error?.message || "Project not found"}`);
+  }
+
+  return {
+    success: true,
+    action: "archive_project",
+    project: updatedProject,
+    message: `Project '${updatedProject.name}' status set to '${status}'.`
+  };
+}
+
+/**
+ * 7. Action: Update Project Status
+ */
+async function updateProjectStatusAction({ projectId, status = "active", userId, organizationId = null }) {
+  if (!projectId) {
+    throw new Error("Project ID is required to update status.");
+  }
+
+  const { data: currProject } = await supabase.from("projects").select("settings").eq("id", projectId).single();
+  const updatedSettings = { ...(currProject?.settings || {}), status };
+
+  const { data: updatedProject, error } = await supabase
+    .from("projects")
+    .update({ settings: updatedSettings, updated_at: new Date().toISOString() })
+    .eq("id", projectId)
+    .select()
+    .single();
+
+  if (error || !updatedProject) {
+    throw new Error(`Failed to update project status: ${error?.message || "Project not found"}`);
+  }
+
+  return {
+    success: true,
+    action: "update_project_status",
+    project: updatedProject,
+    message: `Project '${updatedProject.name}' status set to '${status}'.`
+  };
+}
+
+/**
+ * 8. Action: Get Project Summary / Search
+ */
+async function getProjectSummaryAction({ projectId = null, searchQuery = null, userId, organizationId = null }) {
+  let query = supabase.from("projects").select("*, documents(*)");
+
+  if (projectId) {
+    query = query.eq("id", projectId);
+  } else if (searchQuery) {
+    query = query.ilike("name", `%${searchQuery}%`);
+  }
+
+  if (organizationId) {
+    query = query.eq("organization_id", organizationId);
+  }
+
+  const { data: projects, error } = await query.limit(5);
+
+  if (error || !projects || projects.length === 0) {
+    return {
+      success: true,
+      action: "get_project_summary",
+      projects: [],
+      message: "No matching projects found."
+    };
+  }
+
+  const summaries = projects.map((p) => ({
+    id: p.id,
+    name: p.name,
+    status: p.status || "active",
+    source_lang: p.source_lang,
+    target_languages: p.target_languages || p.target_lang,
+    documents_count: (p.documents || []).length,
+    description: p.description
+  }));
+
+  return {
+    success: true,
+    action: "get_project_summary",
+    projects: summaries,
+    message: `Found ${summaries.length} project(s): ${summaries.map((s) => `${s.name} (${s.status})`).join(", ")}.`
+  };
+}
+
+/**
+ * 9. Action: Update / Extend Due Date & Deadline
+ */
+async function updateDueDateAction({ projectId = null, searchQuery = null, dueDate, userId, organizationId = null }) {
+  if (!dueDate) {
+    throw new Error("Due date / deadline value is required.");
+  }
+
+  let targetIds = [];
+
+  if (projectId) {
+    targetIds = [projectId];
+  } else if (searchQuery) {
+    let q = supabase.from("projects").select("id").ilike("name", `%${searchQuery.trim()}%`);
+    if (organizationId) q = q.eq("organization_id", organizationId);
+    const { data: found } = await q;
+    if (found) targetIds = found.map((p) => p.id);
+  }
+
+  if (targetIds.length === 0) {
+    throw new Error(`Could not find project matching ID or search query '${projectId || searchQuery}'.`);
+  }
+
+  const updatedProjects = [];
+
+  for (const tid of targetIds) {
+    const { data: currProject } = await supabase.from("projects").select("settings").eq("id", tid).single();
+    const updatedSettings = { ...(currProject?.settings || {}), due_date: dueDate };
+
+    const { data: proj } = await supabase
+      .from("projects")
+      .update({ settings: updatedSettings, updated_at: new Date().toISOString() })
+      .eq("id", tid)
+      .select("id, name")
+      .single();
+
+    if (proj) updatedProjects.push(proj);
+  }
+
+  return {
+    success: true,
+    action: "update_due_date",
+    updatedCount: updatedProjects.length,
+    dueDate,
+    message: `Updated due date to '${dueDate}' for ${updatedProjects.length} project(s): ${updatedProjects.map((p) => p.name).join(", ")}.`
+  };
+}
+
+/**
  * OpenAI Tool Definitions Schema
  */
 const PROJECT_TOOLS = [
@@ -380,7 +647,7 @@ const PROJECT_TOOLS = [
     type: "function",
     function: {
       name: "create_project",
-      description: "Create a single localization project (or multiple projects if explicitly specified) from uploaded file IDs or instructions.",
+      description: "Create a single localization project with specified name, source language, target languages, due date, and domain context notes. NEVER ask for or require files.",
       parameters: {
         type: "object",
         properties: {
@@ -390,11 +657,6 @@ const PROJECT_TOOLS = [
             type: "array",
             items: { type: "string" },
             description: "List of target language codes e.g. ['hi', 'es', 'de']."
-          },
-          file_ids: {
-            type: "array",
-            items: { type: "string" },
-            description: "Array of uploaded document IDs to associate with this project."
           },
           due_date: { type: "string", description: "Optional due date ISO string or text e.g. 2026-09-01." },
           notes: { type: "string", description: "Project domain context notes, style guidelines, or translator instructions." }
@@ -461,6 +723,80 @@ const PROJECT_TOOLS = [
         required: ["project_id", "context_notes"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_project",
+      description: "Delete an existing project or application by ID or project name.",
+      parameters: {
+        type: "object",
+        properties: {
+          project_id: { type: "string", description: "ID of the project to delete." },
+          project_name: { type: "string", description: "Name of the project to delete if ID is unknown." }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "archive_project",
+      description: "Archive or unarchive a project.",
+      parameters: {
+        type: "object",
+        properties: {
+          project_id: { type: "string", description: "ID of the project." },
+          archive: { type: "boolean", description: "True to archive, false to restore." }
+        },
+        required: ["project_id"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_project_status",
+      description: "Update the status of a project (active, completed, on_hold, archived).",
+      parameters: {
+        type: "object",
+        properties: {
+          project_id: { type: "string", description: "ID of the project." },
+          status: { type: "string", enum: ["active", "completed", "on_hold", "archived"], description: "New status." }
+        },
+        required: ["project_id", "status"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_project_summary",
+      description: "Search or retrieve summary stats for project(s).",
+      parameters: {
+        type: "object",
+        properties: {
+          project_id: { type: "string", description: "Optional project ID." },
+          search_query: { type: "string", description: "Optional search query by project name." }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_due_date",
+      description: "Update or extend the due date / deadline for a project or batch of projects.",
+      parameters: {
+        type: "object",
+        properties: {
+          project_id: { type: "string", description: "ID of the target project." },
+          search_query: { type: "string", description: "Optional search query by project name to update deadline in batch." },
+          due_date: { type: "string", description: "New due date / deadline ISO string or date e.g. 2026-09-01." }
+        },
+        required: ["due_date"]
+      }
+    }
   }
 ];
 
@@ -505,10 +841,10 @@ async function processAICommand({ prompt, fileIds = [], projectId = null, userId
           messages: [
             {
               role: "system",
-              content: `You are an AI Project Management Assistant for a CAT translation platform.
-Your task is to analyze user requests and call the appropriate tool to execute project operations.
-By default, if multiple files are provided, combine them into a SINGLE project unless the user explicitly requests separate projects.
-Active Context: User ID: ${userId}, Target Project ID (if any): ${projectId || "None"}, Uploaded File IDs: ${JSON.stringify(fileIds)}.`
+              content: `You are an AI Project Management Assistant for a CAT translation platform focused EXCLUSIVELY on project orchestration (creating projects, adding target languages, duplicating projects, updating due dates, setting context guidelines, updating project status, searching, and deleting projects).
+STRICT RULE ON FILES: You MUST NEVER ask the user to upload or attach files, and NEVER demand files to create or manage projects. Projects are created and managed purely using project metadata (name, source language, target languages, due dates, guidelines, and settings).
+IMPORTANT: You HAVE FULL AUTHORIZATION to delete projects when requested by the user. You MUST call the 'delete_project' tool whenever the user asks to delete, remove, or drop a project or application. NEVER output a text response saying deletion is not available.
+Active Context: User ID: ${userId}, Target Project ID (if any): ${projectId || "None"}.`
             },
             {
               role: "user",
@@ -570,6 +906,49 @@ Active Context: User ID: ${userId}, Target Project ID (if any): ${projectId || "
               userId
             });
             results.push(res);
+          } else if (fnName === "delete_project") {
+            const res = await deleteProjectAction({
+              projectId: args.project_id || projectId,
+              projectName: args.project_name || prompt,
+              deleteAll: args.delete_all || /all|every|batch/i.test(prompt),
+              filterStatus: args.filter_status,
+              userId,
+              organizationId
+            });
+            results.push(res);
+          } else if (fnName === "archive_project") {
+            const res = await archiveProjectAction({
+              projectId: args.project_id || projectId,
+              archive: args.archive !== false,
+              userId,
+              organizationId
+            });
+            results.push(res);
+          } else if (fnName === "update_project_status") {
+            const res = await updateProjectStatusAction({
+              projectId: args.project_id || projectId,
+              status: args.status,
+              userId,
+              organizationId
+            });
+            results.push(res);
+          } else if (fnName === "get_project_summary") {
+            const res = await getProjectSummaryAction({
+              projectId: args.project_id || projectId,
+              searchQuery: args.search_query,
+              userId,
+              organizationId
+            });
+            results.push(res);
+          } else if (fnName === "update_due_date") {
+            const res = await updateDueDateAction({
+              projectId: args.project_id || projectId,
+              searchQuery: args.search_query,
+              dueDate: args.due_date,
+              userId,
+              organizationId
+            });
+            results.push(res);
           }
         }
 
@@ -581,7 +960,24 @@ Active Context: User ID: ${userId}, Target Project ID (if any): ${projectId || "
         };
       }
 
-      // If text response without tool call
+      // If text response without tool call, check if it was a false deletion refusal
+      const aiText = message?.content || "";
+      if (/\b(delete|remove|capability|not available)\b/i.test(aiText) && /\b(delete|remove|drop|erase|purge)\b/i.test(prompt)) {
+        const targetProjId = projectId || (prompt.match(/project ([0-9a-f-]+)/i) || [])[1];
+        const isBulk = /all|every|batch/i.test(prompt);
+        const nameMatch = prompt.match(/(?:delete|remove|drop|erase|purge)\s+(?:project|projects|application|applications)?\s*['"]?([^'"]+)['"]?/i) || prompt.match(/project [s]?\s*['"]?([^'"]+)['"]?/i);
+        const targetName = nameMatch ? nameMatch[1].replace(/^(named|called)\s+/i, "").trim() : prompt;
+
+        const res = await deleteProjectAction({
+          projectId: targetProjId,
+          projectName: targetName,
+          deleteAll: isBulk,
+          userId,
+          organizationId
+        });
+        return res;
+      }
+
       return {
         success: true,
         aiResponse: message?.content,
@@ -594,6 +990,31 @@ Active Context: User ID: ${userId}, Target Project ID (if any): ${projectId || "
 
   // 3. Fallback Deterministic Parser (if no OpenAI key or API call fails)
   const lowerPrompt = prompt.toLowerCase();
+
+  if (lowerPrompt.includes("delete") || lowerPrompt.includes("remove")) {
+    const targetProjId = projectId || (prompt.match(/project ([0-9a-f-]+)/i) || [])[1];
+    const nameMatch = prompt.match(/project ['"]?([^'"]+)['"]?/i) || prompt.match(/delete ['"]?([^'"]+)['"]?/i);
+    const targetName = nameMatch ? nameMatch[1] : null;
+
+    const res = await deleteProjectAction({
+      projectId: targetProjId,
+      projectName: targetName,
+      userId,
+      organizationId
+    });
+    return res;
+  }
+
+  if (lowerPrompt.includes("archive")) {
+    const targetProjId = projectId || (prompt.match(/project ([0-9a-f-]+)/i) || [])[1];
+    const res = await archiveProjectAction({
+      projectId: targetProjId,
+      archive: !lowerPrompt.includes("unarchive") && !lowerPrompt.includes("restore"),
+      userId,
+      organizationId
+    });
+    return res;
+  }
 
   if (lowerPrompt.includes("duplicate") || lowerPrompt.includes("clone") || lowerPrompt.includes("copy project")) {
     const scope = lowerPrompt.includes("translation") || lowerPrompt.includes("full") ? "full_with_translations" : "source_only";
@@ -655,5 +1076,10 @@ module.exports = {
   createProjectAction,
   duplicateProjectAction,
   addTargetLanguagesAction,
-  setProjectContextAction
+  setProjectContextAction,
+  deleteProjectAction,
+  archiveProjectAction,
+  updateProjectStatusAction,
+  getProjectSummaryAction,
+  updateDueDateAction
 };

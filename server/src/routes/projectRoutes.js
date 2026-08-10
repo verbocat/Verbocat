@@ -43,7 +43,21 @@ projectRouter.get(["/projects", "/api/projects"], checkAuth, async (request, res
 // 2. Create Project
 projectRouter.post(["/projects", "/api/projects"], checkAuth, async (request, response) => {
   try {
-    const { name, source_lang, target_lang, sourceLanguage, targetLanguages, due_date, notes } = request.body;
+    const {
+      name,
+      client,
+      description,
+      source_lang,
+      target_lang,
+      target_languages,
+      sourceLanguage,
+      targetLanguages,
+      due_date,
+      deadline,
+      dueDate,
+      notes,
+      settings
+    } = request.body;
     const userId = request.user.id;
     const activeTenantId = request.tenant?.id || request.profile?.organization_id || null;
 
@@ -52,33 +66,46 @@ projectRouter.post(["/projects", "/api/projects"], checkAuth, async (request, re
     }
 
     const sLang = source_lang || sourceLanguage || "en";
-    const tLang = target_lang || targetLanguages || ["hi"];
-    const tLangsArray = Array.isArray(tLang) ? tLang : [tLang];
+    const tLangRaw = target_languages || targetLanguages || target_lang || ["hi"];
+    const tLangsArray = Array.isArray(tLangRaw) ? tLangRaw : [tLangRaw];
 
     if (tLangsArray.includes(sLang)) {
       return response.status(400).json({ error: "Source and target language cannot be the same." });
     }
 
+    const dDate = due_date || deadline || dueDate || null;
+    const projDescription = description || notes || "";
+    const mergedSettings = { ...(settings || {}), due_date: dDate };
+
+    const insertPayload = {
+      name: name.trim(),
+      owner_id: userId,
+      source_lang: sLang,
+      target_languages: tLangsArray,
+      description: projDescription,
+      settings: mergedSettings,
+      organization_id: activeTenantId
+    };
+
+    if (client) {
+      insertPayload.client = client;
+    }
+
     const { data: project, error } = await supabase
       .from("projects")
-      .insert({
-        name: name.trim(),
-        owner_id: userId,
-        source_lang: sLang,
-        target_lang: tLang,
-        due_date: due_date || null,
-        notes: notes || "",
-        organization_id: activeTenantId
-      })
+      .insert(insertPayload)
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error("Supabase Project Insert Error:", error);
+      throw error;
+    }
 
     response.json({ project });
   } catch (error) {
     console.error("Create Project Error:", error);
-    response.status(500).json({ error: "Failed to create project" });
+    response.status(500).json({ error: error.message || "Failed to create project" });
   }
 });
 
@@ -298,15 +325,23 @@ projectRouter.get(["/projects/:projectId/analytics", "/api/projects/:projectId/a
 projectRouter.put(["/projects/:id", "/api/projects/:id"], checkAuth, async (request, response) => {
   try {
     const { id } = request.params;
-    const { name, status, due_date, notes } = request.body;
+    const { name, status, due_date, notes, description } = request.body;
     const activeTenantId = request.tenant?.id || request.profile?.organization_id;
     const isSuperAdmin = request.profile?.role === "super_admin";
 
+    const { data: currProject } = await supabase.from("projects").select("settings").eq("id", id).single();
+    const currSettings = currProject?.settings || {};
+
     const updateData = {};
     if (name !== undefined) updateData.name = name.trim();
-    if (status !== undefined) updateData.status = status;
-    if (due_date !== undefined) updateData.due_date = due_date;
-    if (notes !== undefined) updateData.notes = notes;
+    if (description !== undefined || notes !== undefined) {
+      updateData.description = description || notes || "";
+    }
+
+    const newSettings = { ...currSettings };
+    if (status !== undefined) newSettings.status = status;
+    if (due_date !== undefined) newSettings.due_date = due_date;
+    updateData.settings = newSettings;
     updateData.updated_at = new Date().toISOString();
 
     let query = supabase.from("projects").update(updateData).eq("id", id);
@@ -320,7 +355,7 @@ projectRouter.put(["/projects/:id", "/api/projects/:id"], checkAuth, async (requ
     response.json({ project: updatedProject });
   } catch (error) {
     console.error("Update Project Error:", error);
-    response.status(500).json({ error: "Failed to update project" });
+    response.status(500).json({ error: error.message || "Failed to update project" });
   }
 });
 

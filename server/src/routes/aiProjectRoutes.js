@@ -120,4 +120,27 @@ aiProjectRouter.post(["/projects/:id/context", "/api/projects/:id/context"], asy
   }
 });
 
+/**
+ * 5. Delete Project Endpoint
+ */
+aiProjectRouter.post(["/projects/:id/ai-delete", "/api/projects/:id/ai-delete"], async (req, res) => {
+  try {
+    const projectId = req.params.id;
+    const userId = req.user.id;
+    const organizationId = req.tenant?.id || req.profile?.organization_id || null;
+
+    const { deleteProjectAction } = require("../services/aiProjectOrchestrator");
+    const result = await deleteProjectAction({
+      projectId,
+      userId,
+      organizationId
+    });
+
+    return res.json(result);
+  } catch (error) {
+    console.error("AI Delete Project Error:", error);
+    return res.status(500).json({ error: error.message || "Failed to delete project." });
+  }
+});
+
 module.exports = aiProjectRouter;

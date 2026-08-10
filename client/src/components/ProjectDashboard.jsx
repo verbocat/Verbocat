@@ -365,16 +365,6 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
           </div>
         </section>
 
-        {/* ── SMART AI PROJECT ASSISTANT ── */}
-        <SmartAIProjectBar
-          onSuccess={() => loadProjects()}
-          showToast={showToast}
-          onOpenDuplicateModal={(projId) => {
-            const found = projects.find((p) => String(p.id) === String(projId));
-            setDuplicateModalProject(found || { id: projId, name: "Selected Project", target_lang: ["hi"] });
-          }}
-        />
-
         {/* ── TOOLBAR: TABS & FILTERS ── */}
         <section className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
           
@@ -775,20 +765,6 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
             </div>
 
             <form onSubmit={handleCreateProject} className="space-y-5 overflow-y-auto pr-1">
-              {/* AI Quick Create Bar */}
-              <SmartAIProjectBar
-                onSuccess={() => {
-                  setShowCreateModal(false);
-                  loadProjects();
-                }}
-                showToast={showToast}
-                onOpenDuplicateModal={(projId) => {
-                  setShowCreateModal(false);
-                  const found = projects.find((p) => String(p.id) === String(projId));
-                  setDuplicateModalProject(found || { id: projId, name: "Selected Project", target_lang: ["hi"] });
-                }}
-              />
-
               {/* Section 1: Core Project Identity */}
               <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-4.5 space-y-4">
                 <span className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
@@ -1118,6 +1094,16 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
           showToast={showToast}
         />
       )}
+
+      {/* Fixed Bottom Google Gemini AI Bar */}
+      <SmartAIProjectBar
+        onSuccess={() => loadProjects()}
+        showToast={showToast}
+        onOpenDuplicateModal={(projId) => {
+          const found = projects.find((p) => String(p.id) === String(projId));
+          setDuplicateModalProject(found || { id: projId, name: "Selected Project", target_lang: ["hi"] });
+        }}
+      />
 
     </div>
   );

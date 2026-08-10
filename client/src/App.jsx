@@ -61,6 +61,7 @@ import { getTheme } from "./utils/theme.js";
 import { Globe } from "lucide-react";
 import ProjectDashboard from "./components/ProjectDashboard.jsx";
 import ProjectDetails from "./components/ProjectDetails.jsx";
+import { LinguistRestrictedScreen } from "./components/LinguistRestrictedScreen.jsx";
 
 
 export default function App() {
@@ -3184,35 +3185,41 @@ export default function App() {
         />
       )}
 
-      {currentRoute.screen === "dashboard" && (
-        <ProjectDashboard
-          onOpenProject={(projId) => navigateTo(`/project/${projId}`)}
-          showToast={showToast}
-          theme={theme}
-          userRole={user ? user.role : ""}
-          onOpenAdmin={() => setShowAdminDashboard(true)}
-          onOpenSettings={() => setShowSettingsModal(true)}
-          onLogout={logout}
-        />
-      )}
+      {user?.role === "linguist" && currentRoute.screen !== "editor" ? (
+        <LinguistRestrictedScreen user={user} onLogout={logout} />
+      ) : (
+        <>
+          {currentRoute.screen === "dashboard" && (
+            <ProjectDashboard
+              onOpenProject={(projId) => navigateTo(`/project/${projId}`)}
+              showToast={showToast}
+              theme={theme}
+              userRole={user ? user.role : ""}
+              onOpenAdmin={() => setShowAdminDashboard(true)}
+              onOpenSettings={() => setShowSettingsModal(true)}
+              onLogout={logout}
+            />
+          )}
 
-      {currentRoute.screen === "project" && (
-        <ProjectDetails
-          projectId={currentRoute.projectId}
-          onBack={() => navigateTo("/")}
-          onOpenEditor={(jobId, docId, lang) => {
-            navigateTo(`/project/${currentRoute.projectId}/file/${docId}/lang/${lang}`);
-          }}
-          showToast={showToast}
-          theme={theme}
-          token={token}
-          onOpenSettings={() => setShowSettingsModal(true)}
-          refreshTrigger={projectRefreshTrigger}
-          userRole={user ? user.role : ""}
-          userId={user ? user.id : null}
-          onOpenAdmin={() => setShowAdminDashboard(true)}
-          onLogout={logout}
-        />
+          {currentRoute.screen === "project" && (
+            <ProjectDetails
+              projectId={currentRoute.projectId}
+              onBack={() => navigateTo("/")}
+              onOpenEditor={(jobId, docId, lang) => {
+                navigateTo(`/project/${currentRoute.projectId}/file/${docId}/lang/${lang}`);
+              }}
+              showToast={showToast}
+              theme={theme}
+              token={token}
+              onOpenSettings={() => setShowSettingsModal(true)}
+              refreshTrigger={projectRefreshTrigger}
+              userRole={user ? user.role : ""}
+              userId={user ? user.id : null}
+              onOpenAdmin={() => setShowAdminDashboard(true)}
+              onLogout={logout}
+            />
+          )}
+        </>
       )}
 
       {currentRoute.screen === "editor" && (
