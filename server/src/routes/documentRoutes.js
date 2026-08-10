@@ -274,10 +274,19 @@ documentRouter.get(["/documents/:id/access-requests", "/api/documents/:id/access
   }
 });
 
-documentRouter.post(["/documents/:id/respond-request", "/api/documents/:id/respond-request"], checkAuth, async (request, response) => {
-  try {
-    const { id } = request.params;
-    const { requestId, action } = request.body; // action: 'approve' or 'reject'
+documentRouter.post(
+  [
+    "/documents/:id/respond-request",
+    "/api/documents/:id/respond-request",
+    "/documents/:id/access-requests/:requestId/respond",
+    "/api/documents/:id/access-requests/:requestId/respond"
+  ],
+  checkAuth,
+  async (request, response) => {
+    try {
+      const { id, requestId: paramReqId } = request.params;
+      const { requestId: bodyReqId, action } = request.body; // action: 'approve' or 'reject'
+      const requestId = paramReqId || bodyReqId;
 
     const { data: reqRow } = await supabase
       .from("document_access_requests")

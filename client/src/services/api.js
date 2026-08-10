@@ -383,7 +383,10 @@ export const fetchAccessRequests = async (documentId) => {
 };
 
 export const respondToAccessRequest = async (documentId, requestId, action) => {
-  const response = await api.post(`/api/documents/${documentId}/access-requests/${requestId}/respond`, { action });
+  const response = await api.post(`/api/documents/${documentId}/access-requests/${requestId}/respond`, {
+    requestId,
+    action
+  });
   return response.data;
 };
 
