@@ -100,7 +100,7 @@ export default function App() {
   });
   const [autoPropagateEnabled, setAutoPropagateEnabled] = useState(() => {
     const saved = localStorage.getItem("centroid_autopropagate_enabled");
-    return saved !== null ? saved === "true" : true;
+    return saved !== null ? saved === "true" : false;
   });
   const [searchQuery, setSearchQuery] = useState("");
   const [isDragging, setIsDragging] = useState(false);
@@ -1912,29 +1912,11 @@ export default function App() {
             }
           }
           affected.push(updated);
-        } else if (autoPropagateEnabled && cleanedSource && cleanString(segment.source) === cleanedSource) {
-          const propagatedVal = propagateTranslation(value, segment.source);
-          updated.target = propagatedVal;
-          if (trackChangesEnabled && !isOwnerLocal) {
-            const orig = segment.originalTargetText !== null && segment.originalTargetText !== undefined
-              ? segment.originalTargetText
-              : (isTrackInit ? segment.target || "" : null);
-            if (orig !== null) {
-              if (propagatedVal === orig) {
-                updated.originalTargetText = null;
-                updated.trackedBy = null;
-              } else {
-                updated.originalTargetText = orig;
-                updated.trackedBy = user?.email;
-              }
-            }
-          }
-          affected.push(updated);
         }
         return updated;
       });
 
-      // Queue affected segments into pendingBulkSaveRef & trigger 300ms debounced auto-save
+      // Queue affected segment into pendingBulkSaveRef & trigger 250ms debounced auto-save
       if (affected.length > 0) {
         persistBulkSegmentUpdates(affected, false);
       }
