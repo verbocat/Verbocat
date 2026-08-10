@@ -168,16 +168,41 @@ export default function App() {
   };
   const parseUrlRoute = () => {
     const path = window.location.pathname;
-    const jobMatch = path.match(/^\/project\/([^\/]+)\/file\/([^\/]+)\/lang\/([^\/]+)/);
+    const searchParams = new URLSearchParams(window.location.search);
+    const docParam = searchParams.get("doc");
+    const langParam = searchParams.get("lang");
+
+    // 1. /project/:projectId/file/:fileId/lang/:targetLang or /project/:projectId/file/:fileId
+    const jobMatch = path.match(/^\/project\/([^\/]+)\/file\/([^\/]+)(?:\/lang\/([^\/]+))?/);
     if (jobMatch) {
       return {
         screen: "editor",
         projectId: jobMatch[1],
         fileId: jobMatch[2],
-        targetLang: jobMatch[3]
+        targetLang: jobMatch[3] || langParam || "hi"
       };
     }
 
+    // 2. /file/:fileId or /file/:fileId/lang/:targetLang
+    const fileMatch = path.match(/^\/file\/([^\/]+)(?:\/lang\/([^\/]+))?/);
+    if (fileMatch) {
+      return {
+        screen: "editor",
+        fileId: fileMatch[1],
+        targetLang: fileMatch[2] || langParam || "hi"
+      };
+    }
+
+    // 3. Query param ?doc=:fileId or ?doc=:fileId&lang=:targetLang
+    if (docParam) {
+      return {
+        screen: "editor",
+        fileId: docParam,
+        targetLang: langParam || "hi"
+      };
+    }
+
+    // 4. /project/:projectId
     const projectMatch = path.match(/^\/project\/([^\/]+)/);
     if (projectMatch) {
       return {
@@ -1199,8 +1224,9 @@ export default function App() {
       setDocumentId(docId);
 
       if (docId) {
-        const newUrl = `${window.location.origin}${window.location.pathname}?doc=${docId}`;
+        const newUrl = `/file/${docId}/lang/${targetLanguage}${getSpaceQuery()}`;
         window.history.pushState({ path: newUrl }, '', newUrl);
+        setCurrentRoute(parseUrlRoute());
       }
       
       if (isAutoRelink) {
