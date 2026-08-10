@@ -232,33 +232,43 @@ async function getDocumentPermission(documentId, user, profile) {
     return { hasAccess: true, permission: "write", document: doc };
   }
 
-  // 4. Check explicit permission entry in `document_access` table
+  // 4. Project Owner (if document belongs to a project) has full write access
+  if (doc.project_id) {
+    try {
+      const { data: proj } = await supabase
+        .from("projects")
+        .select("owner_id")
+        .eq("id", doc.project_id)
+        .single();
+
+      if (proj && proj.owner_id === userId) {
+        return { hasAccess: true, permission: "write", document: doc };
+      }
+    } catch (_) {}
+  }
+
+  // 5. Check explicit permission entry in `document_access` table
   try {
     const { data: accessRow } = await supabase
       .from("document_access")
-      .select("permission, status")
+      .select("permission")
       .eq("document_id", documentId)
       .eq("user_id", userId)
       .maybeSingle();
 
     if (accessRow) {
-      if (accessRow.status === "rejected") {
-        return { hasAccess: false, permission: null, document: doc };
-      }
-      if (accessRow.status === "approved" || accessRow.status === "active" || !accessRow.status) {
-        const perm = accessRow.permission === "read" ? "read" : "write";
-        return { hasAccess: true, permission: perm, document: doc };
-      }
+      const perm = accessRow.permission === "read" ? "read" : "write";
+      return { hasAccess: true, permission: perm, document: doc };
     }
   } catch (_) {}
 
-  // 5. Check if assigned to any job for this document in `jobs` table
+  // 6. Check if assigned to any job for this document in `translation_jobs` table
   try {
     const { data: jobAssignment } = await supabase
-      .from("jobs")
+      .from("translation_jobs")
       .select("id")
       .eq("document_id", documentId)
-      .or(`translator_id.eq.${userId},assignee_id.eq.${userId},user_id.eq.${userId}`)
+      .or(`translator_id.eq.${userId},assignee_id.eq.${userId}`)
       .limit(1);
 
     if (jobAssignment && jobAssignment.length > 0) {
@@ -266,7 +276,7 @@ async function getDocumentPermission(documentId, user, profile) {
     }
   } catch (_) {}
 
-  // 6. No matching permission found -> ACCESS DENIED
+  // 7. No matching permission found -> ACCESS DENIED
   return { hasAccess: false, permission: null, document: doc };
 }
 

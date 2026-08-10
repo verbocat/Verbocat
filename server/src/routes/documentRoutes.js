@@ -220,17 +220,16 @@ documentRouter.get(["/documents/:id/access", "/api/documents/:id/access"], check
 documentRouter.get(["/documents/:id/request-status", "/api/documents/:id/request-status"], checkAuth, async (request, response) => {
   try {
     const { id } = request.params;
-    const { data: access } = await supabase
-      .from("document_access")
-      .select("status, permission")
+    const { data: reqRow } = await supabase
+      .from("document_access_requests")
+      .select("status")
       .eq("document_id", id)
       .eq("user_id", request.user.id)
       .maybeSingle();
 
     return response.json({
-      hasPendingRequest: access?.status === "pending",
-      status: access?.status || "none",
-      permission: access?.permission || null
+      hasPendingRequest: reqRow?.status === "pending",
+      status: reqRow?.status || "none"
     });
   } catch (err) {
     return response.json({ hasPendingRequest: false, status: "none" });
@@ -240,15 +239,13 @@ documentRouter.get(["/documents/:id/request-status", "/api/documents/:id/request
 documentRouter.post(["/documents/:id/request-access", "/api/documents/:id/request-access"], checkAuth, async (request, response) => {
   try {
     const { id } = request.params;
-    const { permission } = request.body;
 
     const { error } = await supabase
-      .from("document_access")
+      .from("document_access_requests")
       .upsert(
         {
           document_id: id,
           user_id: request.user.id,
-          permission: permission || "write",
           status: "pending"
         },
         { onConflict: "document_id,user_id" }
@@ -266,7 +263,7 @@ documentRouter.get(["/documents/:id/access-requests", "/api/documents/:id/access
   try {
     const { id } = request.params;
     const { data: reqs } = await supabase
-      .from("document_access")
+      .from("document_access_requests")
       .select("*, profiles(*)")
       .eq("document_id", id)
       .eq("status", "pending");
@@ -282,15 +279,36 @@ documentRouter.post(["/documents/:id/respond-request", "/api/documents/:id/respo
     const { id } = request.params;
     const { requestId, action } = request.body; // action: 'approve' or 'reject'
 
+    const { data: reqRow } = await supabase
+      .from("document_access_requests")
+      .select("user_id")
+      .eq("id", requestId)
+      .single();
+
+    if (!reqRow) return response.status(404).json({ error: "Access request not found" });
+
     const newStatus = action === "approve" ? "approved" : "rejected";
-    const { error } = await supabase
-      .from("document_access")
-      .update({ status: newStatus, permission: newStatus === "approved" ? "write" : "none" })
+    await supabase
+      .from("document_access_requests")
+      .update({ status: newStatus })
       .eq("id", requestId);
 
-    if (error) throw error;
+    if (action === "approve") {
+      await supabase
+        .from("document_access")
+        .upsert(
+          {
+            document_id: id,
+            user_id: reqRow.user_id,
+            permission: "write"
+          },
+          { onConflict: "document_id,user_id" }
+        );
+    }
+
     return response.json({ success: true, status: newStatus });
   } catch (err) {
+    console.error("Respond Access Request Error:", err);
     return response.status(500).json({ error: "Failed to respond to access request" });
   }
 });
