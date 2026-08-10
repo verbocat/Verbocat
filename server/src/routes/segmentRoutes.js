@@ -169,16 +169,61 @@ segmentRouter.put([
     if (mqmAccuracyScore !== undefined) updateFields.mqm_accuracy_score = mqmAccuracyScore;
     if (mqmReport !== undefined) updateFields.mqm_report = mqmReport;
 
-    const { data, error } = await supabase
+    const segIndex = Number(index);
+
+    // 1. Try updating existing row matching target_lang = targetLang
+    let { data, error } = await supabase
       .from("document_segments")
       .update(updateFields)
       .eq("document_id", id)
+      .eq("segment_index", segIndex)
       .eq("target_lang", targetLang)
-      .eq("segment_index", Number(index))
       .select()
-      .single();
+      .maybeSingle();
 
-    if (error) throw error;
+    // 2. If no row matched target_lang, try updating row matching target_lang IS NULL
+    if (!data) {
+      const { data: nullRow } = await supabase
+        .from("document_segments")
+        .update({
+          ...updateFields,
+          target_lang: targetLang
+        })
+        .eq("document_id", id)
+        .eq("segment_index", segIndex)
+        .is("target_lang", null)
+        .select()
+        .maybeSingle();
+
+      data = nullRow;
+    }
+
+    // 3. If STILL no row found, upsert a brand new row
+    if (!data) {
+      const { data: inserted, error: insErr } = await supabase
+        .from("document_segments")
+        .upsert(
+          {
+            document_id: id,
+            segment_index: segIndex,
+            target_lang: targetLang,
+            target_text: updateFields.target_text || "",
+            status: updateFields.status || "draft",
+            mqm_accuracy_score: updateFields.mqm_accuracy_score || 100,
+            mqm_report: updateFields.mqm_report || null,
+            updated_at: updateFields.updated_at
+          },
+          { onConflict: "document_id,segment_index,target_lang" }
+        )
+        .select()
+        .single();
+
+      if (insErr) {
+        console.error("Segment Upsert Error:", insErr);
+        throw insErr;
+      }
+      data = inserted;
+    }
 
     // Broadcast socket event
     const { getIo } = require("../services/socket");

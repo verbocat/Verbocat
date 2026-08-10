@@ -123,14 +123,41 @@ const resegmentDocumentInDb = async (documentId, sourceSegments) => {
 
 const fetchAllSegments = async (documentId, select = "*", targetLang = null) => {
   if (targetLang && targetLang !== "source") {
-    // 1. Fetch template segments (target_lang IS NULL)
+    // 1. Fetch template segments (target_lang IS NULL or target_lang = source)
     let sourceSegments = await fetchAllSegmentsRaw(documentId, select, "source");
 
     // 2. Fetch target language segments
     let targetSegments = await fetchAllSegmentsRaw(documentId, select, targetLang);
 
-    // 3. If targetSegments is EMPTY or length mismatch, clone/initialize fresh target segments
-    if ((!targetSegments || targetSegments.length === 0 || targetSegments.length !== sourceSegments.length) && sourceSegments && sourceSegments.length > 0) {
+    // 3. Deduplicate targetSegments by segment_index (preferring non-empty target_text and latest updated_at)
+    if (targetSegments && targetSegments.length > 0) {
+      const segMap = new Map();
+      targetSegments.forEach(seg => {
+        const idx = seg.segment_index;
+        if (!segMap.has(idx)) {
+          segMap.set(idx, seg);
+        } else {
+          const existing = segMap.get(idx);
+          const hasText = seg.target_text && String(seg.target_text).trim().length > 0;
+          const existingHasText = existing.target_text && String(existing.target_text).trim().length > 0;
+          if (hasText && !existingHasText) {
+            segMap.set(idx, seg);
+          } else if (hasText && existingHasText) {
+            if (new Date(seg.updated_at || 0) >= new Date(existing.updated_at || 0)) {
+              segMap.set(idx, seg);
+            }
+          } else if (!hasText && !existingHasText) {
+            if (new Date(seg.updated_at || 0) >= new Date(existing.updated_at || 0)) {
+              segMap.set(idx, seg);
+            }
+          }
+        }
+      });
+      targetSegments = Array.from(segMap.values());
+    }
+
+    // 4. If targetSegments is EMPTY, clone/initialize fresh target segments from source
+    if ((!targetSegments || targetSegments.length === 0) && sourceSegments && sourceSegments.length > 0) {
       targetSegments = sourceSegments.map(src => ({
         ...src,
         target_lang: targetLang,
