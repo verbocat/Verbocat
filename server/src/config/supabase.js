@@ -174,19 +174,20 @@ const fetchAllSegments = async (documentId, select = "*", targetLang = null) => 
           target_text: "",
           status: "draft"
         }));
-        await supabase.from("document_segments").insert(seedInserts);
+        await supabase.from("document_segments").upsert(seedInserts, { onConflict: "document_id,segment_index,target_lang" });
       } catch (seedErr) {
         console.error("Failed to seed target segments:", seedErr);
       }
-    } else {
+    } else if (targetSegments && targetSegments.length > 0) {
       const sourceMap = {};
       sourceSegments.forEach(seg => {
-        sourceMap[seg.segment_index] = seg.source_text;
+        if (seg.source_text) sourceMap[seg.segment_index] = seg.source_text;
       });
 
       targetSegments = targetSegments.map(seg => ({
         ...seg,
-        source_text: sourceMap[seg.segment_index] || seg.source_text || ""
+        source_text: sourceMap[seg.segment_index] || seg.source_text || "",
+        target_text: seg.target_text !== undefined && seg.target_text !== null ? seg.target_text : ""
       }));
     }
 

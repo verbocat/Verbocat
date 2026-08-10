@@ -159,6 +159,7 @@ segmentRouter.put([
     const { id, index, lang } = request.params;
     const { targetText, status, mqmAccuracyScore, mqmReport, originalTargetText, trackedBy, targetLang: bodyLang } = request.body;
     const targetLang = lang || bodyLang || "hi";
+    const segIndex = Number(index);
 
     const updateFields = {
       target_text: targetText !== undefined ? targetText : "",
@@ -171,10 +172,8 @@ segmentRouter.put([
     if (originalTargetText !== undefined) updateFields.original_target_text = originalTargetText;
     if (trackedBy !== undefined) updateFields.tracked_by = trackedBy;
 
-    const segIndex = Number(index);
-
     // 1. Try updating existing row matching target_lang = targetLang
-    let { data, error } = await supabase
+    let { data } = await supabase
       .from("document_segments")
       .update(updateFields)
       .eq("document_id", id)
@@ -183,24 +182,7 @@ segmentRouter.put([
       .select()
       .maybeSingle();
 
-    // 2. If no row matched target_lang, try updating row matching target_lang IS NULL
-    if (!data) {
-      const { data: nullRow } = await supabase
-        .from("document_segments")
-        .update({
-          ...updateFields,
-          target_lang: targetLang
-        })
-        .eq("document_id", id)
-        .eq("segment_index", segIndex)
-        .is("target_lang", null)
-        .select()
-        .maybeSingle();
-
-      data = nullRow;
-    }
-
-    // 3. If STILL no row found, upsert a brand new row
+    // 2. If no row matched target_lang, upsert new target segment row without modifying template (target_lang: null) rows
     if (!data) {
       const { data: inserted, error: insErr } = await supabase
         .from("document_segments")
@@ -213,6 +195,8 @@ segmentRouter.put([
             status: updateFields.status || "draft",
             mqm_accuracy_score: updateFields.mqm_accuracy_score || 100,
             mqm_report: updateFields.mqm_report || null,
+            original_target_text: updateFields.original_target_text || null,
+            tracked_by: updateFields.tracked_by || null,
             updated_at: updateFields.updated_at
           },
           { onConflict: "document_id,segment_index,target_lang" }
@@ -232,7 +216,7 @@ segmentRouter.put([
     const io = getIo();
     if (io) {
       io.to(getDocumentRoomId(id, targetLang)).emit("segment-updated", {
-        segmentIndex: Number(index),
+        segmentIndex: segIndex,
         targetText: updateFields.target_text,
         status: updateFields.status,
         mqmAccuracyScore: updateFields.mqm_accuracy_score,
@@ -271,7 +255,6 @@ segmentRouter.post([
 
     console.log(`\n========================================`);
     console.log(`[SEGMENT_BULK_SAVE_REQUEST] DocId: ${id} | TargetLang: ${targetLang} | Count: ${updates.length}`);
-    console.log(`[SEGMENT_BULK_SAVE_DATA] Payload:`, JSON.stringify(updates.slice(0, 5), null, 2));
 
     for (const item of updates) {
       const { segmentIndex, targetText, status, originalTargetText, trackedBy } = item;
@@ -305,24 +288,7 @@ segmentRouter.post([
         console.error(`[SEGMENT_SAVE_ERR1] doc=${id} seg=${segIndex} lang=${targetLang}:`, err1.message);
       }
 
-      // 2. If no row matched target_lang, try updating row with target_lang IS NULL
-      if (!data) {
-        const { data: nullRow, error: err2 } = await supabase
-          .from("document_segments")
-          .update({ ...updateFields, target_lang: targetLang })
-          .eq("document_id", id)
-          .eq("segment_index", segIndex)
-          .is("target_lang", null)
-          .select()
-          .maybeSingle();
-
-        if (err2) {
-          console.error(`[SEGMENT_SAVE_ERR2] doc=${id} seg=${segIndex} null-lang:`, err2.message);
-        }
-        data = nullRow;
-      }
-
-      // 3. If STILL no row found, upsert a brand new row
+      // 2. If no row matched target_lang, upsert target segment row (never touching template target_lang IS NULL rows)
       if (!data) {
         const { data: inserted, error: insErr } = await supabase
           .from("document_segments")
@@ -347,10 +313,8 @@ segmentRouter.post([
       }
 
       if (data) {
-        console.log(`[SEGMENT_SAVE_SUCCESS] Seg #${segIndex} (${targetLang}) -> target_text: "${updateFields.target_text.substring(0, 30)}"`);
+        console.log(`[SEGMENT_SAVE_SUCCESS] Seg #${segIndex} (${targetLang}) -> target_text: "${updateFields.target_text.substring(0, 40)}"`);
         results.push(data);
-      } else {
-        console.error(`[SEGMENT_SAVE_FAIL] Seg #${segIndex} (${targetLang}) could not be updated or inserted!`);
       }
 
       // Broadcast socket event for real-time sync across all users
