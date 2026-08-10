@@ -403,6 +403,13 @@ export default function App() {
   const routeFileId = currentRoute?.fileId;
   const routeTargetLang = currentRoute?.targetLang;
 
+  const activeTargetLanguage = useMemo(() => {
+    if (currentRoute?.screen === "editor" && currentRoute?.targetLang) {
+      return currentRoute.targetLang;
+    }
+    return targetLanguage || "hi";
+  }, [currentRoute?.screen, currentRoute?.targetLang, targetLanguage]);
+
   const loadedDocIdRef = useRef(null);
 
   // Load collaborative document from DB on startup/change
@@ -410,7 +417,7 @@ export default function App() {
     const activeDocId = (routeScreen === "editor" && routeFileId) ? routeFileId : documentId;
     if (!activeDocId || !token) return;
 
-    const currentDocKey = `${activeDocId}:${routeTargetLang || 'default'}`;
+    const currentDocKey = `${activeDocId}:${activeTargetLanguage}`;
     if (loadedDocIdRef.current === currentDocKey) {
       return;
     }
@@ -421,8 +428,8 @@ export default function App() {
     setDocLoadError(null);
     setAccessRequestMessage("");
     try {
-      console.log(`[CLIENT_FETCH_DOC_TRIGGER] Loading docId: ${activeDocId} | targetLang: ${routeScreen === "editor" ? routeTargetLang : targetLanguage}`);
-      let doc = await fetchDocument(activeDocId, routeScreen === "editor" ? routeTargetLang : targetLanguage);
+      console.log(`[CLIENT_FETCH_DOC_TRIGGER] Loading docId: ${activeDocId} | activeTargetLanguage: ${activeTargetLanguage}`);
+      let doc = await fetchDocument(activeDocId, activeTargetLanguage);
 
       if (doc.contextSettings) {
         setContextSettings(prev => ({
@@ -444,7 +451,7 @@ export default function App() {
       }));
 
       const withTranslations = cleanSegs.filter(s => s.target && s.target.trim().length > 0);
-      console.log(`[CLIENT_FETCH_DOC_SUCCESS] Received ${cleanSegs.length} segments (${withTranslations.length} translated):`, withTranslations);
+      console.log(`[CLIENT_FETCH_DOC_SUCCESS] Received ${cleanSegs.length} segments (${withTranslations.length} translated for ${activeTargetLanguage}):`, withTranslations);
 
       setSegments(cleanSegs);
       // Extract and set the file extension dynamically from the document name or server metadata
@@ -457,7 +464,9 @@ export default function App() {
       setFileName(cleanName);
       setFileId(doc.fileId);
       setSourceLanguage(doc.sourceLang === "pt" ? "pt-BR" : doc.sourceLang);
-      setTargetLanguage(doc.targetLang === "pt" ? "pt-BR" : doc.targetLang);
+      if (!currentRoute?.targetLang && doc.targetLang) {
+        setTargetLanguage(doc.targetLang === "pt" ? "pt-BR" : doc.targetLang);
+      }
       setPermission(doc.permission || "write");
       setOwnerId(doc.ownerId);
       setTrackChangesEnabled(doc.trackChangesEnabled || false);
@@ -1965,16 +1974,16 @@ export default function App() {
 
     if (updates.length === 0) return;
 
-    console.log(`[CLIENT_SAVE_TRIGGER] Saving ${updates.length} segments to docId: ${documentId} (lang: ${targetLanguage})...`, updates);
+    console.log(`[CLIENT_SAVE_TRIGGER] Saving ${updates.length} segments to docId: ${documentId} (lang: ${activeTargetLanguage})...`, updates);
 
     try {
-      const res = await updateSegmentsBulk(documentId, updates, autoPropagateEnabled, targetLanguage);
+      const res = await updateSegmentsBulk(documentId, updates, autoPropagateEnabled, activeTargetLanguage);
       console.log(`[CLIENT_SAVE_SUCCESS] DB updated successfully!`, res);
     } catch (err) {
       console.error("[CLIENT_SAVE_ERROR] Failed to bulk save segments to DB, retrying once...", err);
       // Retry once before giving up
       try {
-        const retryRes = await updateSegmentsBulk(documentId, updates, autoPropagateEnabled, targetLanguage);
+        const retryRes = await updateSegmentsBulk(documentId, updates, autoPropagateEnabled, activeTargetLanguage);
         console.log(`[CLIENT_SAVE_RETRY_SUCCESS] DB updated on retry!`, retryRes);
       } catch (retryErr) {
         console.error("[CLIENT_SAVE_RETRY_FAIL] Retry failed — re-queuing segments:", retryErr);
@@ -1983,7 +1992,7 @@ export default function App() {
         });
       }
     }
-  }, [documentId, autoPropagateEnabled, targetLanguage]);
+  }, [documentId, autoPropagateEnabled, activeTargetLanguage]);
 
   const persistBulkSegmentUpdates = useCallback((updatedSegmentsList, instant = true) => {
     if (!updatedSegmentsList || updatedSegmentsList.length === 0) return;
@@ -2027,7 +2036,7 @@ export default function App() {
         if (updates.length > 0 && documentId) {
           const token = localStorage.getItem("centroid_token");
           const rawBase = (import.meta.env.VITE_API_URL || "").trim().replace(/\/+$/, "").replace(/\/api$/, "");
-          const lang = targetLanguage || "hi";
+          const lang = activeTargetLanguage || "hi";
           const url = `${rawBase}/api/documents/${documentId}/lang/${lang}/segments/bulk`;
           const payload = JSON.stringify({ updates, autoPropagate: autoPropagateEnabled });
 
@@ -2071,7 +2080,7 @@ export default function App() {
       window.removeEventListener("beforeunload", handleBeforeUnload);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [documentId, targetLanguage, autoPropagateEnabled, flushPendingBulkSave]);
+  }, [documentId, activeTargetLanguage, autoPropagateEnabled, flushPendingBulkSave]);
 
   const handleVerifySelectedSegments = () => {
     if (selectedSegmentIds.size === 0) return;
