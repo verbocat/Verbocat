@@ -441,14 +441,17 @@ export default function App() {
 
       setDocumentId(activeDocId);
       const rawSegments = Array.isArray(doc.segments) ? doc.segments : (Array.isArray(doc.segments?.segments) ? doc.segments.segments : []);
-      const cleanSegs = rawSegments.map((s, idx) => ({
-        ...s,
-        source: s.source !== undefined && s.source !== null ? s.source : (s.source_text !== undefined && s.source_text !== null ? s.source_text : ""),
-        target: s.target !== undefined && s.target !== null ? s.target : (s.target_text !== undefined && s.target_text !== null ? s.target_text : ""),
-        id: idx + 1,
-        segment_index: s.segment_index !== undefined ? s.segment_index : idx + 1,
-        uniqueKey: s?.uniqueKey || `seg-${activeDocId}-${idx + 1}`
-      }));
+      const cleanSegs = rawSegments.map((s, idx) => {
+        const actualSegIndex = idx + 1;
+        return {
+          ...s,
+          id: actualSegIndex,
+          segment_index: actualSegIndex,
+          source: s.source !== undefined && s.source !== null ? s.source : (s.source_text !== undefined && s.source_text !== null ? s.source_text : ""),
+          target: s.target !== undefined && s.target !== null ? s.target : (s.target_text !== undefined && s.target_text !== null ? s.target_text : ""),
+          uniqueKey: s?.uniqueKey || `seg-${activeDocId}-${actualSegIndex}`
+        };
+      });
 
       const withTranslations = cleanSegs.filter(s => s.target && s.target.trim().length > 0);
       console.log(`[CLIENT_FETCH_DOC_SUCCESS] Received ${cleanSegs.length} segments (${withTranslations.length} translated for ${activeTargetLanguage}):`, withTranslations);
@@ -553,7 +556,8 @@ export default function App() {
       }
       setSegments((prev) =>
         prev.map((seg, idx) => {
-          if (idx === segmentIndex) {
+          const isMatch = seg.id === segmentIndex || seg.segment_index === segmentIndex || idx === (segmentIndex - 1);
+          if (isMatch) {
             const updatedSeg = { ...seg };
             if (targetText !== undefined) {
               updatedSeg.target = targetText;
@@ -571,6 +575,31 @@ export default function App() {
           return seg;
         })
       );
+    });
+
+    socket.on("typing-update", ({ segmentIndex, targetText, originalTargetText, trackedBy, targetLang }) => {
+      if (targetLang && currentRoute.screen === "editor" && currentRoute.targetLang && targetLang !== currentRoute.targetLang) {
+        return;
+      }
+      setSegments((prev) => {
+        const targetIdx = typeof segmentIndex === "number"
+          ? (prev.findIndex(s => s.id === segmentIndex || s.segment_index === segmentIndex) !== -1
+              ? prev.findIndex(s => s.id === segmentIndex || s.segment_index === segmentIndex)
+              : (segmentIndex > 0 ? segmentIndex - 1 : segmentIndex))
+          : -1;
+
+        if (targetIdx < 0 || targetIdx >= prev.length) return prev;
+
+        return prev.map((seg, idx) => {
+          if (idx === targetIdx) {
+            const updated = { ...seg, target: targetText };
+            if (originalTargetText !== undefined) updated.originalTargetText = originalTargetText;
+            if (trackedBy !== undefined) updated.trackedBy = trackedBy;
+            return updated;
+          }
+          return seg;
+        });
+      });
     });
 
     socket.on("track-changes-toggled", ({ enabled }) => {

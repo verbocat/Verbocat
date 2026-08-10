@@ -873,7 +873,7 @@ export const SegmentCard = ({
               title="Select segment"
             />
           )}
-          <span className="seg-num-label">{String(segment.id).padStart(2, "0")}</span>
+          <span className="seg-num-label">{String(segment.segment_index || segment.id || (index + 1)).padStart(2, "0")}</span>
           <span className={`seg-dot ${dotClass}`} />
           {segment.fuzzyScore && (
             segment.fuzzyScore === 101 ? (
