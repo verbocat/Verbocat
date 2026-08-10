@@ -249,6 +249,137 @@ segmentRouter.put([
   }
 });
 
+// 4. Bulk Update Segments (Supports both base and language-path variants)
+segmentRouter.post([
+  "/documents/:id/segments/bulk",
+  "/api/documents/:id/segments/bulk",
+  "/documents/:id/lang/:lang/segments/bulk",
+  "/api/documents/:id/lang/:lang/segments/bulk"
+], checkAuth, checkDocumentAccess({ requiredPermission: "write" }), async (request, response) => {
+  try {
+    const { id, lang } = request.params;
+    const { updates, autoPropagate, targetLang: bodyLang } = request.body;
+    const targetLang = lang || bodyLang || "hi";
+
+    if (!updates || !Array.isArray(updates) || updates.length === 0) {
+      return response.status(400).json({ error: "No segment updates provided" });
+    }
+
+    const { getIo } = require("../services/socket");
+    const io = getIo();
+    const results = [];
+
+    for (const item of updates) {
+      const { segmentIndex, targetText, status, originalTargetText, trackedBy } = item;
+      const segIndex = Number(segmentIndex);
+
+      if (isNaN(segIndex)) continue;
+
+      const updateFields = {
+        target_text: targetText !== undefined ? targetText : "",
+        status: status || "draft",
+        updated_at: new Date().toISOString()
+      };
+
+      if (originalTargetText !== undefined) updateFields.original_target_text = originalTargetText;
+      if (trackedBy !== undefined) updateFields.tracked_by = trackedBy;
+
+      // 1. Try updating existing row matching target_lang = targetLang
+      let { data } = await supabase
+        .from("document_segments")
+        .update(updateFields)
+        .eq("document_id", id)
+        .eq("segment_index", segIndex)
+        .eq("target_lang", targetLang)
+        .select()
+        .maybeSingle();
+
+      // 2. If no row matched target_lang, try updating row with target_lang IS NULL
+      if (!data) {
+        const { data: nullRow } = await supabase
+          .from("document_segments")
+          .update({ ...updateFields, target_lang: targetLang })
+          .eq("document_id", id)
+          .eq("segment_index", segIndex)
+          .is("target_lang", null)
+          .select()
+          .maybeSingle();
+        data = nullRow;
+      }
+
+      // 3. If STILL no row found, upsert a brand new row
+      if (!data) {
+        const { data: inserted, error: insErr } = await supabase
+          .from("document_segments")
+          .upsert({
+            document_id: id,
+            segment_index: segIndex,
+            target_lang: targetLang,
+            target_text: updateFields.target_text || "",
+            status: updateFields.status || "draft",
+            original_target_text: updateFields.original_target_text || null,
+            tracked_by: updateFields.tracked_by || null,
+            updated_at: updateFields.updated_at
+          }, { onConflict: "document_id,segment_index,target_lang" })
+          .select()
+          .single();
+
+        if (insErr) {
+          console.error(`Bulk Segment Upsert Error for index ${segIndex}:`, insErr);
+          continue;
+        }
+        data = inserted;
+      }
+
+      results.push(data);
+
+      // Broadcast socket event for real-time sync across all users
+      if (io) {
+        io.to(getDocumentRoomId(id, targetLang)).emit("segment-updated", {
+          segmentIndex: segIndex,
+          targetText: updateFields.target_text,
+          status: updateFields.status,
+          originalTargetText: updateFields.original_target_text,
+          trackedBy: updateFields.tracked_by,
+          updatedBy: request.user.email,
+          targetLang
+        });
+      }
+    }
+
+    // Update translation job progress after all segments are saved
+    try {
+      const segmentsInDb = await fetchAllSegments(id, "source_text, status, target_text", targetLang);
+      const progress = calculateProgress(segmentsInDb).progress;
+      const newStatus = progress === 100 ? "completed" : "running";
+
+      const { data: job } = await supabase
+        .from("translation_jobs")
+        .select("id")
+        .eq("document_id", id)
+        .eq("target_lang", targetLang)
+        .maybeSingle();
+
+      if (job) {
+        await supabase
+          .from("translation_jobs")
+          .update({ progress, status: newStatus })
+          .eq("id", job.id);
+
+        const { broadcastJobStatus } = require("../services/jobQueue");
+        broadcastJobStatus(job.id, id, newStatus, progress);
+      }
+    } catch (jobErr) {
+      console.error("Failed to update job stats in bulk save:", jobErr);
+    }
+
+    response.json({ success: true, saved: results.length });
+  } catch (error) {
+    console.error("Bulk Update Segments Error:", error);
+    response.status(500).json({ error: "Failed to bulk update segments" });
+  }
+});
+
 module.exports = {
   segmentRouter
 };

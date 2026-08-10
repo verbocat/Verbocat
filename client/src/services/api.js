@@ -266,8 +266,11 @@ export const updateSegment = async (documentId, segmentIndex, targetText, status
   return response.data;
 };
 
-export const updateSegmentsBulk = async (documentId, updates, autoPropagate = true) => {
-  const response = await api.post(`/api/documents/${documentId}/segments/bulk`, {
+export const updateSegmentsBulk = async (documentId, updates, autoPropagate = true, targetLang = null) => {
+  const url = targetLang
+    ? `/api/documents/${documentId}/lang/${targetLang}/segments/bulk`
+    : `/api/documents/${documentId}/segments/bulk`;
+  const response = await api.post(url, {
     updates,
     autoPropagate
   });
