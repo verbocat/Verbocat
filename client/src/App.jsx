@@ -1901,7 +1901,6 @@ export default function App() {
       });
     }
   };
-
   const pendingBulkSaveRef = useRef(new Map());
   const pendingBulkSaveTimerRef = useRef(null);
 
@@ -1913,14 +1912,16 @@ export default function App() {
     try {
       const updates = itemsToSave
         .map((seg) => {
-          const segIdx = segments.findIndex((s) => s.id === seg.id);
+          const actualIndex = seg.segment_index !== undefined ? seg.segment_index : (typeof seg.id === "number" ? seg.id : 1);
           return {
-            segmentIndex: segIdx !== -1 ? segIdx : (typeof seg.id === "number" ? seg.id - 1 : 0),
-            targetText: seg.target,
-            status: seg.verified ? "approved" : (seg.target ? "translated" : "draft")
+            segmentIndex: actualIndex,
+            targetText: seg.target !== undefined ? seg.target : "",
+            status: seg.verified ? "approved" : (seg.target ? "translated" : "draft"),
+            originalTargetText: seg.originalTargetText !== undefined ? seg.originalTargetText : null,
+            trackedBy: seg.trackedBy || null
           };
         })
-        .filter((u) => u.segmentIndex >= 0);
+        .filter((u) => u.segmentIndex !== undefined && u.segmentIndex !== null);
 
       if (updates.length > 0) {
         await updateSegmentsBulk(documentId, updates, autoPropagateEnabled);
@@ -1928,7 +1929,7 @@ export default function App() {
     } catch (err) {
       console.error("Failed to bulk save segments to DB:", err);
     }
-  }, [documentId, segments, autoPropagateEnabled]);
+  }, [documentId, autoPropagateEnabled]);
 
   const persistBulkSegmentUpdates = useCallback((updatedSegmentsList, instant = true) => {
     if (!updatedSegmentsList || updatedSegmentsList.length === 0) return;
@@ -2029,24 +2030,49 @@ export default function App() {
     }
     const cleanedSource = cleanString(sourceText);
 
+    // Compute affected synchronously from current segments array
     const affected = [];
+    segments.forEach((segment) => {
+      if (segment.id === id || (autoPropagateEnabled && cleanedSource && cleanString(segment.source) === cleanedSource)) {
+        const valToSet = segment.id === id ? value : propagateTranslation(value, segment.source);
+        let updated = { ...segment, target: valToSet, verified: false };
+
+        if (trackChangesEnabled) {
+          const orig = (segment.originalTargetText !== null && segment.originalTargetText !== undefined)
+            ? segment.originalTargetText
+            : (segment.target !== undefined ? segment.target : "");
+
+          if (valToSet === orig) {
+            updated.originalTargetText = null;
+            updated.trackedBy = null;
+          } else {
+            updated.originalTargetText = orig;
+            updated.trackedBy = user?.email || "Editor";
+          }
+        }
+
+        affected.push(updated);
+      }
+    });
+
     setSegments((previous) => {
       return previous.map((segment) => {
-        if (segment.id === id) {
-          const updated = { ...segment, target: value, verified: false };
-          affected.push(updated);
-          return updated;
-        }
-        if (autoPropagateEnabled && cleanedSource && cleanString(segment.source) === cleanedSource) {
-          const updated = { ...segment, target: propagateTranslation(value, segment.source), verified: false };
-          affected.push(updated);
-          return updated;
-        }
-        return segment;
+        const match = affected.find((a) => a.id === segment.id);
+        return match ? match : segment;
       });
     });
 
-    persistBulkSegmentUpdates(affected, false);
+    if (socketRef.current) {
+      const affectedItem = affected.find((a) => a.id === id);
+      socketRef.current.emit("typing-update", {
+        segmentIndex: id - 1,
+        targetText: value,
+        originalTargetText: affectedItem?.originalTargetText || null,
+        trackedBy: affectedItem?.trackedBy || null
+      });
+    }
+
+    persistBulkSegmentUpdates(affected, true);
   };
 
   const toggleVerify = (id) => {

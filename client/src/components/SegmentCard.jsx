@@ -821,8 +821,15 @@ export const SegmentCard = ({
     }
   };
 
+  const initialFocusText = useRef(segment.target || "");
+
   const handleFocus = () => {
     resetInactivityTimer();
+    if (editorRef.current) {
+      initialFocusText.current = htmlToTarget(editorRef.current);
+    } else {
+      initialFocusText.current = segment.target || "";
+    }
     if (onFocusSegment) {
       onFocusSegment(segment.id - 1);
     }
@@ -833,8 +840,9 @@ export const SegmentCard = ({
       clearTimeout(inactivityTimerRef.current);
     }
     const t = htmlToTarget(e.currentTarget);
-    const hasChanged = t !== lastSaved.current;
+    const hasChanged = t !== initialFocusText.current || t !== segment.target;
     lastSaved.current = t;
+    initialFocusText.current = t;
     if (hasChanged) {
       onUpdateTranslation(segment.id, t);
     }

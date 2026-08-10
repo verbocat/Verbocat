@@ -157,17 +157,19 @@ segmentRouter.put([
 ], checkAuth, checkDocumentAccess({ requiredPermission: "write" }), async (request, response) => {
   try {
     const { id, index, lang } = request.params;
-    const { targetText, status, mqmAccuracyScore, mqmReport, targetLang: bodyLang } = request.body;
+    const { targetText, status, mqmAccuracyScore, mqmReport, originalTargetText, trackedBy, targetLang: bodyLang } = request.body;
     const targetLang = lang || bodyLang || "hi";
 
     const updateFields = {
-      target_text: targetText,
+      target_text: targetText !== undefined ? targetText : "",
       status: status || "draft",
       updated_at: new Date().toISOString()
     };
 
     if (mqmAccuracyScore !== undefined) updateFields.mqm_accuracy_score = mqmAccuracyScore;
     if (mqmReport !== undefined) updateFields.mqm_report = mqmReport;
+    if (originalTargetText !== undefined) updateFields.original_target_text = originalTargetText;
+    if (trackedBy !== undefined) updateFields.tracked_by = trackedBy;
 
     const segIndex = Number(index);
 
