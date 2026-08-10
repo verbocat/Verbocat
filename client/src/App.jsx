@@ -1293,74 +1293,6 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, [segments, fileId, fileName, targetLanguage, currentProvider, glossaryMap, contextSettings, history, future]);
 
-  // ── beforeunload & visibilitychange: Protect against data loss on page refresh (Ctrl+R) ──
-  useEffect(() => {
-    const handleBeforeUnload = (e) => {
-      if (pendingBulkSaveRef.current.size > 0) {
-        // Build updates payload from pending items
-        const itemsToSave = Array.from(pendingBulkSaveRef.current.values());
-        const updates = itemsToSave
-          .map((seg) => {
-            const actualIndex = seg.segment_index !== undefined ? seg.segment_index : (typeof seg.id === "number" ? seg.id : 1);
-            return {
-              segmentIndex: actualIndex,
-              targetText: seg.target !== undefined ? seg.target : "",
-              status: seg.verified ? "approved" : (seg.target ? "translated" : "draft"),
-              originalTargetText: seg.originalTargetText !== undefined ? seg.originalTargetText : null,
-              trackedBy: seg.trackedBy || null
-            };
-          })
-          .filter((u) => u.segmentIndex !== undefined && u.segmentIndex !== null);
-
-        if (updates.length > 0 && documentId) {
-          const token = localStorage.getItem("centroid_token");
-          const rawBase = (import.meta.env.VITE_API_URL || "").trim().replace(/\/+$/, "").replace(/\/api$/, "");
-          const lang = targetLanguage || "hi";
-          const url = `${rawBase}/api/documents/${documentId}/lang/${lang}/segments/bulk`;
-          const payload = JSON.stringify({ updates, autoPropagate: autoPropagateEnabled });
-
-          // Use fetch with keepalive: true — survives page unload unlike XMLHttpRequest
-          try {
-            fetch(url, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${token}`
-              },
-              body: payload,
-              keepalive: true
-            });
-          } catch (_) {
-            // Last-resort fallback: sendBeacon (no auth header, may be rejected)
-            try {
-              navigator.sendBeacon(url, new Blob([payload], { type: "application/json" }));
-            } catch (_b) { /* exhausted all options */ }
-          }
-
-          pendingBulkSaveRef.current.clear();
-        }
-
-        // Show browser's native "unsaved changes" dialog
-        e.preventDefault();
-        e.returnValue = "";
-      }
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden" && pendingBulkSaveRef.current.size > 0) {
-        flushPendingBulkSave();
-      }
-    };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [documentId, targetLanguage, autoPropagateEnabled, flushPendingBulkSave]);
-
   const isScriptValidForLanguage = (text, targetLang, sourceText = "") => {
     if (!text) return true;
     const cleanLang = String(targetLang || "").toLowerCase();
@@ -2054,6 +1986,74 @@ export default function App() {
       }, 500);
     }
   }, [flushPendingBulkSave]);
+
+  // ── beforeunload & visibilitychange: Protect against data loss on page refresh (Ctrl+R) ──
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (pendingBulkSaveRef.current.size > 0) {
+        // Build updates payload from pending items
+        const itemsToSave = Array.from(pendingBulkSaveRef.current.values());
+        const updates = itemsToSave
+          .map((seg) => {
+            const actualIndex = seg.segment_index !== undefined ? seg.segment_index : (typeof seg.id === "number" ? seg.id : 1);
+            return {
+              segmentIndex: actualIndex,
+              targetText: seg.target !== undefined ? seg.target : "",
+              status: seg.verified ? "approved" : (seg.target ? "translated" : "draft"),
+              originalTargetText: seg.originalTargetText !== undefined ? seg.originalTargetText : null,
+              trackedBy: seg.trackedBy || null
+            };
+          })
+          .filter((u) => u.segmentIndex !== undefined && u.segmentIndex !== null);
+
+        if (updates.length > 0 && documentId) {
+          const token = localStorage.getItem("centroid_token");
+          const rawBase = (import.meta.env.VITE_API_URL || "").trim().replace(/\/+$/, "").replace(/\/api$/, "");
+          const lang = targetLanguage || "hi";
+          const url = `${rawBase}/api/documents/${documentId}/lang/${lang}/segments/bulk`;
+          const payload = JSON.stringify({ updates, autoPropagate: autoPropagateEnabled });
+
+          // Use fetch with keepalive: true — survives page unload unlike XMLHttpRequest
+          try {
+            fetch(url, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+              },
+              body: payload,
+              keepalive: true
+            });
+          } catch (_) {
+            // Last-resort fallback: sendBeacon (no auth header, may be rejected)
+            try {
+              navigator.sendBeacon(url, new Blob([payload], { type: "application/json" }));
+            } catch (_b) { /* exhausted all options */ }
+          }
+
+          pendingBulkSaveRef.current.clear();
+        }
+
+        // Show browser's native "unsaved changes" dialog
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden" && pendingBulkSaveRef.current.size > 0) {
+        flushPendingBulkSave();
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [documentId, targetLanguage, autoPropagateEnabled, flushPendingBulkSave]);
 
   const handleVerifySelectedSegments = () => {
     if (selectedSegmentIds.size === 0) return;
