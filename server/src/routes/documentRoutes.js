@@ -206,14 +206,125 @@ documentRouter.post(["/documents/:id/accept-all-changes", "/api/documents/:id/ac
   }
 });
 
-// 5. Access Management & Access Request Endpoints
+// 5. Access Management & Public Access Endpoints
 documentRouter.get(["/documents/:id/access", "/api/documents/:id/access"], checkAuth, async (request, response) => {
   try {
     const { id } = request.params;
-    const { data: shares } = await supabase.from("document_access").select("*, profiles(*)").eq("document_id", id);
-    response.json({ access: shares || [] });
+    const { data: doc } = await supabase.from("documents").select("owner_id").eq("id", id).maybeSingle();
+    let owner = null;
+    if (doc?.owner_id) {
+      const { data: ownerProf } = await supabase.from("profiles").select("id, email, full_name, role").eq("id", doc.owner_id).maybeSingle();
+      owner = ownerProf;
+    }
+    const { data: shares } = await supabase.from("document_access").select("*, profiles(id, email, full_name, role)").eq("document_id", id);
+    const collaborators = (shares || []).map(s => ({
+      userId: s.user_id,
+      shareId: s.id,
+      email: s.profiles?.email || "",
+      fullName: s.profiles?.full_name || s.profiles?.email || "User",
+      permission: s.permission || "write"
+    }));
+    response.json({ access: shares || [], collaborators, owner });
   } catch (error) {
-    response.json({ access: [] });
+    response.json({ access: [], collaborators: [], owner: null });
+  }
+});
+
+documentRouter.post(["/documents/:id/access", "/api/documents/:id/access"], checkAuth, async (request, response) => {
+  try {
+    const { id } = request.params;
+    const { email, permission = "write" } = request.body;
+    if (!email) return response.status(400).json({ error: "Email is required" });
+
+    const cleanEmail = String(email).trim().toLowerCase();
+    const { data: targetProfile } = await supabase
+      .from("profiles")
+      .select("id, email, full_name, role")
+      .ilike("email", cleanEmail)
+      .maybeSingle();
+
+    if (!targetProfile) {
+      return response.status(404).json({ error: `User with email '${cleanEmail}' not found.` });
+    }
+
+    const { data: shareRow, error: upsertErr } = await supabase
+      .from("document_access")
+      .upsert(
+        {
+          document_id: id,
+          user_id: targetProfile.id,
+          permission: permission || "write"
+        },
+        { onConflict: "document_id,user_id" }
+      )
+      .select("*, profiles(id, email, full_name, role)")
+      .single();
+
+    if (upsertErr) throw upsertErr;
+
+    response.json({
+      success: true,
+      share: shareRow,
+      collaborator: {
+        userId: targetProfile.id,
+        shareId: shareRow?.id,
+        email: targetProfile.email,
+        fullName: targetProfile.full_name || targetProfile.email,
+        permission: permission || "write"
+      }
+    });
+  } catch (error) {
+    console.error("Grant Document Access Error:", error);
+    response.status(500).json({ error: error.message || "Failed to grant document access" });
+  }
+});
+
+documentRouter.delete(["/documents/:id/access/:userId", "/api/documents/:id/access/:userId"], checkAuth, async (request, response) => {
+  try {
+    const { id, userId } = request.params;
+    const { error } = await supabase
+      .from("document_access")
+      .delete()
+      .eq("document_id", id)
+      .eq("user_id", userId);
+
+    if (error) throw error;
+    response.json({ success: true, message: "Access revoked successfully" });
+  } catch (error) {
+    console.error("Revoke Document Access Error:", error);
+    response.status(500).json({ error: "Failed to revoke document access" });
+  }
+});
+
+documentRouter.get(["/documents/:id/public-access", "/api/documents/:id/public-access"], checkAuth, async (request, response) => {
+  try {
+    const { id } = request.params;
+    const { data: doc } = await supabase.from("documents").select("public_access").eq("id", id).maybeSingle();
+    response.json({ publicAccess: doc?.public_access || "none" });
+  } catch (error) {
+    response.json({ publicAccess: "none" });
+  }
+});
+
+documentRouter.post(["/documents/:id/public-access", "/api/documents/:id/public-access"], checkAuth, async (request, response) => {
+  try {
+    const { id } = request.params;
+    const { publicAccess } = request.body;
+    await supabase.from("documents").update({ public_access: publicAccess || "none" }).eq("id", id);
+    response.json({ success: true, publicAccess: publicAccess || "none" });
+  } catch (error) {
+    response.status(500).json({ error: "Failed to update public access" });
+  }
+});
+
+documentRouter.put(["/documents/:id/public-access", "/api/documents/:id/public-access"], checkAuth, async (request, response) => {
+  try {
+    const { id } = request.params;
+    const { publicAccess } = request.body;
+    await supabase.from("documents").update({ public_access: publicAccess || "none" }).eq("id", id);
+    response.json({ success: true, publicAccess: publicAccess || "none" });
+  } catch (error) {
+    response.status(500).json({ error: "Failed to update public access" });
   }
 });
 

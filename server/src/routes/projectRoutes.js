@@ -385,6 +385,110 @@ projectRouter.delete(["/projects/:id", "/api/projects/:id"], checkAuth, async (r
   }
 });
 
+// 9. Fetch Project Shares
+projectRouter.get(["/projects/:projectId/shares", "/api/projects/:projectId/shares"], checkAuth, async (request, response) => {
+  try {
+    const { projectId } = request.params;
+    const { data: proj } = await supabase.from("projects").select("owner_id").eq("id", projectId).maybeSingle();
+    let owner = null;
+    if (proj?.owner_id) {
+      const { data: ownerProf } = await supabase.from("profiles").select("id, email, full_name, role").eq("id", proj.owner_id).maybeSingle();
+      owner = ownerProf;
+    }
+
+    const { data: docs } = await supabase.from("documents").select("id").eq("project_id", projectId);
+    const docIds = (docs || []).map(d => d.id);
+
+    let collaborators = [];
+    if (docIds.length > 0) {
+      const { data: shares } = await supabase.from("document_access").select("*, profiles(id, email, full_name, role)").in("document_id", docIds);
+      const uniqueUsers = new Map();
+      (shares || []).forEach(s => {
+        if (!uniqueUsers.has(s.user_id)) {
+          uniqueUsers.set(s.user_id, {
+            userId: s.user_id,
+            shareId: s.id,
+            email: s.profiles?.email || "",
+            fullName: s.profiles?.full_name || s.profiles?.email || "User",
+            accessLevel: s.permission || "editor"
+          });
+        }
+      });
+      collaborators = Array.from(uniqueUsers.values());
+    }
+
+    response.json({ collaborators, owner });
+  } catch (error) {
+    console.error("Fetch Project Shares Error:", error);
+    response.json({ collaborators: [], owner: null });
+  }
+});
+
+// 10. Share Project with User by Email
+projectRouter.post(["/projects/:projectId/share", "/api/projects/:projectId/share"], checkAuth, async (request, response) => {
+  try {
+    const { projectId } = request.params;
+    const { email, accessLevel = "editor" } = request.body;
+    if (!email) return response.status(400).json({ error: "Email is required" });
+
+    const cleanEmail = String(email).trim().toLowerCase();
+    const { data: targetUser } = await supabase
+      .from("profiles")
+      .select("id, email, full_name, role")
+      .ilike("email", cleanEmail)
+      .maybeSingle();
+
+    if (!targetUser) {
+      return response.status(404).json({ error: `User with email '${cleanEmail}' not found.` });
+    }
+
+    const { data: docs } = await supabase.from("documents").select("id").eq("project_id", projectId);
+    const docIds = (docs || []).map(d => d.id);
+
+    if (docIds.length > 0) {
+      const accessInserts = docIds.map(docId => ({
+        document_id: docId,
+        user_id: targetUser.id,
+        permission: accessLevel === "viewer" ? "read" : "write"
+      }));
+
+      await supabase.from("document_access").upsert(accessInserts, { onConflict: "document_id,user_id" });
+    }
+
+    response.json({
+      success: true,
+      collaborator: {
+        userId: targetUser.id,
+        email: targetUser.email,
+        fullName: targetUser.full_name || targetUser.email,
+        accessLevel
+      }
+    });
+  } catch (error) {
+    console.error("Share Project Error:", error);
+    response.status(500).json({ error: error.message || "Failed to share project" });
+  }
+});
+
+// 11. Revoke Project Share
+projectRouter.delete(["/projects/:projectId/shares/:targetId", "/api/projects/:projectId/shares/:targetId"], checkAuth, async (request, response) => {
+  try {
+    const { projectId, targetId } = request.params;
+    const { data: docs } = await supabase.from("documents").select("id").eq("project_id", projectId);
+    const docIds = (docs || []).map(d => d.id);
+
+    if (docIds.length > 0) {
+      await supabase.from("document_access").delete().in("document_id", docIds).eq("user_id", targetId);
+    }
+
+    response.json({ success: true, message: "Project access revoked successfully" });
+  } catch (error) {
+    console.error("Revoke Project Share Error:", error);
+    response.status(500).json({ error: "Failed to revoke project share" });
+  }
+});
+
 module.exports = {
   projectRouter
 };
+

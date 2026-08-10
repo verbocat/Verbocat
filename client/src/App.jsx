@@ -1878,7 +1878,8 @@ export default function App() {
 
       const cleanedSource = cleanString(sourceText);
 
-      return previous.map((segment) => {
+      const affected = [];
+      const updatedList = previous.map((segment) => {
         let updated = { ...segment };
         if (segment.id === id) {
           updated.target = value;
@@ -1896,6 +1897,7 @@ export default function App() {
               }
             }
           }
+          affected.push(updated);
         } else if (autoPropagateEnabled && cleanedSource && cleanString(segment.source) === cleanedSource) {
           const propagatedVal = propagateTranslation(value, segment.source);
           updated.target = propagatedVal;
@@ -1913,9 +1915,17 @@ export default function App() {
               }
             }
           }
+          affected.push(updated);
         }
         return updated;
       });
+
+      // Queue affected segments into pendingBulkSaveRef & trigger 300ms debounced auto-save
+      if (affected.length > 0) {
+        persistBulkSegmentUpdates(affected, false);
+      }
+
+      return updatedList;
     });
 
     if (socketRef.current) {
@@ -1983,7 +1993,7 @@ export default function App() {
     } else {
       pendingBulkSaveTimerRef.current = setTimeout(() => {
         flushPendingBulkSave();
-      }, 500);
+      }, 250);
     }
   }, [flushPendingBulkSave]);
 

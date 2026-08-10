@@ -75,29 +75,26 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
     try {
       if (projectId && !documentId) {
         const res = await fetchProjectShares(projectId);
-        if (res && res.owner) {
-          setOwner(res.owner);
-          setAccessList(res.collaborators || []);
-        } else {
-          setAccessList(res || []);
-          setOwner(null);
-        }
+        const list = Array.isArray(res) ? res : (res?.collaborators || res?.access || res?.shares || []);
+        setAccessList(list);
+        setOwner(res?.owner || null);
       } else if (documentId) {
         const res = await fetchDocumentAccess(documentId);
-        if (res && res.owner) {
-          setOwner(res.owner);
-          setAccessList(res.collaborators || []);
-        } else {
-          setAccessList(res || []);
-          setOwner(null);
-        }
+        const list = Array.isArray(res) ? res : (res?.collaborators || res?.access || res?.shares || []);
+        setAccessList(list);
+        setOwner(res?.owner || null);
 
-        const pubRes = await fetchPublicAccess(documentId);
-        setPublicAccess(pubRes.publicAccess || "none");
+        try {
+          const pubRes = await fetchPublicAccess(documentId);
+          setPublicAccess(pubRes?.publicAccess || "none");
+        } catch (_) {
+          setPublicAccess("none");
+        }
       }
     } catch (err) {
-      console.error(err);
+      console.error("Load access list error:", err);
       setError("Failed to load access list.");
+      setAccessList([]);
     } finally {
       setLoading(false);
     }

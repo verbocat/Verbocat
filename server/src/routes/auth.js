@@ -646,6 +646,28 @@ authRouter.post("/join-space", checkAuth, async (request, response) => {
   }
 });
 
+// User Search Endpoint for Share Modals
+authRouter.get("/users/search", checkAuth, async (request, response) => {
+  try {
+    const queryStr = String(request.query.query || "").trim().toLowerCase();
+    if (!queryStr || queryStr.length < 1) {
+      return response.json({ users: [] });
+    }
+
+    const { data: users } = await supabase
+      .from("profiles")
+      .select("id, email, full_name, role")
+      .or(`email.ilike.%${queryStr}%,full_name.ilike.%${queryStr}%`)
+      .limit(10);
+
+    response.json({ users: users || [] });
+  } catch (error) {
+    console.error("User Search Error:", error);
+    response.json({ users: [] });
+  }
+});
+
 module.exports = {
   authRouter
 };
+
