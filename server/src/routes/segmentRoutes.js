@@ -269,11 +269,18 @@ segmentRouter.post([
     const io = getIo();
     const results = [];
 
+    console.log(`\n========================================`);
+    console.log(`[SEGMENT_BULK_SAVE_REQUEST] DocId: ${id} | TargetLang: ${targetLang} | Count: ${updates.length}`);
+    console.log(`[SEGMENT_BULK_SAVE_DATA] Payload:`, JSON.stringify(updates.slice(0, 5), null, 2));
+
     for (const item of updates) {
       const { segmentIndex, targetText, status, originalTargetText, trackedBy } = item;
       const segIndex = Number(segmentIndex);
 
-      if (isNaN(segIndex)) continue;
+      if (isNaN(segIndex)) {
+        console.warn(`[SEGMENT_SAVE_WARN] Skipping invalid segmentIndex:`, item);
+        continue;
+      }
 
       const updateFields = {
         target_text: targetText !== undefined ? targetText : "",
@@ -285,7 +292,7 @@ segmentRouter.post([
       if (trackedBy !== undefined) updateFields.tracked_by = trackedBy;
 
       // 1. Try updating existing row matching target_lang = targetLang
-      let { data } = await supabase
+      let { data, error: err1 } = await supabase
         .from("document_segments")
         .update(updateFields)
         .eq("document_id", id)
@@ -294,9 +301,13 @@ segmentRouter.post([
         .select()
         .maybeSingle();
 
+      if (err1) {
+        console.error(`[SEGMENT_SAVE_ERR1] doc=${id} seg=${segIndex} lang=${targetLang}:`, err1.message);
+      }
+
       // 2. If no row matched target_lang, try updating row with target_lang IS NULL
       if (!data) {
-        const { data: nullRow } = await supabase
+        const { data: nullRow, error: err2 } = await supabase
           .from("document_segments")
           .update({ ...updateFields, target_lang: targetLang })
           .eq("document_id", id)
@@ -304,6 +315,10 @@ segmentRouter.post([
           .is("target_lang", null)
           .select()
           .maybeSingle();
+
+        if (err2) {
+          console.error(`[SEGMENT_SAVE_ERR2] doc=${id} seg=${segIndex} null-lang:`, err2.message);
+        }
         data = nullRow;
       }
 
@@ -325,13 +340,18 @@ segmentRouter.post([
           .single();
 
         if (insErr) {
-          console.error(`Bulk Segment Upsert Error for index ${segIndex}:`, insErr);
+          console.error(`[SEGMENT_SAVE_UPSERT_ERR] doc=${id} seg=${segIndex} lang=${targetLang}:`, insErr.message);
           continue;
         }
         data = inserted;
       }
 
-      results.push(data);
+      if (data) {
+        console.log(`[SEGMENT_SAVE_SUCCESS] Seg #${segIndex} (${targetLang}) -> target_text: "${updateFields.target_text.substring(0, 30)}"`);
+        results.push(data);
+      } else {
+        console.error(`[SEGMENT_SAVE_FAIL] Seg #${segIndex} (${targetLang}) could not be updated or inserted!`);
+      }
 
       // Broadcast socket event for real-time sync across all users
       if (io) {
@@ -346,6 +366,9 @@ segmentRouter.post([
         });
       }
     }
+
+    console.log(`[SEGMENT_BULK_SAVE_COMPLETE] Saved ${results.length}/${updates.length} segments.`);
+    console.log(`========================================\n`);
 
     // Update translation job progress after all segments are saved
     try {

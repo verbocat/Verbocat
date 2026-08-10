@@ -1960,16 +1960,19 @@ export default function App() {
 
     if (updates.length === 0) return;
 
+    console.log(`[CLIENT_SAVE_TRIGGER] Saving ${updates.length} segments to docId: ${documentId} (lang: ${targetLanguage})...`, updates);
+
     try {
-      await updateSegmentsBulk(documentId, updates, autoPropagateEnabled, targetLanguage);
+      const res = await updateSegmentsBulk(documentId, updates, autoPropagateEnabled, targetLanguage);
+      console.log(`[CLIENT_SAVE_SUCCESS] DB updated successfully!`, res);
     } catch (err) {
-      console.error("Failed to bulk save segments to DB, retrying once...", err);
+      console.error("[CLIENT_SAVE_ERROR] Failed to bulk save segments to DB, retrying once...", err);
       // Retry once before giving up
       try {
-        await updateSegmentsBulk(documentId, updates, autoPropagateEnabled, targetLanguage);
+        const retryRes = await updateSegmentsBulk(documentId, updates, autoPropagateEnabled, targetLanguage);
+        console.log(`[CLIENT_SAVE_RETRY_SUCCESS] DB updated on retry!`, retryRes);
       } catch (retryErr) {
-        console.error("Retry also failed — re-queuing segments for next flush:", retryErr);
-        // Re-queue the failed items so the next flush attempt can try again
+        console.error("[CLIENT_SAVE_RETRY_FAIL] Retry failed — re-queuing segments:", retryErr);
         itemsToSave.forEach((seg) => {
           pendingBulkSaveRef.current.set(seg.id, seg);
         });
