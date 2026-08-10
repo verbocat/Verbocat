@@ -1,14 +1,14 @@
 const express = require("express");
 const { supabase, fetchAllSegments } = require("../config/supabase");
-const { checkAuth, checkTranslateAccess } = require("../utils/authMiddleware");
+const { checkAuth, checkTranslateAccess, checkDocumentAccess } = require("../utils/authMiddleware");
 const { translateSegments } = require("../services/translationService");
 const { getDocumentRoomId } = require("../services/socket");
 const { calculateProgress } = require("../utils/segmentProgress");
 
 const segmentRouter = express.Router();
 
-// 1. Batch AI Translate
-segmentRouter.post(["/translate-batch", "/api/translate-batch"], checkAuth, checkTranslateAccess, async (request, response) => {
+// 1. Batch AI Translate (Requires write access to document)
+segmentRouter.post(["/translate-batch", "/api/translate-batch"], checkAuth, checkTranslateAccess, checkDocumentAccess({ requiredPermission: "write" }), async (request, response) => {
   try {
     const { segments, target, source, contextSettings, fileName, documentId } = request.body;
     let fileExtension = "";
@@ -135,7 +135,7 @@ segmentRouter.get([
   "/api/documents/:id/segments",
   "/documents/:id/lang/:lang/segments",
   "/api/documents/:id/lang/:lang/segments"
-], checkAuth, async (request, response) => {
+], checkAuth, checkDocumentAccess({ requiredPermission: "read" }), async (request, response) => {
   try {
     const { id, lang } = request.params;
     const targetLang = lang || request.query.target || "hi";
@@ -154,7 +154,7 @@ segmentRouter.put([
   "/api/documents/:id/segments/:index",
   "/documents/:id/lang/:lang/segments/:index",
   "/api/documents/:id/lang/:lang/segments/:index"
-], checkAuth, async (request, response) => {
+], checkAuth, checkDocumentAccess({ requiredPermission: "write" }), async (request, response) => {
   try {
     const { id, index, lang } = request.params;
     const { targetText, status, mqmAccuracyScore, mqmReport, targetLang: bodyLang } = request.body;

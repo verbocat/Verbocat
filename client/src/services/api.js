@@ -557,7 +557,10 @@ export const uploadFileToProject = async (projectId, file, onProgress = null) =>
 };
 
 export const updateProjectLanguages = async (projectId, targetLanguages) => {
-  const response = await api.post(`/api/projects/${projectId}/languages`, { targetLanguages });
+  const response = await api.post(`/api/projects/${projectId}/add-languages`, {
+    targetLangs: targetLanguages,
+    targetLanguages
+  });
   return response.data;
 };
 

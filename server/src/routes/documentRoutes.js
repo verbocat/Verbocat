@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const { processUploadedFile } = require("../services/fileService");
 const { supabase, fetchAllSegments } = require("../config/supabase");
-const { checkAuth } = require("../utils/authMiddleware");
+const { checkAuth, getDocumentPermission, checkDocumentAccess } = require("../utils/authMiddleware");
 const { getDocumentRoomId } = require("../services/socket");
 
 const documentRouter = express.Router();
@@ -47,17 +47,27 @@ documentRouter.post(["/upload", "/api/upload"], checkAuth, upload.single("file")
       .from("documents")
       .insert({
         id: documentId,
-        name: result.originalName || request.file.originalname || "Untitled Document",
-        owner_id: userId,
-        file_id: result.fileId,
+        file_id: documentId,
+        name: request.file.originalname,
         source_lang: srcLang,
         target_lang: tgtLang,
-        organization_id: activeTenantId
+        owner_id: userId,
+        organization_id: activeTenantId,
+        file_extension: ext,
+        status: "active"
       });
 
     if (docError) {
-      return response.status(500).json({ error: `Failed to create document record: ${docError.message || "Database error"}` });
+      console.error("Document Insert Error:", docError);
     }
+
+    // Automatically insert document_access entry for creator
+    await supabase.from("document_access").upsert({
+      document_id: documentId,
+      user_id: userId,
+      permission: "write",
+      status: "approved"
+    }, { onConflict: "document_id,user_id" }).catch(() => {});
 
     // Persist parsed template segments to DB in parallel batches (target_lang: null)
     const segmentInserts = result.segments.map((seg, idx) => ({
@@ -86,39 +96,35 @@ documentRouter.post(["/upload", "/api/upload"], checkAuth, upload.single("file")
     }
 
     response.json({
-      type: result.type,
-      documentId,
+      documentId: documentId,
+      fileId: documentId,
       segments: result.segments,
-      originalName: result.originalName
+      type: result.type,
+      name: request.file.originalname
     });
   } catch (error) {
-    console.error("Single File Upload Error:", error);
-    const statusCode = (error.status >= 100 && error.status < 1000) ? error.status : 500;
-    response.status(statusCode).json({ error: error.message || "Server error during single file upload." });
+    console.error("Upload Route Exception:", error);
+    if (request.file && request.file.path && fs.existsSync(request.file.path)) {
+      fs.unlinkSync(request.file.path);
+    }
+    response.status(500).json({ error: error.message || "Failed to process uploaded file" });
   }
 });
 
-// 2. Get Single Document Metadata and Segments
+// 2. Get Single Document Metadata and Segments (STRICT PERMISSION GUARD ENFORCED)
 documentRouter.get(["/documents/:id", "/api/documents/:id"], checkAuth, async (request, response) => {
   try {
     const { id } = request.params;
-    const activeTenantId = request.tenant?.id || request.profile?.organization_id;
-    const isSuperAdmin = request.profile?.role === "super_admin";
-
-    let query = supabase
-      .from("documents")
-      .select("*")
-      .eq("id", id);
-
-    if (!isSuperAdmin && activeTenantId) {
-      query = query.eq("organization_id", activeTenantId);
+    
+    // Strict Access Verification
+    const access = await getDocumentPermission(id, request.user, request.profile);
+    if (!access.hasAccess) {
+      return response.status(403).json({
+        error: "Access Denied: You do not have permission to access this document workspace. Please request access from the owner or administrator to participate."
+      });
     }
 
-    const { data: doc, error } = await query.single();
-    if (error || !doc) {
-      return response.status(404).json({ error: "Document not found or access denied." });
-    }
-
+    const doc = access.document;
     const targetLang = request.query.target || doc.target_lang || "hi";
     const segments = await fetchAllSegments(id, "*", targetLang);
 
@@ -134,7 +140,7 @@ documentRouter.get(["/documents/:id", "/api/documents/:id"], checkAuth, async (r
       sourceLang: doc.source_lang || "en",
       targetLang: doc.target_lang || "hi",
       ownerId: doc.owner_id,
-      permission: "write",
+      permission: access.permission,
       trackChangesEnabled: doc.track_changes_enabled || false,
       contextSettings: doc.context_settings || {},
       segments: segments || []
@@ -200,7 +206,7 @@ documentRouter.post(["/documents/:id/accept-all-changes", "/api/documents/:id/ac
   }
 });
 
-// 5. Access Management Endpoints
+// 5. Access Management & Access Request Endpoints
 documentRouter.get(["/documents/:id/access", "/api/documents/:id/access"], checkAuth, async (request, response) => {
   try {
     const { id } = request.params;
@@ -212,11 +218,81 @@ documentRouter.get(["/documents/:id/access", "/api/documents/:id/access"], check
 });
 
 documentRouter.get(["/documents/:id/request-status", "/api/documents/:id/request-status"], checkAuth, async (request, response) => {
-  response.json({ status: "none" });
+  try {
+    const { id } = request.params;
+    const { data: access } = await supabase
+      .from("document_access")
+      .select("status, permission")
+      .eq("document_id", id)
+      .eq("user_id", request.user.id)
+      .maybeSingle();
+
+    return response.json({
+      hasPendingRequest: access?.status === "pending",
+      status: access?.status || "none",
+      permission: access?.permission || null
+    });
+  } catch (err) {
+    return response.json({ hasPendingRequest: false, status: "none" });
+  }
+});
+
+documentRouter.post(["/documents/:id/request-access", "/api/documents/:id/request-access"], checkAuth, async (request, response) => {
+  try {
+    const { id } = request.params;
+    const { permission } = request.body;
+
+    const { error } = await supabase
+      .from("document_access")
+      .upsert(
+        {
+          document_id: id,
+          user_id: request.user.id,
+          permission: permission || "write",
+          status: "pending"
+        },
+        { onConflict: "document_id,user_id" }
+      );
+
+    if (error) throw error;
+    return response.json({ success: true, message: "Access request submitted to document owner." });
+  } catch (err) {
+    console.error("Request Access Error:", err);
+    return response.status(500).json({ error: err.message || "Failed to submit access request" });
+  }
 });
 
 documentRouter.get(["/documents/:id/access-requests", "/api/documents/:id/access-requests"], checkAuth, async (request, response) => {
-  response.json({ requests: [] });
+  try {
+    const { id } = request.params;
+    const { data: reqs } = await supabase
+      .from("document_access")
+      .select("*, profiles(*)")
+      .eq("document_id", id)
+      .eq("status", "pending");
+
+    return response.json(reqs || []);
+  } catch (err) {
+    return response.json([]);
+  }
+});
+
+documentRouter.post(["/documents/:id/respond-request", "/api/documents/:id/respond-request"], checkAuth, async (request, response) => {
+  try {
+    const { id } = request.params;
+    const { requestId, action } = request.body; // action: 'approve' or 'reject'
+
+    const newStatus = action === "approve" ? "approved" : "rejected";
+    const { error } = await supabase
+      .from("document_access")
+      .update({ status: newStatus, permission: newStatus === "approved" ? "write" : "none" })
+      .eq("id", requestId);
+
+    if (error) throw error;
+    return response.json({ success: true, status: newStatus });
+  } catch (err) {
+    return response.status(500).json({ error: "Failed to respond to access request" });
+  }
 });
 
 // 6. Delete Document

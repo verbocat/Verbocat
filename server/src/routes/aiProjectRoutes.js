@@ -79,14 +79,21 @@ aiProjectRouter.post(["/projects/:id/duplicate", "/api/projects/:id/duplicate"],
 
 /**
  * 3. Dynamic Target Language Addition Endpoint
- * Request body: { targetLangs: string[] }
+ * Request body: { targetLangs: string[] } or { targetLanguages: string[] }
  */
-aiProjectRouter.post(["/projects/:id/add-languages", "/api/projects/:id/add-languages"], async (req, res) => {
-  try {
-    const projectId = req.params.id;
-    const { targetLangs } = req.body;
-    const userId = req.user.id;
-    const organizationId = req.tenant?.id || req.profile?.organization_id || null;
+aiProjectRouter.post(
+  [
+    "/projects/:id/add-languages",
+    "/api/projects/:id/add-languages",
+    "/projects/:id/languages",
+    "/api/projects/:id/languages"
+  ],
+  async (req, res) => {
+    try {
+      const projectId = req.params.id;
+      const targetLangs = req.body.targetLangs || req.body.targetLanguages || req.body.target_langs || req.body.target_languages;
+      const userId = req.user.id;
+      const organizationId = req.tenant?.id || req.profile?.organization_id || null;
 
     if (!targetLangs || (Array.isArray(targetLangs) && targetLangs.length === 0)) {
       return res.status(400).json({ error: "targetLangs array is required." });

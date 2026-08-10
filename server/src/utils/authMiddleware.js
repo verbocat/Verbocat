@@ -198,8 +198,115 @@ function checkRole(allowedRoles) {
   };
 }
 
+/**
+ * 4. Verifies if a user has access/permission to view or edit a document.
+ * Returns { hasAccess: boolean, permission: "read" | "write" | null, document: object | null }
+ */
+async function getDocumentPermission(documentId, user, profile) {
+  if (!documentId || !user || !profile) {
+    return { hasAccess: false, permission: null, document: null };
+  }
+
+  // 1. Fetch document record
+  const { data: doc, error: docErr } = await supabase
+    .from("documents")
+    .select("*")
+    .eq("id", documentId)
+    .single();
+
+  if (docErr || !doc) {
+    return { hasAccess: false, permission: null, document: null };
+  }
+
+  const role = profile.role || "";
+  const userId = user.id;
+
+  // 2. Super admin, Admin, Project Manager, or VerboLabs Staff on same workspace have full write access
+  const isStaffOrAdmin = ["super_admin", "admin", "project_manager", "verbolabs_staff"].includes(role);
+  if (isStaffOrAdmin) {
+    return { hasAccess: true, permission: "write", document: doc };
+  }
+
+  // 3. Document Owner has full write access
+  if (doc.owner_id === userId) {
+    return { hasAccess: true, permission: "write", document: doc };
+  }
+
+  // 4. Check explicit permission entry in `document_access` table
+  try {
+    const { data: accessRow } = await supabase
+      .from("document_access")
+      .select("permission, status")
+      .eq("document_id", documentId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (accessRow) {
+      if (accessRow.status === "rejected") {
+        return { hasAccess: false, permission: null, document: doc };
+      }
+      if (accessRow.status === "approved" || accessRow.status === "active" || !accessRow.status) {
+        const perm = accessRow.permission === "read" ? "read" : "write";
+        return { hasAccess: true, permission: perm, document: doc };
+      }
+    }
+  } catch (_) {}
+
+  // 5. Check if assigned to any job for this document in `jobs` table
+  try {
+    const { data: jobAssignment } = await supabase
+      .from("jobs")
+      .select("id")
+      .eq("document_id", documentId)
+      .or(`translator_id.eq.${userId},assignee_id.eq.${userId},user_id.eq.${userId}`)
+      .limit(1);
+
+    if (jobAssignment && jobAssignment.length > 0) {
+      return { hasAccess: true, permission: "write", document: doc };
+    }
+  } catch (_) {}
+
+  // 6. No matching permission found -> ACCESS DENIED
+  return { hasAccess: false, permission: null, document: doc };
+}
+
+/**
+ * Middleware wrapper that enforces document read/write access on Express routes
+ */
+function checkDocumentAccess({ requiredPermission = "read" } = {}) {
+  return async (request, response, next) => {
+    try {
+      const documentId = request.params.id || request.params.documentId || request.body.documentId || request.query.documentId;
+      if (!documentId) {
+        return next();
+      }
+
+      const access = await getDocumentPermission(documentId, request.user, request.profile);
+      if (!access.hasAccess) {
+        return response.status(403).json({
+          error: "Access Denied: You do not have permission to access this document workspace. Please request access from the owner or administrator to participate."
+        });
+      }
+
+      if (requiredPermission === "write" && access.permission !== "write") {
+        return response.status(403).json({
+          error: "Access Denied: You have Read-Only access to this document and cannot modify its segments."
+        });
+      }
+
+      request.documentAccess = access;
+      next();
+    } catch (err) {
+      console.error("Check Document Access Error:", err);
+      return response.status(500).json({ error: "Failed to verify document permissions" });
+    }
+  };
+}
+
 module.exports = {
   checkAuth,
   checkTranslateAccess,
-  checkRole
+  checkRole,
+  getDocumentPermission,
+  checkDocumentAccess
 };

@@ -59,7 +59,7 @@ export const AdminDashboard = ({ onClose, theme }) => {
       setLoading(true);
       setError("");
       const res = await fetchAdminOrganizations();
-      setOrganizations(res.organizations || []);
+      setOrganizations(Array.isArray(res) ? res : (res?.organizations || []));
     } catch (err) {
       console.error(err);
       showToast(err.response?.data?.error || "Failed to load client space organizations", true);
@@ -137,7 +137,7 @@ export const AdminDashboard = ({ onClose, theme }) => {
       setLoading(true);
       setError("");
       const res = await fetchAdminTm();
-      setTmList(res.tm || []);
+      setTmList(Array.isArray(res) ? res : (res?.tm || []));
     } catch (err) {
       console.error(err);
       showToast(err.response?.data?.error || "Failed to load translation memory", true);
@@ -199,8 +199,8 @@ export const AdminDashboard = ({ onClose, theme }) => {
         return { logs: [] };
       });
       
-      setUsers(usersData.users || []);
-      setLogs(logsData.logs || []);
+      setUsers(Array.isArray(usersData) ? usersData : (usersData?.users || []));
+      setLogs(Array.isArray(logsData) ? logsData : (logsData?.logs || []));
     } catch (err) {
       console.error(err);
       const serverErr = err.response?.data?.error;
