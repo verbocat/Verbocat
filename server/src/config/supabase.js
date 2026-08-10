@@ -184,6 +184,19 @@ const fetchAllSegments = async (documentId, select = "*", targetLang = null) => 
         };
       });
 
+      console.log(`\n========================================`);
+      console.log(`[DB_FETCH_SEGMENTS_REQUEST] DocId: ${documentId} | TargetLang: ${targetLang}`);
+      console.log(`[DB_FETCH_RAW] SourceRows: ${sourceSegments.length} | TargetRows: ${targetSegments.length}`);
+      console.log(`[DB_FETCH_RESULT] MergedTotal: ${mergedSegments.length}`);
+      const translatedCount = mergedSegments.filter(s => s.target_text && s.target_text.trim().length > 0).length;
+      console.log(`[DB_FETCH_TRANSLATION_COUNT] Non-empty Target Translations: ${translatedCount}`);
+      mergedSegments.forEach(s => {
+        if (s.target_text && s.target_text.trim().length > 0) {
+          console.log(`  -> Seg #${s.segment_index} (${targetLang}): "${s.target_text.substring(0, 40)}"`);
+        }
+      });
+      console.log(`========================================\n`);
+
       return mergedSegments;
     }
   }

@@ -421,7 +421,8 @@ export default function App() {
     setDocLoadError(null);
     setAccessRequestMessage("");
     try {
-      let doc = await fetchDocument(activeDocId, routeScreen === "editor" ? routeTargetLang : null);
+      console.log(`[CLIENT_FETCH_DOC_TRIGGER] Loading docId: ${activeDocId} | targetLang: ${routeScreen === "editor" ? routeTargetLang : targetLanguage}`);
+      let doc = await fetchDocument(activeDocId, routeScreen === "editor" ? routeTargetLang : targetLanguage);
 
       if (doc.contextSettings) {
         setContextSettings(prev => ({
@@ -441,6 +442,10 @@ export default function App() {
         segment_index: s.segment_index !== undefined ? s.segment_index : idx + 1,
         uniqueKey: s?.uniqueKey || `seg-${activeDocId}-${idx + 1}`
       }));
+
+      const withTranslations = cleanSegs.filter(s => s.target && s.target.trim().length > 0);
+      console.log(`[CLIENT_FETCH_DOC_SUCCESS] Received ${cleanSegs.length} segments (${withTranslations.length} translated):`, withTranslations);
+
       setSegments(cleanSegs);
       // Extract and set the file extension dynamically from the document name or server metadata
       const docName = doc.name || "Untitled Document";
