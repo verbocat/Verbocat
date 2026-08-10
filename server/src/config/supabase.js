@@ -129,69 +129,63 @@ const fetchAllSegments = async (documentId, select = "*", targetLang = null) => 
     // 2. Fetch target language segments
     let targetSegments = await fetchAllSegmentsRaw(documentId, select, targetLang);
 
-    // 3. Deduplicate targetSegments by segment_index (preferring non-empty target_text and latest updated_at)
+    const sourceMap = new Map();
+    sourceSegments.forEach(s => sourceMap.set(s.segment_index, s));
+
+    // 3. Map targetSegments by segment_index (preferring non-empty target_text and latest updated_at)
+    const targetMap = new Map();
     if (targetSegments && targetSegments.length > 0) {
-      const segMap = new Map();
       targetSegments.forEach(seg => {
         const idx = seg.segment_index;
-        if (!segMap.has(idx)) {
-          segMap.set(idx, seg);
+        if (!targetMap.has(idx)) {
+          targetMap.set(idx, seg);
         } else {
-          const existing = segMap.get(idx);
+          const existing = targetMap.get(idx);
           const hasText = seg.target_text && String(seg.target_text).trim().length > 0;
           const existingHasText = existing.target_text && String(existing.target_text).trim().length > 0;
           if (hasText && !existingHasText) {
-            segMap.set(idx, seg);
+            targetMap.set(idx, seg);
           } else if (hasText && existingHasText) {
             if (new Date(seg.updated_at || 0) >= new Date(existing.updated_at || 0)) {
-              segMap.set(idx, seg);
-            }
-          } else if (!hasText && !existingHasText) {
-            if (new Date(seg.updated_at || 0) >= new Date(existing.updated_at || 0)) {
-              segMap.set(idx, seg);
+              targetMap.set(idx, seg);
             }
           }
         }
       });
-      targetSegments = Array.from(segMap.values());
     }
 
-    // 4. If targetSegments is EMPTY, clone/initialize fresh target segments from source
-    if ((!targetSegments || targetSegments.length === 0) && sourceSegments && sourceSegments.length > 0) {
-      targetSegments = sourceSegments.map(src => ({
-        ...src,
-        target_lang: targetLang,
-        target_text: "",
-        status: "draft"
-      }));
+    // 4. Build master union of all unique segment_index values across source & target rows
+    const allIndices = new Set([
+      ...sourceSegments.map(s => s.segment_index),
+      ...targetSegments.map(s => s.segment_index)
+    ]);
+    const sortedIndices = Array.from(allIndices).sort((a, b) => a - b);
 
-      try {
-        const seedInserts = sourceSegments.map(src => ({
+    if (sortedIndices.length > 0) {
+      const mergedSegments = sortedIndices.map(idx => {
+        const src = sourceMap.get(idx);
+        const tgt = targetMap.get(idx);
+
+        if (tgt) {
+          return {
+            ...tgt,
+            source_text: (src?.source_text || tgt.source_text || ""),
+            target_text: tgt.target_text !== undefined && tgt.target_text !== null ? tgt.target_text : ""
+          };
+        }
+
+        return {
           document_id: documentId,
+          segment_index: idx,
           target_lang: targetLang,
-          segment_index: src.segment_index,
-          source_text: src.source_text || "",
+          source_text: src?.source_text || "",
           target_text: "",
           status: "draft"
-        }));
-        await supabase.from("document_segments").upsert(seedInserts, { onConflict: "document_id,segment_index,target_lang" });
-      } catch (seedErr) {
-        console.error("Failed to seed target segments:", seedErr);
-      }
-    } else if (targetSegments && targetSegments.length > 0) {
-      const sourceMap = {};
-      sourceSegments.forEach(seg => {
-        if (seg.source_text) sourceMap[seg.segment_index] = seg.source_text;
+        };
       });
 
-      targetSegments = targetSegments.map(seg => ({
-        ...seg,
-        source_text: sourceMap[seg.segment_index] || seg.source_text || "",
-        target_text: seg.target_text !== undefined && seg.target_text !== null ? seg.target_text : ""
-      }));
+      return mergedSegments;
     }
-
-    return targetSegments;
   }
 
   return await fetchAllSegmentsRaw(documentId, select, targetLang);
