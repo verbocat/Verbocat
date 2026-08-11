@@ -3,7 +3,7 @@ import { useUserStore } from "../services/userStore";
 import { api } from "../services/api";
 import { 
   Eye, EyeOff, Lock, ArrowRight, CheckCircle2, 
-  AlertCircle, Sparkles, Mail, KeyRound, Fingerprint
+  AlertCircle, Sparkles, Mail, KeyRound, Fingerprint, User
 } from "lucide-react";
 
 // ============================================================================
@@ -123,6 +123,7 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
 
   // Form states
   const [mode, setMode] = useState(initialMode); // 'login', 'register', 'forgot', 'reset'
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -258,19 +259,36 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
   };
   const spaceName = getActiveSpaceName();
 
+  // Password Security Validator Helper
+  const validatePasswordSecurity = (pass) => {
+    if (!pass || pass.length < 8) {
+      return "Password must be at least 8 characters long.";
+    }
+    if (!/[A-Z]/.test(pass)) {
+      return "Password must contain at least one uppercase letter (A-Z).";
+    }
+    if (!/[0-9]/.test(pass)) {
+      return "Password must contain at least one number (0-9).";
+    }
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pass)) {
+      return "Password must contain at least one special character (!@#$%^&*...).";
+    }
+    return null;
+  };
+
   // Password Strength Calculator
   const calculatePasswordStrength = (pass) => {
     if (!pass) return { score: 0, label: "", color: "bg-slate-300" };
     let score = 0;
-    if (pass.length >= 6) score += 25;
-    if (pass.length >= 10) score += 25;
+    if (pass.length >= 8) score += 25;
     if (/[A-Z]/.test(pass)) score += 25;
-    if (/[0-9!@#$%^&*]/.test(pass)) score += 25;
+    if (/[0-9]/.test(pass)) score += 25;
+    if (/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pass)) score += 25;
 
-    if (score <= 25) return { score: 25, label: "Basic", color: "bg-rose-500" };
-    if (score <= 50) return { score: 50, label: "Medium", color: "bg-amber-500" };
-    if (score <= 75) return { score: 75, label: "Strong", color: "bg-indigo-600" };
-    return { score: 100, label: "Enterprise Ready", color: "bg-emerald-500" };
+    if (score <= 25) return { score: 25, label: "Weak (Need 8+ chars, uppercase, number, special char)", color: "bg-rose-500" };
+    if (score <= 50) return { score: 50, label: "Fair", color: "bg-amber-500" };
+    if (score <= 75) return { score: 75, label: "Good", color: "bg-indigo-600" };
+    return { score: 100, label: "Strong & Secured", color: "bg-emerald-500" };
   };
   const passStrength = calculatePasswordStrength(password);
 
@@ -292,22 +310,30 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
         );
       } 
       else if (mode === "register") {
+        if (!name.trim()) {
+          throw new Error("Full Name is required");
+        }
         if (password !== confirmPassword) {
           throw new Error("Passwords do not match");
         }
-        if (password.length < 6) {
-          throw new Error("Password must be at least 6 characters long");
+        
+        const secError = validatePasswordSecurity(password);
+        if (secError) {
+          throw new Error(secError);
         }
-        const response = await api.post("/api/auth/register", { email, password });
-        setSuccessMsg(response.data.message || "Account initialized! Redirecting to sign in...");
-        setEmail("");
+
+        const response = await api.post("/api/auth/register", { name: name.trim(), email, password });
+        setSuccessMsg(response.data.message || `Account created! A verification email has been sent to ${email}. Please click the verification button in your email to activate your account.`);
+        setName("");
         setPassword("");
         setConfirmPassword("");
+        // Switch to sign in mode so user can sign in after verifying email
         setTimeout(() => {
           setMode("login");
-          setSuccessMsg("");
-        }, 2000);
+        }, 3000);
       } 
+
+
       else if (mode === "forgot") {
         const response = await api.post("/api/auth/forgot-password", { email });
         setSuccessMsg(response.data.message || "Recovery email dispatched. Please check your inbox.");
@@ -317,9 +343,11 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
         if (password !== confirmPassword) {
           throw new Error("Passwords do not match");
         }
-        if (password.length < 6) {
-          throw new Error("Password must be at least 6 characters long");
+        const secError = validatePasswordSecurity(password);
+        if (secError) {
+          throw new Error(secError);
         }
+
         const token = localStorage.getItem("centroid_token");
         const response = await api.post("/api/auth/reset-password", 
           { password },
@@ -337,6 +365,7 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
           }
         }, 2000);
       }
+
     } catch (err) {
       const serverErr = err.response?.data?.error;
       const errorText = typeof serverErr === "object" && serverErr !== null
@@ -487,11 +516,31 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
               {/* AUTH FORM */}
               <form onSubmit={handleSubmit} className="space-y-4">
                 
+                {/* Full Name Input Field (Required for Registration) */}
+                {mode === "register" && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700 ml-1 block">
+                      Full Name
+                    </label>
+                    <div className="relative flex items-center skeuo-recessed-slot rounded-2xl">
+                      <User className="absolute left-4 h-4 w-4 text-slate-400 pointer-events-none" />
+                      <input
+                        type="text"
+                        required
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="John Doe"
+                        className="w-full bg-transparent pl-11 pr-4 py-3.5 text-xs sm:text-sm font-semibold text-slate-900 placeholder-slate-400 outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+
                 {/* Email Input Field */}
                 {mode !== "reset" && (
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-700 ml-1 block">
-                      Work Email
+                      Email
                     </label>
                     <div className="relative flex items-center skeuo-recessed-slot rounded-2xl">
                       <Mail className="absolute left-4 h-4 w-4 text-slate-400 pointer-events-none" />
@@ -506,6 +555,7 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
                     </div>
                   </div>
                 )}
+
 
                 {/* Password Input Field */}
                 {mode !== "forgot" && (

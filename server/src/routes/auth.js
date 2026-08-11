@@ -5,19 +5,42 @@ const { authRateLimiter } = require("../utils/rateLimiter");
 
 const authRouter = express.Router();
 
+const validatePasswordSecurity = (pass) => {
+  if (!pass || pass.length < 8) {
+    return "Password must be at least 8 characters long.";
+  }
+  if (!/[A-Z]/.test(pass)) {
+    return "Password must contain at least one uppercase letter (A-Z).";
+  }
+  if (!/[0-9]/.test(pass)) {
+    return "Password must contain at least one number (0-9).";
+  }
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pass)) {
+    return "Password must contain at least one special character (!@#$%^&*...).";
+  }
+  return null;
+};
+
 // 1. User Account Registration / Join Space
 authRouter.post("/register", authRateLimiter, async (request, response) => {
   try {
-    const { email, password } = request.body;
-    if (!email || !password) {
-      return response.status(400).json({ error: "Email and password are required" });
+    const { name, email, password } = request.body;
+    if (!name || !email || !password) {
+      return response.status(400).json({ error: "Full Name, email, and password are required" });
+    }
+
+    const secError = validatePasswordSecurity(password);
+    if (secError) {
+      return response.status(400).json({ error: secError });
     }
 
     const tenantId = request.tenant?.id;
+
     const tenantName = request.tenant?.name || "this";
     const tenantSubdomain = request.tenant?.subdomain || "centroid";
     const isMainSpace = ["centroid", "verbolabs"].includes(tenantSubdomain.toLowerCase());
     const cleanEmail = email.toLowerCase().trim();
+    const cleanName = name.trim();
 
     // Check if user already exists in Supabase Auth
     let existingUser = null;
@@ -28,8 +51,14 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
       }
     } catch (_) {}
 
+    let redirectTo = request.headers.origin || "http://localhost:5173";
+    if (!redirectTo.endsWith("/")) {
+      redirectTo += "/";
+    }
+
     if (existingUser) {
-      // User already has a Supabase Auth account. Verify password then check space account.
+
+      // User already has an account. Verify password then reset verification for this signup session.
       const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password
@@ -41,37 +70,26 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
         });
       }
 
-      // Password valid. Check if they already have an account created for this workspace
+
+      // Force email re-verification for every signup attempt
+      try {
+        await supabaseAdmin.auth.admin.updateUserById(existingUser.id, { email_confirm: false });
+      } catch (_) {}
+
+      // Reset profile status to pending_verification for this signup
+      await supabase
+        .from("profiles")
+        .upsert({
+          id: existingUser.id,
+          email: cleanEmail,
+          name: cleanName,
+          full_name: cleanName,
+          organization_id: tenantId || null,
+          status: "pending_verification",
+          email_verified: false
+        }, { onConflict: "id" });
+
       if (tenantId) {
-        let alreadyMember = false;
-        try {
-          const { data: existingMem } = await supabase
-            .from("user_tenant_memberships")
-            .select("id")
-            .eq("user_id", existingUser.id)
-            .eq("organization_id", tenantId)
-            .maybeSingle();
-          
-          if (existingMem) {
-            alreadyMember = true;
-          } else {
-            const { data: profileCheck } = await supabase
-              .from("profiles")
-              .select("id")
-              .eq("id", existingUser.id)
-              .eq("organization_id", tenantId)
-              .maybeSingle();
-            if (profileCheck) alreadyMember = true;
-          }
-        } catch (_) {}
-
-        if (alreadyMember) {
-          return response.status(400).json({
-            error: `An account for ${cleanEmail} already exists in '${tenantName}' workspace. Please log in.`
-          });
-        }
-
-        // Register independent account membership for this specific workspace
         try {
           await supabase
             .from("user_tenant_memberships")
@@ -80,68 +98,142 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
               organization_id: tenantId,
               role: "linguist",
               credits_allowed: 50000,
-              credits_consumed: 0,
-              has_translate_access: true,
-              status: "active"
+              status: "pending_verification"
             }, { onConflict: "user_id,organization_id" });
         } catch (_) {}
       }
 
+      // Dispatch fresh signup verification email to user inbox
+      try {
+        await supabaseAdmin.auth.admin.generateLink({
+          type: "signup",
+          email: cleanEmail,
+          password,
+          options: { redirectTo }
+        });
+      } catch (_) {
+        try {
+          await supabase.auth.resend({
+            type: "signup",
+            email: cleanEmail,
+            options: { emailRedirectTo: redirectTo }
+          });
+        } catch (_) {}
+      }
+
       return response.json({
-        message: `Account registered successfully for '${tenantName}' workspace! You can now log in.`,
-        user: { id: loginData.user.id, email: loginData.user.email }
+        message: `Signup successful! A new verification email has been dispatched to ${cleanEmail}. Please check your inbox and click the verification button to activate your account.`,
+        user: { id: existingUser.id, email: cleanEmail, name: cleanName },
+        requiresVerification: true
       });
     }
 
-    // Brand new user — create Supabase Auth account
-    const { data, error } = await supabaseAdmin.auth.admin.createUser({
+    // Brand new user — create account with email_confirm: false so verification email is required
+    const { data: adminData, error: adminErr } = await supabaseAdmin.auth.admin.createUser({
       email: cleanEmail,
       password,
-      email_confirm: true
+      email_confirm: false,
+      user_metadata: { name: cleanName, full_name: cleanName }
+    });
+
+    if (adminErr) {
+      return response.status(400).json({ error: adminErr.message });
+    }
+
+    const user = adminData.user;
+
+    // Ensure email_confirm is false so user MUST verify via email link
+    try {
+      await supabaseAdmin.auth.admin.updateUserById(user.id, { email_confirm: false });
+    } catch (_) {}
+
+    // Generate and dispatch signup verification email
+    try {
+      await supabaseAdmin.auth.admin.generateLink({
+        type: "signup",
+        email: cleanEmail,
+        password,
+        options: { redirectTo }
+      });
+    } catch (_) {}
+
+    if (user) {
+      // Upsert base profile with pending_verification status
+      await supabase
+        .from("profiles")
+        .upsert({
+          id: user.id,
+          email: user.email,
+          name: cleanName,
+          full_name: cleanName,
+          role: "linguist",
+          organization_id: tenantId || null,
+          credits_allowed: 50000,
+          status: "pending_verification",
+          email_verified: false
+        }, { onConflict: "id" });
+
+      if (tenantId) {
+        // Upsert space membership
+        try {
+          await supabase
+            .from("user_tenant_memberships")
+            .upsert({
+              user_id: user.id,
+              organization_id: tenantId,
+              role: "linguist",
+              credits_allowed: 50000,
+              status: "pending_verification"
+            }, { onConflict: "user_id,organization_id" });
+        } catch (_) {}
+      }
+    }
+
+    response.json({
+      message: `Account created successfully! A verification email has been sent to ${cleanEmail}. Please check your inbox and click the verification button to activate your account before signing in.`,
+      user: { id: user.id, email: user.email, name: cleanName },
+      requiresVerification: true
+    });
+
+  } catch (error) {
+    console.error("Register Router Exception:", error);
+    response.status(500).json({ error: "Registration failed on server" });
+  }
+});
+
+// 1b. Resend Email Verification Link
+authRouter.post("/resend-verification", async (request, response) => {
+  try {
+    const { email } = request.body;
+    if (!email) {
+      return response.status(400).json({ error: "Email address is required" });
+    }
+
+    let redirectTo = request.headers.origin || "http://localhost:5173";
+    if (!redirectTo.endsWith("/")) {
+      redirectTo += "/";
+    }
+
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: email.toLowerCase().trim(),
+      options: { emailRedirectTo: redirectTo }
     });
 
     if (error) {
       return response.status(400).json({ error: error.message });
     }
 
-    const user = data.user;
-
-    if (user && tenantId) {
-      // Upsert base profile for this tenant
-      await supabase
-        .from("profiles")
-        .upsert({
-          id: user.id,
-          email: user.email,
-          role: "linguist",
-          organization_id: tenantId,
-          credits_allowed: 50000,
-          status: "active"
-        }, { onConflict: "id" });
-
-      // Upsert space membership
-      try {
-        await supabase
-          .from("user_tenant_memberships")
-          .upsert({
-            user_id: user.id,
-            organization_id: tenantId,
-            role: "linguist",
-            credits_allowed: 50000,
-            status: "active"
-          }, { onConflict: "user_id,organization_id" });
-      } catch (_) {}
-    }
-
     response.json({
-      message: `Account registered successfully for '${tenantName}' workspace! You can now log in.`,
-      user: { id: user.id, email: user.email }
+      message: `A new verification email has been sent to ${email}. Please check your inbox.`
     });
   } catch (error) {
-    console.error("Register Router Exception:", error);
-    response.status(500).json({ error: "Registration failed on server" });
+    console.error("Resend Verification Error:", error);
+    response.status(500).json({ error: "Failed to resend verification email" });
   }
 });
+
+
 
 
 // 2. User Sign In (Login)
@@ -163,17 +255,18 @@ authRouter.post("/login", authRateLimiter, async (request, response) => {
     }
 
     const user = data.user;
-    
-    // Check if email has been verified
-    const isConfirmed = user.email_confirmed_at || user.confirmed_at;
-    if (!isConfirmed) {
-      // Sign out immediately if not confirmed
-      await supabase.auth.signOut();
-      return response.status(403).json({ 
-        error: "Please confirm your email address. A verification link has been sent to your inbox." 
-      });
-    }
 
+    // Check if email has been verified via Supabase Admin API
+    let isConfirmed = false;
+    try {
+      const { data: adminUserRes } = await supabaseAdmin.auth.admin.getUserById(user.id);
+      if (adminUserRes?.user?.email_confirmed_at) {
+        isConfirmed = true;
+      }
+    } catch (_) {
+      isConfirmed = !!(user.email_confirmed_at || user.confirmed_at);
+    }
+    
     // Retrieve user profile role and organization details
     let profile = null;
     let { data: profileWithOrg, error: profileError } = await supabase
@@ -192,6 +285,32 @@ authRouter.post("/login", authRateLimiter, async (request, response) => {
     } else {
       profile = profileWithOrg;
     }
+
+    if (!profile) {
+      return response.status(401).json({ error: "User profile record missing" });
+    }
+
+    // Enforce email verification check
+    if (!isConfirmed || profile.status === "pending_verification" || profile.email_verified === false) {
+      if (isConfirmed) {
+        // User HAS clicked the email verification link in their email! Promote profile status to active!
+        try {
+          await supabase
+            .from("profiles")
+            .update({ status: "active", email_verified: true })
+            .eq("id", user.id);
+          profile.status = "active";
+          profile.email_verified = true;
+        } catch (_) {}
+      } else {
+        // User HAS NOT clicked the email verification link! Strictly block sign in!
+        await supabase.auth.signOut();
+        return response.status(403).json({ 
+          error: `Email verification required: A confirmation link was sent to ${user.email}. Please check your inbox and click the verification button to verify your account before logging in.` 
+        });
+      }
+    }
+
 
     if (!profile) {
       return response.status(401).json({ error: "User profile record missing" });
@@ -255,6 +374,7 @@ authRouter.post("/login", authRateLimiter, async (request, response) => {
       user: {
         id: user.id,
         email: user.email,
+        name: profile.name || profile.full_name || user.user_metadata?.name || user.user_metadata?.full_name || user.email?.split("@")[0],
         role: profile.role,
         hasTranslateAccess: profile.has_translate_access,
         creditsAllowed: profile.credits_allowed,
@@ -264,6 +384,7 @@ authRouter.post("/login", authRateLimiter, async (request, response) => {
         organization: profile.organization || null
       }
     });
+
   } catch (error) {
     console.error("Login Router Error:", error);
     response.status(500).json({ error: "Authentication failed on server" });
@@ -439,9 +560,11 @@ authRouter.post("/reset-password", async (request, response) => {
     if (!password) {
       return response.status(400).json({ error: "New password is required" });
     }
-    if (password.length < 6) {
-      return response.status(400).json({ error: "Password must be at least 6 characters long" });
+    const secError = validatePasswordSecurity(password);
+    if (secError) {
+      return response.status(400).json({ error: secError });
     }
+
 
     // Extract Bearer token
     const authHeader = request.headers.authorization;
@@ -500,6 +623,7 @@ authRouter.get("/me", checkAuth, async (request, response) => {
     response.json({
       id: profile.id,
       email: profile.email,
+      name: profile.name || profile.full_name || request.user?.user_metadata?.name || request.user?.user_metadata?.full_name || profile.email?.split("@")[0],
       role: profile.role,
       hasTranslateAccess: profile.has_translate_access,
       creditsAllowed: profile.credits_allowed,
@@ -514,6 +638,7 @@ authRouter.get("/me", checkAuth, async (request, response) => {
     response.status(500).json({ error: "Could not fetch user session profile" });
   }
 });
+
 
 // 6. List User's Joined Spaces
 authRouter.get("/my-spaces", checkAuth, async (request, response) => {
