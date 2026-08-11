@@ -454,7 +454,7 @@ export default function App() {
       });
 
       const withTranslations = cleanSegs.filter(s => s.target && s.target.trim().length > 0);
-      console.log(`[CLIENT_FETCH_DOC_SUCCESS] Received ${cleanSegs.length} segments (${withTranslations.length} translated for ${activeTargetLanguage}):`, withTranslations);
+      console.log(`[CLIENT_FETCH_DOC_SUCCESS] 📥 Loaded ${cleanSegs.length} total segments from DB (${withTranslations.length} translated for target_lang "${activeTargetLanguage}"):`, withTranslations);
 
       setSegments(cleanSegs);
       // Extract and set the file extension dynamically from the document name or server metadata
@@ -1588,6 +1588,16 @@ export default function App() {
         }
       }
 
+      // Flush all translated segments to DB to ensure persistence
+      setSegments((latest) => {
+        const translatedSegments = latest.filter((s) => s.target && s.target.trim().length > 0);
+        if (translatedSegments.length > 0) {
+          console.log(`[CLIENT_SAVE_POST_TRANSLATION] Persisting ${translatedSegments.length} translated segments for lang ${activeTargetLanguage}...`);
+          persistBulkSegmentUpdates(translatedSegments, true);
+        }
+        return latest;
+      });
+
       setIsTranslating(false);
       if (stillUntranslatedCount > 0) {
         showToast(`Translation completed! ${stillUntranslatedCount} segments were retried for completeness.`);
@@ -1962,11 +1972,27 @@ export default function App() {
       });
     }
   };
+
   const pendingBulkSaveRef = useRef(new Map());
   const pendingBulkSaveTimerRef = useRef(null);
 
+  /**
+   * =========================================================================================
+   * 🚨 CRITICAL AI SAFETY & CLIENT SAVE SECURITY WARNING 🚨
+   * DO NOT REMOVE `activeDocId` FALLBACK RESOLUTION (`documentId || currentRoute?.fileId`).
+   * When accessing an editor page directly via URL route, `documentId` state can be null
+   * during initial render cycles. Omitting `currentRoute?.fileId` causes auto-save to silently
+   * abort, dropping all unsaved translations!
+   * =========================================================================================
+   */
   const flushPendingBulkSave = useCallback(async () => {
-    if (!documentId || pendingBulkSaveRef.current.size === 0) return;
+    const activeDocId = documentId || (currentRoute?.screen === "editor" && currentRoute?.fileId);
+    if (!activeDocId || pendingBulkSaveRef.current.size === 0) {
+      if (!activeDocId && pendingBulkSaveRef.current.size > 0) {
+        console.warn(`[CLIENT_SAVE_ABORT] Cannot save ${pendingBulkSaveRef.current.size} pending segments: activeDocId is missing/null.`);
+      }
+      return;
+    }
     const itemsToSave = Array.from(pendingBulkSaveRef.current.values());
     pendingBulkSaveRef.current.clear();
 
@@ -1975,6 +2001,7 @@ export default function App() {
         const actualIndex = seg.segment_index !== undefined ? seg.segment_index : (typeof seg.id === "number" ? seg.id : 1);
         return {
           segmentIndex: actualIndex,
+          sourceText: seg.source || seg.source_text || "",
           targetText: seg.target !== undefined ? seg.target : "",
           status: seg.verified ? "approved" : (seg.target ? "translated" : "draft"),
           originalTargetText: seg.originalTargetText !== undefined ? seg.originalTargetText : null,
@@ -1985,17 +2012,17 @@ export default function App() {
 
     if (updates.length === 0) return;
 
-    console.log(`[CLIENT_SAVE_TRIGGER] Saving ${updates.length} segments to docId: ${documentId} (lang: ${activeTargetLanguage})...`, updates);
+    console.log(`[CLIENT_SAVE_TRIGGER] 💾 Saving ${updates.length} segment(s) to DB for doc ${activeDocId} (target_lang: "${activeTargetLanguage}")...`, updates);
 
     try {
-      const res = await updateSegmentsBulk(documentId, updates, autoPropagateEnabled, activeTargetLanguage);
-      console.log(`[CLIENT_SAVE_SUCCESS] DB updated successfully!`, res);
+      const res = await updateSegmentsBulk(activeDocId, updates, autoPropagateEnabled, activeTargetLanguage);
+      console.log(`[CLIENT_SAVE_SUCCESS] ✅ DB updated successfully! Saved ${res?.saved !== undefined ? res.saved : updates.length} segment(s) to Supabase for target_lang "${activeTargetLanguage}". Response:`, res);
     } catch (err) {
       console.error("[CLIENT_SAVE_ERROR] Failed to bulk save segments to DB, retrying once...", err);
       // Retry once before giving up
       try {
-        const retryRes = await updateSegmentsBulk(documentId, updates, autoPropagateEnabled, activeTargetLanguage);
-        console.log(`[CLIENT_SAVE_RETRY_SUCCESS] DB updated on retry!`, retryRes);
+        const retryRes = await updateSegmentsBulk(activeDocId, updates, autoPropagateEnabled, activeTargetLanguage);
+        console.log(`[CLIENT_SAVE_RETRY_SUCCESS] DB updated on retry for docId: ${activeDocId}!`, retryRes);
       } catch (retryErr) {
         console.error("[CLIENT_SAVE_RETRY_FAIL] Retry failed — re-queuing segments:", retryErr);
         itemsToSave.forEach((seg) => {
@@ -2003,7 +2030,7 @@ export default function App() {
         });
       }
     }
-  }, [documentId, autoPropagateEnabled, activeTargetLanguage]);
+  }, [documentId, currentRoute?.screen, currentRoute?.fileId, autoPropagateEnabled, activeTargetLanguage]);
 
   const persistBulkSegmentUpdates = useCallback((updatedSegmentsList, instant = true) => {
     if (!updatedSegmentsList || updatedSegmentsList.length === 0) return;

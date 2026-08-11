@@ -279,8 +279,8 @@ function splitTargetBlockToN(targetPlaceholderStr, N, sourceSubSegments, targetT
     if (sourceTagMap && targetTagMap && srcText) {
       alignedTarget = alignSegmentTags(srcText, alignedTarget, sourceTagMap, targetTagMap);
     }
-    return projectSourceTagsOntoTarget(srcText, alignedTarget);
   });
+}
 }
 
 async function alignTargetHtmlToSource(targetFilePath, templateHtml, sourceTagMap, sourceSegments, sourceSegmentToBlockMap) {

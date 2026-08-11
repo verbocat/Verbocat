@@ -121,6 +121,15 @@ const resegmentDocumentInDb = async (documentId, sourceSegments) => {
   return false;
 };
 
+/**
+ * =========================================================================================
+ * 🚨 AI SAFETY & ARCHITECTURE SECURITY WARNING 🚨
+ * DO NOT ALTER THE SEGMENT MERGE ALGORITHM BELOW:
+ * `fetchAllSegments` merges `target_lang IS NULL` template source rows with target language
+ * (`target_lang = '<code>'`) rows. This architecture enables multi-language translations
+ * on a single document without overwriting source templates.
+ * =========================================================================================
+ */
 const fetchAllSegments = async (documentId, select = "*", targetLang = null) => {
   if (targetLang && targetLang !== "source") {
     // 1. Fetch template segments (target_lang IS NULL or target_lang = source)

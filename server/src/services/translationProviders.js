@@ -586,17 +586,15 @@ const translateWithProviders = async (sourceTexts, protectedTexts, target, provi
   return null;
 };
 
-// Local definition removed — imported from tagProtection utility instead.
-
 const isScriptValidForLanguage = (text, targetLang, sourceText = "") => {
   const cleanLang = String(targetLang || "").toLowerCase();
   
   // Strip tags/placeholders first to avoid false positives on tag characters
   const cleanText = String(text || "").replace(/__TAG_\d+__/g, "").replace(/<\/?\d+>/g, "");
 
-  // 1. If target is Hindi, strictly forbid any Perso-Arabic characters
-  if (cleanLang.startsWith("hi")) {
-    if (/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(cleanText)) {
+  // 1. If target is Hindi/Devanagari, strictly forbid Perso-Arabic, Cyrillic, or CJK characters
+  if (cleanLang.startsWith("hi") || cleanLang.startsWith("mr") || cleanLang.startsWith("ne")) {
+    if (/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\u0400-\u04FF\u4E00-\u9FFF\uAC00-\uD7AF]/.test(cleanText)) {
       return false;
     }
 
@@ -662,17 +660,15 @@ const isScriptValidForLanguage = (text, targetLang, sourceText = "") => {
   // forbid any non-Latin scripts (like Arabic, Cyrillic, Devanagari, Han/Chinese, Japanese, Hangul)
   const isLatinBased = /^(en|es|fr|de|it|pt|nl|sv|no|da|fi|pl)/.test(cleanLang);
   if (isLatinBased) {
-    if (/[\u0900-\u097F\u0600-\u06FF\u0400-\u04FF\u4E00-\u9FFF]/.test(cleanText)) {
+    if (/[\u0900-\u097F\u0600-\u06FF\u0400-\u04FF\u4E00-\u9FFF\uAC00-\uD7AF]/.test(cleanText)) {
       return false;
     }
   }
 
-  // 3. Forbid other target language scripts from leaking into each other.
+  // 3. Forbid Arabic script leakage into non-Arabic targets
   const isArabicBased = /^(ar|ur|fa|ps|sd)/.test(cleanLang);
   if (!isArabicBased && /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(cleanText)) {
-    if (/[\u0621-\u064A]/.test(cleanText)) {
-      return false;
-    }
+    return false;
   }
 
   return true;

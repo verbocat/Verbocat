@@ -558,6 +558,40 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
     );
   }
 
+  if (!project) {
+    return (
+      <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] flex items-center justify-center p-6">
+        <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-2xl p-8 max-w-md w-full text-center shadow-xl space-y-4">
+          <div className="h-12 w-12 rounded-full bg-red-500/10 text-red-400 flex items-center justify-center mx-auto border border-red-500/20">
+            <AlertCircle size={24} />
+          </div>
+          <h2 className="text-lg font-bold text-[var(--text-primary)]">Unable to load project</h2>
+          <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+            The project details could not be retrieved. The server backend may be restarting or unreachable.
+          </p>
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <button
+              onClick={onBack}
+              className="px-4 py-2 text-xs font-semibold rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] transition-all cursor-pointer"
+            >
+              Back to Dashboard
+            </button>
+            <button
+              onClick={() => {
+                setLoading(true);
+                loadProjectDetails();
+                loadAnalytics();
+              }}
+              className="px-4 py-2 text-xs font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition-all cursor-pointer shadow-sm"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen flex flex-col bg-[var(--bg-base)] text-[var(--text-primary)]">
       
@@ -573,10 +607,10 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
           </button>
           <div className="min-w-0">
             <h1 className="text-base font-black tracking-tight text-[var(--text-primary)] truncate max-w-md">
-              {project.name}
+              {project?.name || "Project Details"}
             </h1>
             <div className="flex items-center gap-3 text-[11px] text-[var(--text-muted)] mt-0.5 font-medium flex-wrap">
-              {project.client && (
+              {project?.client && (
                 <span>
                   Client: <strong className="text-[var(--text-secondary)] font-bold">{project.client}</strong>
                 </span>

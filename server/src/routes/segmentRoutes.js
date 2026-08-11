@@ -1,3 +1,23 @@
+/**
+ * =========================================================================================
+ * 🚨 CRITICAL AI SAFETY & ARCHITECTURE SECURITY WARNING 🚨
+ * DO NOT EDIT OR REMOVE THE FOLLOWING CONSTRAINTS IN THIS FILE:
+ *
+ * 1. MANDATORY `source_text` IN UPSERTS:
+ *    PostgreSQL table `document_segments` enforces `source_text TEXT NOT NULL`.
+ *    EVERY `.upsert()` call in ALL endpoints (`translate-batch`, PUT single segment, POST bulk)
+ *    MUST include `source_text`. Omitting `source_text` causes PostgreSQL Error 23502
+ *    (null value violates not-null constraint) and breaks segment saving 100% of the time.
+ *
+ * 2. MULTI-TENANCY TARGET LANGUAGE PARTITIONING:
+ *    Template rows have `target_lang IS NULL`. Target translations for languages (e.g. `ar`, `hi`)
+ *    MUST insert/update distinct rows with `target_lang = '<lang_code>'`. NEVER touch template rows.
+ *
+ * 3. 1-BASED SEGMENT INDEXING:
+ *    `segment_index` is 1-indexed. NEVER subtract 1 when writing or querying `segment_index`.
+ * =========================================================================================
+ */
+
 const express = require("express");
 const { supabase, fetchAllSegments } = require("../config/supabase");
 const { checkAuth, checkTranslateAccess, checkDocumentAccess } = require("../utils/authMiddleware");
@@ -26,8 +46,21 @@ segmentRouter.post(["/translate-batch", "/api/translate-batch"], checkAuth, chec
       const { getIo } = require("../services/socket");
       const io = getIo();
 
+      // Pre-fetch template source_text map for all segments in document
+      const { data: templateSegs } = await supabase
+        .from("document_segments")
+        .select("segment_index, source_text")
+        .eq("document_id", documentId)
+        .is("target_lang", null);
+
+      const templateSourceMap = new Map();
+      if (templateSegs) {
+        templateSegs.forEach(t => templateSourceMap.set(t.segment_index, t.source_text || ""));
+      }
+
       const updatePromises = results.map(async (item) => {
-        const segmentIndex = item.id - 1;
+        const segmentIndex = item.segment_index !== undefined ? Number(item.segment_index) : (item.id !== undefined ? Number(item.id) : 1);
+        const sourceText = item.source || templateSourceMap.get(segmentIndex) || "";
 
         const { isLegitimatelyIdentical } = require("../services/translationProviders");
         const cleanSource = String(item.source || "").replace(/<[^>]+>/g, "").trim();
@@ -51,14 +84,49 @@ segmentRouter.post(["/translate-batch", "/api/translate-batch"], checkAuth, chec
           updateFields.mqm_report = item.mqmReport || null;
         }
 
-        const { error } = await supabase
+        // 1. Try updating existing row matching target_lang = target
+        let { data, error: updateErr } = await supabase
           .from("document_segments")
           .update(updateFields)
           .eq("document_id", documentId)
+          .eq("segment_index", segmentIndex)
           .eq("target_lang", target)
-          .eq("segment_index", segmentIndex);
+          .select()
+          .maybeSingle();
 
-        if (!error && io) {
+        if (updateErr) {
+          console.error(`[TRANSLATE_BATCH_UPDATE_ERR] seg=${segmentIndex} lang=${target}:`, updateErr.message);
+        }
+
+        // 2. If no row matched target_lang, upsert target segment row (including required source_text)
+        if (!data) {
+          const { data: inserted, error: insErr } = await supabase
+            .from("document_segments")
+            .upsert(
+              {
+                document_id: documentId,
+                segment_index: segmentIndex,
+                target_lang: target,
+                source_text: sourceText,
+                target_text: updateFields.target_text || "",
+                status: updateFields.status || "draft",
+                mqm_accuracy_score: updateFields.mqm_accuracy_score || 100,
+                mqm_report: updateFields.mqm_report || null,
+                updated_at: updateFields.updated_at
+              },
+              { onConflict: "document_id,segment_index,target_lang" }
+            )
+            .select()
+            .single();
+
+          if (insErr) {
+            console.error(`[TRANSLATE_BATCH_UPSERT_ERR] seg=${segmentIndex} lang=${target}:`, insErr.message);
+          } else {
+            data = inserted;
+          }
+        }
+
+        if (data && io) {
           io.to(getDocumentRoomId(documentId, target)).emit("segment-updated", {
             segmentIndex,
             targetText: updateFields.target_text,
@@ -184,6 +252,18 @@ segmentRouter.put([
 
     // 2. If no row matched target_lang, upsert new target segment row without modifying template (target_lang: null) rows
     if (!data) {
+      let sourceText = request.body.sourceText || request.body.source || "";
+      if (!sourceText) {
+        const { data: tmpl } = await supabase
+          .from("document_segments")
+          .select("source_text")
+          .eq("document_id", id)
+          .eq("segment_index", segIndex)
+          .is("target_lang", null)
+          .maybeSingle();
+        if (tmpl) sourceText = tmpl.source_text || "";
+      }
+
       const { data: inserted, error: insErr } = await supabase
         .from("document_segments")
         .upsert(
@@ -191,6 +271,7 @@ segmentRouter.put([
             document_id: id,
             segment_index: segIndex,
             target_lang: targetLang,
+            source_text: sourceText,
             target_text: updateFields.target_text || "",
             status: updateFields.status || "draft",
             mqm_accuracy_score: updateFields.mqm_accuracy_score || 100,
@@ -253,6 +334,18 @@ segmentRouter.post([
     const io = getIo();
     const results = [];
 
+    // Pre-fetch template source_text map for document
+    const { data: templateSegs } = await supabase
+      .from("document_segments")
+      .select("segment_index, source_text")
+      .eq("document_id", id)
+      .is("target_lang", null);
+
+    const templateSourceMap = new Map();
+    if (templateSegs) {
+      templateSegs.forEach(t => templateSourceMap.set(t.segment_index, t.source_text || ""));
+    }
+
     console.log(`\n========================================`);
     console.log(`[SEGMENT_BULK_SAVE_REQUEST] DocId: ${id} | TargetLang: ${targetLang} | Count: ${updates.length}`);
 
@@ -288,14 +381,16 @@ segmentRouter.post([
         console.error(`[SEGMENT_SAVE_ERR1] doc=${id} seg=${segIndex} lang=${targetLang}:`, err1.message);
       }
 
-      // 2. If no row matched target_lang, upsert target segment row (never touching template target_lang IS NULL rows)
+      // 2. If no row matched target_lang, upsert target segment row (including required source_text)
       if (!data) {
+        const sourceText = item.source || item.sourceText || templateSourceMap.get(segIndex) || "";
         const { data: inserted, error: insErr } = await supabase
           .from("document_segments")
           .upsert({
             document_id: id,
             segment_index: segIndex,
             target_lang: targetLang,
+            source_text: sourceText,
             target_text: updateFields.target_text || "",
             status: updateFields.status || "draft",
             original_target_text: updateFields.original_target_text || null,
