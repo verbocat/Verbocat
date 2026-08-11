@@ -2671,5 +2671,728 @@ body, .topbar, .workspace-footer, .seg-row, .seg-editor, .nav-btn, .modal-card, 
   color: #0f172a;
 }
 
+/* ================================================================
+   PROFESSIONAL NEUMORPHISM DESIGN SYSTEM (AUTHENTICATION SUITE)
+   Target: Sleek 3D Soft Tactile Realism (Clean Dual Shadows & Fluid Layout)
+   ================================================================ */
+.neu-body-bg {
+  background-color: #14171d;
+  background-image: 
+    radial-gradient(circle at 20% 20%, rgba(99, 102, 241, 0.03) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(139, 92, 246, 0.03) 0%, transparent 50%);
+}
+
+.neu-panel-extruded {
+  background: linear-gradient(145deg, #171a21, #13151b);
+  box-shadow: 14px 14px 32px #0a0c0f, -14px -14px 32px #1e222c;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.neu-card-convex {
+  background: linear-gradient(145deg, #161920, #13151a);
+  box-shadow: 6px 6px 16px #0b0c0f, -6px -6px 16px #1d212a;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.neu-inset {
+  background: #111318;
+  box-shadow: inset 3px 3px 7px #090a0d, inset -3px -3px 7px #191c23;
+  border: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.neu-inset-focus:focus-within {
+  box-shadow: inset 3px 3px 7px #090a0d, inset -3px -3px 7px #191c23, 0 0 0 2px rgba(99, 102, 241, 0.45);
+}
+
+.neu-button-extruded {
+  background: linear-gradient(145deg, #171a21, #13151b);
+  box-shadow: 5px 5px 12px #0a0c0f, -5px -5px 12px #1e222c;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.neu-button-extruded:hover {
+  box-shadow: 7px 7px 16px #0a0c0f, -7px -7px 16px #1e222c;
+  transform: translateY(-1px);
+}
+.neu-button-extruded:active {
+  box-shadow: inset 3px 3px 6px #0a0c0f, inset -3px -3px 6px #1e222c;
+  transform: translateY(1px);
+}
+
+.neu-button-primary {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  box-shadow: 5px 5px 14px #0a0c0f, -5px -5px 14px #1e222c, inset 1px 1px 1px rgba(255, 255, 255, 0.3);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.neu-button-primary:hover {
+  background: linear-gradient(135deg, #6767f3, #5349eb);
+  box-shadow: 7px 7px 18px #0a0c0f, -7px -7px 18px #1e222c, inset 1px 1px 2px rgba(255, 255, 255, 0.4);
+  transform: translateY(-1px);
+}
+.neu-button-primary:active {
+  box-shadow: inset 4px 4px 10px #312e81, inset -4px -4px 10px #6366f1;
+  transform: translateY(1px);
+}
+
+.neu-badge-inset {
+  background: #111318;
+  box-shadow: inset 2px 2px 5px #090a0d, inset -2px -2px 5px #191c23;
+  border: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.neu-icon-btn {
+  background: linear-gradient(145deg, #171a21, #13151b);
+  box-shadow: 3px 3px 8px #0a0c0f, -3px -3px 8px #1e222c;
+  transition: all 0.15s ease;
+}
+.neu-icon-btn:hover {
+  box-shadow: 5px 5px 12px #0a0c0f, -5px -5px 12px #1e222c;
+}
+.neu-icon-btn:active {
+  box-shadow: inset 2px 2px 5px #0a0c0f, inset -2px -2px 5px #1e222c;
+}
+
+.neu-switch-track {
+  background: #111318;
+  box-shadow: inset 3px 3px 6px #090a0d, inset -3px -3px 6px #191c23;
+  border: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.neu-switch-thumb-active {
+  background: linear-gradient(145deg, #6366f1, #4f46e5);
+  box-shadow: 3px 3px 7px #0a0c0f, -3px -3px 7px #1e222c, inset 1px 1px 1px rgba(255, 255, 255, 0.35);
+}
+.neu-switch-thumb-inactive {
+  background: linear-gradient(145deg, #181b22, #13151b);
+  box-shadow: 2px 2px 5px #0a0c0f, -2px -2px 5px #1e222c;
+}
+
+/* ================================================================
+   AURORA STUDIO ANIMATIONS & LUXURY GLASS UI UTILITIES
+   ================================================================ */
+
+@keyframes auroraFloatSlow {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(1deg);
+  }
+}
+
+@keyframes auroraFloatReverse {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(12px) rotate(-1.5deg);
+  }
+}
+
+@keyframes shimmerPass {
+  0% {
+    transform: translateX(-100%) skewX(-15deg);
+  }
+  100% {
+    transform: translateX(200%) skewX(-15deg);
+  }
+}
+
+@keyframes pulseGlowRing {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.25), 0 0 30px rgba(168, 85, 247, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(99, 102, 241, 0.45), 0 0 50px rgba(168, 85, 247, 0.3);
+  }
+}
+
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes textCrossFade {
+  0%, 15% { opacity: 0; transform: translateY(8px); }
+  25%, 85% { opacity: 1; transform: translateY(0); }
+  95%, 100% { opacity: 0; transform: translateY(-8px); }
+}
+
+.animate-aurora-float {
+  animation: auroraFloatSlow 7s ease-in-out infinite;
+}
+
+.animate-aurora-float-reverse {
+  animation: auroraFloatReverse 9s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.animate-shimmer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.15) 50%,
+    transparent 100%
+  );
+  animation: shimmerPass 4s infinite;
+  pointer-events: none;
+}
+
+.animate-gradient-text {
+  background: linear-gradient(135deg, #a5b4fc 0%, #c084fc 50%, #38bdf8 100%);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradientShift 6s ease infinite;
+}
+
+.glass-panel-luxury {
+  background: rgba(13, 15, 23, 0.65);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.glass-card-interactive {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.glass-card-interactive:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(165, 180, 252, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4), 0 0 20px rgba(99, 102, 241, 0.15);
+}
+
+.input-aurora {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  transition: all 0.25s ease;
+}
+.input-aurora:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.input-aurora:focus-within, .input-aurora:focus {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: #818cf8;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25), 0 0 20px rgba(99, 102, 241, 0.15);
+  outline: none;
+}
+
+/* ================================================================
+   NEW ULTRA-PROFESSIONAL LOGIN REDESIGN ANIMATIONS & STYLES
+   ================================================================ */
+
+@keyframes loginFloatOrb1 {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+    opacity: 0.45;
+  }
+  33% {
+    transform: translate(40px, -60px) scale(1.12);
+    opacity: 0.65;
+  }
+  66% {
+    transform: translate(-30px, 30px) scale(0.95);
+    opacity: 0.5;
+  }
+}
+
+@keyframes loginFloatOrb2 {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translate(-50px, 40px) scale(1.18);
+    opacity: 0.6;
+  }
+}
+
+@keyframes loginFloatOrb3 {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: translate(30px, 50px) scale(1.1);
+    opacity: 0.55;
+  }
+}
+
+@keyframes loginGridMove {
+  0% {
+    background-position: 0px 0px;
+  }
+  100% {
+    background-position: 40px 40px;
+  }
+}
+
+@keyframes loginGlowLineSweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  50%, 100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes loginBadgePulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(99, 102, 241, 0);
+  }
+}
+
+@keyframes loginTextGlowCycle {
+  0%, 100% {
+    filter: drop-shadow(0 0 12px rgba(129, 140, 248, 0.4));
+  }
+  50% {
+    filter: drop-shadow(0 0 25px rgba(192, 132, 252, 0.65));
+  }
+}
+
+@keyframes loginCardBorderGlow {
+  0%, 100% {
+    border-color: rgba(99, 102, 241, 0.2);
+  }
+  50% {
+    border-color: rgba(168, 85, 247, 0.45);
+  }
+}
+
+.login-bg-grid {
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 40%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 40%, transparent 100%);
+}
+
+.login-orb-1 {
+  animation: loginFloatOrb1 16s ease-in-out infinite;
+}
+
+.login-orb-2 {
+  animation: loginFloatOrb2 20s ease-in-out infinite;
+}
+
+.login-orb-3 {
+  animation: loginFloatOrb3 18s ease-in-out infinite;
+}
+
+.login-glass-card-v2 {
+  background: rgba(12, 14, 22, 0.72);
+  backdrop-filter: blur(36px) saturate(190%);
+  -webkit-backdrop-filter: blur(36px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: 
+    0 35px 90px rgba(0, 0, 0, 0.75),
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+    0 1px 0 rgba(255, 255, 255, 0.15) inset;
+}
+
+.login-glass-card-v2:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.login-input-field {
+  background: rgba(18, 21, 33, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  color: #f1f5f9;
+}
+
+.login-input-field:hover {
+  background: rgba(26, 30, 48, 0.75);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.login-input-field:focus-within {
+  background: rgba(30, 35, 56, 0.85);
+  border-color: #6366f1;
+  box-shadow: 
+    0 0 0 4px rgba(99, 102, 241, 0.18),
+    0 8px 24px rgba(99, 102, 241, 0.12);
+}
+
+.login-btn-primary {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%);
+  background-size: 200% 200%;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 
+    0 10px 30px -5px rgba(99, 102, 241, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.2) inset;
+}
+
+.login-btn-primary:hover:not(:disabled) {
+  background-position: 100% 0%;
+  transform: translateY(-1.5px);
+  box-shadow: 
+    0 16px 40px -6px rgba(139, 92, 246, 0.6),
+    0 0 30px rgba(217, 70, 239, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.3) inset;
+}
+
+.login-btn-primary:active:not(:disabled) {
+  transform: translateY(0.5px) scale(0.99);
+  box-shadow: 0 6px 20px -4px rgba(99, 102, 241, 0.4);
+}
+
+.login-feature-card {
+  background: rgba(255, 255, 255, 0.025);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.login-feature-card:hover {
+  background: rgba(255, 255, 255, 0.055);
+  border-color: rgba(99, 102, 241, 0.35);
+  transform: translateY(-3px) scale(1.01);
+  box-shadow: 
+    0 20px 40px rgba(0, 0, 0, 0.5),
+    0 0 25px rgba(99, 102, 241, 0.15);
+}
+
+.login-tab-pill {
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.login-gradient-title {
+  background: linear-gradient(135deg, #ffffff 0%, #e2e8f0 40%, #818cf8 80%, #c084fc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: loginTextGlowCycle 8s ease-in-out infinite;
+}
+
+.login-subtle-glow {
+  box-shadow: 0 0 25px rgba(99, 102, 241, 0.15);
+}
+
+/* ================================================================
+   HYPER-ENHANCED LUXURY DESIGNER TOKENS
+   ================================================================ */
+
+@keyframes loginFadeInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes loginGlowPulseRing {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.2), 0 0 40px rgba(168, 85, 247, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 35px rgba(99, 102, 241, 0.4), 0 0 70px rgba(168, 85, 247, 0.25);
+  }
+}
+
+.animate-login-fade-in {
+  animation: loginFadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.login-glass-hero-card {
+  background: rgba(15, 18, 30, 0.6);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 
+    0 20px 50px rgba(0, 0, 0, 0.6),
+    0 1px 0 rgba(255, 255, 255, 0.12) inset;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.login-glass-hero-card:hover {
+  background: rgba(20, 24, 40, 0.72);
+  border-color: rgba(99, 102, 241, 0.35);
+  box-shadow: 
+    0 25px 60px rgba(0, 0, 0, 0.7),
+    0 0 30px rgba(99, 102, 241, 0.18),
+    0 1px 0 rgba(255, 255, 255, 0.2) inset;
+}
+
+.login-pill-active {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(168, 85, 247, 0.25) 100%);
+  border: 1px solid rgba(165, 180, 252, 0.4);
+  color: #ffffff;
+  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.25);
+}
+
+.login-pill-inactive {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  color: #94a3b8;
+}
+
+.login-pill-inactive:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #f1f5f9;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* ================================================================
+   SILKY SMOOTH TRANSITION UTILITIES
+   ================================================================ */
+
+.smooth-fade-enter {
+  opacity: 1;
+  transform: translateY(0px) scale(1);
+  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.smooth-fade-exit {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.98);
+  transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.smooth-tab-slider {
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.smooth-input-transition {
+  transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+.smooth-button-hover {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1), background-position 0.4s ease;
+}
+
+/* ================================================================
+   LIGHT MODE DESIGN TOKENS FOR LOGIN SCREEN
+   ================================================================ */
+
+.login-light-bg-grid {
+  background-image: 
+    linear-gradient(to right, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15, 23, 42, 0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 40%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 40%, transparent 100%);
+}
+
+.login-light-glass-card {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(36px) saturate(190%);
+  -webkit-backdrop-filter: blur(36px) saturate(190%);
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  box-shadow: 
+    0 30px 80px rgba(15, 23, 42, 0.08),
+    0 4px 20px rgba(99, 102, 241, 0.06),
+    0 1px 0 rgba(255, 255, 255, 1) inset;
+}
+
+.login-light-glass-card:hover {
+  border-color: rgba(199, 210, 254, 0.9);
+  box-shadow: 
+    0 35px 90px rgba(15, 23, 42, 0.12),
+    0 0 30px rgba(99, 102, 241, 0.1);
+}
+
+.login-light-input {
+  background: rgba(248, 250, 252, 0.9);
+  border: 1px solid rgba(226, 232, 240, 1);
+  color: #0f172a;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.login-light-input:hover {
+  background: #ffffff;
+  border-color: rgba(203, 213, 225, 1);
+}
+
+.login-light-input:focus-within {
+  background: #ffffff;
+  border-color: #4f46e5;
+  box-shadow: 
+    0 0 0 4px rgba(79, 70, 229, 0.12),
+    0 4px 16px rgba(79, 70, 229, 0.08);
+}
+
+.login-gradient-title-light {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #2563eb 100%);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradientShift 6s ease infinite;
+}
+
+/* ================================================================
+   SKEUOMORPHIC MATTE DESIGN TOKENS
+   ================================================================ */
+
+/* ================================================================
+   ELEGANT SOFT-TOUCH MATTE SKEUOMORPHIC & GLASS DESIGN TOKENS
+   ================================================================ */
+
+.skeuo-matte-bg {
+  background-color: #f3f5f8;
+  background-image: 
+    radial-gradient(at 15% 15%, rgba(99, 102, 241, 0.07) 0px, transparent 50%),
+    radial-gradient(at 85% 85%, rgba(59, 130, 246, 0.07) 0px, transparent 50%),
+    radial-gradient(at 50% 50%, rgba(243, 245, 248, 1) 0px, rgba(235, 240, 247, 0.6) 100%);
+}
+
+.login-bg-grid {
+  background-size: 32px 32px;
+  background-image: 
+    radial-gradient(circle, rgba(148, 163, 184, 0.18) 1px, transparent 1px);
+}
+
+.skeuo-metal-panel {
+  background: rgba(243, 245, 248, 0.94);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 
+    18px 18px 40px rgba(166, 178, 195, 0.45),
+    -18px -18px 40px rgba(255, 255, 255, 0.95),
+    inset 1px 1px 1px rgba(255, 255, 255, 0.9),
+    inset -1px -1px 2px rgba(166, 178, 195, 0.15);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.skeuo-recessed-slot {
+  background: #ebf0f7;
+  border: 1px solid rgba(218, 226, 237, 0.9);
+  box-shadow: 
+    inset 3px 3px 7px rgba(166, 178, 195, 0.4),
+    inset -3px -3px 7px rgba(255, 255, 255, 0.95);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.skeuo-recessed-slot:focus-within {
+  background: #ffffff;
+  border-color: #6366f1;
+  box-shadow: 
+    inset 2px 2px 4px rgba(166, 178, 195, 0.18),
+    inset -2px -2px 4px rgba(255, 255, 255, 1),
+    0 0 0 3.5px rgba(99, 102, 241, 0.18),
+    0 4px 12px rgba(99, 102, 241, 0.08);
+}
+
+.skeuo-push-btn {
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 50%, #4338ca 100%);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 
+    6px 6px 18px rgba(79, 70, 229, 0.35),
+    -4px -4px 12px rgba(255, 255, 255, 0.9),
+    inset 0 1px 1px rgba(255, 255, 255, 0.45);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.skeuo-push-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 
+    8px 12px 24px rgba(79, 70, 229, 0.45),
+    -5px -5px 15px rgba(255, 255, 255, 1),
+    inset 0 1px 1px rgba(255, 255, 255, 0.6);
+}
+
+.skeuo-push-btn:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: 
+    inset 3px 3px 6px rgba(0, 0, 0, 0.3);
+}
+
+.skeuo-rocker-track {
+  background: #e6ecf4;
+  border: 1px solid rgba(218, 226, 237, 0.8);
+  box-shadow: 
+    inset 3px 3px 6px rgba(166, 178, 195, 0.45),
+    inset -3px -3px 6px rgba(255, 255, 255, 0.9);
+}
+
+.skeuo-rocker-thumb {
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+  box-shadow: 
+    3px 3px 10px rgba(79, 70, 229, 0.35),
+    inset 0 1px 1px rgba(255, 255, 255, 0.4);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.skeuo-sso-btn {
+  background: #f3f5f8;
+  border: 1px solid rgba(218, 226, 237, 0.9);
+  box-shadow: 
+    3px 3px 8px rgba(166, 178, 195, 0.3),
+    -3px -3px 8px rgba(255, 255, 255, 0.9),
+    inset 0 1px 1px rgba(255, 255, 255, 0.8);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.skeuo-sso-btn:hover {
+  background: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 
+    4px 4px 12px rgba(166, 178, 195, 0.4),
+    -4px -4px 12px rgba(255, 255, 255, 1);
+}
+
+.skeuo-badge-pill {
+  background: rgba(243, 245, 248, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 
+    3px 3px 8px rgba(166, 178, 195, 0.25),
+    -3px -3px 8px rgba(255, 255, 255, 0.9),
+    inset 0 1px 1px rgba(255, 255, 255, 0.8);
+}
+
+/* ================================================================
+   GPU-ACCELERATED SILKY-SMOOTH INFINITE SCALE SCROLLING
+   ================================================================ */
+
+@keyframes infiniteScaleLoop {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-16px, 0, 0);
+  }
+}
+
+.infinite-scale-tape {
+  will-change: transform;
+  animation: infiniteScaleLoop var(--scale-speed, 0.4s) linear infinite;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

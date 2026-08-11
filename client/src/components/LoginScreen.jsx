@@ -1,11 +1,127 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useUserStore } from "../services/userStore";
 import { api } from "../services/api";
-import { Eye, EyeOff, LockKeyhole, ArrowRight, CheckCircle, AlertCircle, Sparkles, Mail } from "lucide-react";
+import { 
+  Eye, EyeOff, Lock, ArrowRight, CheckCircle2, 
+  AlertCircle, Sparkles, Mail, KeyRound, Fingerprint
+} from "lucide-react";
 
+// ============================================================================
+// HTML5 Canvas Infinite Decelerating Scale Tuner (Clean Minimalist Bar)
+// ============================================================================
+const SpeedScaleMeter = ({ speedFactor, isLocked, accentColor }) => {
+  const canvasRef = useRef(null);
+  const targetVelocityRef = useRef(4.5);
+
+  useEffect(() => {
+    targetVelocityRef.current = isLocked ? 0.5 : Math.max(0.8, speedFactor * 4.5);
+  }, [speedFactor, isLocked]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+
+    let animId;
+    let currentPos = 0;
+    let currentVel = 4.5;
+
+    const render = () => {
+      currentVel += (targetVelocityRef.current - currentVel) * 0.05;
+      currentPos += currentVel;
+
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      const cssWidth = rect.width || 400;
+      const cssHeight = rect.height || 32;
+
+      if (canvas.width !== Math.round(cssWidth * dpr) || canvas.height !== Math.round(cssHeight * dpr)) {
+        canvas.width = Math.round(cssWidth * dpr);
+        canvas.height = Math.round(cssHeight * dpr);
+      }
+
+      ctx.save();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+      const tickSpacing = 16;
+      const offset = currentPos % tickSpacing;
+      const baseIndex = Math.floor(currentPos / tickSpacing);
+      const numTicks = Math.ceil(cssWidth / tickSpacing) + 2;
+
+      ctx.lineWidth = 1;
+
+      for (let i = -1; i <= numTicks; i++) {
+        const tickX = i * tickSpacing - offset;
+        const snapX = Math.floor(tickX) + 0.5; // Snap to 0.5px grid for crisp 100% flicker-free line strokes
+        const globalTickIndex = baseIndex + i;
+        const isMajor = Math.abs(globalTickIndex) % 4 === 0;
+
+        ctx.strokeStyle = isMajor ? "rgba(30, 41, 59, 0.85)" : "rgba(148, 163, 184, 0.65)";
+        ctx.beginPath();
+        const tickHeight = isMajor ? 18 : 10;
+        const startY = Math.floor((cssHeight - tickHeight) / 2);
+        ctx.moveTo(snapX, startY);
+        ctx.lineTo(snapX, startY + tickHeight);
+        ctx.stroke();
+      }
+
+
+      // Edge fade gradients
+      const leftGrad = ctx.createLinearGradient(0, 0, 45, 0);
+      leftGrad.addColorStop(0, "#f3f5f8");
+      leftGrad.addColorStop(1, "rgba(243, 245, 248, 0)");
+      ctx.fillStyle = leftGrad;
+      ctx.fillRect(0, 0, 45, cssHeight);
+
+      const rightGrad = ctx.createLinearGradient(cssWidth - 45, 0, cssWidth, 0);
+      rightGrad.addColorStop(0, "rgba(243, 245, 248, 0)");
+      rightGrad.addColorStop(1, "#f3f5f8");
+      ctx.fillStyle = rightGrad;
+      ctx.fillRect(cssWidth - 45, 0, 45, cssHeight);
+
+      // Center Hairline Needle Pointer
+      const centerX = Math.floor(cssWidth / 2) + 0.5;
+      ctx.strokeStyle = accentColor || "#f43f5e";
+      ctx.lineWidth = 1.5;
+      ctx.shadowColor = accentColor || "rgba(244, 63, 94, 0.8)";
+      ctx.shadowBlur = 4;
+      ctx.beginPath();
+      ctx.moveTo(centerX, 2);
+      ctx.lineTo(centerX, cssHeight - 2);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      ctx.restore();
+
+      animId = requestAnimationFrame(render);
+    };
+
+    animId = requestAnimationFrame(render);
+    return () => cancelAnimationFrame(animId);
+  }, [accentColor]);
+
+  return (
+    <div className="w-full max-w-md pt-2">
+      {/* BORDERLESS HTML5 CANVAS (Crisp High-DPI Retina Tuner Scale) */}
+      <div className="relative h-8 w-full flex items-center justify-center bg-transparent overflow-hidden">
+        <canvas
+          ref={canvasRef}
+          className="w-full h-8 block"
+        />
+      </div>
+    </div>
+  );
+};
+
+
+// ============================================================================
+// Main LoginScreen Component (RESTORED SOFT-TOUCH MATTE SKEUOMORPHIC THEME)
+// ============================================================================
 export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => {
   const loginAction = useUserStore((state) => state.login);
-  
+
+  // Form states
   const [mode, setMode] = useState(initialMode); // 'login', 'register', 'forgot', 'reset'
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -15,9 +131,124 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
-  const [isMobile, setIsMobile] = useState(false);
 
-  // Derive active space name for user-facing messages
+  // Speedometer & Rotator Sync States
+  const [rotatorIndex, setRotatorIndex] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [speedFactor, setSpeedFactor] = useState(1.0);
+  const [isLocked, setIsLocked] = useState(false);
+
+  // Diverse Target Scripts with Color-Synced Backdrop Halo Glows
+  const translations = useMemo(() => [
+    { 
+      prefix: "Welcome to", 
+      suffix: "", 
+      glowColor: "radial-gradient(circle, rgba(99, 102, 241, 0.4) 0%, transparent 70%)", 
+      accentColor: "#6366f1" 
+    },
+    { 
+      prefix: "", 
+      suffix: "में आपका स्वागत है", 
+      glowColor: "radial-gradient(circle, rgba(16, 185, 129, 0.4) 0%, transparent 70%)", 
+      accentColor: "#10b981" 
+    },
+    { 
+      prefix: "", 
+      suffix: "へようこそ", 
+      glowColor: "radial-gradient(circle, rgba(244, 63, 94, 0.4) 0%, transparent 70%)", 
+      accentColor: "#f43f5e" 
+    },
+    { 
+      prefix: "欢迎来到", 
+      suffix: "", 
+      glowColor: "radial-gradient(circle, rgba(239, 68, 68, 0.4) 0%, transparent 70%)", 
+      accentColor: "#ef4444" 
+    },
+    { 
+      prefix: "Добро пожаловать в", 
+      suffix: "", 
+      glowColor: "radial-gradient(circle, rgba(6, 182, 212, 0.4) 0%, transparent 70%)", 
+      accentColor: "#06b6d4" 
+    },
+    { 
+      prefix: "Καλώς ήρθατε στο", 
+      suffix: "", 
+      glowColor: "radial-gradient(circle, rgba(139, 92, 246, 0.4) 0%, transparent 70%)", 
+      accentColor: "#8b5cf6" 
+    },
+    { 
+      prefix: "", 
+      suffix: "에 오신 것을 환영합니다", 
+      glowColor: "radial-gradient(circle, rgba(168, 85, 247, 0.4) 0%, transparent 70%)", 
+      accentColor: "#a855f7" 
+    },
+    { 
+      prefix: "ยินดีต้อนรับสู่", 
+      suffix: "", 
+      glowColor: "radial-gradient(circle, rgba(245, 158, 11, 0.4) 0%, transparent 70%)", 
+      accentColor: "#f59e0b" 
+    },
+    { 
+      prefix: "ברוכים הבאים ל-", 
+      suffix: "", 
+      glowColor: "radial-gradient(circle, rgba(20, 184, 166, 0.4) 0%, transparent 70%)", 
+      accentColor: "#14b8a6" 
+    },
+    { 
+      prefix: "Bienvenido a", 
+      suffix: "", 
+      glowColor: "radial-gradient(circle, rgba(249, 115, 22, 0.4) 0%, transparent 70%)", 
+      accentColor: "#f97316" 
+    }
+  ], []);
+
+  // Synchronized Deceleration Engine with Ultra-Smooth Apple Spring Transitions
+  useEffect(() => {
+    let currentInterval = 70;
+    let factor = 1.0;
+    let stepCount = 0;
+    let timerId;
+
+    const tick = () => {
+      setIsTransitioning(true);
+
+      const fadeOutDuration = stepCount < 18 ? Math.min(currentInterval * 0.4, 150) : 380;
+
+      setTimeout(() => {
+        setRotatorIndex((prev) => (prev + 1) % translations.length);
+        setTimeout(() => {
+          setIsTransitioning(false);
+        }, 50);
+      }, fadeOutDuration);
+
+      stepCount++;
+
+      if (stepCount < 18) {
+        currentInterval = Math.round(currentInterval * 1.28);
+        factor = Math.max(0.15, 1.0 - (stepCount / 18) * 0.85);
+        setSpeedFactor(factor);
+        setIsLocked(false);
+        timerId = setTimeout(tick, currentInterval);
+      } else {
+        setSpeedFactor(0.15);
+        setIsLocked(true);
+        timerId = setTimeout(tick, 3800);
+      }
+    };
+
+    timerId = setTimeout(tick, currentInterval);
+    return () => clearTimeout(timerId);
+  }, [translations.length]);
+
+
+  // Sync mode on prop change
+  useEffect(() => {
+    setMode(initialMode);
+    setError("");
+    setSuccessMsg("");
+  }, [initialMode]);
+
+  // Derive active workspace tenant space name
   const getActiveSpaceName = () => {
     const spaceParam = new URLSearchParams(window.location.search).get("space");
     if (spaceParam && !["centroid", "verbolabs"].includes(spaceParam.toLowerCase())) {
@@ -25,26 +256,25 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
     }
     return null;
   };
+  const spaceName = getActiveSpaceName();
 
-  useEffect(() => {
-    setMode(initialMode);
-    setError("");
-    setSuccessMsg("");
-  }, [initialMode]);
+  // Password Strength Calculator
+  const calculatePasswordStrength = (pass) => {
+    if (!pass) return { score: 0, label: "", color: "bg-slate-300" };
+    let score = 0;
+    if (pass.length >= 6) score += 25;
+    if (pass.length >= 10) score += 25;
+    if (/[A-Z]/.test(pass)) score += 25;
+    if (/[0-9!@#$%^&*]/.test(pass)) score += 25;
 
-  // Window resize handler for mobile responsive behaviors
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
+    if (score <= 25) return { score: 25, label: "Basic", color: "bg-rose-500" };
+    if (score <= 50) return { score: 50, label: "Medium", color: "bg-amber-500" };
+    if (score <= 75) return { score: 75, label: "Strong", color: "bg-indigo-600" };
+    return { score: 100, label: "Enterprise Ready", color: "bg-emerald-500" };
+  };
+  const passStrength = calculatePasswordStrength(password);
 
-  const isSignUp = mode === "register";
-  const activeLeftForm = mode === "register" ? "login" : mode; // Keep track of the active left form even during signup
-
+  // Form Submit Handler
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -53,7 +283,6 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
 
     try {
       if (mode === "login") {
-        // Use api instance so X-Tenant-Subdomain header is auto-injected
         const response = await api.post("/api/auth/login", { email, password });
         loginAction(
           response.data.token, 
@@ -69,21 +298,19 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
         if (password.length < 6) {
           throw new Error("Password must be at least 6 characters long");
         }
-        // Use api instance so X-Tenant-Subdomain header is auto-injected
         const response = await api.post("/api/auth/register", { email, password });
-        setSuccessMsg(response.data.message);
+        setSuccessMsg(response.data.message || "Account initialized! Redirecting to sign in...");
         setEmail("");
         setPassword("");
         setConfirmPassword("");
-        // Auto slide back to login upon success
         setTimeout(() => {
           setMode("login");
           setSuccessMsg("");
-        }, 3000);
+        }, 2000);
       } 
       else if (mode === "forgot") {
         const response = await api.post("/api/auth/forgot-password", { email });
-        setSuccessMsg(response.data.message);
+        setSuccessMsg(response.data.message || "Recovery email dispatched. Please check your inbox.");
         setEmail("");
       }
       else if (mode === "reset") {
@@ -98,7 +325,7 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
           { password },
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        setSuccessMsg(response.data.message);
+        setSuccessMsg(response.data.message || "Password updated successfully!");
         setPassword("");
         setConfirmPassword("");
         setTimeout(() => {
@@ -108,494 +335,284 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
             setMode("login");
             setSuccessMsg("");
           }
-        }, 3000);
+        }, 2000);
       }
     } catch (err) {
       const serverErr = err.response?.data?.error;
       const errorText = typeof serverErr === "object" && serverErr !== null
         ? (serverErr.message || JSON.stringify(serverErr))
-        : (serverErr || err.message || "An unexpected error occurred");
+        : (serverErr || err.message || "An unexpected error occurred. Please try again.");
       setError(errorText);
     } finally {
       setLoading(false);
     }
   };
 
+  const currentTranslation = translations[rotatorIndex];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-auth-space p-4 transition-all duration-500 overflow-y-auto custom-scrollbar">
+    <div className="min-h-dvh h-auto w-full skeuo-matte-bg text-slate-900 flex flex-col justify-between items-center p-3 sm:p-6 lg:p-8 overflow-y-auto overflow-x-hidden font-sans selection:bg-indigo-500/20 selection:text-indigo-900 relative">
       
-      {/* Dynamic Background Grids and Floating Glow Orbs */}
-      <div className="absolute inset-0 bg-grid-pattern opacity-25 pointer-events-none" />
-      <div className="absolute inset-0 bg-grid-pattern-fine opacity-15 pointer-events-none" />
-      
-      {/* Ambient Moving Orbs */}
-      <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-violet-800/10 blur-[130px] animate-float-glow-1 pointer-events-none" />
-      <div className="absolute -bottom-40 -right-40 w-[600px] h-[600px] rounded-full bg-indigo-800/10 blur-[130px] animate-float-glow-2 pointer-events-none" />
-      
-      {/* Outer Card Container */}
-      <div className="relative w-full max-w-[420px] md:max-w-[880px] min-h-[550px] md:h-[580px] rounded-3xl overflow-hidden high-tech-card border border-white/10 shadow-2xl animate-fade-in flex">
-        
-        {/* ========================================================
-            LEFT COLUMN (Sign In, Forgot Password, Reset Password)
-            ======================================================== */}
-        <div 
-          className={`w-full md:w-1/2 h-full flex flex-col justify-between p-8 md:p-12 relative z-10 transition-all duration-700 ${
-            isMobile && isSignUp ? "opacity-0 scale-95 pointer-events-none absolute" : "opacity-100 scale-100"
-          }`}
-          inert={isSignUp && !isMobile ? "" : undefined}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between select-none">
-            <div className="flex items-center gap-2">
-              <div className="h-6 w-6 rounded-lg bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-violet-500/20">
-                <Sparkles className="h-3.5 w-3.5 animate-pulse" />
-              </div>
-              <span className="text-sm font-extrabold tracking-wider text-white font-mono">
-                CENTROID_
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 bg-neutral-950/40 border border-white/5 rounded-full px-2.5 py-1 text-[10px] font-mono">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              {(() => {
-                const spaceParam = new URLSearchParams(window.location.search).get("space");
-                if (spaceParam && !["centroid", "verbolabs"].includes(spaceParam.toLowerCase())) {
-                  return <span className="text-indigo-400 font-bold uppercase">{spaceParam} space</span>;
-                }
-                return <span className="text-neutral-400">VERBOLABS MAIN</span>;
-              })()}
-            </div>
-          </div>
+      {/* Soft Ambient Light Aura */}
+      <div 
+        className="absolute top-1/2 left-1/4 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[140px] opacity-40 pointer-events-none"
+        style={{
+          background: "radial-gradient(circle, rgba(99, 102, 241, 0.12) 0%, rgba(59, 130, 246, 0.05) 50%, transparent 70%)"
+        }}
+      />
 
-          {/* Form Switcher Body */}
-          <div className="relative flex-1 flex items-center mt-6">
+      {/* TOP HEADER */}
+      <header className="w-full max-w-6xl shrink-0 flex items-center justify-between py-2 sm:py-3 z-20">
+        {/* Brand Header for Mobile View (< lg) */}
+        <div className="flex items-center gap-2.5 lg:hidden">
+          <img 
+            src="/centroid_final_LOGO_light.png" 
+            alt="Centroid Logo" 
+            className="h-8 sm:h-9 w-auto object-contain drop-shadow-xs"
+          />
+        </div>
+
+        {/* Tenant Space Badge */}
+        {spaceName && (
+          <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full skeuo-metal-panel text-[11px] sm:text-xs font-semibold text-indigo-700 ml-auto">
+            <span className="h-2 w-2 rounded-full bg-indigo-600 animate-ping" />
+            <span>Workspace: <strong className="text-slate-900 uppercase tracking-wider">{spaceName}</strong></span>
+          </div>
+        )}
+      </header>
+
+      {/* MAIN FLEXIBLE CONTAINER */}
+      <main className="w-full max-w-6xl my-auto py-4 sm:py-6 flex-1 flex items-center justify-center z-20">
+        <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 items-center">
+          
+          {/* LEFT SIDE: HERO HEADLINE WITH BACKDROP GLOW + PRISTINE LOGO IMAGE (6 Cols Desktop) */}
+          <div className="lg:col-span-6 hidden lg:flex flex-col justify-center space-y-6 pr-2">
             
-            {/* 1. LOGIN FORM */}
-            <div 
-              className={`w-full transition-all duration-500 ease-out-expo ${
-                activeLeftForm === "login" 
-                  ? "opacity-100 translate-y-0 scale-100 z-10" 
-                  : "opacity-0 translate-y-8 scale-95 pointer-events-none absolute inset-x-0"
-              }`}
-            >
-              <h3 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight mb-2">
-                Sign In
-              </h3>
-              <p className="text-xs text-neutral-400 mb-6 leading-relaxed">
-                {(() => {
-                  const spaceParam = new URLSearchParams(window.location.search).get("space");
-                  if (spaceParam && !["centroid", "verbolabs"].includes(spaceParam.toLowerCase())) {
-                    return `Enter your credentials to access the '${spaceParam}' space.`;
-                  }
-                  return "Enter your workspace credentials to access your translation projects.";
-                })()}
-              </p>
-
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Email Input */}
-                <div className="relative group">
-                  <div className="flex items-center bg-neutral-950/40 border border-white/8 rounded-xl px-4 py-3.5 text-neutral-200 transition-all duration-300 focus-within:border-violet-500/40 focus-within:ring-2 focus-within:ring-violet-500/10 focus-within:bg-neutral-950/70">
-                    <Mail className="h-4 w-4 text-neutral-500 mr-3 shrink-0 group-focus-within:text-violet-400 transition-colors" />
-                    <input
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Email Address"
-                      className="w-full bg-transparent outline-none border-none text-white placeholder-neutral-500 text-sm font-medium"
-                    />
-                  </div>
-                </div>
-
-                {/* Password Input */}
-                <div className="relative group">
-                  <div className="flex items-center bg-neutral-950/40 border border-white/8 rounded-xl px-4 py-3.5 text-neutral-200 transition-all duration-300 focus-within:border-violet-500/40 focus-within:ring-2 focus-within:ring-violet-500/10 focus-within:bg-neutral-950/70">
-                    <LockKeyhole className="h-4 w-4 text-neutral-500 mr-3 shrink-0 group-focus-within:text-violet-400 transition-colors" />
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      required
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Password"
-                      className="w-full bg-transparent outline-none border-none text-white placeholder-neutral-500 text-sm font-medium pr-12"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 text-neutral-500 hover:text-neutral-300 transition-colors cursor-pointer"
-                    >
-                      {showPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Action Link row */}
-                <div className="flex items-center justify-between text-xs pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setError("");
-                      setSuccessMsg("");
-                      setMode("forgot");
-                    }}
-                    className="text-neutral-400 hover:text-violet-400 hover:underline cursor-pointer transition-colors"
-                  >
-                    Forgot Password?
-                  </button>
-                </div>
-
-                {/* Feedback notifications */}
-                {error && (
-                  <div className="rounded-xl bg-rose-500/10 py-3 px-4 text-xs font-semibold text-rose-300 border border-rose-500/20 flex items-start gap-2 animate-slide-up">
-                    <AlertCircle className="h-4.5 w-4.5 text-rose-400 shrink-0 mt-0.5" />
-                    <span className="leading-relaxed">{error}</span>
-                  </div>
-                )}
-                {successMsg && (
-                  <div className="rounded-xl bg-emerald-500/10 py-3 px-4 text-xs font-semibold text-emerald-300 border border-emerald-500/20 flex items-start gap-2 animate-slide-up">
-                    <CheckCircle className="h-4.5 w-4.5 text-emerald-400 shrink-0 mt-0.5" />
-                    <span className="leading-relaxed">{successMsg}</span>
-                  </div>
-                )}
-
-                {/* Submit button */}
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full mt-4 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white rounded-xl py-3 px-4 font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-violet-500/10 hover:shadow-violet-500/25 transition-all duration-300 hover:scale-[1.01] active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
-                >
-                  {loading ? (
-                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                  ) : (
-                    <>
-                      <span>Access Workspace</span>
-                      <ArrowRight className="h-4 w-4" />
-                    </>
-                  )}
-                </button>
-              </form>
+            {/* Top AI Badge */}
+            <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-2xl skeuo-metal-panel text-xs font-semibold text-indigo-700 w-fit">
+              <Sparkles className="h-4 w-4 text-indigo-600 shrink-0" />
+              <span>Next-Generation Enterprise Localization Stack</span>
             </div>
 
-            {/* 2. FORGOT PASSWORD FORM */}
-            <div 
-              className={`w-full transition-all duration-500 ease-out-expo ${
-                activeLeftForm === "forgot" 
-                  ? "opacity-100 translate-y-0 scale-100 z-10" 
-                  : "opacity-0 translate-y-8 scale-95 pointer-events-none absolute inset-x-0"
-              }`}
-            >
-              <h3 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight mb-2">
-                Recover Account
-              </h3>
-              <p className="text-xs text-neutral-400 mb-6 leading-relaxed">
-                Provide your email address to receive a secure password recovery code.
-              </p>
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Email Input */}
-                <div className="relative group">
-                  <div className="flex items-center bg-neutral-950/40 border border-white/8 rounded-xl px-4 py-3.5 text-neutral-200 transition-all duration-300 focus-within:border-violet-500/40 focus-within:ring-2 focus-within:ring-violet-500/10 focus-within:bg-neutral-950/70">
-                    <Mail className="h-4 w-4 text-neutral-500 mr-3 shrink-0 group-focus-within:text-violet-400 transition-colors" />
-                    <input
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Email Address"
-                      className="w-full bg-transparent outline-none border-none text-white placeholder-neutral-500 text-sm font-medium"
-                    />
-                  </div>
-                </div>
-
-                {/* Feedback notifications */}
-                {error && (
-                  <div className="rounded-xl bg-rose-500/10 py-3 px-4 text-xs font-semibold text-rose-300 border border-rose-500/20 flex items-start gap-2 animate-slide-up">
-                    <AlertCircle className="h-4.5 w-4.5 text-rose-400 shrink-0 mt-0.5" />
-                    <span className="leading-relaxed">{error}</span>
-                  </div>
-                )}
-                {successMsg && (
-                  <div className="rounded-xl bg-emerald-500/10 py-3 px-4 text-xs font-semibold text-emerald-300 border border-emerald-500/20 flex items-start gap-2 animate-slide-up">
-                    <CheckCircle className="h-4.5 w-4.5 text-emerald-400 shrink-0 mt-0.5" />
-                    <span className="leading-relaxed">{successMsg}</span>
-                  </div>
-                )}
-
-                {/* Action Link row */}
-                <div className="flex items-center justify-between text-xs pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setError("");
-                      setSuccessMsg("");
-                      setMode("login");
-                    }}
-                    className="text-neutral-400 hover:text-violet-400 hover:underline cursor-pointer transition-colors"
-                  >
-                    Back to Sign In
-                  </button>
-                </div>
-
-                {/* Submit button */}
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full mt-4 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white rounded-xl py-3 px-4 font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-violet-500/10 hover:shadow-violet-500/25 transition-all duration-300 hover:scale-[1.01] active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+            {/* 3-BLOCK VERTICAL HEADLINE ARCHITECTURE */}
+            <div className="flex flex-col justify-center space-y-1.5 w-full min-h-[170px]">
+              
+              {/* BLOCK ONE (TOP): Translation BEFORE Centroid */}
+              <div className="min-h-[44px] flex items-center justify-start overflow-hidden py-1">
+                <div 
+                  className={`text-2xl sm:text-3xl font-normal text-slate-600 tracking-tight transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[transform,opacity,filter] ${
+                    isTransitioning || !currentTranslation.prefix 
+                      ? "opacity-0 -translate-y-2 blur-[3px] pointer-events-none" 
+                      : "opacity-100 translate-y-0 blur-0"
+                  }`}
                 >
-                  {loading ? (
-                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                  ) : (
-                    <>
-                      <span>Send Recovery Link</span>
-                      <ArrowRight className="h-4 w-4" />
-                    </>
-                  )}
-                </button>
-              </form>
-            </div>
-
-            {/* 3. RESET PASSWORD FORM */}
-            <div 
-              className={`w-full transition-all duration-500 ease-out-expo ${
-                activeLeftForm === "reset" 
-                  ? "opacity-100 translate-y-0 scale-100 z-10" 
-                  : "opacity-0 translate-y-8 scale-95 pointer-events-none absolute inset-x-0"
-              }`}
-            >
-              <h3 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight mb-2">
-                New Password
-              </h3>
-              <p className="text-xs text-neutral-400 mb-6 leading-relaxed">
-                Create a strong, unique password to secure your translation database session.
-              </p>
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {/* New Password Input */}
-                <div className="relative group">
-                  <div className="flex items-center bg-neutral-950/40 border border-white/8 rounded-xl px-4 py-3.5 text-neutral-200 transition-all duration-300 focus-within:border-violet-500/40 focus-within:ring-2 focus-within:ring-violet-500/10 focus-within:bg-neutral-950/70">
-                    <LockKeyhole className="h-4 w-4 text-neutral-500 mr-3 shrink-0 group-focus-within:text-violet-400 transition-colors" />
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      required
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="New Password"
-                      className="w-full bg-transparent outline-none border-none text-white placeholder-neutral-500 text-sm font-medium pr-12"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 text-neutral-500 hover:text-neutral-300 transition-colors cursor-pointer"
-                    >
-                      {showPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
-                    </button>
-                  </div>
+                  {currentTranslation.prefix || "\u00A0"}
                 </div>
-
-                {/* Confirm Password Input */}
-                <div className="relative group">
-                  <div className="flex items-center bg-neutral-950/40 border border-white/8 rounded-xl px-4 py-3.5 text-neutral-200 transition-all duration-300 focus-within:border-violet-500/40 focus-within:ring-2 focus-within:ring-violet-500/10 focus-within:bg-neutral-950/70">
-                    <LockKeyhole className="h-4 w-4 text-neutral-500 mr-3 shrink-0 group-focus-within:text-violet-400 transition-colors" />
-                    <input
-                      type={showConfirmPassword ? "text" : "password"}
-                      required
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Confirm New Password"
-                      className="w-full bg-transparent outline-none border-none text-white placeholder-neutral-500 text-sm font-medium pr-12"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-4 text-neutral-500 hover:text-neutral-300 transition-colors cursor-pointer"
-                    >
-                      {showConfirmPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Feedback notifications */}
-                {error && (
-                  <div className="rounded-xl bg-rose-500/10 py-3 px-4 text-xs font-semibold text-rose-300 border border-rose-500/20 flex items-start gap-2 animate-slide-up">
-                    <AlertCircle className="h-4.5 w-4.5 text-rose-400 shrink-0 mt-0.5" />
-                    <span className="leading-relaxed">{error}</span>
-                  </div>
-                )}
-                {successMsg && (
-                  <div className="rounded-xl bg-emerald-500/10 py-3 px-4 text-xs font-semibold text-emerald-300 border border-emerald-500/20 flex items-start gap-2 animate-slide-up">
-                    <CheckCircle className="h-4.5 w-4.5 text-emerald-400 shrink-0 mt-0.5" />
-                    <span className="leading-relaxed">{successMsg}</span>
-                  </div>
-                )}
-
-                {/* Submit button */}
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full mt-4 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white rounded-xl py-3 px-4 font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-violet-500/10 hover:shadow-violet-500/25 transition-all duration-300 hover:scale-[1.01] active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
-                >
-                  {loading ? (
-                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                  ) : (
-                    <>
-                      <span>Update Credentials</span>
-                      <ArrowRight className="h-4 w-4" />
-                    </>
-                  )}
-                </button>
-              </form>
-            </div>
-
-          </div>
-
-          {/* Footer Navigation (Mobile Switcher Link) */}
-          <div className="mt-8 flex items-center justify-center md:hidden">
-            <span className="text-xs text-neutral-400">
-              New here?{" "}
-              <button
-                onClick={() => {
-                  setError("");
-                  setSuccessMsg("");
-                  setMode("register");
-                }}
-                className="text-violet-400 hover:text-violet-300 font-extrabold underline underline-offset-4 cursor-pointer"
-              >
-                Create an Account
-              </button>
-            </span>
-          </div>
-
-          {/* High-tech security metadata footer */}
-          <div className="hidden md:flex items-center justify-between text-[9px] text-neutral-500 font-mono tracking-wider select-none border-t border-white/5 pt-4">
-            <span>SYS_VERSION // 1.2.0</span>
-            <span>AUTH_ENGINE: SUPABASE_SHIELD</span>
-          </div>
-        </div>
-
-        {/* ========================================================
-            RIGHT COLUMN (Sign Up / Registration Form)
-            ======================================================== */}
-        <div 
-          className={`w-full md:w-1/2 h-full flex flex-col justify-between p-8 md:p-12 relative z-10 transition-all duration-700 ${
-            isMobile && !isSignUp ? "opacity-0 scale-95 pointer-events-none absolute" : "opacity-100 scale-100"
-          }`}
-          inert={!isSignUp && !isMobile ? "" : undefined}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between select-none">
-            <div className="flex items-center gap-2">
-              <div className="h-6 w-6 rounded-lg bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-violet-500/20">
-                <Sparkles className="h-3.5 w-3.5 animate-pulse" />
               </div>
-              <span className="text-sm font-extrabold tracking-wider text-white font-mono">
-                CENTROID_
-              </span>
+
+              {/* BLOCK TWO (CENTER): PRISTINE ORIGINAL LOGO IMAGE WITH COLOR-SYNCED BACKDROP HALO GLOW */}
+              <div className="relative min-h-[64px] flex items-center justify-start py-1 w-fit">
+                {/* Dynamic Ambient Halo Glow BEHIND Pristine Logo */}
+                <div 
+                  className="absolute -inset-4 rounded-3xl blur-2xl transition-all duration-1000 ease-in-out pointer-events-none opacity-60"
+                  style={{
+                    background: currentTranslation.glowColor
+                  }}
+                />
+
+                {/* Pristine Logo Image (100% Unaltered 'O' Texture) */}
+                <img 
+                  src="/centroid_final_LOGO_light.png" 
+                  alt="Centroid Logo" 
+                  className="relative z-10 h-12 sm:h-14 xl:h-16 w-auto object-contain drop-shadow-xs"
+                />
+              </div>
+
+              {/* BLOCK THREE (BOTTOM): Translation AFTER Centroid */}
+              <div className="min-h-[44px] flex items-center justify-start overflow-hidden py-1">
+                <div 
+                  className={`text-2xl sm:text-3xl font-normal text-slate-600 tracking-tight transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[transform,opacity,filter] ${
+                    isTransitioning || !currentTranslation.suffix 
+                      ? "opacity-0 translate-y-2 blur-[3px] pointer-events-none" 
+                      : "opacity-100 translate-y-0 blur-0"
+                  }`}
+                >
+                  {currentTranslation.suffix || "\u00A0"}
+                </div>
+              </div>
+
+
             </div>
-            <div className="flex items-center gap-1.5 bg-neutral-950/40 border border-white/5 rounded-full px-2.5 py-1 text-[10px] text-neutral-400 font-mono">
-              <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse" />
-              SYSTEM_INIT
-            </div>
+
+            {/* MINIMALIST SCALE TUNER DIRECTLY BELOW THE 3 BLOCKS */}
+            <SpeedScaleMeter 
+              speedFactor={speedFactor} 
+              isLocked={isLocked} 
+              accentColor={currentTranslation.accentColor}
+            />
+
+            <p className="text-sm sm:text-base text-slate-600 max-w-lg leading-relaxed font-medium pt-1">
+              The unified translation memory & glossaries workspace engineered for high-precision enterprise localization.
+            </p>
+
           </div>
 
-          {/* Form Switcher Body */}
-          <div className="flex-1 flex items-center mt-6">
-            <div className="w-full">
-              <h3 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight mb-2">
-                Join Workspace
-              </h3>
-              <p className="text-xs text-neutral-400 mb-6 leading-relaxed">
-                Create a secure localized database session profile inside the system node.
-              </p>
+          {/* RIGHT SIDE: SOFT-TOUCH MATTE SKEUOMORPHIC CONSOLE CARD */}
+          <div className="lg:col-span-6 w-full max-w-md mx-auto">
+            <div className="skeuo-metal-panel rounded-[32px] sm:rounded-[36px] p-6 sm:p-9 relative overflow-hidden">
+              
+              {/* Console Header */}
+              <div className="mb-6 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
+                    {mode === "login" && "Welcome back"}
+                    {mode === "register" && "Create account"}
+                    {mode === "forgot" && "Account recovery"}
+                    {mode === "reset" && "Update password"}
+                  </h2>
 
+                  <div className="p-2.5 rounded-2xl skeuo-recessed-slot text-indigo-600 flex items-center justify-center">
+                    <Fingerprint className="h-4.5 sm:h-5 w-4.5 sm:w-5 text-indigo-700" />
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                  {mode === "login" && "Sign in to access your translation workspace."}
+                  {mode === "register" && "Initialize your translation workspace profile."}
+                  {mode === "forgot" && "Enter your registered email to receive recovery instructions."}
+                  {mode === "reset" && "Specify a new strong password to restore full access."}
+                </p>
+              </div>
+
+              {/* AUTH FORM */}
               <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Email Input */}
-                <div className="relative group">
-                  <div className="flex items-center bg-neutral-950/40 border border-white/8 rounded-xl px-4 py-3.5 text-neutral-200 transition-all duration-300 focus-within:border-violet-500/40 focus-within:ring-2 focus-within:ring-violet-500/10 focus-within:bg-neutral-950/70">
-                    <Mail className="h-4 w-4 text-neutral-500 mr-3 shrink-0 group-focus-within:text-violet-400 transition-colors" />
-                    <input
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Email Address"
-                      className="w-full bg-transparent outline-none border-none text-white placeholder-neutral-500 text-sm font-medium"
-                    />
+                
+                {/* Email Input Field */}
+                {mode !== "reset" && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700 ml-1 block">
+                      Work Email
+                    </label>
+                    <div className="relative flex items-center skeuo-recessed-slot rounded-2xl">
+                      <Mail className="absolute left-4 h-4 w-4 text-slate-400 pointer-events-none" />
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="name@company.com"
+                        className="w-full bg-transparent pl-11 pr-4 py-3.5 text-xs sm:text-sm font-semibold text-slate-900 placeholder-slate-400 outline-none"
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
 
-                {/* Password Input */}
-                <div className="relative group">
-                  <div className="flex items-center bg-neutral-950/40 border border-white/8 rounded-xl px-4 py-3.5 text-neutral-200 transition-all duration-300 focus-within:border-violet-500/40 focus-within:ring-2 focus-within:ring-violet-500/10 focus-within:bg-neutral-950/70">
-                    <LockKeyhole className="h-4 w-4 text-neutral-500 mr-3 shrink-0 group-focus-within:text-violet-400 transition-colors" />
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      required
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Password"
-                      className="w-full bg-transparent outline-none border-none text-white placeholder-neutral-500 text-sm font-medium pr-12"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 text-neutral-500 hover:text-neutral-300 transition-colors cursor-pointer"
-                    >
-                      {showPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
-                    </button>
+                {/* Password Input Field */}
+                {mode !== "forgot" && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between ml-1">
+                      <label className="text-xs font-semibold text-slate-700">
+                        {mode === "reset" ? "New Password" : "Password"}
+                      </label>
+                      {mode === "login" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setError("");
+                            setSuccessMsg("");
+                            setMode("forgot");
+                          }}
+                          className="text-xs font-semibold text-indigo-700 hover:text-indigo-900 transition-colors cursor-pointer"
+                        >
+                          Forgot password?
+                        </button>
+                      )}
+                    </div>
+                    <div className="relative flex items-center skeuo-recessed-slot rounded-2xl">
+                      <Lock className="absolute left-4 h-4 w-4 text-slate-400 pointer-events-none" />
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••••••"
+                        className="w-full bg-transparent pl-11 pr-11 py-3.5 text-xs sm:text-sm font-semibold text-slate-900 placeholder-slate-400 outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3.5 p-1 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+
+                    {/* Password Strength Indicator */}
+                    {mode === "register" && password.length > 0 && (
+                      <div className="space-y-1 pt-1">
+                        <div className="flex justify-between items-center text-[10px] font-mono">
+                          <span className="text-slate-500">Strength:</span>
+                          <span className="font-semibold text-slate-800">{passStrength.label}</span>
+                        </div>
+                        <div className="w-full bg-slate-300 h-1.5 rounded-full overflow-hidden shadow-inner">
+                          <div 
+                            className={`h-full ${passStrength.color} transition-all duration-300`}
+                            style={{ width: `${passStrength.score}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
+                )}
 
-                {/* Confirm Password Input */}
-                <div className="relative group">
-                  <div className="flex items-center bg-neutral-950/40 border border-white/8 rounded-xl px-4 py-3.5 text-neutral-200 transition-all duration-300 focus-within:border-violet-500/40 focus-within:ring-2 focus-within:ring-violet-500/10 focus-within:bg-neutral-950/70">
-                    <LockKeyhole className="h-4 w-4 text-neutral-500 mr-3 shrink-0 group-focus-within:text-violet-400 transition-colors" />
-                    <input
-                      type={showConfirmPassword ? "text" : "password"}
-                      required
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Confirm Password"
-                      className="w-full bg-transparent outline-none border-none text-white placeholder-neutral-500 text-sm font-medium pr-12"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-4 text-neutral-500 hover:text-neutral-300 transition-colors cursor-pointer"
-                    >
-                      {showConfirmPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
-                    </button>
+                {/* Confirm Password Field */}
+                {(mode === "register" || mode === "reset") && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700 ml-1 block">
+                      Confirm Password
+                    </label>
+                    <div className="relative flex items-center skeuo-recessed-slot rounded-2xl">
+                      <KeyRound className="absolute left-4 h-4 w-4 text-slate-400 pointer-events-none" />
+                      <input
+                        type={showConfirmPassword ? "text" : "password"}
+                        required
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="••••••••••••"
+                        className="w-full bg-transparent pl-11 pr-11 py-3.5 text-xs sm:text-sm font-semibold text-slate-900 placeholder-slate-400 outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-3.5 p-1 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                      >
+                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
 
-                {/* Feedback notifications */}
+                {/* Error Banner */}
                 {error && (
-                  <div className="rounded-xl bg-rose-500/10 py-3 px-4 text-xs font-semibold text-rose-300 border border-rose-500/20 flex items-start gap-2 animate-slide-up">
-                    <AlertCircle className="h-4.5 w-4.5 text-rose-400 shrink-0 mt-0.5" />
+                  <div className="rounded-2xl bg-rose-50 border border-rose-200 p-3.5 flex items-start gap-2.5 text-xs text-rose-700 font-medium shadow-xs">
+                    <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
                     <span className="leading-relaxed">{error}</span>
                   </div>
                 )}
+
+                {/* Success Banner */}
                 {successMsg && (
-                  <div className="rounded-xl bg-emerald-500/10 py-3 px-4 text-xs font-semibold text-emerald-300 border border-emerald-500/20 flex items-start gap-2 animate-slide-up">
-                    <CheckCircle className="h-4.5 w-4.5 text-emerald-400 shrink-0 mt-0.5" />
+                  <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-3.5 flex items-start gap-2.5 text-xs text-emerald-700 font-medium shadow-xs">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
                     <span className="leading-relaxed">{successMsg}</span>
                   </div>
                 )}
 
-                {/* Submit button */}
+                {/* Primary Action Button */}
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full mt-4 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white rounded-xl py-3 px-4 font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-violet-500/10 hover:shadow-violet-500/25 transition-all duration-300 hover:scale-[1.01] active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+                  className="group w-full skeuo-push-btn text-white font-bold rounded-2xl py-3.5 px-6 flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50 disabled:pointer-events-none mt-5 text-xs sm:text-sm"
                 >
                   {loading ? (
                     <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -604,123 +621,79 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
                     </svg>
                   ) : (
                     <>
-                      <span>Initialize Account</span>
-                      <ArrowRight className="h-4 w-4" />
+                      <span>
+                        {mode === "login" && "Sign in"}
+                        {mode === "register" && "Create account"}
+                        {mode === "forgot" && "Send recovery link"}
+                        {mode === "reset" && "Update password"}
+                      </span>
+                      <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform duration-300 ease-out" />
                     </>
                   )}
                 </button>
+
+                {/* Secondary UX Links */}
+                {mode === "login" && (
+                  <div className="text-center pt-2">
+                    <p className="text-xs text-slate-500 font-medium">
+                      New to Centroid?{" "}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setError("");
+                          setSuccessMsg("");
+                          setMode("register");
+                        }}
+                        className="font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer ml-1"
+                      >
+                        Create account
+                      </button>
+                    </p>
+                  </div>
+                )}
+
+                {mode === "register" && (
+                  <div className="text-center pt-2">
+                    <p className="text-xs text-slate-500 font-medium">
+                      Already have an account?{" "}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setError("");
+                          setSuccessMsg("");
+                          setMode("login");
+                        }}
+                        className="font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer ml-1"
+                      >
+                        Sign in
+                      </button>
+                    </p>
+                  </div>
+                )}
+
+                {(mode === "forgot" || mode === "reset") && (
+                  <div className="text-center pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setError("");
+                        setSuccessMsg("");
+                        setMode("login");
+                      }}
+                      className="text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors duration-300 cursor-pointer inline-flex items-center gap-1.5"
+                    >
+                      <span>← Back to Sign in</span>
+                    </button>
+                  </div>
+                )}
+
               </form>
+
             </div>
           </div>
 
-          {/* Footer Navigation (Mobile Switcher Link) */}
-          <div className="mt-8 flex items-center justify-center md:hidden">
-            <span className="text-xs text-neutral-400">
-              Already have an account?{" "}
-              <button
-                onClick={() => {
-                  setError("");
-                  setSuccessMsg("");
-                  setMode("login");
-                }}
-                className="text-violet-400 hover:text-violet-300 font-extrabold underline underline-offset-4 cursor-pointer"
-              >
-                Sign In
-              </button>
-            </span>
-          </div>
-
-          {/* Professional security metadata footer */}
-          <div className="hidden md:flex items-center justify-between text-[11px] text-neutral-400 font-medium select-none border-t border-white/5 pt-4">
-            <span className="flex items-center gap-1.5 cursor-pointer hover:text-white transition-colors" onClick={() => window.location.href = '/'} title="Go to Home">
-              <Sparkles className="h-3 w-3 text-indigo-400" /> Centroid — Next-Gen Enterprise Language Intelligence Platform
-            </span>
-            <span className="flex items-center gap-1"><LockKeyhole className="h-3 w-3 text-emerald-400" /> 256-Bit Encrypted</span>
-          </div>
         </div>
-
-        {/* ========================================================
-            SLIDING OVERLAY CONTAINER (Desktop Only)
-            ======================================================== */}
-        <div 
-          className={`hidden md:block absolute top-0 left-0 w-1/2 h-full z-20 overflow-hidden sliding-container border-l border-r border-white/5 shadow-2xl ${
-            isSignUp ? "translate-x-0" : "translate-x-full"
-          }`}
-          style={{
-            background: "linear-gradient(135deg, rgba(8, 10, 20, 0.96) 0%, rgba(18, 16, 36, 0.98) 50%, rgba(5, 7, 15, 0.96) 100%)"
-          }}
-        >
-          {/* Overlay Decoration */}
-          <div className="absolute inset-0 bg-grid-pattern opacity-15 pointer-events-none" />
-          <div className="absolute -top-32 -left-32 w-80 h-80 rounded-full bg-violet-600/15 blur-[90px] animate-pulse pointer-events-none" />
-          <div className="absolute -bottom-32 -right-32 w-80 h-80 rounded-full bg-indigo-600/15 blur-[90px] animate-pulse pointer-events-none" />
-
-          <div className="relative w-full h-full">
-            
-            {/* Overlay Slide Content A: "New Here?" (Shown when in login/forgot/reset mode) */}
-            <div 
-              className={`absolute inset-0 flex flex-col items-center justify-center p-12 text-center transition-all duration-800 cubic-bezier(0.76, 0, 0.24, 1) ${
-                !isSignUp 
-                  ? "opacity-100 translate-x-0 scale-100" 
-                  : "opacity-0 -translate-x-20 scale-90 pointer-events-none"
-              }`}
-            >
-              <div className="h-12 w-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white mb-6 animate-float-y">
-                <Sparkles className="h-6 w-6 text-violet-400" />
-              </div>
-              <h4 className="text-3xl font-extrabold text-white tracking-tight mb-4">
-                New here?
-              </h4>
-              <p className="text-sm text-neutral-400 mb-8 max-w-[280px] leading-relaxed">
-                Join the team and configure your workspace node to start translating documents with AI assistance.
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setError("");
-                  setSuccessMsg("");
-                  setMode("register");
-                }}
-                className="bg-white/5 hover:bg-white text-white hover:text-neutral-950 border border-white/10 hover:border-white rounded-xl py-3 px-6 font-bold text-sm transition-all duration-300 cursor-pointer shadow-lg hover:shadow-white/10"
-              >
-                Create an Account
-              </button>
-            </div>
-
-            {/* Overlay Slide Content B: "Welcome Back" (Shown when in register mode) */}
-            <div 
-              className={`absolute inset-0 flex flex-col items-center justify-center p-12 text-center transition-all duration-800 cubic-bezier(0.76, 0, 0.24, 1) ${
-                isSignUp 
-                  ? "opacity-100 translate-x-0 scale-100" 
-                  : "opacity-0 translate-x-20 scale-90 pointer-events-none"
-              }`}
-            >
-              <div className="h-12 w-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white mb-6 animate-float-y">
-                <LockKeyhole className="h-6 w-6 text-indigo-400" />
-              </div>
-              <h4 className="text-3xl font-extrabold text-white tracking-tight mb-4">
-                Welcome back!
-              </h4>
-              <p className="text-sm text-neutral-400 mb-8 max-w-[280px] leading-relaxed">
-                Connect your active database credentials to resume localization projects.
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setError("");
-                  setSuccessMsg("");
-                  setMode("login");
-                }}
-                className="bg-white/5 hover:bg-white text-white hover:text-neutral-950 border border-white/10 hover:border-white rounded-xl py-3 px-6 font-bold text-sm transition-all duration-300 cursor-pointer shadow-lg hover:shadow-white/10"
-              >
-                Sign In
-              </button>
-            </div>
-
-          </div>
-        </div>
-
-      </div>
+      </main>
 
     </div>
   );
