@@ -8,7 +8,7 @@ const parseFile = async (filePath) => {
   const paragraphs = text.split(/\r?\n/);
   
   const segments = [];
-  let segmentIndex = 0;
+  let segmentIndex = 1; // STRICT 1-BASED INDEXING (__SEG_1__, __SEG_2__, ...)
   
   const templateLines = paragraphs.map(p => {
     const source = normalizeSegmentText(p);
@@ -37,8 +37,13 @@ const exportFile = async (templateBase64, segments) => {
   }
 
   const segmentMap = new Map();
-  segments.forEach((segment) => {
-    segmentMap.set(segment.id, segment.target);
+  segments.forEach((segment, arrayIdx) => {
+    const targetText = (segment.target !== undefined && segment.target !== null && segment.target !== "")
+      ? segment.target
+      : (segment.source || "");
+    const key = segment.id !== undefined && segment.id !== null ? Number(segment.id) : (arrayIdx + 1);
+    segmentMap.set(key, targetText);
+    if (segment.id) segmentMap.set(Number(segment.id), targetText);
   });
 
   const resultStr = templateStr.replace(/__SEG_(\d+)__/g, (match, idStr) => {

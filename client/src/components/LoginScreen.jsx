@@ -206,21 +206,32 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
     }
   ], []);
 
-  // Synchronized Deceleration Engine with Ultra-Smooth Apple Spring Transitions
+  // Synchronized Deceleration Engine with Ultra-Smooth Apple Spring Transitions & Clean Unmount
   useEffect(() => {
+    let active = true;
     let currentInterval = 70;
     let factor = 1.0;
     let stepCount = 0;
-    let timerId;
+    const activeTimers = new Set();
+
+    const addTimer = (fn, delay) => {
+      const id = setTimeout(() => {
+        activeTimers.delete(id);
+        if (active) fn();
+      }, delay);
+      activeTimers.add(id);
+      return id;
+    };
 
     const tick = () => {
+      if (!active) return;
       setIsTransitioning(true);
 
       const fadeOutDuration = stepCount < 18 ? Math.min(currentInterval * 0.4, 150) : 380;
 
-      setTimeout(() => {
+      addTimer(() => {
         setRotatorIndex((prev) => (prev + 1) % translations.length);
-        setTimeout(() => {
+        addTimer(() => {
           setIsTransitioning(false);
         }, 50);
       }, fadeOutDuration);
@@ -232,17 +243,23 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
         factor = Math.max(0.15, 1.0 - (stepCount / 18) * 0.85);
         setSpeedFactor(factor);
         setIsLocked(false);
-        timerId = setTimeout(tick, currentInterval);
+        addTimer(tick, currentInterval);
       } else {
         setSpeedFactor(0.15);
         setIsLocked(true);
-        timerId = setTimeout(tick, 3800);
+        addTimer(tick, 3800);
       }
     };
 
-    timerId = setTimeout(tick, currentInterval);
-    return () => clearTimeout(timerId);
+    addTimer(tick, currentInterval);
+
+    return () => {
+      active = false;
+      activeTimers.forEach(id => clearTimeout(id));
+      activeTimers.clear();
+    };
   }, [translations.length]);
+
 
 
   // Sync mode on prop change
@@ -301,10 +318,13 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
     setError("");
     setSuccessMsg("");
     setLoading(true);
+    console.log("[Auth Submit Debug] Form submitted in mode:", mode, "Email:", email, "Name:", name);
 
     try {
       if (mode === "login") {
-        const response = await api.post("/api/auth/login", { email, password });
+        console.log("[Auth Submit Debug] Sending login request...");
+        const response = await api.post("/api/auth/login", { email, password }, { timeout: 10000 });
+        console.log("[Auth Submit Debug] Login success response:", response.data);
         loginAction(
           response.data.token, 
           response.data.refreshToken, 
@@ -313,6 +333,7 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
         );
       } 
       else if (mode === "register") {
+        console.log("[Auth Submit Debug] Validating registration input fields...");
         if (!name.trim()) {
           throw new Error("Full Name is required");
         }
@@ -325,20 +346,24 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
           throw new Error(secError);
         }
 
-        const response = await api.post("/api/auth/register", { name: name.trim(), email, password });
+        console.log("[Auth Submit Debug] Sending registration API request...");
+        const response = await api.post("/api/auth/register", { name: name.trim(), email, password }, { timeout: 10000 });
+        console.log("[Auth Submit Debug] Registration success response payload:", response.data);
+        
         setSuccessMsg(response.data.message || `Account created! A verification email has been sent to ${email}. Please check your inbox and click the verification button in your email to activate your account.`);
         if (response.data.verificationLink) {
+          console.log("[Auth Submit Debug] Action verification link received:", response.data.verificationLink);
           setVerificationLink(response.data.verificationLink);
         }
         setName("");
         setPassword("");
         setConfirmPassword("");
-
       } 
 
-
       else if (mode === "forgot") {
-        const response = await api.post("/api/auth/forgot-password", { email });
+        console.log("[Auth Submit Debug] Sending forgot password request...");
+        const response = await api.post("/api/auth/forgot-password", { email }, { timeout: 10000 });
+        console.log("[Auth Submit Debug] Forgot password response:", response.data);
         setSuccessMsg(response.data.message || "Recovery email dispatched. Please check your inbox.");
         setEmail("");
       }
@@ -352,10 +377,12 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
         }
 
         const token = localStorage.getItem("centroid_token");
+        console.log("[Auth Submit Debug] Sending reset password request...");
         const response = await api.post("/api/auth/reset-password", 
           { password },
-          { headers: { Authorization: `Bearer ${token}` } }
+          { headers: { Authorization: `Bearer ${token}` }, timeout: 10000 }
         );
+        console.log("[Auth Submit Debug] Reset password response:", response.data);
         setSuccessMsg(response.data.message || "Password updated successfully!");
         setPassword("");
         setConfirmPassword("");
@@ -370,15 +397,18 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
       }
 
     } catch (err) {
+      console.error("[Auth Submit Error Catch]:", err);
       const serverErr = err.response?.data?.error;
       const errorText = typeof serverErr === "object" && serverErr !== null
         ? (serverErr.message || JSON.stringify(serverErr))
         : (serverErr || err.message || "An unexpected error occurred. Please try again.");
       setError(errorText);
     } finally {
+      console.log("[Auth Submit Debug] Disabling loading indicator.");
       setLoading(false);
     }
   };
+
 
   const currentTranslation = translations[rotatorIndex];
 
@@ -647,11 +677,38 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
 
                 {/* Error Banner */}
                 {error && (
-                  <div className="rounded-2xl bg-rose-50 border border-rose-200 p-3.5 flex items-start gap-2.5 text-xs text-rose-700 font-medium shadow-xs">
-                    <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
-                    <span className="leading-relaxed">{error}</span>
+                  <div className="rounded-2xl bg-rose-50 border border-rose-200 p-4 space-y-3 text-xs text-rose-700 font-medium shadow-xs">
+                    <div className="flex items-start gap-2.5">
+                      <AlertCircle className="h-4.5 w-4.5 text-rose-600 shrink-0 mt-0.5" />
+                      <span className="leading-relaxed font-medium">{error}</span>
+                    </div>
+
+                    {/verification|confirm/i.test(error) && email && (
+                      <div className="pt-2 border-t border-rose-200/80 flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              setLoading(true);
+                              const res = await api.post("/api/auth/resend-verification", { email });
+                              setSuccessMsg(res.data.message || `Verification link resent to ${email}!`);
+                              setError("");
+                            } catch (err) {
+                              setError(err.response?.data?.error || "Failed to resend verification email.");
+                            } finally {
+                              setLoading(false);
+                            }
+                          }}
+                          className="w-full py-2.5 px-3.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
+                        >
+                          <Mail className="h-3.5 w-3.5" />
+                          <span>Resend Verification Email to {email}</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
+
 
                 {/* Success Banner */}
                 {successMsg && (

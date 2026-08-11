@@ -23,10 +23,45 @@ const validatePasswordSecurity = (pass) => {
   return null;
 };
 
+const normalizeEmail = (email) => String(email || "").toLowerCase().trim();
+
+const sanitizeSearchQuery = (queryStr) => {
+  return String(queryStr || "")
+    .trim()
+    .toLowerCase()
+    .slice(0, 64)
+    .replace(/[%_,]/g, "");
+};
+
+const includeVerificationLink = (actionLink) => {
+  if (process.env.NODE_ENV !== "production" && actionLink) {
+    return { verificationLink: actionLink };
+  }
+  return {};
+};
+
+async function findExistingAuthUser(cleanEmail) {
+  const { data: profileRow } = await supabase
+    .from("profiles")
+    .select("id, email")
+    .eq("email", cleanEmail)
+    .maybeSingle();
+
+  if (profileRow?.id) {
+    const { data: adminUserRes } = await supabaseAdmin.auth.admin.getUserById(profileRow.id);
+    if (adminUserRes?.user) {
+      return adminUserRes.user;
+    }
+  }
+
+  return null;
+}
+
 // 1. User Account Registration / Join Space
 authRouter.post("/register", authRateLimiter, async (request, response) => {
   try {
     const { name, email, password } = request.body;
+
     if (!name || !email || !password) {
       return response.status(400).json({ error: "Full Name, email, and password are required" });
     }
@@ -37,21 +72,16 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
     }
 
     const tenantId = request.tenant?.id;
-
     const tenantName = request.tenant?.name || "this";
-    const tenantSubdomain = request.tenant?.subdomain || "centroid";
-    const isMainSpace = ["centroid", "verbolabs"].includes(tenantSubdomain.toLowerCase());
-    const cleanEmail = email.toLowerCase().trim();
+    const cleanEmail = normalizeEmail(email);
     const cleanName = name.trim();
 
-    // Check if user already exists in Supabase Auth
     let existingUser = null;
     try {
-      const { data: authData } = await supabaseAdmin.auth.admin.listUsers();
-      if (authData?.users) {
-        existingUser = authData.users.find(u => u.email?.toLowerCase() === cleanEmail);
-      }
-    } catch (_) {}
+      existingUser = await findExistingAuthUser(cleanEmail);
+    } catch (err) {
+      console.warn("Register user lookup error:", err?.message);
+    }
 
     let redirectTo = request.headers.origin || "http://localhost:5173";
     if (!redirectTo.endsWith("/")) {
@@ -59,9 +89,9 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
     }
 
     if (existingUser) {
+      const isAlreadyConfirmed = !!(existingUser.email_confirmed_at || existingUser.confirmed_at);
 
-      // User already has an account. Verify password then reset verification for this signup session.
-      const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+      const { error: loginError } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password
       });
@@ -72,24 +102,33 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
         });
       }
 
+      if (!isAlreadyConfirmed) {
+        try {
+          await supabaseAdmin.auth.admin.updateUserById(existingUser.id, { email_confirm: false });
+        } catch (_) {}
 
-      // Force email re-verification for every signup attempt
-      try {
-        await supabaseAdmin.auth.admin.updateUserById(existingUser.id, { email_confirm: false });
-      } catch (_) {}
-
-      // Reset profile status to pending_verification for this signup
-      await supabase
-        .from("profiles")
-        .upsert({
-          id: existingUser.id,
-          email: cleanEmail,
-          name: cleanName,
-          full_name: cleanName,
-          organization_id: tenantId || null,
-          status: "pending_verification",
-          email_verified: false
-        }, { onConflict: "id" });
+        await supabase
+          .from("profiles")
+          .upsert({
+            id: existingUser.id,
+            email: cleanEmail,
+            name: cleanName,
+            full_name: cleanName,
+            organization_id: tenantId || null,
+            status: "pending_verification",
+            email_verified: false
+          }, { onConflict: "id" });
+      } else {
+        await supabase
+          .from("profiles")
+          .upsert({
+            id: existingUser.id,
+            email: cleanEmail,
+            name: cleanName,
+            full_name: cleanName,
+            organization_id: tenantId || null
+          }, { onConflict: "id" });
+      }
 
       if (tenantId) {
         try {
@@ -105,7 +144,6 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
         } catch (_) {}
       }
 
-      // Generate verification link for existing user signup
       let actionLink = null;
       try {
         const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
@@ -115,87 +153,12 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
           options: { redirectTo }
         });
         actionLink = linkData?.properties?.action_link;
-      } catch (_) {}
-
-      // Dispatch custom HTML email via mailer utility
-      if (actionLink) {
-        try {
-          await sendEmail({
-            to: cleanEmail,
-            subject: "Verify Your Centroid Workspace Account",
-            html: `
-              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 20px; background-color: #ffffff; color: #0f172a;">
-                <div style="margin-bottom: 20px; text-align: center;">
-                  <h1 style="color: #4f46e5; font-size: 24px; font-weight: 800; margin: 0;">Centroid CAT</h1>
-                  <p style="color: #64748b; font-size: 12px; margin-top: 4px; font-weight: 500;">Next-Gen Enterprise Localization</p>
-                </div>
-                
-                <h2 style="font-size: 18px; font-weight: 700; color: #0f172a; margin-top: 0;">Welcome back, ${cleanName}! 👋</h2>
-                <p style="font-size: 14px; color: #475569; line-height: 1.6;">
-                  You requested to register for the <strong>${tenantName}</strong> workspace. Please click the button below to verify your email (<strong>${cleanEmail}</strong>) and activate your access.
-                </p>
-
-                <div style="margin: 28px 0; text-align: center;">
-                  <a href="${actionLink}" target="_blank" style="background-color: #4f46e5; color: #ffffff; font-size: 14px; font-weight: 700; padding: 14px 28px; text-decoration: none; border-radius: 14px; display: inline-block; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);">
-                    Verify Email & Activate Account →
-                  </a>
-                </div>
-
-                <p style="font-size: 12px; color: #94a3b8; line-height: 1.5; border-top: 1px solid #f1f5f9; pt: 16px;">
-                  If the button doesn't work, copy and paste this link into your browser:<br/>
-                  <a href="${actionLink}" style="color: #4f46e5; word-break: break-all;">${actionLink}</a>
-                </p>
-              </div>
-            `
-          });
-        } catch (e) {
-          console.error("Mailer send email error:", e?.message || e);
-        }
+      } catch (err) {
+        console.error("Register generate link error:", err?.message);
       }
 
-      return response.json({
-        message: `Signup successful! A verification email has been dispatched to ${cleanEmail}. Please check your inbox and click the verification button to activate your account.`,
-        user: { id: existingUser.id, email: cleanEmail, name: cleanName },
-        verificationLink: actionLink || null,
-        requiresVerification: true
-      });
-    }
-
-    // Brand new user — create account with email_confirm: false so verification email is required
-    const { data: adminData, error: adminErr } = await supabaseAdmin.auth.admin.createUser({
-      email: cleanEmail,
-      password,
-      email_confirm: false,
-      user_metadata: { name: cleanName, full_name: cleanName }
-    });
-
-    if (adminErr) {
-      return response.status(400).json({ error: adminErr.message });
-    }
-
-    const user = adminData.user;
-
-    // Ensure email_confirm is false so user MUST verify via email link
-    try {
-      await supabaseAdmin.auth.admin.updateUserById(user.id, { email_confirm: false });
-    } catch (_) {}
-
-    // Generate signup verification link
-    let actionLink = null;
-    try {
-      const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
-        type: "signup",
-        email: cleanEmail,
-        password,
-        options: { redirectTo }
-      });
-      actionLink = linkData?.properties?.action_link;
-    } catch (_) {}
-
-    // Dispatch custom HTML email via mailer utility
-    if (actionLink) {
-      try {
-        await sendEmail({
+      if (actionLink) {
+        sendEmail({
           to: cleanEmail,
           subject: "Verify Your Centroid Workspace Account",
           html: `
@@ -205,9 +168,9 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
                 <p style="color: #64748b; font-size: 12px; margin-top: 4px; font-weight: 500;">Next-Gen Enterprise Localization</p>
               </div>
               
-              <h2 style="font-size: 18px; font-weight: 700; color: #0f172a; margin-top: 0;">Welcome, ${cleanName}! 👋</h2>
+              <h2 style="font-size: 18px; font-weight: 700; color: #0f172a; margin-top: 0;">Welcome back, ${cleanName}! 👋</h2>
               <p style="font-size: 14px; color: #475569; line-height: 1.6;">
-                Thank you for creating an account. Please click the button below to verify your email address (<strong>${cleanEmail}</strong>) and activate your account.
+                You requested to register for the <strong>${tenantName}</strong> workspace. Please click the button below to verify your email (<strong>${cleanEmail}</strong>) and activate your access.
               </p>
 
               <div style="margin: 28px 0; text-align: center;">
@@ -222,14 +185,87 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
               </p>
             </div>
           `
-        });
-      } catch (e) {
-        console.error("Mailer send email error:", e?.message || e);
+        }).catch(e => console.error("Register mailer error:", e?.message || e));
       }
+
+      return response.json({
+        message: `Signup successful! A verification email has been dispatched to ${cleanEmail}. Please check your inbox and click the verification button to activate your account.`,
+        user: { id: existingUser.id, email: cleanEmail, name: cleanName },
+        requiresVerification: true,
+        ...includeVerificationLink(actionLink)
+      });
+    }
+
+    const { data: adminData, error: adminErr } = await supabaseAdmin.auth.admin.createUser({
+      email: cleanEmail,
+      password,
+      email_confirm: false,
+      user_metadata: { name: cleanName, full_name: cleanName }
+    });
+
+    if (adminErr) {
+      if (/already|registered|exists/i.test(adminErr.message || "")) {
+        const retryUser = await findExistingAuthUser(cleanEmail);
+        if (retryUser) {
+          return response.status(400).json({
+            error: "An account with this email already exists. Please sign in or use your existing password to join this workspace."
+          });
+        }
+      }
+      return response.status(400).json({ error: adminErr.message });
+    }
+
+    const user = adminData.user;
+
+    try {
+      await supabaseAdmin.auth.admin.updateUserById(user.id, { email_confirm: false });
+    } catch (_) {}
+
+    let actionLink = null;
+    try {
+      const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
+        type: "signup",
+        email: cleanEmail,
+        password,
+        options: { redirectTo }
+      });
+      actionLink = linkData?.properties?.action_link;
+    } catch (err) {
+      console.error("Register generate link error:", err?.message);
+    }
+
+    if (actionLink) {
+      sendEmail({
+        to: cleanEmail,
+        subject: "Verify Your Centroid Workspace Account",
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 20px; background-color: #ffffff; color: #0f172a;">
+            <div style="margin-bottom: 20px; text-align: center;">
+              <h1 style="color: #4f46e5; font-size: 24px; font-weight: 800; margin: 0;">Centroid CAT</h1>
+              <p style="color: #64748b; font-size: 12px; margin-top: 4px; font-weight: 500;">Next-Gen Enterprise Localization</p>
+            </div>
+            
+            <h2 style="font-size: 18px; font-weight: 700; color: #0f172a; margin-top: 0;">Welcome, ${cleanName}! 👋</h2>
+            <p style="font-size: 14px; color: #475569; line-height: 1.6;">
+              Thank you for creating an account. Please click the button below to verify your email address (<strong>${cleanEmail}</strong>) and activate your account.
+            </p>
+
+            <div style="margin: 28px 0; text-align: center;">
+              <a href="${actionLink}" target="_blank" style="background-color: #4f46e5; color: #ffffff; font-size: 14px; font-weight: 700; padding: 14px 28px; text-decoration: none; border-radius: 14px; display: inline-block; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);">
+                Verify Email & Activate Account →
+              </a>
+            </div>
+
+            <p style="font-size: 12px; color: #94a3b8; line-height: 1.5; border-top: 1px solid #f1f5f9; pt: 16px;">
+              If the button doesn't work, copy and paste this link into your browser:<br/>
+              <a href="${actionLink}" style="color: #4f46e5; word-break: break-all;">${actionLink}</a>
+            </p>
+          </div>
+        `
+      }).catch(e => console.error("Register mailer error:", e?.message || e));
     }
 
     if (user) {
-      // Upsert base profile with pending_verification status
       await supabase
         .from("profiles")
         .upsert({
@@ -245,7 +281,6 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
         }, { onConflict: "id" });
 
       if (tenantId) {
-        // Upsert space membership
         try {
           await supabase
             .from("user_tenant_memberships")
@@ -260,27 +295,29 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
       }
     }
 
-    response.json({
+    return response.json({
       message: `Account created successfully! A verification email has been sent to ${cleanEmail}. Please check your inbox and click the verification button to activate your account before signing in.`,
       user: { id: user.id, email: user.email, name: cleanName },
-      verificationLink: actionLink || null,
-      requiresVerification: true
+      requiresVerification: true,
+      ...includeVerificationLink(actionLink)
     });
 
 
   } catch (error) {
     console.error("Register Router Exception:", error);
-    response.status(500).json({ error: "Registration failed on server" });
+    response.status(500).json({ error: error?.message || "Registration failed on server" });
   }
 });
 
 // 1b. Resend Email Verification Link
-authRouter.post("/resend-verification", async (request, response) => {
+authRouter.post("/resend-verification", authRateLimiter, async (request, response) => {
   try {
     const { email } = request.body;
     if (!email) {
       return response.status(400).json({ error: "Email address is required" });
     }
+
+    const cleanEmail = normalizeEmail(email);
 
     let redirectTo = request.headers.origin || "http://localhost:5173";
     if (!redirectTo.endsWith("/")) {
@@ -289,7 +326,7 @@ authRouter.post("/resend-verification", async (request, response) => {
 
     const { error } = await supabase.auth.resend({
       type: "signup",
-      email: email.toLowerCase().trim(),
+      email: cleanEmail,
       options: { emailRedirectTo: redirectTo }
     });
 
@@ -298,7 +335,7 @@ authRouter.post("/resend-verification", async (request, response) => {
     }
 
     response.json({
-      message: `A new verification email has been sent to ${email}. Please check your inbox.`
+      message: `A new verification email has been sent to ${cleanEmail}. Please check your inbox.`
     });
   } catch (error) {
     console.error("Resend Verification Error:", error);

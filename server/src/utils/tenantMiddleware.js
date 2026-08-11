@@ -130,10 +130,17 @@ async function resolveTenant(request, response, next) {
       subdomain = "centroid";
     }
 
-    const tenant = await getOrganizationBySubdomain(subdomain);
+    let tenant = await getOrganizationBySubdomain(subdomain);
+
+    const isAuthRoute = /^\/api\/auth(\/|$)/.test(request.path || "");
 
     if (!tenant) {
-      return response.status(404).json({ error: `Tenant space '${subdomain}' not found.` });
+      if (isAuthRoute) {
+        tenant = await getOrganizationBySubdomain("centroid");
+      }
+      if (!tenant) {
+        return response.status(404).json({ error: `Tenant space '${subdomain}' not found.` });
+      }
     }
 
     if (tenant.status === "suspended") {

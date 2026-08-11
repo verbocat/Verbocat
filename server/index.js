@@ -1,4 +1,3 @@
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 require('regenerator-runtime/runtime');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });

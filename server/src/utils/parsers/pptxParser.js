@@ -12,7 +12,8 @@ const parseFile = async (filePath) => {
   const fileData = fs.readFileSync(filePath);
   const zip = await JSZip.loadAsync(fileData);
   const segments = [];
-  let segmentIndex = 0;
+  let segmentIndex = 1; // STRICT 1-BASED INDEXING (__SEG_1__, __SEG_2__, ...)
+
 
   const tagMapGlobal = new Map();
   const tagCounter = { value: 1 };
@@ -91,14 +92,17 @@ const exportFile = async (templateBase64, segments) => {
   const zip = await JSZip.loadAsync(zipBuffer);
 
   const segmentMap = new Map();
-  segments.forEach((segment) => {
+  segments.forEach((segment, arrayIdx) => {
     const savedTags = segmentTagsMap.get(segment.id) || {};
     const leading = savedTags.leading || segment.leading || "";
     const trailing = savedTags.trailing || segment.trailing || "";
     const targetText = leading + (segment.target || segment.source) + trailing;
     const restoredText = restorePlaceholders(targetText, tagMapGlobal);
-    segmentMap.set(segment.id, restoredText);
+    const key = segment.id !== undefined && segment.id !== null ? Number(segment.id) : (arrayIdx + 1);
+    segmentMap.set(key, restoredText);
+    if (segment.id) segmentMap.set(Number(segment.id), restoredText);
   });
+
 
   const slideFiles = Object.keys(zip.files).filter(relativePath => 
     relativePath.startsWith('ppt/slides/slide') && relativePath.endsWith('.xml')

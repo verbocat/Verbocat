@@ -366,8 +366,8 @@ export const deleteProjectNote = async (projectId, noteId) => {
 };
 
 export const searchUsers = async (query) => {
-  const response = await api.get(`/api/users/search?query=${query}`);
-  return response.data;
+  const response = await api.get(`/api/auth/users/search?query=${encodeURIComponent(query)}`);
+  return response.data?.users || [];
 };
 
 export const fetchRequestStatus = async (documentId) => {
