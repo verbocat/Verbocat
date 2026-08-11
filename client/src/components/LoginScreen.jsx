@@ -3,8 +3,9 @@ import { useUserStore } from "../services/userStore";
 import { api } from "../services/api";
 import { 
   Eye, EyeOff, Lock, ArrowRight, CheckCircle2, 
-  AlertCircle, Sparkles, Mail, KeyRound, Fingerprint, User
+  AlertCircle, Sparkles, Mail, KeyRound, Fingerprint, User, ExternalLink
 } from "lucide-react";
+
 
 // ============================================================================
 // HTML5 Canvas Infinite Decelerating Scale Tuner (Clean Minimalist Bar)
@@ -132,6 +133,8 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+  const [verificationLink, setVerificationLink] = useState("");
+
 
   // Speedometer & Rotator Sync States
   const [rotatorIndex, setRotatorIndex] = useState(0);
@@ -323,14 +326,14 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
         }
 
         const response = await api.post("/api/auth/register", { name: name.trim(), email, password });
-        setSuccessMsg(response.data.message || `Account created! A verification email has been sent to ${email}. Please click the verification button in your email to activate your account.`);
+        setSuccessMsg(response.data.message || `Account created! A verification email has been sent to ${email}. Please check your inbox and click the verification button in your email to activate your account.`);
+        if (response.data.verificationLink) {
+          setVerificationLink(response.data.verificationLink);
+        }
         setName("");
         setPassword("");
         setConfirmPassword("");
-        // Switch to sign in mode so user can sign in after verifying email
-        setTimeout(() => {
-          setMode("login");
-        }, 3000);
+
       } 
 
 
@@ -652,11 +655,31 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
 
                 {/* Success Banner */}
                 {successMsg && (
-                  <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-3.5 flex items-start gap-2.5 text-xs text-emerald-700 font-medium shadow-xs">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span className="leading-relaxed">{successMsg}</span>
+                  <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 space-y-3 text-xs text-emerald-800 font-medium shadow-xs">
+                    <div className="flex items-start gap-2.5">
+                      <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 shrink-0 mt-0.5" />
+                      <span className="leading-relaxed font-semibold">{successMsg}</span>
+                    </div>
+
+                    {verificationLink && (
+                      <div className="pt-2 border-t border-emerald-200/80 flex flex-col gap-2">
+                        <span className="text-[11px] font-bold text-emerald-900">
+                          Didn't receive the email in your inbox? Click below to verify directly:
+                        </span>
+                        <a
+                          href={verificationLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
+                        >
+                          <span>Click Here to Verify Account Now</span>
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      </div>
+                    )}
                   </div>
                 )}
+
 
                 {/* Primary Action Button */}
                 <button

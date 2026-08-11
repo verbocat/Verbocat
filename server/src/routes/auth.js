@@ -2,8 +2,10 @@ const express = require("express");
 const { supabase, supabaseAdmin } = require("../config/supabase");
 const { checkAuth } = require("../utils/authMiddleware");
 const { authRateLimiter } = require("../utils/rateLimiter");
+const { sendEmail } = require("../utils/mailer");
 
 const authRouter = express.Router();
+
 
 const validatePasswordSecurity = (pass) => {
   if (!pass || pass.length < 8) {
@@ -103,27 +105,58 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
         } catch (_) {}
       }
 
-      // Dispatch fresh signup verification email to user inbox
+      // Generate verification link for existing user signup
+      let actionLink = null;
       try {
-        await supabaseAdmin.auth.admin.generateLink({
+        const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
           type: "signup",
           email: cleanEmail,
           password,
           options: { redirectTo }
         });
-      } catch (_) {
+        actionLink = linkData?.properties?.action_link;
+      } catch (_) {}
+
+      // Dispatch custom HTML email via mailer utility
+      if (actionLink) {
         try {
-          await supabase.auth.resend({
-            type: "signup",
-            email: cleanEmail,
-            options: { emailRedirectTo: redirectTo }
+          await sendEmail({
+            to: cleanEmail,
+            subject: "Verify Your Centroid Workspace Account",
+            html: `
+              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 20px; background-color: #ffffff; color: #0f172a;">
+                <div style="margin-bottom: 20px; text-align: center;">
+                  <h1 style="color: #4f46e5; font-size: 24px; font-weight: 800; margin: 0;">Centroid CAT</h1>
+                  <p style="color: #64748b; font-size: 12px; margin-top: 4px; font-weight: 500;">Next-Gen Enterprise Localization</p>
+                </div>
+                
+                <h2 style="font-size: 18px; font-weight: 700; color: #0f172a; margin-top: 0;">Welcome back, ${cleanName}! 👋</h2>
+                <p style="font-size: 14px; color: #475569; line-height: 1.6;">
+                  You requested to register for the <strong>${tenantName}</strong> workspace. Please click the button below to verify your email (<strong>${cleanEmail}</strong>) and activate your access.
+                </p>
+
+                <div style="margin: 28px 0; text-align: center;">
+                  <a href="${actionLink}" target="_blank" style="background-color: #4f46e5; color: #ffffff; font-size: 14px; font-weight: 700; padding: 14px 28px; text-decoration: none; border-radius: 14px; display: inline-block; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);">
+                    Verify Email & Activate Account →
+                  </a>
+                </div>
+
+                <p style="font-size: 12px; color: #94a3b8; line-height: 1.5; border-top: 1px solid #f1f5f9; pt: 16px;">
+                  If the button doesn't work, copy and paste this link into your browser:<br/>
+                  <a href="${actionLink}" style="color: #4f46e5; word-break: break-all;">${actionLink}</a>
+                </p>
+              </div>
+            `
           });
-        } catch (_) {}
+        } catch (e) {
+          console.error("Mailer send email error:", e?.message || e);
+        }
       }
 
       return response.json({
-        message: `Signup successful! A new verification email has been dispatched to ${cleanEmail}. Please check your inbox and click the verification button to activate your account.`,
+        message: `Signup successful! A verification email has been dispatched to ${cleanEmail}. Please check your inbox and click the verification button to activate your account.`,
         user: { id: existingUser.id, email: cleanEmail, name: cleanName },
+        verificationLink: actionLink || null,
         requiresVerification: true
       });
     }
@@ -147,15 +180,53 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
       await supabaseAdmin.auth.admin.updateUserById(user.id, { email_confirm: false });
     } catch (_) {}
 
-    // Generate and dispatch signup verification email
+    // Generate signup verification link
+    let actionLink = null;
     try {
-      await supabaseAdmin.auth.admin.generateLink({
+      const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
         type: "signup",
         email: cleanEmail,
         password,
         options: { redirectTo }
       });
+      actionLink = linkData?.properties?.action_link;
     } catch (_) {}
+
+    // Dispatch custom HTML email via mailer utility
+    if (actionLink) {
+      try {
+        await sendEmail({
+          to: cleanEmail,
+          subject: "Verify Your Centroid Workspace Account",
+          html: `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 20px; background-color: #ffffff; color: #0f172a;">
+              <div style="margin-bottom: 20px; text-align: center;">
+                <h1 style="color: #4f46e5; font-size: 24px; font-weight: 800; margin: 0;">Centroid CAT</h1>
+                <p style="color: #64748b; font-size: 12px; margin-top: 4px; font-weight: 500;">Next-Gen Enterprise Localization</p>
+              </div>
+              
+              <h2 style="font-size: 18px; font-weight: 700; color: #0f172a; margin-top: 0;">Welcome, ${cleanName}! 👋</h2>
+              <p style="font-size: 14px; color: #475569; line-height: 1.6;">
+                Thank you for creating an account. Please click the button below to verify your email address (<strong>${cleanEmail}</strong>) and activate your account.
+              </p>
+
+              <div style="margin: 28px 0; text-align: center;">
+                <a href="${actionLink}" target="_blank" style="background-color: #4f46e5; color: #ffffff; font-size: 14px; font-weight: 700; padding: 14px 28px; text-decoration: none; border-radius: 14px; display: inline-block; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);">
+                  Verify Email & Activate Account →
+                </a>
+              </div>
+
+              <p style="font-size: 12px; color: #94a3b8; line-height: 1.5; border-top: 1px solid #f1f5f9; pt: 16px;">
+                If the button doesn't work, copy and paste this link into your browser:<br/>
+                <a href="${actionLink}" style="color: #4f46e5; word-break: break-all;">${actionLink}</a>
+              </p>
+            </div>
+          `
+        });
+      } catch (e) {
+        console.error("Mailer send email error:", e?.message || e);
+      }
+    }
 
     if (user) {
       // Upsert base profile with pending_verification status
@@ -192,8 +263,10 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
     response.json({
       message: `Account created successfully! A verification email has been sent to ${cleanEmail}. Please check your inbox and click the verification button to activate your account before signing in.`,
       user: { id: user.id, email: user.email, name: cleanName },
+      verificationLink: actionLink || null,
       requiresVerification: true
     });
+
 
   } catch (error) {
     console.error("Register Router Exception:", error);
