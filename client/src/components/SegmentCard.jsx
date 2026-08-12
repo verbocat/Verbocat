@@ -225,7 +225,8 @@ const ForbiddenHighlight = ({ term, children }) => {
 /* ── Tag conversion helpers ──────────────────────────────────── */
 const targetToHtml = (str, forbiddenTerms = [], forbiddenTermsEnabled = true) => {
   if (!str) return "";
-  let html = str.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  let cleanStr = String(str).replace(/[\r\n]+/g, " ").replace(/^[\s\uFEFF\xA0]+/, "").replace(/ +/g, " ");
+  let html = cleanStr.replace(/</g, "&lt;").replace(/>/g, "&gt;");
   html = html.replace(/&lt;(\/?[^&>]*)\&gt;/gi, (match, inner) => {
     if (!inner) return match;
     let display = `&lt;${inner}&gt;`;
@@ -922,7 +923,10 @@ export const SegmentCard = ({
 
         <div className="seg-arrow">
           <button
-            onClick={() => onUpdateTranslation(segment.id, segment.source)}
+            onClick={() => {
+              const cleanSourceStr = (segment.source || "").replace(/[\r\n]+/g, " ").replace(/^[\s\uFEFF\xA0]+/, "").replace(/ +/g, " ");
+              onUpdateTranslation(segment.id, cleanSourceStr);
+            }}
             className="seg-arrow-btn"
             title="Copy source to target"
             disabled={readOnly || segment.verified || !!lockInfo}

@@ -34,12 +34,31 @@ const stripTagMarkers = (text) => {
     .trim();
 };
 
+// Normalize rPr XML string into a comparable key for formatting equality
+const normalizeRPr = (rPrXml) => {
+  if (!rPrXml) return "";
+  const cleaned = rPrXml.replace(/<\/?w:rPr[^>]*>/gi, "").replace(/\s+/g, " ").trim();
+  if (!cleaned) return "";
+  const tags = cleaned.match(/<[^>]+>/g) || [];
+  return tags.sort().join("");
+};
+
+// Check if a field instruction is a dynamic system field (like PAGE, NUMPAGES, DATE, etc.)
+const isDynamicSystemField = (instrText) => {
+  if (!instrText) return false;
+  const upper = instrText.trim().toUpperCase();
+  return /^(PAGE|NUMPAGES|SECTION|SECTIONPAGES|DATE|TIME|FILENAME|FILESIZE|AUTHOR|TITLE|SUBJECT|KEYWORDS|DOCPROPERTY|TOC)\b/.test(upper);
+};
+
 const parseFile = async (filePath) => {
+  console.log(`\n========================================`);
+  console.log(`[DOCX_PARSER_START] Parsing file: ${filePath}`);
   const fileData = fs.readFileSync(filePath);
   let zip;
   try {
     zip = await JSZip.loadAsync(fileData);
   } catch (err) {
+    console.error(`[DOCX_PARSER_ERROR] Invalid DOCX zip archive:`, err.message);
     throw new Error('Invalid DOCX file or legacy .doc format. Please save/convert your file as .docx (Word Document) before uploading.');
   }
 
@@ -52,53 +71,243 @@ const parseFile = async (filePath) => {
     return a.localeCompare(b, undefined, { numeric: true });
   });
 
+  console.log(`[DOCX_PARSER_FILES_FOUND] Found ${docXmlFiles.length} XML file(s): ${docXmlFiles.join(', ')}`);
+
   if (docXmlFiles.length === 0) {
     throw new Error('Invalid DOCX file: missing word/document.xml');
   }
 
   const segments = [];
+  const paraMetaMap = {};
   let segmentId = 1;
 
   for (const xmlFile of docXmlFiles) {
     let xmlContent = await zip.file(xmlFile).async('string');
 
     xmlContent = xmlContent.replace(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/gi, (pBlock) => {
-      // Extract runs and text inside this paragraph
-      const textTagRegex = /<w:t\b([^>]*)>([\s\S]*?)<\/w:t>|<w:t\b([^>]*)\/>/gi;
-      let fullText = "";
-      let hasTextTag = false;
-      let match;
-
-      while ((match = textTagRegex.exec(pBlock)) !== null) {
-        hasTextTag = true;
-        const rawText = match[2] !== undefined ? match[2] : "";
-        fullText += unescapeXml(rawText);
+      // 1. Extract paragraph properties <w:pPr>...</w:pPr> if present
+      let pPrXml = "";
+      const pPrMatch = pBlock.match(/<w:pPr\b[^>]*>[\s\S]*?<\/w:pPr>/i);
+      if (pPrMatch) {
+        pPrXml = pPrMatch[0];
       }
 
-      const cleanText = fullText;
-      if (!cleanText.trim() || !hasTextTag) {
+      // Extract inner XML of <w:p> after <w:pPr>
+      const pInnerXml = pBlock.replace(/^<w:p\b[^>]*>/i, "").replace(/<\/w:p>$/i, "");
+
+      // 2. Tokenize paragraph body into runs (<w:r>), simple fields (<w:fldSimple>), and other elements
+      const childNodeRegex = /<w:fldSimple\b[^>]*>[\s\S]*?<\/w:fldSimple>|<w:fldSimple\b[^>]*\/>|<w:r\b[^>]*>[\s\S]*?<\/w:r>|<[^>]+>/gi;
+
+      let inFieldSequence = false;
+      let fieldInstrIsDynamic = false;
+      
+      const spans = [];
+      let currentSpan = [];
+
+      let match;
+      while ((match = childNodeRegex.exec(pInnerXml)) !== null) {
+        const nodeXml = match[0];
+        const index = match.index;
+
+        if (/^<w:pPr\b/i.test(nodeXml)) continue;
+
+        // Check for simple fields <w:fldSimple>
+        if (/^<w:fldSimple\b/i.test(nodeXml)) {
+          const instrAttr = (nodeXml.match(/w:instr="([^"]*)"/i) || [])[1] || "";
+          if (isDynamicSystemField(instrAttr)) {
+            if (currentSpan.length > 0) {
+              spans.push(currentSpan);
+              currentSpan = [];
+            }
+            continue;
+          }
+        }
+
+        // Check for run <w:r>
+        if (/^<w:r\b/i.test(nodeXml)) {
+          if (/w:fldCharType="begin"/i.test(nodeXml)) {
+            inFieldSequence = true;
+            fieldInstrIsDynamic = false;
+            if (currentSpan.length > 0) {
+              spans.push(currentSpan);
+              currentSpan = [];
+            }
+            continue;
+          }
+
+          const instrMatch = nodeXml.match(/<w:instrText\b[^>]*>([\s\S]*?)<\/w:instrText>/i);
+          if (instrMatch && isDynamicSystemField(instrMatch[1])) {
+            fieldInstrIsDynamic = true;
+          }
+
+          if (/w:fldCharType="separate"/i.test(nodeXml) || /w:fldCharType="end"/i.test(nodeXml)) {
+            if (/w:fldCharType="end"/i.test(nodeXml)) {
+              inFieldSequence = false;
+              fieldInstrIsDynamic = false;
+            }
+            continue;
+          }
+
+          if (inFieldSequence && fieldInstrIsDynamic) {
+            continue;
+          }
+
+          // Extract rPrXml
+          let rPrXml = "";
+          const rPrMatch = nodeXml.match(/<w:rPr\b[^>]*>[\s\S]*?<\/w:rPr>/i);
+          if (rPrMatch) {
+            rPrXml = rPrMatch[0];
+          }
+
+          const hasBr = /<w:br\b[^>]*\/>|<w:cr\b[^>]*\/>/i.test(nodeXml) && !/type="page"/i.test(nodeXml);
+          const hasPageBreak = /<w:br\b[^>]*type="page"[^>]*\/>/i.test(nodeXml);
+
+          const textTagRegex = /<w:t\b([^>]*)>([\s\S]*?)<\/w:t>|<w:t\b([^>]*)\/>/gi;
+          let runText = "";
+          let tMatch;
+          while ((tMatch = textTagRegex.exec(nodeXml)) !== null) {
+            const rawText = tMatch[2] !== undefined ? tMatch[2] : "";
+            runText += unescapeXml(rawText);
+          }
+
+          if (runText || hasBr || hasPageBreak) {
+            currentSpan.push({
+              xml: nodeXml,
+              startIndex: index,
+              endIndex: index + nodeXml.length,
+              text: runText,
+              hasBr,
+              hasPageBreak,
+              rPrXml,
+              rPrKey: normalizeRPr(rPrXml)
+            });
+          }
+        }
+      }
+
+      if (currentSpan.length > 0) {
+        spans.push(currentSpan);
+      }
+
+      // Filter spans to only those containing actual translatable text
+      const validSpans = spans.filter(span => span.map(e => e.text).join("").trim().length > 0);
+
+      if (validSpans.length === 0) {
         return pBlock;
       }
 
-      const currentSegId = segmentId++;
-      segments.push({
-        id: currentSegId,
-        source: cleanText.trim(),
-        target: "",
-        leading: "",
-        trailing: ""
-      });
+      // Process each valid span as an independent segment placeholder
+      let modifiedInnerXml = pInnerXml;
 
-      // Replace text inside paragraph while preserving all paragraph properties (w:pPr) and run properties (w:rPr)
-      let matchIdx = 0;
-      return pBlock.replace(/<w:t\b[^>]*>[\s\S]*?<\/w:t>|<w:t\b([^>]*)\/>/gi, () => {
-        if (matchIdx === 0) {
-          matchIdx++;
-          return `<w:t xml:space="preserve">__SEG_${currentSegId}__</w:t>`;
+      // Replace spans from right to left (descending order of startIndex) to keep string indices stable
+      for (let i = validSpans.length - 1; i >= 0; i--) {
+        const span = validSpans[i];
+        const spanText = span.map(e => e.text).join("");
+        if (!spanText.trim()) continue;
+
+        const distinctKeys = new Set(span.filter(e => e.text).map(e => e.rPrKey));
+        const needsRunTagging = distinctKeys.size > 1;
+
+        let segmentSource = "";
+        const tagRPrMap = {};
+        let defaultRPr = "";
+        let currentTagId = 1;
+        let hasBrInSource = false;
+
+        if (!needsRunTagging) {
+          // Uniform formatting across span
+          const firstWithRPr = span.find(e => e.rPrXml);
+          if (firstWithRPr) defaultRPr = firstWithRPr.rPrXml;
+
+          for (const el of span) {
+            if (el.hasBr) {
+              segmentSource += "<br/>";
+              hasBrInSource = true;
+            }
+            if (el.hasPageBreak) segmentSource += "<pagebreak/>";
+            if (el.text) segmentSource += el.text;
+          }
+        } else {
+          // Mixed formatting across runs -> defaultRPr MUST remain empty string "" to prevent bold leakage onto normal text!
+          defaultRPr = "";
+          let activeTagId = null;
+          let activeKey = null;
+          let lastTagText = "";
+
+          for (const el of span) {
+            if (el.hasBr) {
+              if (activeTagId !== null) {
+                segmentSource += `</${activeTagId}>`;
+                activeTagId = null;
+                activeKey = null;
+              }
+              segmentSource += "<br/>";
+              hasBrInSource = true;
+            }
+            if (el.hasPageBreak) {
+              if (activeTagId !== null) {
+                segmentSource += `</${activeTagId}>`;
+                activeTagId = null;
+                activeKey = null;
+              }
+              segmentSource += "<pagebreak/>";
+            }
+
+            if (el.text) {
+              if (el.rPrKey !== activeKey) {
+                if (activeTagId !== null) {
+                  segmentSource += `</${activeTagId}>`;
+                  // Preserve essential space between adjacent formatted runs (e.g. "WORD FORMATTING" and "TEST DOCUMENT" or "elements." and "Use")
+                  if (lastTagText && !/\s$/.test(lastTagText) && !/^\s/.test(el.text)) {
+                    segmentSource += " ";
+                  }
+                }
+                activeTagId = currentTagId++;
+                activeKey = el.rPrKey;
+                tagRPrMap[activeTagId] = el.rPrXml;
+                segmentSource += `<${activeTagId}>`;
+              }
+              segmentSource += el.text;
+              lastTagText = el.text;
+            }
+          }
+          if (activeTagId !== null) {
+            segmentSource += `</${activeTagId}>`;
+          }
         }
-        matchIdx++;
-        return `<w:t xml:space="preserve"></w:t>`;
-      });
+
+        const currentSegId = segmentId++;
+        segments.push({
+          id: currentSegId,
+          source: segmentSource.trim(),
+          target: "",
+          leading: "",
+          trailing: ""
+        });
+
+        paraMetaMap[currentSegId] = {
+          id: currentSegId,
+          pPrXml,
+          defaultRPr,
+          tagRPrMap,
+          needsRunTagging,
+          hasBrInSource
+        };
+
+        const spanStart = span[0].startIndex;
+        const spanEnd = span[span.length - 1].endIndex;
+
+        const beforeSpan = modifiedInnerXml.substring(0, spanStart);
+        const afterSpan = modifiedInnerXml.substring(spanEnd);
+        const placeholderXml = `<w:r><w:t xml:space="preserve">__PARA_SEG_${currentSegId}__</w:t></w:r>`;
+
+        modifiedInnerXml = beforeSpan + placeholderXml + afterSpan;
+      }
+
+      const pAttrsMatch = pBlock.match(/^<w:p\b([^>]*)>/i);
+      const pAttrs = pAttrsMatch ? pAttrsMatch[1] : "";
+
+      return `<w:p ${pAttrs}>${modifiedInnerXml}</w:p>`;
     });
 
     zip.file(xmlFile, xmlContent);
@@ -110,18 +319,24 @@ const parseFile = async (filePath) => {
   packageZip.file('template.zip', modifiedZipBuffer);
   
   const meta = {
-    segmentCount: segments.length
+    segmentCount: segments.length,
+    hasParaMeta: true
   };
   packageZip.file('meta.json', JSON.stringify(meta));
+  packageZip.file('paraMeta.json', JSON.stringify(paraMetaMap));
   
   const packageBuffer = await packageZip.generateAsync({ type: 'nodebuffer', compression: 'STORE' });
   const template = packageBuffer.toString('base64');
   
+  console.log(`[DOCX_PARSER_COMPLETE] Extracted ${segments.length} segments | Template Size: ${packageBuffer.length} bytes`);
+  console.log(`========================================\n`);
+
   return { segments, template };
 };
 
 const exportFile = async (templateBase64, segments) => {
   let zipBase64 = "";
+  let paraMetaMap = {};
 
   try {
     const rawBuffer = Buffer.from(templateBase64, 'base64');
@@ -130,6 +345,12 @@ const exportFile = async (templateBase64, segments) => {
       const packageZip = await JSZip.loadAsync(rawBuffer);
       const modifiedZipBuffer = await packageZip.file('template.zip').async('nodebuffer');
       zipBase64 = modifiedZipBuffer.toString('base64');
+
+      const paraMetaFile = packageZip.file('paraMeta.json');
+      if (paraMetaFile) {
+        const paraMetaStr = await paraMetaFile.async('string');
+        paraMetaMap = JSON.parse(paraMetaStr);
+      }
     } else {
       const templateData = JSON.parse(rawBuffer.toString('utf-8'));
       zipBase64 = templateData.zipBase64 || templateBase64;
@@ -155,18 +376,81 @@ const exportFile = async (templateBase64, segments) => {
     const rawText = (seg.target !== undefined && seg.target !== null && seg.target !== "") 
       ? seg.target 
       : (seg.source || "");
-    const cleanText = stripTagMarkers(rawText);
     const key = seg.id !== undefined && seg.id !== null ? seg.id : (arrayIdx + 1);
-    segmentMap.set(Number(key), escapeXml(cleanText));
+    segmentMap.set(Number(key), rawText);
   });
 
   for (const xmlFile of docXmlFiles) {
     let xmlContent = await zip.file(xmlFile).async('string');
     
+    // Replace paragraph markers __PARA_SEG_N__ with reconstructed Word OpenXML runs
+    xmlContent = xmlContent.replace(/<w:r\b[^>]*>\s*<w:t\b[^>]*>__PARA_SEG_(\d+)__<\/w:t>\s*<\/w:r>/gi, (match, idStr) => {
+      const id = parseInt(idStr, 10);
+      const targetText = segmentMap.get(id) || "";
+      const paraMeta = paraMetaMap[id];
+
+      if (!paraMeta) {
+        // Fallback for missing meta: plain text run
+        const clean = stripTagMarkers(targetText);
+        return `<w:r><w:t xml:space="preserve">${escapeXml(clean)}</w:t></w:r>`;
+      }
+
+      const { tagRPrMap = {}, defaultRPr = "", hasBrInSource = false } = paraMeta;
+
+      // Tokenize targetText into tags (<1>, </1>, <br/>, <pagebreak/>), and text
+      const tokenRegex = /(<\/?\d+>|<br\s*\/?>|<pagebreak\s*\/?>|\n)/gi;
+      const parts = targetText.split(tokenRegex).filter(Boolean);
+
+      let generatedRunsXml = "";
+      let activeTagId = null;
+      let hasBrInTarget = false;
+
+      for (const part of parts) {
+        const openMatch = part.match(/^<(\d+)>$/);
+        const closeMatch = part.match(/^<\/(\d+)>$/);
+        const brMatch = part.match(/^<br\s*\/?>$/i) || part === "\n";
+        const pageBreakMatch = part.match(/^<pagebreak\s*\/?>$/i);
+
+        if (openMatch) {
+          activeTagId = openMatch[1];
+        } else if (closeMatch) {
+          activeTagId = null;
+        } else if (brMatch) {
+          generatedRunsXml += `<w:r><w:br/></w:r>`;
+          hasBrInTarget = true;
+        } else if (pageBreakMatch) {
+          generatedRunsXml += `<w:r><w:br w:type="page"/></w:r>`;
+        } else {
+          // Plain text token
+          const unescapedPart = unescapeXml(part);
+          const escapedPart = escapeXml(unescapedPart);
+
+          let rPrXml = defaultRPr;
+          if (activeTagId && tagRPrMap[activeTagId] !== undefined) {
+            rPrXml = tagRPrMap[activeTagId];
+          }
+
+          generatedRunsXml += `<w:r>${rPrXml}<w:t xml:space="preserve">${escapedPart}</w:t></w:r>`;
+        }
+      }
+
+      // Line Break Recovery: If source segment contained <br/> and target translation dropped <br/> between tags, inject <w:br/>
+      if (hasBrInSource && !hasBrInTarget && generatedRunsXml.includes("</w:r><w:r>")) {
+        generatedRunsXml = generatedRunsXml.replace("</w:r><w:r>", "</w:r><w:r><w:br/></w:r><w:r>");
+      }
+
+      if (!generatedRunsXml) {
+        generatedRunsXml = `<w:r>${defaultRPr}<w:t xml:space="preserve"></w:t></w:r>`;
+      }
+
+      return generatedRunsXml;
+    });
+
+    // Fallback for legacy __SEG_N__ template markers
     xmlContent = xmlContent.replace(/__SEG_(\d+)__/g, (match, idStr) => {
       const id = parseInt(idStr, 10);
       if (segmentMap.has(id)) {
-        return segmentMap.get(id);
+        return escapeXml(stripTagMarkers(segmentMap.get(id)));
       }
       return "";
     });

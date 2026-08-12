@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HTML Formatting Test Document</title>
+<style>
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+    color: #222;
+    background: #ffffff;
+    margin: 0;
+    padding: 40px;
+  }
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  .cover {
+    text-align: center;
+    padding: 45px 20px;
+    border: 3px solid #222;
+    margin-bottom: 35px;
+  }
+  .cover h1 {
+    font-size: 38px;
+    margin: 0 0 15px;
+    letter-spacing: 1px;
+  }
+  .cover .subtitle {
+    font-size: 20px;
+    font-style: italic;
+  }
+  .cover .description {
+    margin: 25px auto 0;
+    max-width: 800px;
+  }
+  h2 {
+    color: #245a94;
+    border-bottom: 2px solid #245a94;
+    padding-bottom: 6px;
+    margin-top: 38px;
+  }
+  h3 {
+    color: #555;
+  }
+  .mixed span { margin-right: 5px; }
+  .red { color: #c00000; }
+  .green { color: #008000; }
+  .blue { color: #0050b4; }
+  .orange { color: #e07800; }
+  .highlight { background: #ffff00; }
+  .small { font-size: 10px; }
+  .medium { font-size: 16px; }
+  .large { font-size: 24px; }
+  .xl { font-size: 32px; }
+  .quote {
+    border-left: 5px solid #777;
+    background: #f3f3f3;
+    padding: 15px 20px;
+    font-family: Georgia, serif;
+    font-style: italic;
+    margin: 20px 0;
+  }
+  .warning {
+    text-align: center;
+    color: #b40000;
+    font-weight: bold;
+    padding: 15px;
+    border: 2px solid #b40000;
+    background: #fff3f3;
+  }
+  .box {
+    border: 1px solid #555;
+    margin: 20px 0;
+  }
+  .box-title {
+    background: #fff2cc;
+    font-weight: bold;
+    padding: 8px;
+  }
+  .box-content {
+    padding: 12px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+  }
+  th, td {
+    border: 1px solid #333;
+    padding: 9px;
+    text-align: left;
+    vertical-align: middle;
+  }
+  th {
+    background: #d9eaf7;
+    font-weight: bold;
+  }
+  .merged {
+    background: #e2f0d9;
+    text-align: center;
+    font-weight: bold;
+  }
+  .center { text-align: center; }
+  .right { text-align: right; }
+  .justify { text-align: justify; }
+  .indent {
+    text-indent: 40px;
+  }
+  .spaced {
+    margin-top: 25px;
+    margin-bottom: 30px;
+    line-height: 2;
+  }
+  .code {
+    font-family: Consolas, "Courier New", monospace;
+    background: #eeeeee;
+    padding: 2px 5px;
+  }
+  pre {
+    background: #f4f4f4;
+    border: 1px solid #ccc;
+    padding: 15px;
+    overflow-x: auto;
+  }
+  .two-column {
+    column-count: 2;
+    column-gap: 45px;
+  }
+  .rtl {
+    direction: rtl;
+    text-align: right;
+    border: 1px solid #bbb;
+    padding: 15px;
+  }
+  .small-table {
+    max-width: 650px;
+  }
+  .footer-test {
+    margin-top: 50px;
+    padding-top: 15px;
+    border-top: 2px solid #222;
+    text-align: center;
+    color: #666;
+  }
+  .svg-wrap {
+    border: 1px solid #aaa;
+    padding: 15px;
+    text-align: center;
+  }
+  @media print {
+    .page-break { page-break-before: always; }
+  }
+</style>
+</head>
+
+<body>
+<div class="container">
+
+  <section class="cover">
+    <h1>HTML FORMATTING TEST DOCUMENT</h1>
+    <div class="subtitle">Localization / Translation Tool Validation Suite</div>
+    <p class="description">
+      This document intentionally contains diverse HTML formatting, structures, tables,
+      lists, symbols, inline styles, CSS properties, technical tokens, and multilingual content.
+      Use it to test parsing, translation, segmentation, formatting preservation, and export fidelity.
+    </p>
+  </section>
+
+  <h2>1. Typography and Inline Formatting</h2>
+  <p class="mixed">
+    <strong>Bold text</strong> |
+    <em>Italic text</em> |
+    <u>Underlined text</u> |
+    <strong><em>Bold + Italic</em></strong> |
+    <s>Strikethrough</s> |
+    <mark>Highlighted text</mark> |
+    <small>Small text</small> |
+    <sup>Superscript 102</sup> |
+    <sub>Subscript H₂O</sub> |
+    <span style="font-variant: small-caps;">Small Caps</span>
+  </p>
+
+  <p>
+    <span class="red">Red</span>
+    <span class="green">Green</span>
+    <span class="blue">Blue</span>
+    <span class="orange">Orange</span>
+  </p>
+
+  <p>
+    Mixed font sizes:
+    <span class="small">8pt</span>
+    <span class="medium">16pt</span>
+    <span class="large">24pt</span>
+    <span class="xl">32pt</span>
+  </p>
+
+  <p>
+    Special characters:
+    © ® ™ € £ ¥ ₹ § ¶ † ‡ • … — – « » “ ” ‘ ’
+  </p>
+
+  <p>
+    Math / Unicode:
+    α β γ Δ Ω μ π √ ∑ ∞ ≠ ≤ ≥ ± × ÷ → ← ↔ ∀ ∃ ∈ ∉
+  </p>
+
+  <h2>2. Paragraph Alignment and Spacing</h2>
+
+  <p style="text-align:left;">
+    <strong>Left aligned:</strong> This paragraph tests left alignment and normal text wrapping.
+  </p>
+
+  <p class="center">
+    <strong>Centered:</strong> This paragraph tests centered alignment.
+  </p>
+
+  <p class="right">
+    <strong>Right aligned:</strong> This paragraph tests right alignment.
+  </p>
+
+  <p class="justify">
+    <strong>Justified:</strong> This paragraph contains enough text to test justified alignment,
+    word spacing, line wrapping, and the behavior of translated text when sentence length changes
+    significantly between source and target languages.
+  </p>
+
+  <p class="indent">
+    First-line indentation test. This paragraph intentionally begins with an indented first line.
+    It should preserve indentation and paragraph spacing after translation.
+  </p>
+
+  <p class="spaced">
+    Paragraph spacing and line-height test. This text intentionally has increased line spacing and
+    larger margins before and after the paragraph.
+  </p>
+
+  <h2>3. Lists</h2>
+
+  <h3>Unordered List</h3>
+  <ul>
+    <li>Primary translation</li>
+    <li>Quality assurance</li>
+    <li>Glossary validation</li>
+    <li>Formatting preservation</li>
+  </ul>
+
+  <h3>Ordered List</h3>
+  <ol>
+    <li>Upload source</li>
+    <li>Extract content</li>
+    <li>Translate content</li>
+    <li>Rebuild document</li>
+    <li>Validate output</li>
+  </ol>
+
+  <h3>Nested List</h3>
+  <ul>
+    <li>Main item A
+      <ul>
+        <li>Nested item 1</li>
+        <li>Nested item 2</li>
+      </ul>
+    </li>
+    <li>Main item B
+      <ol>
+        <li>Nested numbered item 1</li>
+        <li>Nested numbered item 2</li>
+      </ol>
+    </li>
+  </ul>
+
+  <h2>4. Quotes and Callouts</h2>
+
+  <blockquote class="quote">
+    “The quick brown fox jumps over the lazy dog.”
+  </blockquote>
+
+  <div class="warning">
+    IMPORTANT: This is a centered warning/callout sentence.
+  </div>
+
+  <div class="box">
+    <div class="box-title">NOTICE</div>
+    <div class="box-content">
+      This bordered box tests nested elements, background colors, borders, padding, and
+      preservation of block-level structure.
+    </div>
+  </div>
+
+  <h2>5. Tables</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Source Text</th>
+        <th>Target Text</th>
+        <th>Status</th>
+        <th>Score</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>001</td>
+        <td>Hello, world!</td>
+        <td>नमस्ते, दुनिया!</td>
+        <td>Approved</td>
+        <td>100%</td>
+      </tr>
+      <tr>
+        <td>002</td>
+        <td>Good morning.</td>
+        <td>सुप्रभात।</td>
+        <td>Review</td>
+        <td>92%</td>
+      </tr>
+      <tr>
+        <td>003</td>
+        <td>Translation memory</td>
+        <td>अनुवाद मेमोरी</td>
+        <td>Approved</td>
+        <td>98%</td>
+      </tr>
+      <tr>
+        <td>004</td>
+        <td>Formatting test</td>
+        <td>फ़ॉर्मेटिंग परीक्षण</td>
+        <td>Pending</td>
+        <td>—</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <table class="small-table">
+    <tr>
+      <th colspan="4" class="merged">Merged Header — colspan=4</th>
+    </tr>
+    <tr>
+      <th>A</th>
+      <th>B</th>
+      <th>C</th>
+      <th>D</th>
+    </tr>
+    <tr>
+      <td>Long text that wraps across the cell</td>
+      <td>12345</td>
+      <td>₹10,000</td>
+      <td>✓</td>
+    </tr>
+  </table>
+
+  <h2>6. Links, Emails, URLs and Special Tokens</h2>
+
+  <p>
+    Website:
+    <a href="https://example.com/translation/test?lang=en&amp;target=hi">
+      https://example.com/translation/test?lang=en&amp;target=hi
+    </a>
+  </p>
+
+  <p>Email: <a href="mailto:test@example.com">test@example.com</a></p>
+
+  <p>
+    Tokens:
+    <span class="code">${USER_NAME}</span> |
+    <span class="code">{{count}}</span> |
+    <span class="code">%PLACEHOLDER%</span> |
+    <span class="code">&lt;g id="1"/&gt;</span> |
+    <span class="code">[DO_NOT_TRANSLATE]</span>
+  </p>
+
+  <h2>7. Technical Content</h2>
+
+  <p>
+    Inline code:
+    <code>const result = await translateText("Hello world", "en", "hi");</code>
+  </p>
+
+  <pre><code>function translateText(text, source, target) {
+  return {
+    source: source,
+    target: target,
+    text: text
+  };
+}</code></pre>
+
+  <h2>8. Two-Column Layout</h2>
+
+  <div class="two-column">
+    <p>
+      This section uses CSS columns. The translation tool should preserve the two-column
+      structure rather than converting the content into a single uncontrolled block.
+    </p>
+    <p>
+      This is additional content to force column flow and test how translated text affects
+      column balancing and pagination.
+    </p>
+    <p>
+      Long translated sentences may become substantially longer than the source. This makes
+      column preservation an important formatting test.
+    </p>
+  </div>
+
+  <h2 class="page-break">9. Multilingual and RTL Content</h2>
+
+  <p>
+    <strong>English:</strong>
+    The translation system must preserve formatting while adapting sentence length to the target language.
+  </p>
+
+  <p>
+    <strong>Hindi:</strong>
+    अनुवाद प्रणाली को लक्ष्य भाषा के अनुसार वाक्य की लंबाई को समायोजित करते हुए फ़ॉर्मेटिंग को सुरक्षित रखना चाहिए।
+  </p>
+
+  <p>
+    <strong>Gujarati:</strong>
+    અનુવાદ પ્રણાલીએ લક્ષ્ય ભાષા અનુસાર વાક્યની લંબાઈને સમાયોજિત કરતી વખતે ફોર્મેટિંગ જાળવી રાખવું જોઈએ.
+  </p>
+
+  <div class="rtl">
+    <strong>Arabic:</strong>
+    يجب أن يحافظ نظام الترجمة على التنسيق مع تكييف طول الجمل وفقًا للغة الهدف.
+  </div>
+
+  <h2>10. Images / SVG Test</h2>
+
+  <div class="svg-wrap">
+    <svg width="500" height="180" viewBox="0 0 500 180" xmlns="http://www.w3.org/2000/svg" aria-label="Formatting test graphic">
+      <rect x="10" y="10" width="480" height="160" fill="#e8f1f8" stroke="#245a94" stroke-width="3"/>
+      <circle cx="100" cy="90" r="50" fill="#f4b183"/>
+      <rect x="180" y="45" width="100" height="90" fill="#a9d18e"/>
+      <text x="310" y="85" font-family="Arial" font-size="20" font-weight="bold">SVG TEST</text>
+      <text x="310" y="115" font-family="Arial" font-size="14">Do not translate this graphic</text>
+    </svg>
+  </div>
+
+  <h2>11. Form Elements</h2>
+
+  <form>
+    <label for="name"><strong>Name:</strong></label>
+    <input id="name" type="text" value="Translation Tester">
+
+    <label for="language"><strong>Language:</strong></label>
+    <select id="language">
+      <option>English</option>
+      <option>Hindi</option>
+      <option>Gujarati</option>
+      <option>Arabic</option>
+    </select>
+
+    <label>
+      <input type="checkbox" checked>
+      Preserve formatting
+    </label>
+
+    <label>
+      <input type="radio" name="status" checked>
+      Approved
+    </label>
+  </form>
+
+  <h2>12. Translation QA Checklist</h2>
+
+  <ul>
+    <li>☐ Headings remain headings.</li>
+    <li>☐ Bold, italic, underline, and colors are preserved.</li>
+    <li>☐ Tables retain rows, columns, borders, and merged cells.</li>
+    <li>☐ Lists preserve numbering and nesting.</li>
+    <li>☐ Special characters and symbols remain intact.</li>
+    <li>☐ Variables, tags, and placeholders are not translated.</li>
+    <li>☐ URLs and email addresses remain intact.</li>
+    <li>☐ CSS alignment and spacing remain correct.</li>
+    <li>☐ RTL content remains right-to-left.</li>
+    <li>☐ Images/SVG graphics remain unchanged.</li>
+    <li>☐ Long translated text does not overlap nearby content.</li>
+  </ul>
+
+  <h2>13. Stress-Test Paragraph</h2>
+
+  <p>
+    This is an intentionally long paragraph for translation and HTML reconstruction testing.
+    It contains punctuation, numbers (1234567890), currency values (₹10,000, €500, $250),
+    abbreviations (API, HTML, CSS, JS), technical tokens (${variable}, {{count}}, &lt;g id="1"/&gt;),
+    an email address (test@example.com), a URL (https://example.com), and a
+    verylongunbrokenwordthatmayforcewrappingbehaviorintherenderer. The purpose is to test
+    segmentation, whitespace preservation, inline elements, escaping, line wrapping, and
+    formatting fidelity after translation.
+  </p>
+
+  <div class="footer-test">
+    HTML FORMATTING TEST — END OF DOCUMENT
+  </div>
+
+</div>
+</body>
+</html>

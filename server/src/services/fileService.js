@@ -162,17 +162,21 @@ const getParser = (ext) => {
 
 const processUploadedFile = async (file) => {
   if (!file) {
+    console.error("[FILE_SERVICE_ERROR] No file object passed to processUploadedFile");
     const error = new Error("No file uploaded");
     error.status = 400;
     throw error;
   }
 
   const ext = path.extname(file.originalname).toLowerCase();
+  console.log(`\n========================================`);
+  console.log(`[FILE_PROCESSING_START] File: "${file.originalname}" | Ext: "${ext}" | Size: ${file.size} bytes | Path: ${file.path}`);
   let parser = getParser(ext);
   let parsePath = file.path;
   let finalType = ext.substring(1);
 
   if (!parser) {
+    console.error(`[FILE_PROCESSING_ERROR] No parser available for file extension: ${ext}`);
     try {
       if (fs.existsSync(file.path)) {
         fs.unlinkSync(file.path);
@@ -190,14 +194,22 @@ const processUploadedFile = async (file) => {
     if (ext === '.pdf') {
       const tempDocxPath = file.path + '.docx';
       try {
+        console.log(`[PDF_CONVERT_START] Converting PDF to DOCX via pdf2docx...`);
         await convertPdfToDocx(file.path, tempDocxPath);
         const { segments, template: docxTemplate } = await docxParser.parseFile(tempDocxPath);
         const fileId = uuidv4();
+        console.log(`[DB_SAVE_TEMPLATE] Saving PDF (converted DOCX) template to html_files (fileId: ${fileId})...`);
         const { error: insertError } = await supabase
           .from("html_files")
           .insert([{ id: fileId, content: docxTemplate }]);
 
-        if (insertError) throw insertError;
+        if (insertError) {
+          console.error(`[DB_SAVE_TEMPLATE_ERROR] html_files insert error:`, insertError);
+          throw insertError;
+        }
+
+        console.log(`[FILE_PROCESSING_SUCCESS] File "${file.originalname}" processed! FileId: ${fileId} | Segments: ${segments.length}`);
+        console.log(`========================================\n`);
 
         return {
           type: 'pdf',
@@ -206,14 +218,21 @@ const processUploadedFile = async (file) => {
           originalName: file.originalname
         };
       } catch (pdf2docxErr) {
-        console.warn("pdf2docx processing failed on server, falling back to direct pdfParser:", pdf2docxErr.message);
+        console.warn("[PDF_CONVERT_WARN] pdf2docx processing failed on server, falling back to direct pdfParser:", pdf2docxErr.message);
         const { segments, template: pdfTemplate } = await pdfParser.parseFile(file.path);
         const fileId = uuidv4();
+        console.log(`[DB_SAVE_TEMPLATE] Saving direct PDF template to html_files (fileId: ${fileId})...`);
         const { error: insertError } = await supabase
           .from("html_files")
           .insert([{ id: fileId, content: pdfTemplate }]);
 
-        if (insertError) throw insertError;
+        if (insertError) {
+          console.error(`[DB_SAVE_TEMPLATE_ERROR] html_files insert error:`, insertError);
+          throw insertError;
+        }
+
+        console.log(`[FILE_PROCESSING_SUCCESS] Direct PDF processed! FileId: ${fileId} | Segments: ${segments.length}`);
+        console.log(`========================================\n`);
 
         return {
           type: 'pdf',
@@ -225,18 +244,24 @@ const processUploadedFile = async (file) => {
     }
 
     // Default parser path for non-PDFs
+    console.log(`[PARSER_EXECUTE] Invoking parser for ${ext}...`);
     const { segments, template } = await parser.parseFile(parsePath);
     const fileId = uuidv4();
+
+    console.log(`[DB_SAVE_TEMPLATE] Saving document template to html_files (fileId: ${fileId})...`);
     const { error: insertError } = await supabase
       .from("html_files")
       .insert([{ id: fileId, content: template }]);
 
     if (insertError) {
-      console.error("Supabase insert error:", insertError);
+      console.error("[DB_SAVE_TEMPLATE_ERROR] Supabase insert error:", insertError);
       const error = new Error("Failed to save document template securely to the database.");
       error.status = 500;
       throw error;
     }
+
+    console.log(`[FILE_PROCESSING_SUCCESS] File "${file.originalname}" processed! FileId: ${fileId} | Segments: ${segments.length}`);
+    console.log(`========================================\n`);
 
     return {
       type: finalType,

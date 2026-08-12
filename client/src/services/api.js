@@ -551,14 +551,20 @@ export const deleteProject = async (projectId) => {
 export const uploadFileToProject = async (projectId, file, onProgress = null) => {
   const formData = new FormData();
   formData.append("file", file);
+  console.log(`[FRONTEND_API] POST /api/projects/${projectId}/upload -> Starting HTTP upload of "${file.name}" (${file.size} bytes)...`);
   const response = await api.post(`/api/projects/${projectId}/upload`, formData, {
     onUploadProgress: (progressEvent) => {
-      if (onProgress && progressEvent.total) {
+      if (progressEvent.total) {
         const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-        onProgress(percentCompleted);
+        console.log(`[FRONTEND_UPLOAD_HTTP_PROGRESS] "${file.name}": ${percentCompleted}% sent over wire (${(progressEvent.loaded / 1024).toFixed(1)} KB / ${(progressEvent.total / 1024).toFixed(1)} KB)`);
+        if (percentCompleted === 100) {
+          console.log(`[FRONTEND_UPLOAD_SERVER_WAIT] HTTP bytes sent! Waiting for server to parse document & save segments...`);
+        }
+        if (onProgress) onProgress(percentCompleted);
       }
     }
   });
+  console.log(`[FRONTEND_API_SUCCESS] Server finished processing "${file.name}"! Response received:`, response.data);
   return response.data;
 };
 

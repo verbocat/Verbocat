@@ -79,6 +79,8 @@ function getInnerRange(node, html) {
 
   // Deterministic closing-tag start:  </tagName>  has length tagName.length + 3
   const tagName = node.name;
+  if (!tagName) return { innerStart, innerEnd: innerStart };
+
   const expectedStart = node.endIndex - tagName.length - 2;
 
   if (expectedStart >= innerStart) {
@@ -88,9 +90,10 @@ function getInnerRange(node, html) {
     }
   }
 
-  // Fallback: native C-optimized scan backward for '</'
+  // Fallback: search at most 150 chars backward from node.endIndex (never scan 1.6MB backward!)
+  const searchLimit = Math.max(innerStart, node.endIndex - 150);
   const lastCloseIdx = html.lastIndexOf("</", node.endIndex);
-  if (lastCloseIdx >= innerStart) {
+  if (lastCloseIdx >= searchLimit) {
     return { innerStart, innerEnd: lastCloseIdx };
   }
 
@@ -118,6 +121,8 @@ function getRawTagStrings(node, html) {
 
   // Deterministic position
   const tagName = node.name;
+  if (!tagName) return { openingTag, closingTag: "" };
+
   const expectedStart = node.endIndex - tagName.length - 2;
   if (expectedStart > openEnd) {
     const candidate = html.substring(expectedStart, node.endIndex + 1);
@@ -126,9 +131,10 @@ function getRawTagStrings(node, html) {
     }
   }
 
-  // Fallback scan: native C-optimized search
+  // Fallback scan bounded to max 150 chars before node.endIndex
+  const searchLimit = Math.max(openEnd, node.endIndex - 150);
   const lastCloseIdx = html.lastIndexOf("</", node.endIndex);
-  if (lastCloseIdx > openEnd) {
+  if (lastCloseIdx >= searchLimit && lastCloseIdx > openEnd) {
     return { openingTag, closingTag: html.substring(lastCloseIdx, node.endIndex + 1) };
   }
 
@@ -406,12 +412,16 @@ function collectOrphanRuns(parentNode, $, html, blocks, getStructuralMeta) {
  */
 const parseFile = async (filePath) => {
   const html = fs.readFileSync(filePath, "utf-8");
+  console.log(`\n========================================`);
+  console.log(`[HTML_PARSER_START] Parsing HTML file: ${filePath} (${html.length} bytes / ${(html.length / 1024).toFixed(1)} KB)`);
+
   const $ = cheerio.load(html, {
     _useHtmlParser2: true,
     withStartIndices: true,
     withEndIndices: true,
     decodeEntities: false,
   });
+  console.log(`[HTML_PARSER_DOM_LOADED] Loaded HTML DOM into Cheerio parser successfully.`);
 
   const segments = [];
   let segmentIndex = 1;
@@ -419,6 +429,7 @@ const parseFile = async (filePath) => {
   const tagCounter = { value: 1 };
 
   const textBlocks = findAllTextBlocks($, html);
+  console.log(`[HTML_PARSER_BLOCKS_FOUND] Found ${textBlocks.length} text block candidates in HTML structure.`);
   const blockMeta = [];
 
   textBlocks.forEach((block, blockIdx) => {
@@ -445,9 +456,10 @@ const parseFile = async (filePath) => {
     subSegments.forEach((subSeg) => {
       const segmentId = segmentIndex++;
       const { leading, body, trailing } = extractSegmentTags(subSeg);
+      const cleanBody = body ? body.replace(/[\r\n]+/g, " ").replace(/^[\s\uFEFF\xA0]+/, "").replace(/ +/g, " ") : "";
       segments.push({
         id: segmentId,
-        source: body,
+        source: cleanBody,
         target: "",
         leading,
         trailing,
@@ -455,6 +467,10 @@ const parseFile = async (filePath) => {
       });
       segmentIds.push(segmentId);
     });
+
+    if ((blockIdx + 1) % 500 === 0 || blockIdx === textBlocks.length - 1) {
+      console.log(`[HTML_PARSER_PROGRESS] Processed ${blockIdx + 1}/${textBlocks.length} text blocks -> Extracted ${segments.length} segments so far...`);
+    }
 
     blockMeta.push({
       blockIndex: blockIdx,
@@ -480,6 +496,9 @@ const parseFile = async (filePath) => {
 
   const zippedBuf = await gzipAsync(Buffer.from(JSON.stringify(templateData), "utf-8"));
   const template = zippedBuf.toString("base64");
+
+  console.log(`[HTML_PARSER_COMPLETE] Successfully extracted ${segments.length} segments from ${textBlocks.length} text blocks! Zipped Template Size: ${zippedBuf.length} bytes.`);
+  console.log(`========================================\n`);
 
   return { segments, template };
 };

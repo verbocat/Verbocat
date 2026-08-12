@@ -191,21 +191,38 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
       let current = 0;
       for (const file of filesList) {
         current++;
-        setUploadProgress({ current, total: filesList.length });
-        console.log(`[FRONTEND UPLOAD DEBUG] Starting upload ${current}/${filesList.length}: name=${file.name}, size=${file.size} bytes`);
-        const uploadRes = await uploadFileToProject(projectId, file);
-        console.log(`[FRONTEND UPLOAD DEBUG] Upload succeeded for ${file.name}:`, uploadRes);
+        setUploadProgress({ current, total: filesList.length, percent: 0, status: "Uploading file..." });
+        console.log(`[FRONTEND UPLOAD DEBUG] ========================================`);
+        console.log(`[FRONTEND UPLOAD DEBUG] Step 1/4: Starting HTTP upload for file ${current}/${filesList.length}: "${file.name}" (${(file.size / 1024).toFixed(1)} KB)`);
+        
+        const uploadRes = await uploadFileToProject(projectId, file, (percent) => {
+          const statusText = percent === 100 
+            ? "100% sent! Server is now parsing document structure & saving segments into DB..." 
+            : `Uploading (${percent}%)...`;
+          setUploadProgress({ current, total: filesList.length, percent, status: statusText });
+          console.log(`[FRONTEND UPLOAD DEBUG] Step 2/4 Progress: ${percent}% sent over HTTP. Status: "${statusText}"`);
+        });
 
-        if (uploadRes && uploadRes.document) {
-          setFiles(prev => [...prev.filter(f => f.id !== uploadRes.document.id), uploadRes.document]);
+        console.log(`[FRONTEND UPLOAD DEBUG] Step 3/4 Server Response Received!`);
+        console.log(`[FRONTEND UPLOAD DEBUG] -> Document ID: ${uploadRes.document?.id || uploadRes.fileId}`);
+        console.log(`[FRONTEND UPLOAD DEBUG] -> Segments Parsed: ${uploadRes.segmentsCount || uploadRes.segments?.length || 0}`);
+        if (uploadRes.metrics) {
+          console.log(`[FRONTEND UPLOAD DEBUG] -> Metrics: ParseTime=${uploadRes.metrics.parseTimeMs}ms | DBSaveTime=${uploadRes.metrics.dbSaveTimeMs}ms (${uploadRes.metrics.batchCount} batches) | TotalTime=${uploadRes.metrics.totalTimeMs}ms`);
+        }
+
+        if (uploadRes && (uploadRes.document || uploadRes.fileId)) {
+          const docObj = uploadRes.document || { id: uploadRes.fileId, name: file.name };
+          setFiles(prev => [...prev.filter(f => f.id !== docObj.id), docObj]);
           if (uploadRes.jobs && uploadRes.jobs.length > 0) {
             const formattedJobs = uploadRes.jobs.map(j => ({
               ...j,
-              fileName: j.documents?.name || uploadRes.document.name
+              fileName: j.documents?.name || docObj.name
             }));
-            setJobs(prev => [...prev.filter(j => j.document_id !== uploadRes.document.id), ...formattedJobs]);
+            setJobs(prev => [...prev.filter(j => j.document_id !== docObj.id), ...formattedJobs]);
           }
         }
+        console.log(`[FRONTEND UPLOAD DEBUG] Step 4/4 UI state updated for "${file.name}"!`);
+        console.log(`[FRONTEND UPLOAD DEBUG] ========================================\n`);
       }
       showToast("All files uploaded and segments parsed successfully!");
       loadProjectDetails();
@@ -952,7 +969,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
             <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-2xl p-4 flex items-center justify-between gap-4 animate-pulse">
               <div className="flex items-center gap-3">
                 <div className="animate-spin rounded-full h-4 w-4 border border-indigo-500 border-t-transparent" />
-                <span className="text-xs font-bold text-indigo-400">Uploading Document ({uploadProgress.current}/{uploadProgress.total})</span>
+                <span className="text-xs font-bold text-indigo-400">Uploading Document ({uploadProgress.current}/{uploadProgress.total}): {uploadProgress.status || "Processing..."}</span>
               </div>
               <div className="flex-1 max-w-md bg-[var(--bg-input)] h-2 rounded-full overflow-hidden">
                 <div 

@@ -213,13 +213,276 @@
 </head>
 
 
-<body style="font-size:14px;padding:16px 0;font-family:Calibri,
-sans-serif;background-color:#fff;margin:auto;text-align:justify;width:100%">
+<body
+    style="font-size:14px;padding:16px 0;font-family:Calibri, sans-serif;background-color:#fff;margin:auto;text-align:justify;width:100%">
     <header id="pageHeader"> <img src="https://cdn.pchf.in/logos/piramal_company_logo.png" height="150px"
             width="auto" />
     </header>
+    <table class="no-padded-table outer-table" style="margin-left: 40px; width: calc(100% - 40px);">
+        <tr>
+            <td
+                style="background-color: #ef4023; border-bottom: 15px solid #1e3549; font-size: 36px; color: #fff; padding: 40px 0 40px 35px; text-decoration: underline; text-decoration-color: #6ad926;">
+                <b>
+                    LOAN DOCUMENTS <br />
+                    BUSINESS LOAN
+                </b>
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 110px 35px 0;">
+                <table>
+                    <tr>
+                        <td style="width: 84px; vertical-align: bottom; padding: 0;">Branch Name :</td>
+                        <td style=" vertical-align: bottom;">
+                            <div style="width: 100%; border-bottom: 1px solid;"><span
+                                    th:text="${executionPlace}"></span></div>
+                        </td>
+                    </tr>
+                </table>
+                <table>
+                    <tr>
+                        <td style="width: 50px; vertical-align: bottom; padding: 0;">Lead ID :</td>
+                        <td style=" vertical-align: bottom;">
+                            <div style="width: 100%; border-bottom: 1px solid;"><span
+                                    th:text="${applicationRefNo}"></span></div>
+                        </td>
+                    </tr>
+                </table>
+                <table>
+                    <tr>
+                        <td style="width: 100px; vertical-align: bottom; padding: 0;">Customer Name :</td>
+                        <td style=" vertical-align: bottom;">
+                            <div style="width: 100%; border-bottom: 1px solid;"><span
+                                    th:text="${applicantsNameSeparatedByAmp}"></span></div>
+                        </td>
+                    </tr>
+                </table>
+                <table>
+                    <tr>
+                        <td style="width: 133px; vertical-align: bottom; padding: 0;">Link Loan Account No. :</td>
+                        <td style=" vertical-align: bottom;">
+                            <div style="width: 100%; border-bottom: 1px solid;"></div>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+    <!-- GENERAL INSTRUCTIONS - START -->
+    <table class="no-padded-table outer-table" style="page-break-before: always;">
+        <tr>
+            <td style="
+                font-size: 14px;
+                font-weight: bold;
+                padding-bottom: 16px;
+                text-align: center;
+                ">
+                GENERAL INSTRUCTIONS
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <table>
+                    <tr>
+                        <td class="number-col">1.</td>
+                        <td>All documents to be filled in English in CAPITAL LETTERS using a ballpoint pen only.</td>
+                    </tr>
+                    <tr>
+                        <td>2.</td>
+                        <td>The schedules of the loan documents shall be filled as per the details mentioned in the
+                            accepted sanction letter.</td>
+                    </tr>
+                    <tr>
+                        <td>3.</td>
+                        <td>
+                            <p>
+                                In the schedule of the Loan Agreement, the place of Arbitration shall be mentioned as
+                                per the details mentioned
+                                below:
+                            </p>
+                            <br />
+                            <table class="outlined" style="width: 80%; margin: auto">
+                                <tr>
+                                    <td class="outlined" style="width: 65%;">
+                                        <b>States</b>
+                                    </td>
+                                    <td class="outlined">
+                                        <b>Place &amp; Venue of Arbitration</b>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="outlined">
+                                        Delhi, Chandigarh, Haryana, Punjab, Uttar Pradesh,
+                                        Uttarakhand, Rajasthan
+                                    </td>
+                                    <td class="outlined">
+                                        New Delhi
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="outlined">
+                                        Maharashtra, Gujarat, Madhya Pradesh, Chhattisgarh, Goa
+                                    </td>
+                                    <td class="outlined">
+                                        Mumbai
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="outlined">
+                                        Karnataka, Kerala, Tamilnadu, Telangana, Andhra Pradesh
+                                    </td>
+                                    <td class="outlined">
+                                        Bengaluru
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="outlined">
+                                        West Bengal, Assam, Odisha, Bihar, Jharkhand
+                                    </td>
+                                    <td class="outlined">
+                                        Kolkata
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>4.</td>
+                        <td>
+                            Stamping –
+                            <br />
+                            <table>
+                                <tr>
+                                    <td class="number-col">•</td>
+                                    <td>
+                                        Loan Agreement needs to be stamped as per the updated Stamp duty chart
+                                        applicable for respective States.
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>•</td>
+                                    <td>Documents shall be duly stamped on or before the date of execution of the
+                                        document.</td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>5.</td>
+                        <td>
+                            Borrower (including co-borrower) shall put complete signature at the respective places which
+                            are
+                            identified in each of the document which shall minimum include the Execution Clause and each
+                            page of
+                            the Schedules.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>6.</td>
+                        <td>
+                            Documents shall be signed by affixing full signatures in the same style as per the KYC
+                            records by all the
+                            borrowers.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>7.</td>
+                        <td>
+                            There should not be any amendments/overwriting/erasures/cutting on the Loan Agreement and
+                            any
+                            amendments/overwriting/erasures/cutting should be countersigned/undersigned.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>8.</td>
+                        <td>
+                            Where the documents are to be executed by illiterate person/s then his/her thumb impression
+                            should
+                            be obtained against each of the aforesaid identified places where the signatures have to be
+                            affixed in
+                            the documents.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>9.</td>
+                        <td>
+                            Name and Employee Code of the person signing the Loan Agreement on behalf of the Lender
+                            shall be
+                            mentioned below the respective place of signature.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>10.</td>
+                        <td>
+                            In case of Non-individual borrower/co-borrower, applicable documents related to signing
+                            authority
+                            (PAL, BR etc.) shall be annexed with the loan documents.
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+    <!-- GENERAL INSTRUCTIONS - END -->
+    <!-- INDEX - START -->
+    <table class="no-padded-table outer-table" style="page-break-before: always;">
+        <tr>
+            <td style="font-size: 20px;">
+                Index
+            </td>
+        </tr>
+        <tr>
+            <td style="padding-top: 30px ;">
+                <table class="outlined half-border"
+                    style=" border-radius: 10px; border-collapse: separate; border-spacing: 0;">
+                    <tr>
+                        <td class="outlined half-border" style=" border-radius: 8px 0 0 0; background-color: #bcbdc0;">
+                            <b>Sr. No.</b>
+                        </td>
+                        <td class="outlined half-border" style=" background-color: #bcbdc0;">
+                            <b>Particulars</b>
+                        </td>
+                        <td class="outlined half-border"
+                            style="text-align: center;border-radius: 0 8px 0 0; background-color: #bcbdc0;">
+                            <b>
+                                Page no.
+                            </b>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="outlined half-border">1</td>
+                        <td class="outlined half-border">
+                            Loan Agreement
+                        </td>
+                        <td class="outlined half-border" style="text-align: center;">
+                            01 - 11
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="outlined half-border">2</td>
+                        <td class="outlined half-border">
+                            Cheque Submission Form
+                        </td>
+                        <td class="outlined half-border" style="text-align: center;">
+                            12- 13
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="outlined half-border" style=" border-radius: 0 0 0 8px;">3</td>
+                        <td class="outlined half-border">
+                            Disbursement Request Form
+                        </td>
+                        <td class="outlined half-border" style="text-align: center; border-radius: 0 0 8px 0;">
+                            14
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+    <!-- INDEX - END -->
     <!-- LOAN AGREEMENT - START -->
-    <table class="no-padded-table outer-table">
+    <table class="no-padded-table outer-table" style="page-break-before: always;">
         <tr>
             <td>
                 <p style="font-size:14px;">PFL/Loan Agreement - UBL/ Jan_26/v.2</p>
@@ -990,15 +1253,19 @@ sans-serif;background-color:#fff;margin:auto;text-align:justify;width:100%">
                                 <tr>
                                     <td>
                                         <p>The Lender shall be entitled to receive and apply/adjust/appropriate amount
-                                            that the Lender may receive under any payments, pre-payment and
-                                            realizations, including any realization received from any insurance company
-                                            against amounts payable under this Agreement &amp; any of the loans or
-                                            advances availed by the Borrower form the Lender including any affiliates of
-                                            the Lender without affecting the Borrower’s obligations under the Agreement.
-                                            If such application/adjustment/appropriation result in part Repayment of the
-                                            Loan, the repayment schedule be suitably modified by the Lender and the
-                                            Borrower shall thereafter pay the Instalment as per the modified Repayment
-                                            Schedule as communicated to the Borrower(s).</p>
+                                            that
+                                            the Lender may receive under any payments, pre-payment and realizations,
+                                            including any realization received from any insurance company against
+                                            amounts
+                                            payable under this Agreement &amp; any of the loans or advances availed by
+                                            the
+                                            Borrower form the Lender including any affiliates of the Lender without
+                                            affecting the Borrower’s obligations under the Agreement. If such
+                                            application/adjustment/appropriation result in part Repayment of the Loan,
+                                            the
+                                            repayment schedule be suitably modified by the Lender and the Borrower shall
+                                            thereafter pay the Instalment as per the modified Repayment Schedule as
+                                            communicated to the Borrower(s).</p>
                                     </td>
                                 </tr>
                             </table>
@@ -2345,13 +2612,19 @@ sans-serif;background-color:#fff;margin:auto;text-align:justify;width:100%">
                                     <b>Governing Law and Jurisdiction</b>
                                     <p>This Agreement, including all matters relating to its validity, construction,
                                         performance and enforcement, shall be governed by and construed in accordance
-                                        with Indian law. The courts at the place as detailed in the Schedule hereto
-                                        shall have non-exclusive jurisdiction in relation to any matter arising under or
-                                        in connection with the Agreement or any arrangement entered into pursuant to the
-                                        Agreement. However, the Parties hereby agree, confirm and undertake that Lender
-                                        has a right to file its claim in relation to Outstanding Amount or any other
-                                        connected matter(s) as mentioned in the Agreement in any other Court of
-                                        competent jurisdiction in India at its sole discretion</p>
+                                        with
+                                        Indian law. The courts at the place as detailed in the Schedule hereto shall
+                                        have
+                                        non-exclusive jurisdiction in relation to any matter arising under or in
+                                        connection
+                                        with the Agreement or any arrangement entered into pursuant to the Agreement.
+                                        However, the Parties hereby agree, confirm and undertake that Lender has a right
+                                        to
+                                        file its claim in relation to Outstanding Amount or any other connected
+                                        matter(s) as
+                                        mentioned in the Agreement in any other Court of competent jurisdiction in India
+                                        at
+                                        its sole discretion</p>
                                 </li>
                                 <li>
                                     Dispute Resolution
@@ -2368,28 +2641,24 @@ sans-serif;background-color:#fff;margin:auto;text-align:justify;width:100%">
                                                 to the other party (“Respondent”) suggesting the name of one of the
                                                 following independent institution (“Designated
                                                 Institution”):<br /><br />
-                                            <ol style="list-style-type: lower-roman;">
-                                                <li>&nbsp;Presolv360 ODR Institution - <a
-                                                        href="https://presolv360.com/">Presolv360 \| Dispute resolution
-                                                        made easy</a><br /><br /></li>
-                                                <li>&nbsp;RK eADR Federation – <a href="https://eadrlegal.com/">eADR
-                                                        legal Solutions</a><br /><br /></li>
-                                                <li>&nbsp;Council for National and International Commercial Arbitration,
-                                                    Chennai – <a
-                                                        href="https://cnica.org/">https://cnica.org/</a><br /><br />
-                                                </li>
-                                                <li>&nbsp;The Centre for Alternate Dispute Resolution Excellence (CADRE)
-                                                    - <a href="https://cadreodr.com/">India’s Simplest Online Dispute
-                                                        Resolution Platform \| CADRE ODR</a><br /><br /></li>
-                                                <li>&nbsp;SAMA - <a href="https://sama.live/">Sama</a><br /><br /></li>
-                                                <li>&nbsp;Jupiter Council for Arbitration and Mediation (JCAM) - <a
-                                                        href="https://jcam.org.in/">Home</a><br /><br /></li>
-                                                <li>&nbsp;Webnyay Private Limited - <a
-                                                        href="https://webnyay.in/">Resolve Complaints And Disputes
-                                                        Outside Court</a><br /><br /></li>
-                                                <li>&nbsp;Or any other independent institution that may be identified
-                                                    and is duly notified by the Lender.<br /></li>
-                                            </ol>
+                                                &nbsp;Presolv360 ODR Institution - <a
+                                                    href="https://presolv360.com/">Presolv360 \| Dispute resolution made
+                                                    easy</a><br /><br />
+                                                &nbsp;RK eADR Federation – <a href="https://eadrlegal.com/">eADR legal
+                                                    Solutions</a><br /><br />
+                                                &nbsp;Council for National and International Commercial Arbitration,
+                                                Chennai – <a
+                                                    href="https://cnica.org/">https://cnica.org/</a><br /><br />
+                                                &nbsp;The Centre for Alternate Dispute Resolution Excellence (CADRE) -
+                                                <a href="https://cadreodr.com/">India’s Simplest Online Dispute
+                                                    Resolution Platform \| CADRE ODR</a><br /><br />
+                                                &nbsp;SAMA - <a href="https://sama.live/">Sama</a><br /><br />
+                                                &nbsp;Jupiter Council for Arbitration and Mediation (JCAM) - <a
+                                                    href="https://jcam.org.in/">Home</a><br /><br />
+                                                &nbsp;Webnyay Private Limited - <a href="https://webnyay.in/">Resolve
+                                                    Complaints And Disputes Outside Court</a><br /><br />
+                                                &nbsp;Or any other independent institution that may be identified and is
+                                                duly notified by the Lender.<br />
                                             </p>
                                         </li>
                                         <li>
@@ -2676,17 +2945,14 @@ sans-serif;background-color:#fff;margin:auto;text-align:justify;width:100%">
                     <tr>
                         <td class="number-col" style="font-weight: bold;">18.</td>
                         <td class="no-padding"><b>Classification of loan account as Special Mention Account (SMA) and
-                                Non-Performing
-                                Asset
+                                Non-Performing Asset
                                 (NPA)</b>
                             <ol style="list-style-type: lower-alpha;">
                                 <li>
                                     Upon the occurrence of any payment default under this Loan, the Lender shall
-                                    classify Borrower’s
-                                    loan
+                                    classify Borrower’s loan
                                     account held with the Lender (Loan Account) in accordance with the prevailing RBI
-                                    norms and
-                                    guidelines.
+                                    norms and guidelines.
                                     <ol>
                                         <li>
                                             As per the current prevailing guidelines of RBI, Loan Account shall be
@@ -2707,8 +2973,7 @@ sans-serif;background-color:#fff;margin:auto;text-align:justify;width:100%">
                                                         style="border: 1px solid black; text-align: center; padding: 2px">
                                                         Basis for
                                                         classification - Principal or interest payment or any other
-                                                        amount wholly or
-                                                        partly
+                                                        amount wholly or partly
                                                         overdue</th>
                                                 </tr>
                                                 <tr>
@@ -2732,8 +2997,7 @@ sans-serif;background-color:#fff;margin:auto;text-align:justify;width:100%">
                                         <li>Further, the Loan Account shall be classified as Non-Performing Asset (NPA)
                                             where interest
                                             and/or instalment of principal remains overdue for a period of more than 90
-                                            days in respect
-                                            of a
+                                            days in respect of a
                                             term loan;</li>
                                         <li>Loan account classified as NPAs may be upgraded as standard asset only if
                                             entire arrears of
@@ -2746,18 +3010,15 @@ sans-serif;background-color:#fff;margin:auto;text-align:justify;width:100%">
                                         <li>If due date of a loan account is March 31, 2021, and full dues are not
                                             received before the
                                             Lender runs the day-end process for this date, the date of overdue shall be
-                                            March 31, 2021.
-                                            If
+                                            March 31, 2021. If
                                             it continues to remain overdue, then this account shall get tagged as SMA1
-                                            upon running
-                                            day-end
+                                            upon running day-end
                                             process on April 30, 2021 i.e. upon completion of 30 days of being
                                             continuously overdue.
                                             Accordingly, the date of SMA-1 classification for that account shall be
                                             April 30, 2021.</li>
                                         <li>Similarly, if the account continues to remain overdue, it shall get tagged
-                                            as SMA-2 upon
-                                            running
+                                            as SMA-2 upon running
                                             day-end process on May 30, 2021 and if continues to remain overdue further,
                                             it shall get
                                             classified as NPA upon running day end process on June 29, 2021.</li>
@@ -3003,8 +3264,8 @@ sans-serif;background-color:#fff;margin:auto;text-align:justify;width:100%">
                         within 15 days, the Borrower may escalate by writing to us at: grievances@piramal.com</li>
                     <li>If the Borrower is not satisfied with the resolution provided at Level 2 or his/her queries are
                         not solved within 15 days, the Borrower may escalate to:
-                        <p>The Principal Nodal Officer – Ms. Hetal Parihar: 1st Floor, Amiti Building, Agastya Corporate
-                            Park, Kamani Junction, Opp. Fire Station, LBS Marg, Kurla (W) Mumbai MH 400070.</p>
+                        <p>The Nodal Officer – Ms. Hetal Parihar: 1st Floor, Amiti Building, Agastya Corporate Park,
+                            Kamani Junction, Opp. Fire Station, LBS Marg, Kurla (W) Mumbai MH 400070.</p>
                         <p>Email : nodal.officer@piramal.com</p>
                         <p>Contact Number: 022- 71740555</p>
                     </li>
@@ -3437,7 +3698,7 @@ sans-serif;background-color:#fff;margin:auto;text-align:justify;width:100%">
                             (Fixed)</td>
                     </tr>
                     <tr>
-                        <td class="outlined"><b>8.</b></td>
+                        <td><b>8.</b></td>
                         <td class="outlined"><b>Date of Reset of Interest</b></td>
                         <td class="outlined" colspan="3">
                             (Applicable only for fixed rate of interest) The Borrower shall be liable to pay interest on
@@ -3620,27 +3881,22 @@ sans-serif;background-color:#fff;margin:auto;text-align:justify;width:100%">
                     </tr>
                     <tr>
                         <td class="outlined"></td>
-                        <td class="outlined">XIV. Stamp Duty Service Charges</td>
+                        <td class="outlined">XIV. Statutory Charges<br /></td>
                         <td class="outlined" colspan="3">At actuals + applicable taxes</td>
                     </tr>
                     <tr>
                         <td class="outlined"></td>
-                        <td class="outlined">XV. Statutory Charges<br /></td>
-                        <td class="outlined" colspan="3">At actuals + applicable taxes</td>
-                    </tr>
-                    <tr>
-                        <td class="outlined"></td>
-                        <td class="outlined">XVI. EMI Date Change</td>
+                        <td class="outlined">XV. EMI Date Change</td>
                         <td class="outlined" colspan="3">Rs. 1000/- per instance + applicable taxes</td>
                     </tr>
                     <tr>
                         <td class="outlined"></td>
-                        <td class="outlined">XVII. Documentation Charges</td>
+                        <td class="outlined">XVI. Documentation Charges</td>
                         <td class="outlined" colspan="3">Upto Rs. 1000/- + applicable taxes</td>
                     </tr>
                     <tr>
                         <td class="outlined"></td>
-                        <td class="outlined">XVIII. Admin Charges</td>
+                        <td class="outlined">XVII. Admin Charges</td>
                         <td class="outlined" colspan="3">Upto Rs. 5000 + applicable taxes</td>
                     </tr>
                     <tr style="background-color: #d1d1d1;">
@@ -3782,7 +4038,7 @@ sans-serif;background-color:#fff;margin:auto;text-align:justify;width:100%">
                                 <tr>
                                     <td>c)</td>
                                     <td>In case the concern remains unresolved beyond a period of 15 days, the Borrower
-                                        may escalate the matter to “The Principal Nodal Officer Hetal Parihar”, 1st
+                                        may escalate the matter to “The Nodal Officer Hetal Parihar”, 1st
                                         Floor,
                                         Amiti Building, Agastya Corporate Park, Kamani Junction, Opp. Fire Station, LBS
                                         Marg, Kurla (West), Mumbai - 400 070. Email: nodal.officer@piramal.com</td>
@@ -5030,17 +5286,8 @@ sans-serif;background-color:#fff;margin:auto;text-align:justify;width:100%">
                         <td class="outlined"><span th:text="${disbursementAccountNo4}"></span></td>
                         <td class="outlined"><span th:text="${disbursementAmount4}"></span></td>
                     </tr>
-                    <tr>
-                        <td class="outlined" style="text-align: center;">5</td>
-                        <td class="outlined"><span>Deduct from Disbursement</span></td>
-                        <td class="outlined"><span>Stamp Duty Service Charges</span></td>
-                        <td class="outlined"><span></span></td>
-                        <td class="outlined"><span></span></td>
-                        <td class="outlined"><span></span></td>
-                        <td class="outlined"><span th:text="${stampDutyServiceCharge}"></span></td>
-                    </tr>
                     <tr th:if="${numberOfBt== 0}">
-                        <td class="outlined" style="text-align:center">6</td>
+                        <td class="outlined" style="text-align:center">5</td>
                         <td class="outlined"><span th:text="${disbursementMode5}"></span></td>
                         <td class="outlined"><span th:text="${disbursementAccountName5}"></span></td>
                         <td class="outlined"><span th:text="${disbursementAccountLocation5}"></span></td>
@@ -5049,7 +5296,7 @@ sans-serif;background-color:#fff;margin:auto;text-align:justify;width:100%">
                         <td class="outlined"><span th:text="${disbursementAmount5}"></span></td>
                     </tr>
                     <tr th:if="${numberOfBt> 0}">
-                        <td class="outlined" style="text-align:center">6</td>
+                        <td class="outlined" style="text-align:center">5</td>
                         <td class="outlined"><span th:text="${btPaymentMode6}"></span></td>
                         <td class="outlined"><span th:text="${btFavouringName6}"></span></td>
                         <td class="outlined"><span th:text="${btBankBranch6}"></span></td>
@@ -5058,7 +5305,7 @@ sans-serif;background-color:#fff;margin:auto;text-align:justify;width:100%">
                         <td class="outlined"><span th:text="${btBankAmount6}"></span></td>
                     </tr>
                     <tr th:if="${numberOfBt> 1}">
-                        <td class="outlined" style="text-align:center">7</td>
+                        <td class="outlined" style="text-align:center">6</td>
                         <td class="outlined"><span th:text="${btPaymentMode7}"></span></td>
                         <td class="outlined"><span th:text="${btFavouringName7}"></span></td>
                         <td class="outlined"><span th:text="${btBankBranch7}"></span></td>
@@ -5191,646 +5438,12 @@ sans-serif;background-color:#fff;margin:auto;text-align:justify;width:100%">
         </tr>
     </table>
     <!-- DISBURSEMENT REQUEST FORM - END -->
-    <h1 class="page-break" style="margin-left: 4%">Annex A</h1>
-    <h2 style="margin-left: 4%">Key Facts and Statements</h2>
-    <h3 style="margin-left: 4%">Part 1 (Interest rate and fees/charges)</h3>
-
-    <table class="annexABC-table">
-        <tr style="font-weight: bold;">
-            <td class="half_col" style="text-align: left;">
-                Generated Date: <span th:text="${generatedDate}"></span>
-            </td>
-            <td class="half_col" style="text-align: right;">
-                Validity: 3 Days
-            </td>
-        </tr>
-    </table>
-
-    <br />
-    <table class="annexABC-table">
-        <tr style="text-align:left; padding-left:5px; font-weight: bold;">
-            <th class="first-col">Sr No.</th>
-            <th class="second-col">Particulars</th>
-            <th class="third-col">Details</th>
-        </tr>
-        <tr>
-            <td class="first-col">1</td>
-            <td class="second-col" style="font-weight: bold;">Loan Proposal/Account No.</td>
-            <td class="third-col" th:text="${loanAccountNo}"></td>
-        </tr>
-        <tr>
-            <td class="first-col"></td>
-            <td class="second-col" style="font-weight: bold;">Type of Loan</td>
-            <td class="third-col">Unsecured Business Loan<span th:if="${isFlexiLoan}==true">(Flexi Loan)</span></td>
-        </tr>
-
-        <tr>
-            <td class="first-col">2</td>
-            <td class="second-col" style="font-weight: bold;">Sanctioned Loan Amount (in
-                Rupees)</td>
-            <td class="third-col">₹ <span th:text="${loanAmountWithInsurance}"></span></td>
-        </tr>
-
-        <tr>
-            <td class="first-col">3</td>
-            <td class="second-col">
-                <b>Disbursal Schedule</b> <br />
-                (i) Disbursement in stages or 100% upfront.<br />
-                (ii) Disbursement in stages, specify stages and amount at each stage.
-            </td>
-            <td class="third-col" th:text="${disbursal100orNot}">
-            </td>
-        </tr>
-
-        <tr>
-            <td class="first-col">4</td>
-            <td class="second-col" style="font-weight: bold;">Loan term (year/months/days)
-            </td>
-            <td class="third-col"><span th:text="${tenureInMonths}"></span> Months</td>
-        </tr>
-
-        <tr th:if="${isFlexiLoan}==true">
-            <td class="first-col"></td>
-            <td class="second-col">1st Period</td>
-            <td class="third-col"><span th:text="${flexiTenure}"></span> Months</td>
-        </tr>
-
-        <tr th:if="${isFlexiLoan}==true">
-            <td class="first-col"></td>
-            <td class="second-col">2nd Period</td>
-            <td class="third-col"><span th:text="${balanceTenure}"></span> Months</td>
-        </tr>
-
-        <tr>
-            <td class="first-col">5</td>
-            <td colspan="2" style="font-weight: bold;">Instalment details</td>
-        </tr>
-
-        <tr>
-            <td class="first-col"></td>
-            <td class="second-col">Type of Instalments</td>
-            <td class="third-col" th:text="${instalmentType}"></td>
-        </tr>
-
-        <tr>
-            <td class="first-col"></td>
-            <td class="second-col">Number of EMIs</td>
-            <td class="third-col" th:text="${tenureInMonths}"></td>
-        </tr>
-
-        <tr>
-            <td class="first-col"></td>
-            <td class="second-col"> EMI(in Rupees)</td>
-            <td class="third-col" th:if="${isFlexiLoan}==false">₹ <span th:text="${installment}"></span></td>
-            <td class="third-col" th:if="${isFlexiLoan}==true"></td>
-        </tr>
-        <tr th:if="${isFlexiLoan}==true">
-            <td class="first-col"></td>
-            <td class="second-col"> First <span th:text="${flexiTenure}"></span> months</td>
-            <td class="third-col">₹ <span th:text="${flexiEmi}"></span></td>
-        </tr>
-
-        <tr th:if="${isFlexiLoan}==true">
-            <td class="first-col"></td>
-            <td class="second-col"> Balance <span th:text="${balanceTenure}"></span> months</td>
-            <td class="third-col">₹ <span th:text="${balanceEmi}"></span></td>
-        </tr>
-        <tr>
-            <td class="first-col"></td>
-            <td class="second-col">Commencement of repayment, post sanction</td>
-            <td class="third-col">5th of every month</td>
-        </tr>
-        <tr>
-            <td class="first-col">6</td>
-            <td class="second-col" style="font-weight: bold;">Interest rate (%)</td>
-            <td class="third-col"><span th:text="${roi}"></span>%</td>
-        </tr>
-        <tr>
-            <td class="first-col"></td>
-            <td class="second-col" style="font-weight: bold;">Interest Type (Fixed/Floating)</td>
-            <td class="third-col" th:text="${interestRateType}"></td>
-        </tr>
-
-        <tr>
-            <td class="first-col">7</td>
-            <td colspan="2" style="font-weight: bold;">Additional Information in case
-                of Floating rate of interest</td>
-        </tr>
-
-        <tr>
-            <td class="first-col"></td>
-            <td class="second-col">Reference Benchmark</td>
-            <td class="third-col" th:text="${referenceBenchmark}"></td>
-        </tr>
-        <tr>
-            <td class="first-col"></td>
-            <td class="second-col">Benchmark rate (%) (B)</td>
-            <td class="third-col" th:text="${benchmarkRate}"></td>
-        </tr>
-        <tr>
-            <td class="first-col"></td>
-            <td class="second-col">Spread (%) (S)</td>
-            <td class="third-col" th:text="${spreadRate}"></td>
-        </tr>
-        <tr>
-            <td class="first-col"></td>
-            <td class="second-col">Final rate (%)
-                R = (B) + (S)</td>
-            <td class="third-col" th:text="${finalRate}"></td>
-        </tr>
-        <tr>
-            <td class="first-col"></td>
-            <td class="second-col">Reset periodicity
-                (Months)</td>
-            <td class="third-col" th:text="${resetPeriodicity}"></td>
-        </tr>
-        <tr>
-            <td class="first-col"></td>
-            <td class="second-col">Impact of change in the reference benchmark <br />
-                (for 25 bps)</td>
-            <td class="third-col" th:text="${benchmarkImpact}"></td>
-        </tr>
-
-        <tr>
-            <td class="first-col"></td>
-            <td class="second-col">Change in EMI(in Rupees)</td>
-            <td class="third-col" th:text="${installmentifFloating}"></td>
-        </tr>
-        <tr>
-            <td class="first-col"></td>
-            <td class="second-col">Change in No. of EMIs</td>
-            <td class="third-col" th:text="${tenureInMonthsifFloating}"></td>
-        </tr>
-
-        <tr>
-            <td class="first-col">8</td>
-            <td colspan="2" style="font-weight: bold;">Fee/Charges</td>
-        </tr>
-        <tr>
-            <td class="first-col"></td>
-            <td class="second-col" style="font-weight: bold;">1. Payable to PFL (A)</td>
-            <td class="third-col" th:text="${payableToREA}"></td>
-        </tr>
-        <tr>
-            <td class="first-col">(i)</td>
-            <td class="second-col">Login Fee (One-time)</td>
-            <td class="third-col" th:text="${loginFees}"></td>
-
-        </tr>
-        <tr>
-            <td class="first-col">(ii)</td>
-            <td class="second-col">Admin Charges (One-time)</td>
-            <td class="third-col" th:text="${adminFees}"></td>
-        </tr>
-        <tr>
-            <td class="first-col">(iii)</td>
-            <td class="second-col">Processing Fees (One-Time)</td>
-            <td class="third-col">₹ <span th:text="${processingFees}"></span></td>
-        </tr>
-        <tr>
-            <td class="first-col">(iv)</td>
-            <td class="second-col">Stamp Duty Charges</td>
-            <td class="third-col" th:text="${stampDutyChargesForKfs}"></td>
-        </tr>
-        <tr>
-            <td class="first-col">(v)</td>
-            <td class="second-col">Stamp Duty Service Charges</td>
-            <td class="third-col" th:text="${stampDutyServiceCharge}"></td>
-        </tr>
-        <tr>
-            <td class="first-col"></td>
-            <td class="second-col" style="font-weight: bold;">2. Payable to a third party through PFL (B)</td>
-            <td class="third-col" th:text="${payableToREB}"></td>
-        </tr>
-        <tr>
-            <td class="first-col">(i)</td>
-            <td class="second-col">Valuation Fees (One-Time)</td>
-            <td class="third-col" th:text="${valuationFees}"></td>
-        </tr>
-        <tr>
-            <td class="first-col">(ii)</td>
-            <td class="second-col">CERSAI Charges (One-time)</td>
-            <td class="third-col" th:text="${cersaiCharges}"></td>
-        </tr>
-        <tr>
-            <td class="first-col">(iii)</td>
-            <td class="second-col">Insurance Charges (One-time)</td>
-            <td class="parent_loan_col" th:text="${insuranceCharges}"></td>
-        </tr>
-        <tr>
-            <td class="first-col">(iv)</td>
-            <td class="second-col">MG Fees</td>
-            <td class="third-col" th:text="${mgFees}"></td>
-        </tr>
-        <tr>
-            <td class="first-col">(v)</td>
-            <td class="second-col">CIBIL Charges</td>
-            <td class="third-col" th:text="${cibilCharges}"></td>
-        </tr>
-        <tr>
-            <td class="first-col">9</td>
-            <td class="second-col" style="font-weight: bold;">Annual Percentage Rate (APR)
-                (%)</td>
-            <td class="third-col" th:text="${apr}"></td>
-        </tr>
-        <tr>
-            <td class="first-col">10</td>
-            <td colspan="2" style="font-weight: bold;">Details of Contingent Charges
-                (in Rupees or %, as applicable)</td>
-        </tr>
-        <tr>
-            <td class="first-col">(i)</td>
-            <td class="second-col">Penal Charges, if any, in case of delayed payment
-            </td>
-            <td class="third-col" style="text-align: justify;">
-                24% per annum i.e. 2% p.m. on default of Installment/ EMI from the date of default till the date of
-                actual payment
-            </td>
-        </tr>
-        <tr>
-            <td class="first-col">(ii)</td>
-            <td class="second-col">Other Penal Charges, if any</td>
-            <td class="third-col" style="text-align: justify;">
-                2% p.m. on Outstanding Amount for the non-compliance of the terms and conditions of the Transaction
-                Documents as detailed below by the Borrower, for the period beginning the date of such non-compliance
-                until the same is cured to the satisfaction of the Lender
-            </td>
-        </tr>
-        <tr>
-            <td class="first-col">(iii)</td>
-            <td class="second-col">Pre-payment charges</td>
-            <td class="third-col" style="text-align: justify;">
-                5% of Outstanding amount being repaid + applicable taxes
-            </td>
-        </tr>
-        <tr>
-            <td class="first-col">(iv)</td>
-            <td class="second-col">Part payment charges</td>
-            <td class="third-col" style="text-align: justify;">
-                5% of the amount being repaid + applicable taxes (Part payment charges are not applicable in case of
-                UBL-Flexi for part payment of up to 30% of disbursed amount. For part payment above 30% of disbursed
-                amount part payment charges would apply as mentioned.)
-            </td>
-        </tr>
-        <tr>
-            <td class="first-col">(v)</td>
-            <td class="second-col">Loan pre-closure charges</td>
-            <td class="third-col" style="text-align: justify;">
-                5% of outstanding loan amount + applicable taxes
-            </td>
-        </tr>
-        <tr>
-            <td class="first-col">(vi)</td>
-            <td class="second-col">Charges for switching of loans from floating to fixed rate and vice versa</td>
-            <td class="third-col" style="text-align: justify;">
-                NA
-            </td>
-        </tr>
-        <tr>
-            <td class="first-col">(vii)</td>
-            <td class="second-col">Any other charges, please specify</td>
-            <td class="third-col" style="text-align: justify;">
-                -
-            </td>
-        </tr>
-    </table>
-    <br />
-
-    <h2>Part 2 (Other qualitative information)</h2>
-
-
-    <table class="annexABC-table">
-        <tr>
-            <td class="first-col">1</td>
-            <td class="second-col">Clause of Loan agreement relating to
-                engagement of recovery agents</td>
-            <td class="third-col" style="text-align: justify;">
-                The Borrower expressly recognises and accepts that the Lender shall, without prejudice to its right to
-                perform such activities itself or through its officers or servants, be absolutely entitled and have full
-                powers and authority to appoint &amp;engage at the cost &amp;expenses of the Borrower a recovery agent
-                of the Lender’s choice to assist in the recovery of any Outstanding Amounts due under this Agreement, to
-                visit the premises of the Borrower whether residential or office or otherwise, collect on behalf of the
-                Lender all unpaid dues, getting or verifying any information of the Borrower/ their assets and to
-                perform and execute all act(s), deed(s), matter(s) and thing(s) connected therewith or incidental
-                thereto including sending notices of demand, or otherwise contacting the Borrower, receiving the
-                outstanding (in cash/through bank draft/cheque) from the Borrower, and to perform and execute all lawful
-                acts, deeds, matters and things connected herewith or incidental hereto as the recovery agent may
-                consider appropriate for the purpose.
-                The Borrower expressly agrees that in the event of Lender appointing an agent as aforesaid, the Lender
-                shall be entitled to provide the information held by the Lender in relation to the Borrower/guarantor
-                &amp;Loan to such agent and the Borrower shall co-operate with such agent appointed by the Lender in the
-                same manner as it would with the Lender in terms of this Agreement.
-            </td>
-        </tr>
-        <tr>
-            <td class="first-col">2</td>
-            <td class="second-col">Clause of Loan agreement which details
-                grievance redressal mechanism</td>
-            <td class="third-col" style="text-align: justify;">Grievance Redressal:
-                There can be instances where the Borrower is not satisfied with the services provided. To highlight such
-                instances &amp;register a complaint the Borrower may follow the following process:
-                <ol style="list-style-type: lower-alpha;">
-                    <li>
-                        The Borrower may raise his / her complaint through Toll free number mentioned on
-                        www.piramalfinance.com
-                        or email to customercare@piramal.com or contact the Branch Operations Manager of the respective
-                        dealing
-                        branch within working hours as mentioned on the website</li>
-
-                    <li>If the Borrower is not satisfied with the resolution provided or his/her queries are not solved
-                        within
-                        15 days, the Borrower may escalate to:grievances@piramal.com.</li>
-                    <li>
-                        In case the concern remains unresolved beyond a period of 15 days, the Borrower may escalate the
-                        matter
-                        to “The Principal Nodal Officer”, Piramal Finance Limited. (Formerly Piramal Capital &amp;
-                        Housing Finance Ltd.), Unit No-601, 1st Floor, Piramal
-                        Amiti Building, Piramal Agastya Corporate Park, Kamani Junction, Opp. Fire Station, LBS Marg,
-                        Kurla
-                        (West), Mumbai - 400 070. Email : <a
-                            href="mailto:nodal.officer@piramal.com">nodal.officer@piramal.com</a>,
-                        Contact No: 022-71740555</li>
-                    <li>In case of non-addressal of the complaint to the customer’s satisfaction, within a reasonable
-                        time frame
-                        from the above quarters, the customer may approach the Complaint Redressal Cell of National
-                        Housing Bank
-                        by lodging its complaint in online mode at the link https://grids.nhbonline.org.in/ or may write
-                        to :
-                        National Housing Bank
-                        Complaint Redressal Cell, Department of Regulation &amp;Supervision,
-                        National Housing Bank, 4th Floor, Core 5A, India Habitat Centre, Lodhi Road, New Delhi - 110
-                        003.
-                        https://grids.nhbonline.org.in/</li>
-                </ol>
-            </td>
-        </tr>
-        <tr>
-            <td class="first-col">3</td>
-            <td class="second-col">Phone number and email id of the nodal
-                grievance redressal officer</td>
-            <td class="third-col" style="text-align: justify;">
-                “The Principal Nodal Officer - Hetal Parihar”, 1st Floor, Amiti Building, Agastya Corporate Park, Kamani
-                Junction,
-                Opp. Fire Station, LBS Marg, Kurla (West), Mumbai - 400 070. Contact details: 022-71740555, Email: <a
-                    href="mailto:nodal.officer@piramal.com">nodal.officer@piramal.com</a>
-            </td>
-        </tr>
-        <tr>
-            <td class="first-col">4</td>
-            <td class="second-col">Whether the loan is, or in future maybe,
-                subject
-                to transfer to other REs or securitisation (Yes/ No)</td>
-            <td class="third-col">Yes</td>
-        </tr>
-        <tr>
-            <td class="first-col">5</td>
-            <td class="second-col">In case of lending under collaborative lending
-                arrangements (e.g., co-lending/outsourcing),
-                following additional details may be furnished:
-            </td>
-            <td class="third-col"></td>
-        </tr>
-        <tr>
-            <td class="first-col">(i)</td>
-            <td class="second-col">Name of the originating RE, along with its
-                funding proportion</td>
-            <td class="third-col">NA</td>
-        </tr>
-        <tr>
-            <td class="first-col">(ii)</td>
-            <td class="second-col">Name of the partner RE along with its
-                proportion of funding</td>
-            <td class="third-col">NA</td>
-        </tr>
-        <tr>
-            <td class="first-col">(iii)</td>
-            <td class="second-col">Blended rate of interest</td>
-            <td class="third-col">NA</td>
-        </tr>
-
-        <tr>
-            <td class="first-col">6</td>
-            <td class="second-col">In Case of Digital Loans</td>
-            <td class="third-col"></td>
-        </tr>
-        <tr>
-            <td class="first-col">(i)</td>
-            <td class="second-col">Cooling Off/Look-up Period, in Terms of RE’s Board Approved Policy</td>
-            <td class="third-col">3 days</td>
-        </tr>
-        <tr>
-            <td class="first-col">(ii)</td>
-            <td class="second-col">Details of LSP Acting as Recovery Agent and Authorized to Approach the Borrower</td>
-            <td class="third-col"> Piramal Finance Limited. (Formerly Piramal Capital &amp; Housing Finance Ltd.)</td>
-        </tr>
-    </table>
-    <br />
-    <table>
-        <tr>
-            <td>The above terms and conditions have been explained to me/us and have been acknowledged &amp; understood
-                by me/us.</td>
-        </tr>
-    </table>
-
-    <table>
-        <tr>
-            <td>
-                Borrower Signature:
-            </td>
-
-            <td>
-                Co-Borrower Signature:
-            </td>
-
-            <td>
-                Guarantor Signature:
-            </td>
-        </tr>
-        <tr>
-            <td>
-                ______________________________
-            </td>
-
-            <td>
-                ______________________________
-            </td>
-
-            <td>
-                ______________________________
-            </td>
-        </tr>
-        <tr>
-            <td>
-                Date:
-            </td>
-
-            <td>
-                Date:
-            </td>
-
-            <td>
-                Date:
-            </td>
-        </tr>
-    </table>
-
-    <h1 class="page-break" style="margin-left: 4%">Annex B</h1>
-
-    <h2 style="text-align: center; font-weight: bold;">Computation of APR
-    </h2>
-
-    <table class="annexABC-table">
-        <tr>
-            <th class="first-col">Sr. No.</th>
-            <th class="second-col">Parameter</th>
-            <th class="third-col">Details</th>
-        </tr>
-        <tr>
-            <td class="first-col">1</td>
-            <td class="second-col">Sanctioned Loan Amount</td>
-            <td class="third-col">₹ <span th:text="${loanAmountWithInsurance}"></span></td>
-        </tr>
-        <tr>
-            <td class="first-col">2</td>
-            <td class="second-col" th:if="${isFlexiLoan}==false">Loan Term</td>
-            <td class="second-col" th:if="${isFlexiLoan}==true">Loan Term Total(Months)</td>
-            <td class="third-col" th:text="${tenureInMonths}"></td>
-        </tr>
-        <tr th:if="${isFlexiLoan}==true">
-            <td class="first-col"></td>
-            <td class="second-col">1st Period</td>
-            <td class="third-col"><span th:text="${flexiTenure}"></span> Months</td>
-        </tr>
-        <tr th:if="${isFlexiLoan}==true">
-            <td class="first-col"></td>
-            <td class="second-col">2nd Period</td>
-            <td class="third-col"><span th:text="${balanceTenure}"></span> Months</td>
-        </tr>
-        <tr>
-            <td class="first-col">3</td>
-            <td class="second-col">Interest Type (Fixed/Floating)</td>
-            <td class="third-col" th:text="${interestRateType}"></td>
-        </tr>
-        <tr>
-            <td class="first-col">4</td>
-            <td class="second-col">Rate of Interest</td>
-            <td class="third-col" th:text="${roi}"></td>
-        </tr>
-        <tr>
-            <td class="first-col">5</td>
-            <td class="second-col">Loan EMI (Monthly)</td>
-            <td class="third-col" th:if="${isFlexiLoan}==false">₹ <span th:text="${installment}"></span></td>
-            <td class="third-col" th:if="${isFlexiLoan}==true"></td>
-        </tr>
-        <tr th:if="${isFlexiLoan}==true">
-            <td class="first-col"></td>
-            <td class="second-col"> First <span th:text="${flexiTenure}"></span> months</td>
-            <td class="third-col">₹ <span th:text="${flexiEmi}"></span></td>
-        </tr>
-        <tr th:if="${isFlexiLoan}==true">
-            <td class="first-col"></td>
-            <td class="second-col"> Balance <span th:text="${balanceTenure}"></span> months</td>
-            <td class="third-col">₹ <span th:text="${balanceEmi}"></span></td>
-        </tr>
-        <tr>
-            <td class="first-col">6</td>
-            <td class="second-col">Total Interest Amount to be charged during the entire tenor of the loan as per the
-                rate prevailing on sanction date</td>
-            <td class="third-col">₹ <span th:text="${totalInterestAmount}"></span></td>
-        </tr>
-        <tr>
-            <td class="first-col">7</td>
-            <td class="second-col">Fee/Charges payable</td>
-            <td class="third-col">₹ <span th:text="${feesPayable}"></span></td>
-        </tr>
-        <tr>
-            <td class="first-col">a)</td>
-            <td class="second-col">Payable to PFL</td>
-            <td class="third-col">₹ <span th:text="${payableToREA}"></span></td>
-        </tr>
-        <tr>
-            <td class="first-col">b)</td>
-            <td class="second-col">Payable to third-party</td>
-            <td class="third-col">₹ <span th:text="${payableToREB}"></span></td>
-        </tr>
-        <tr>
-            <td class="first-col">8</td>
-            <td class="second-col">Net disbursed amount</td>
-            <td class="third-col">₹ <span th:text="${netDisbursedAmount}"></span></td>
-        </tr>
-        <tr>
-            <td class="first-col">9</td>
-            <td class="second-col">Total amount to be paid by the borrower (1+5)</td>
-            <td class="third-col">₹ <span th:text="${totalAmountKfs}"></span></td>
-        </tr>
-        <tr>
-            <td class="first-col">10</td>
-            <td class="second-col">Annual Percentage rate- Effective annualized interest rate</td>
-            <td class="third-col" th:text="${apr}"></td>
-        </tr>
-        <tr>
-            <td class="first-col">11</td>
-            <td class="second-col">Schedule of disbursement as per terms and conditions</td>
-            <td class="third-col">Attached as AnnexC of KFS</td>
-        </tr>
-        <tr>
-            <td class="first-col">12</td>
-            <td class="second-col">Due date of payment of instalment and interest</td>
-            <td class="third-col">5th of every month</td>
-        </tr>
-    </table>
-
-    <h1 class="page-break" style="margin-left: 4%">Annex C</h1>
-    <h2 style="margin-left: 4%">Loan Summary</h2>
-
-    <table class="annexABC-table" id="loanDetailsTable">
-        <tr>
-            <th style="border: 1px solid black;text-align: center;">Principal Amount</th>
-            <th style="border: 1px solid black;text-align: center;">Rate of Interest</th>
-            <th style="border: 1px solid black;text-align: center;">Total Interest</th>
-            <th style="border: 1px solid black;text-align: center;">Loan Term (Months)</th>
-            <th style="border: 1px solid black;text-align: center;">Monthly Payment</th>
-            <th style="border: 1px solid black;text-align: center;">Number of Payments</th>
-            <th style="border: 1px solid black;text-align: center;">Early Payments</th>
-            <th style="border: 1px solid black;text-align: center;">Lender Name</th>
-        </tr>
-        <tr>
-            <td style="border: 1px solid black;text-align: center;" th:text="${loanAmountWithInsurance}"></td>
-            <td style="border: 1px solid black;text-align: center;" th:text="${roi}"></td>
-            <td style="border: 1px solid black;text-align: center;" th:text="${totalInterestAmount}"></td>
-            <td style="border: 1px solid black;text-align: center;" th:text="${tenureInMonths}"></td>
-            <td style="border: 1px solid black;text-align: center;" th:text="${installment}"></td>
-            <td style="border: 1px solid black;text-align: center;" th:text="${tenureInMonths}"></td>
-            <td style="border: 1px solid black;text-align: center;">0.00</td>
-            <td style="border: 1px solid black;text-align: center;">Piramal</td>
-        </tr>
-    </table>
-
-    <h2 style="margin-left: 4%">Loan Amortization Schedule</h2>
-
-    <table class="annexABC-table" id="scheduleTable">
-        <tr>
-            <th style="border: 1px solid black; text-align: center;">Month</th>
-            <th style="border: 1px solid black; text-align: center;">Monthly Payment</th>
-            <th style="border: 1px solid black; text-align: center;">Principal Payment</th>
-            <th style="border: 1px solid black; text-align: center;">Interest Payment</th>
-            <th style="border: 1px solid black; text-align: center;">Remaining Balance</th>
-            <th style="border: 1px solid black; text-align: center;">Cumulative Interest</th>
-        </tr>
-        <tr th:each="row: ${rps_rows}">
-            <td style="border: 1px solid black; text-align: center;" th:each="header: ${rps_headers}"
-                th:text="${row.get(header)}">
-            </td>
-        </tr>
-    </table>
-
     <!-- Application Form of Borrower and CoBorrower1 - START -->
     <table class="outer-table" style="page-break-before: always;">
         <tr>
             <td>
                 <table>
                     <tr>
-                        <td></td>
                         <td class="passport-section">
                             <table style="height: 100%">
                                 <tr>
@@ -6007,11 +5620,6 @@ sans-serif;background-color:#fff;margin:auto;text-align:justify;width:100%">
                         </td>
                         <td class="outlined"><span th:text="${borrowerKYCId}"></span></td>
                         <td class="outlined"><span th:text="${coBorrower1KYCId}"></span></td>
-                    </tr>
-                    <tr>
-                        <td class="outlined" colspan="2">CKYC ID</td>
-                        <td class="outlined"><span th:text="${borrowerCKYCId}"></span></td>
-                        <td class="outlined"><span th:text="${coBorrower1CKYCId}"></span></td>
                     </tr>
                     <tr>
                         <td class="outlined" colspan="2">
@@ -15189,7 +14797,6 @@ sans-serif;background-color:#fff;margin:auto;text-align:justify;width:100%">
             <td>
                 <table>
                     <tr>
-                        <td></td>
                         <td class="passport-section">
                             <table>
                                 <tr>
@@ -22175,1527 +21782,6 @@ sans-serif;background-color:#fff;margin:auto;text-align:justify;width:100%">
     </table>
     <!-- Fatca section - END -->
 
-    <!-- HI Insurance - START -->
-    <table role="presentation" style="
-        background: white;
-        page-break-before: always;
-        font-family: 'Catamaran', sans-serif;
-      ">
-        <tr>
-            <td style="
-            text-align: left;
-            padding: 10px 20px 10px 20px;
-            font-size: 12px;
-          ">
-                Underwritten by <br />
-                <img src="https://cdn.piramalfinance.com/pchfl/carelogo.png" alt="Care Insurance" height="60"
-                    width="200" />
-            </td>
-        </tr>
-        <tr>
-            <td style="
-            padding-left: 20px;
-            width: 100%;
-            font-size: 12px;
-            font-family: 'Catamaran', sans-serif;
-            font-weight: normal;
-          ">
-                (SCHEME FOR PIRAMAL FINANCE LIMITED LOAN CUSTOMERS)
-                <br />
-            </td>
-        </tr>
-        <tr>
-            <td>
-                <p style="
-              padding: 2px;
-              padding-left: 20px;
-              text-align: left;
-              color: black;
-              background-color: #d3d3d3;
-              border-top-right-radius: 16px;
-              width: 100%;
-              font-family: 'Catamaran', sans-serif;
-              font-weight: bold;
-              font-size: 18px;
-              margin: 0;
-            ">
-                    Loan Details
-                </p>
-            </td>
-        </tr>
-        <tr>
-            <td style="
-            font-size: 16px;
-            font-family: 'Catamaran', sans-serif;
-            font-weight: normal;
-            padding: 10px;
-          ">
-                <table>
-                    <tr>
-                        <td style="
-                  text-align: left;
-                  color: #253746;
-                  width: 23%;
-                  font-weight: normal;
-                  font-family: 'Catamaran', sans-serif;
-                  padding-left: 20px;
-                ">
-                            Loan Account Number:
-                        </td>
-                        <td style="width: 40%">
-                            <p th:if="${isHIPresent==true}" th:text="*{loanAccountNumber}" style="
-                    padding: 10px;
-                    text-align: center;
-                    border: 1px solid gray;
-                    background-color: white;
-                    width: 89%;
-                    height: 16px;
-                    margin: 0;
-                  "></p>
-                            <p th:if="${isHIPresent==false}" style="
-                    padding: 10px;
-                    text-align: center;
-                    border: 1px solid gray;
-                    background-color: white;
-                    width: 89%;
-                    height: 16px;
-                    margin: 0;
-                  "></p>
-                        </td>
-                        <td style="
-                  text-align: left;
-                  color: #253746;
-                  width: 10%;
-                  font-weight: normal;
-                  font-family: 'Catamaran', sans-serif;
-                ">
-                            Loan type :
-                        </td>
-                        <td>
-                            <p th:if="${isHIPresent==true}" style="
-                    padding: 10px;
-                    font-family: 'Catamaran', sans-serif;
-                    font-size: 12px;
-                    text-align: center;
-                    border-bottom: 1px solid gray;
-                    background-color: white;
-                    width: 86%;
-                    height: 16px;
-                    margin: 0;
-                  ">
-                                Unsecured Business Loan
-                            </p>
-                            <p th:if="${isHIPresent==false}" style="
-                    padding: 10px;
-                    font-family: 'Catamaran', sans-serif;
-                    text-align: center;
-                    border-bottom: 1px solid gray;
-                    background-color: white;
-                    width: 86%;
-                    height: 16px;
-                    margin: 0;
-                  "></p>
-                        </td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-        <tr>
-            <td>
-                <p style="
-              padding: 2px;
-              padding-left: 20px;
-              text-align: left;
-              color: black;
-              background-color: #d3d3d3;
-              border-top-right-radius: 16px;
-              width: 100%;
-              font-family: 'Catamaran', sans-serif;
-              font-weight: bold;
-              font-size: 18px;
-              margin: 0;
-            ">
-                    Proposer Details
-                </p>
-            </td>
-        </tr>
-        <tr>
-            <td style="
-            padding-left: 20px;
-            font-size: 16px;
-            font-family: 'Catamaran', sans-serif;
-            font-weight: normal;
-          ">
-                <table>
-                    <tr>
-                        <td style="
-                  padding: 5px;
-                  color: #253746;
-                  font-weight: normal;
-                  font-family: 'Catamaran', sans-serif;
-                  width: 10%;
-                ">
-                            Name :
-                        </td>
-                        <td>
-                            <p th:if="${isHIPresent==true}" placeholder="First
-                    Name" th:text="*{HI_firstInsuredName}" style="
-                    padding: 5px;
-                    margin: 5px;
-                    text-align: center;
-                    border: 1px solid gray;
-                    width: 90%;
-                    background-color: white;
-                    height: 18px;
-                  "></p>
-                            <p th:if="${isHIPresent==false}" placeholder="First Name" style="
-                    padding: 5px;
-                    margin: 5px;
-                    text-align: center;
-                    border: 1px solid gray;
-                    width: 90%;
-                    background-color: white;
-                    height: 18px;
-                  "></p>
-                        </td>
-                    </tr>
-                </table>
-                <table>
-                    <tr>
-                        <td style="
-                  padding: 5px;
-                  color: #253746;
-                  font-weight: normal;
-                  font-family: 'Catamaran', sans-serif;
-                  width: 100%;
-                ">
-                            Address :
-                        </td>
-                    </tr>
-                    <td style="padding: 4px">
-                        <p th:if="${isHIPresent==true}" th:text="*{HI_firstInsuredAddress1}" style="
-                  padding: 5px;
-                  border: 1px solid gray;
-                  background-color: white;
-                  width: 99%;
-                  float: left;
-                  height: 32px;
-                  margin: 0;
-                "></p>
-                        <p th:if="${isHIPresent==false}" style="
-                  padding: 5px;
-                  border: 1px solid gray;
-                  background-color: white;
-                  width: 99%;
-                  float: left;
-                  height: 32px;
-                  margin: 0;
-                "></p>
-                    </td>
-                    <tr>
-                        <td style="padding: 4px">
-                            <p th:if="${isHIPresent==true}" th:text="*{HI_firstInsuredAddress2}" style="
-                    padding: 5px;
-                    border: 1px solid gray;
-                    background-color: white;
-                    width: 99%;
-                    float: left;
-                    height: 32px;
-                    margin: 0;
-                  "></p>
-                            <p th:if="${isHIPresent==false}" style="
-                    padding: 5px;
-                    border: 1px solid gray;
-                    background-color: white;
-                    width: 99%;
-                    float: left;
-                    height: 32px;
-                    margin: 0;
-                  "></p>
-                        </td>
-                    </tr>
-                </table>
-                <table>
-                    <tr>
-                        <td style="
-                  padding: 5px;
-                  color: #253746;
-                  font-weight: normal;
-                  font-family: 'Catamaran', sans-serif;
-                ">
-                            State :
-                            <p th:if="${isHIPresent==true}" placeholder="State" th:text="*{HI_firstInsuredStateName}"
-                                style="
-                    padding: 5px;
-                    margin: 5px;
-                    text-align: center;
-                    border: 1px solid gray;
-                    width: 90%;
-                    background-color: white;
-                    height: 18px;
-                  "></p>
-                            <p th:if="${isHIPresent==false}" placeholder="State" style="
-                    padding: 5px;
-                    margin: 5px;
-                    text-align: center;
-                    border: 1px solid gray;
-                    width: 90%;
-                    background-color: white;
-                    height: 18px;
-                  "></p>
-                        </td>
-                        <td style="
-                  padding: 5px;
-                  color: #253746;
-                  font-weight: normal;
-                  font-family: 'Catamaran', sans-serif;
-                ">
-                            City :
-                            <p th:if="${isHIPresent==true}" placeholder="City" th:text="*{HI_firstInsuredCity}" style="
-                    padding: 5px;
-                    margin: 5px;
-                    text-align: center;
-                    border: 1px solid gray;
-                    width: 90%;
-                    background-color: white;
-                    height: 18px;
-                  "></p>
-                            <p th:if="${isHIPresent==false}" placeholder="City" style="
-                    padding: 5px;
-                    margin: 5px;
-                    text-align: center;
-                    border: 1px solid gray;
-                    width: 90%;
-                    background-color: white;
-                    height: 18px;
-                  "></p>
-                        </td>
-                        <td style="
-                  padding: 5px;
-                  color: #253746;
-                  font-weight: normal;
-                  font-family: 'Catamaran', sans-serif;
-                ">
-                            Pin Code :
-                            <p th:if="${isHIPresent==true}" placeholder="Pin Code"
-                                th:text="*{HI_firstInsuredPostalCode}" style="
-                    padding: 5px;
-                    margin: 5px;
-                    text-align: center;
-                    border: 1px solid gray;
-                    width: 93%;
-                    background-color: white;
-                    height: 18px;
-                  "></p>
-                            <p th:if="${isHIPresent==false}" placeholder="Pin Code" style="
-                    padding: 5px;
-                    margin: 5px;
-                    text-align: center;
-                    border: 1px solid gray;
-                    width: 93%;
-                    background-color: white;
-                    height: 18px;
-                  "></p>
-                        </td>
-                    </tr>
-                </table>
-                <table>
-                    <tr>
-                        <td style="
-                  text-align: left;
-                  color: #253746;
-                  width: 23%;
-                  font-weight: normal;
-                  font-family: 'Catamaran', sans-serif;
-                  width: 20%;
-                ">
-                            Date of Birth :
-                        </td>
-                        <td style="width: 40%">
-                            <p th:if="${isHIPresent==true}" th:text="*{HI_firstInsuredDOB}" style="
-                    padding: 5px;
-                    text-align: center;
-                    border: 1px solid gray;
-                    background-color: white;
-                    width: 89%;
-                    height: 16px;
-                    margin: 0;
-                  "></p>
-                            <p th:if="${isHIPresent==false}" style="
-                    padding: 5px;
-                    text-align: center;
-                    border: 1px solid gray;
-                    background-color: white;
-                    width: 89%;
-                    height: 16px;
-                    margin: 0;
-                  "></p>
-                        </td>
-                        <td style="
-                  text-align: left;
-                  color: #253746;
-                  font-weight: normal;
-                  font-family: 'Catamaran', sans-serif;
-                  width: 10%;
-                ">
-                            Contact No:
-                        </td>
-                        <td>
-                            <p th:if="${isHIPresent==true}" th:text="*{HI_firstInsuredMobileNo}" style="
-                    padding: 5px;
-                    text-align: center;
-                    border-bottom: 1px solid gray;
-                    background-color: white;
-                    width: 90%;
-                    height: 16px;
-                    margin: 0;
-                  "></p>
-                            <p th:if="${isHIPresent==false}" style="
-                    padding: 5px;
-                    text-align: center;
-                    border-bottom: 1px solid gray;
-                    background-color: white;
-                    width: 90%;
-                    height: 16px;
-                    margin: 0;
-                  "></p>
-                        </td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-        <tr>
-            <td style="padding: 10px 5px 5px">
-                <p style="
-              padding: 7px;
-              padding-left: 20px;
-              text-align: left;
-              color: black;
-              background-color: #d3d3d3;
-              border-top-right-radius: 16px;
-              width: 100%;
-              font-family: 'Catamaran', sans-serif;
-              font-weight: bold;
-              font-size: 18px;
-            ">
-                    Nominee Details
-                </p>
-            </td>
-        </tr>
-        <tr>
-            <td>
-                <table>
-                    <tr>
-                        <td style="
-                  padding: 20px;
-                  color: #253746;
-                  font-weight: normal;
-                  font-family: 'Catamaran', sans-serif;
-                  width: 20%;
-                ">
-                            Name :
-                        </td>
-                        <td style="padding: 4px">
-                            <p th:text="*{HI_firstNomineeName}" style="
-                    padding: 5px;
-                    border: 1px solid gray;
-                    background-color: white;
-                    height: 18px;
-                    margin: 0;
-                  "></p>
-                        </td>
-                    </tr>
-                </table>
-                <table>
-                    <tr>
-                        <td style="
-                  text-align: left;
-                  color: #253746;
-                  font-weight: normal;
-                  font-family: 'Catamaran', sans-serif;
-                  padding: 20px;
-                ">
-                            Date of Birth :
-                        </td>
-                        <td style="width: 20%">
-                            <p th:text="*{HI_firstNomineeDOB}" style="
-                    padding: 5px;
-                    text-align: center;
-                    border: 1px solid gray;
-                    background-color: white;
-                    width: 89%;
-                    height: 16px;
-                    margin: 0;
-                  "></p>
-                        </td>
-                        <td style="
-                  text-align: left;
-                  color: #253746;
-                  width: 20%;
-                  font-weight: normal;
-                  font-family: 'Catamaran', sans-serif;
-                  padding-left: 15px;
-                ">
-                            Relationship with Proposer :
-                        </td>
-                        <td>
-                            <p th:text="*{HI_firstNomineeRelationWithProposer}" style="
-                    padding: 5px;
-                    text-align: center;
-                    border: 1px solid gray;
-                    background-color: white;
-                    width: 74%;
-                    height: 16px;
-                    margin: 0;
-                    width: 94%;
-                  "></p>
-                        </td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-        <tr>
-            <td style="
-            padding-left: 20px;
-            width: 100%;
-            font-size: 14px;
-            font-family: 'Catamaran', sans-serif;
-            font-weight: normal;
-          ">
-                Please note : Nominee must be age 18 years or above <br />
-            </td>
-        </tr>
-        <tr>
-            <td style="padding: 10px 5px 5px">
-                <p style="
-              padding: 7px;
-              padding-left: 20px;
-              text-align: left;
-              color: black;
-              background-color: #d3d3d3;
-              border-top-right-radius: 16px;
-              width: 100%;
-              font-family: 'Catamaran', sans-serif;
-              font-weight: bold;
-              font-size: 18px;
-            ">
-                    Details of the Person to be Insured (Including Applicant)
-                </p>
-            </td>
-        </tr>
-        <tr>
-            <td>
-                <ol style="list-style-type: lower-alpha">
-                    <table border="1px solid black" style="border-collapse: collapse">
-                        <tr>
-                            <th style="
-                    padding: 5px 10px;
-                    font-family: 'Catamaran', sans-serif;
-                  ">
-                                Name
-                            </th>
-                            <th style="
-                    padding: 5px 10px;
-                    font-family: 'Catamaran', sans-serif;
-                  ">
-                                Date of Birth
-                            </th>
-                            <th style="
-                    padding: 5px 10px;
-                    font-family: 'Catamaran', sans-serif;
-                  ">
-                                Gender
-                            </th>
-                            <th style="
-                    padding: 5px 10px;
-                    font-family: 'Catamaran', sans-serif;
-                  ">
-                                Relationship with Applicant
-                            </th>
-                        </tr>
-                        <tr>
-                            <td style="padding: 20px; border-top: none; border-right: none">
-                                <span th:text="${HI_firstInsuredName}"></span>
-                            </td>
-                            <td style="padding: 20px; border-top: none; border-right: none">
-                                <span th:text="${HI_firstInsuredDOB}"></span>
-                            </td>
-                            <td style="padding: 5px; vertical-align: top">
-                                <table>
-                                    <tr>
-                                        <td style="
-                          width: 30%;
-                          align-items: center;
-                          text-align: center;
-                        ">
-                                            <img width="20" height="20" th:if="${HI_firstInsuredGender}=='MALE' " style="
-                            vertical-align: middle;
-                            background-color: white;
-                          " src="https://cdn.pchf.in/pchfl/checkbox-tick.png" />
-                                            <span id="male" name="male" th:if="${HI_firstInsuredGender} !='MALE' "
-                                                style="
-                            width: 18px;
-                            height: 18px;
-                            margin-right: 8px;
-                            background-color: white;
-                            border: 1px solid black;
-                            padding: 0 8px;
-                          "></span>
-                                            <label for="male">M</label>
-                                        </td>
-                                        <td style="width: 40%">
-                                            <img width="20" height="20" th:if="${HI_firstInsuredGender}=='FEMALE' "
-                                                style="
-                            vertical-align: middle;
-                            background-color: white;
-                          " src="https://cdn.pchf.in/pchfl/checkbox-tick.png" />
-                                            <span id="female" name="female" th:if="${HI_firstInsuredGender}
-                                                !='FEMALE' " style="
-                            width: 18px;
-                            height: 18px;
-                            margin-right: 8px;
-                            background-color: white;
-                            border: 1px solid black;
-                            padding: 0 8px;
-                          "></span>
-                                            <label for="female">F</label>
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                            <td th:if="${isHIPresent==true}"
-                                style="padding: 20px; border-top: none; border-right: none">
-                                <span>Self</span>
-                            </td>
-                            <td th:if="${isHIPresent==false}"
-                                style="padding: 20px; border-top: none; border-right: none">
-                                <span></span>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 20px; border-top: none; border-right: none">
-                                <span th:text="${HI_secondInsuredName}"></span>
-                            </td>
-                            <td style="padding: 20px; border-top: none; border-right: none">
-                                <span th:text="${HI_secondInsuredDOB}"></span>
-                            </td>
-                            <td style="padding: 5px; vertical-align: top">
-                                <table>
-                                    <tr>
-                                        <td style="
-                          width: 30%;
-                          align-items: center;
-                          text-align: center;
-                        ">
-                                            <img width="20" height="20" th:if="${HI_secondInsuredGender}=='MALE' "
-                                                style="
-                            vertical-align: middle;
-                            background-color: white;
-                          " src="https://cdn.pchf.in/pchfl/checkbox-tick.png" />
-                                            <span id="male" name="male" th:if="${HI_secondInsuredGender} !='MALE'
-                                                " style="
-                            width: 18px;
-                            height: 18px;
-                            margin-right: 8px;
-                            background-color: white;
-                            border: 1px solid black;
-                            padding: 0 8px;
-                          "></span>
-                                            <label for="male">M</label>
-                                        </td>
-                                        <td style="width: 40%">
-                                            <img width="20" height="20" th:if="${HI_secondInsuredGender}=='FEMALE' "
-                                                style="
-                            vertical-align: middle;
-                            background-color: white;
-                          " src="https://cdn.pchf.in/pchfl/checkbox-tick.png" />
-                                            <span id="female" name="female" th:if="${HI_secondInsuredGender}
-                                                !='FEMALE' " style="
-                            width: 18px;
-                            height: 18px;
-                            margin-right: 8px;
-                            background-color: white;
-                            border: 1px solid black;
-                            padding: 0 8px;
-                          "></span>
-                                            <label for="female">F</label>
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                            <td style="padding: 20px; border-top: none; border-right: none">
-                                <span th:text="${HI_secondInsuredRelationship}"></span>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 20px; border-top: none; border-right: none">
-                                <span th:text="${HI_thirdInsuredRelationship}"></span>
-                            </td>
-                            <td style="padding: 20px; border-top: none; border-right: none">
-                                <span th:text="${HI_thirdInsuredDOB}"></span>
-                            </td>
-                            <td style="padding: 5px; vertical-align: top">
-                                <table>
-                                    <tr>
-                                        <td style="
-                          width: 30%;
-                          align-items: center;
-                          text-align: center;
-                        ">
-                                            <img width="20" height="20" th:if="${HI_thirdInsuredGender}=='MALE' " style="
-                            vertical-align: middle;
-                            background-color: white;
-                          " src="https://cdn.pchf.in/pchfl/checkbox-tick.png" />
-                                            <span id="male" name="male" th:if="${HI_thirdInsuredGender} !='MALE' "
-                                                style="
-                            width: 18px;
-                            height: 18px;
-                            margin-right: 8px;
-                            background-color: white;
-                            border: 1px solid black;
-                            padding: 0 8px;
-                          "></span>
-                                            <label for="male">M</label>
-                                        </td>
-                                        <td style="width: 40%">
-                                            <img width="20" height="20" th:if="${HI_thirdInsuredGender}=='FEMALE' "
-                                                style="
-                            vertical-align: middle;
-                            background-color: white;
-                          " src="https://cdn.pchf.in/pchfl/checkbox-tick.png" />
-                                            <span id="female" name="female" th:if="${HI_thirdInsuredGender}
-                                                !='FEMALE' " style="
-                            width: 18px;
-                            height: 18px;
-                            margin-right: 8px;
-                            background-color: white;
-                            border: 1px solid black;
-                            padding: 0 8px;
-                          "></span>
-                                            <label for="female">F</label>
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                            <td style="padding: 20px; border-top: none; border-right: none">
-                                <span th:text="${HI_thirdInsuredRelationship}"></span>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 20px; border-top: none; border-right: none">
-                                <span th:text="${HI_fourthInsuredName}"></span>
-                            </td>
-                            <td style="padding: 20px; border-top: none; border-right: none">
-                                <span th:text="${HI_fourthInsuredDOB}"></span>
-                            </td>
-                            <td style="padding: 5px; vertical-align: top">
-                                <table>
-                                    <tr>
-                                        <td style="
-                          width: 30%;
-                          align-items: center;
-                          text-align: center;
-                        ">
-                                            <img width="20" height="20" th:if="${HI_fourthInsuredGender}=='MALE' "
-                                                style="
-                            vertical-align: middle;
-                            background-color: white;
-                          " src="https://cdn.pchf.in/pchfl/checkbox-tick.png" />
-                                            <span id="male" name="male" th:if="${HI_fourthInsuredGender} !='MALE'
-                                                " style="
-                            width: 18px;
-                            height: 18px;
-                            margin-right: 8px;
-                            background-color: white;
-                            border: 1px solid black;
-                            padding: 0 8px;
-                          "></span>
-                                            <label for="male">M</label>
-                                        </td>
-                                        <td style="width: 40%">
-                                            <img width="20" height="20" th:if="${HI_fourthInsuredGender}=='FEMALE' "
-                                                style="
-                            vertical-align: middle;
-                            background-color: white;
-                          " src="https://cdn.pchf.in/pchfl/checkbox-tick.png" />
-                                            <span id="female" name="female" th:if="${HI_fourthInsuredGender}
-                                                !='FEMALE' " style="
-                            width: 18px;
-                            height: 18px;
-                            margin-right: 8px;
-                            background-color: white;
-                            border: 1px solid black;
-                            padding: 0 8px;
-                          "></span>
-                                            <label for="female">F</label>
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                            <td style="padding: 20px; border-top: none; border-right: none">
-                                <span th:text="${HI_fourthInsuredRelationship}"></span>
-                            </td>
-                        </tr>
-                    </table>
-                </ol>
-            </td>
-        </tr>
-        <tr>
-            <td style="padding: 10px 5px 5px">
-                <p style="
-              padding: 7px;
-              padding-left: 20px;
-              text-align: left;
-              color: black;
-              background-color: #d3d3d3;
-              border-top-right-radius: 16px;
-              width: 100%;
-              font-family: 'Catamaran', sans-serif;
-              font-weight: bold;
-              font-size: 18px;
-            ">
-                    Health Indemnity
-                </p>
-            </td>
-        </tr>
-        <tr>
-            <td>
-                <ol style="padding: 0 20px; list-style-type: lower-alpha">
-                    <table border="1px
-                        solid black" style="border-collapse: collapse; font-size: 12px">
-                        <tr>
-                            <th style="
-                    padding: 5px 10px;
-                    font-family: 'Catamaran', sans-serif;
-                  ">
-                                Family size
-                            </th>
-                            <th style="padding: 5px 10px">1A</th>
-                            <td>
-                                <table>
-                                    <tr>
-                                        <td style="
-                          width: 10%;
-                          align-items: center;
-                          text-align: center;
-                        ">
-                                            <img width="20" height="20" th:if="${HI_familySize}=='1A' " style="
-                            vertical-align: middle;
-                            background-color: white;
-                          " src="https://cdn.pchf.in/pchfl/checkbox-tick.png" />
-                                            <span id="famSize1A" name="famSize1A" th:if="${HI_familySize} !='1A' "
-                                                style="
-                            width: 18px;
-                            height: 18px;
-                            margin-left: 8px;
-                            background-color: white;
-                            border: 1px solid black;
-                            padding: 0 8px;
-                          "></span>
-                                            <label for="famSize1A"></label>
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                            <th style="padding: 5px 10px">2A</th>
-                            <td>
-                                <table>
-                                    <tr>
-                                        <td style="
-                          width: 10%;
-                          align-items: center;
-                          text-align: center;
-                        ">
-                                            <img width="20" height="20" th:if="${HI_familySize}=='2A' " style="
-                            vertical-align: middle;
-                            background-color: white;
-                          " src="https://cdn.pchf.in/pchfl/checkbox-tick.png" />
-                                            <span id="famSize2A" name="famSize2A" th:if="${HI_familySize} !='2A' "
-                                                style="
-                            width: 18px;
-                            height: 18px;
-                            margin-left: 8px;
-                            background-color: white;
-                            border: 1px solid black;
-                            padding: 0 8px;
-                          "></span>
-                                            <label for="famSize2A"></label>
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                            <th style="padding: 5px 10px">2A + IC</th>
-                            <td>
-                                <table>
-                                    <tr>
-                                        <td style="
-                          width: 10%;
-                          align-items: center;
-                          text-align: center;
-                        ">
-                                            <img width="20" height="20" th:if="${HI_familySize}=='2AIC' " style="
-                            vertical-align: middle;
-                            background-color: white;
-                          " src="https://cdn.pchf.in/pchfl/checkbox-tick.png" />
-                                            <span id="famSize2AIC" name="famSize2AIC" th:if="${HI_familySize}
-                                                !='2AIC' " style="
-                            width: 18px;
-                            height: 18px;
-                            margin-left: 8px;
-                            background-color: white;
-                            border: 1px solid black;
-                            padding: 0 8px;
-                          "></span>
-                                            <label for="famSize2AIC"></label>
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                            <th style="padding: 5px 10px">2A + 2C</th>
-                            <td>
-                                <table>
-                                    <tr>
-                                        <td style="
-                          width: 10%;
-                          align-items: center;
-                          text-align: center;
-                        ">
-                                            <img width="20" height="20" th:if="${HI_familySize}=='2A2C' " style="
-                            vertical-align: middle;
-                            background-color: white;
-                          " src="https://cdn.pchf.in/pchfl/checkbox-tick.png" />
-                                            <span id="famSize2A2C" name="famSize2AIC" th:if="${HI_familySize}
-                                                !='2A2C' " style="
-                            width: 18px;
-                            height: 18px;
-                            margin-left: 8px;
-                            background-color: white;
-                            border: 1px solid black;
-                            padding: 0 8px;
-                          "></span>
-                                            <label for="famSize2A2C"></label>
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                            <td>
-                                <span id="FSempty1" name="empty1" style="
-                      width: 18px;
-                      height: 18px;
-                      background-color: white;
-                      border: 0px solid black;
-                      padding: 0 8px;
-                      margin: auto;
-                      text-align: center;
-                    "></span>
-                            </td>
-                            <td>
-                                <span id="FSempty2" name="empty2" style="
-                      width: 18px;
-                      height: 18px;
-                      background-color: white;
-                      border: 0px solid black;
-                      padding: 0 8px;
-                      margin: auto;
-                      text-align: center;
-                    "></span>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th style="
-                    padding: 5px 10px;
-                    font-family: 'Catamaran', sans-serif;
-                  ">
-                                Sum Insured (in Rs)
-                            </th>
-                            <th style="padding: 5px 10px">1 Lacs</th>
-                            <td>
-                                <table>
-                                    <tr>
-                                        <td style="
-                          width: 10%;
-                          align-items: center;
-                          text-align: center;
-                        ">
-                                            <img width="20" height="20" th:if="${HI_sumInsuredInLacs}=='1' " style="
-                            vertical-align: middle;
-                            background-color: white;
-                          " src="https://cdn.pchf.in/pchfl/checkbox-tick.png" />
-                                            <span id="1L" name="1L" th:if="${HI_sumInsuredInLacs} !='1' " style="
-                            width: 18px;
-                            height: 18px;
-                            margin-left: 8px;
-                            background-color: white;
-                            border: 1px solid black;
-                            padding: 0 8px;
-                          "></span>
-                                            <label for="1L"></label>
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                            <th style="padding: 5px 10px">2 Lacs</th>
-                            <td>
-                                <table>
-                                    <tr>
-                                        <td style="
-                          width: 10%;
-                          align-items: center;
-                          text-align: center;
-                        ">
-                                            <img width="20" height="20" th:if="${HI_sumInsuredInLacs}=='2' " style="
-                            vertical-align: middle;
-                            background-color: white;
-                          " src="https://cdn.pchf.in/pchfl/checkbox-tick.png" />
-                                            <span id="2L" name="2L" th:if="${HI_sumInsuredInLacs} !='2' " style="
-                            width: 18px;
-                            height: 18px;
-                            margin-left: 8px;
-                            background-color: white;
-                            border: 1px solid black;
-                            padding: 0 8px;
-                          "></span>
-                                            <label for="2L"></label>
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                            <th style="padding: 5px 10px">3 Lacs</th>
-                            <td>
-                                <table>
-                                    <tr>
-                                        <td style="
-                          width: 10%;
-                          align-items: center;
-                          text-align: center;
-                        ">
-                                            <img width="20" height="20" th:if="${HI_sumInsuredInLacs}=='3' " style="
-                            vertical-align: middle;
-                            background-color: white;
-                          " src="https://cdn.pchf.in/pchfl/checkbox-tick.png" />
-                                            <span id="3L" name="3L" th:if="${HI_sumInsuredInLacs} !='3' " style="
-                            width: 18px;
-                            height: 18px;
-                            margin-left: 8px;
-                            background-color: white;
-                            border: 1px solid black;
-                            padding: 0 8px;
-                          "></span>
-                                            <label for="3L"></label>
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                            <th style="padding: 5px 10px">4 Lacs</th>
-                            <td>
-                                <table>
-                                    <tr>
-                                        <td style="
-                          width: 10%;
-                          align-items: center;
-                          text-align: center;
-                        ">
-                                            <img width="20" height="20" th:if="${HI_sumInsuredInLacs}=='4' " style="
-                            vertical-align: middle;
-                            background-color: white;
-                          " src="https://cdn.pchf.in/pchfl/checkbox-tick.png" />
-                                            <span id="4L" name="4L" th:if="${HI_sumInsuredInLacs} !='4' " style="
-                            width: 18px;
-                            height: 18px;
-                            margin-left: 8px;
-                            background-color: white;
-                            border: 1px solid black;
-                            padding: 0 8px;
-                          "></span>
-                                            <label for="4L"></label>
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                            <th style="padding: 5px 10px">5 Lacs</th>
-                            <td>
-                                <table>
-                                    <tr>
-                                        <td style="
-                          width: 10%;
-                          align-items: center;
-                          text-align: center;
-                        ">
-                                            <img width="20" height="20" th:if="${HI_sumInsuredInLacs}=='5' " style="
-                            vertical-align: middle;
-                            background-color: white;
-                          " src="https://cdn.pchf.in/pchfl/checkbox-tick.png" />
-                                            <span id="5L" name="5L" th:if="${HI_sumInsuredInLacs} !='5' " style="
-                            width: 18px;
-                            height: 18px;
-                            margin-left: 8px;
-                            background-color: white;
-                            border: 1px solid black;
-                            padding: 0 8px;
-                          "></span>
-                                            <label for="5L"></label>
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th style="
-                    padding: 5px 10px;
-                    font-family: 'Catamaran', sans-serif;
-                  ">
-                                Tenure (in years)
-                            </th>
-                            <th style="padding: 5px 10px">1 year</th>
-                            <td>
-                                <table>
-                                    <tr>
-                                        <td style="
-                          width: 10%;
-                          align-items: center;
-                          text-align: center;
-                        ">
-                                            <img width="20" height="20" th:if="${HI_tenureInYears}=='1' " style="
-                            vertical-align: middle;
-                            background-color: white;
-                          " src="https://cdn.pchf.in/pchfl/checkbox-tick.png" />
-                                            <span id="1Y" name="1Y" th:if="${HI_tenureInYears} !='1' " style="
-                            width: 18px;
-                            height: 18px;
-                            margin-left: 8px;
-                            background-color: white;
-                            border: 1px solid black;
-                            padding: 0 8px;
-                          "></span>
-                                            <label for="1Y"></label>
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                            <th style="padding: 5px 10px">2 years</th>
-                            <td>
-                                <table>
-                                    <tr>
-                                        <td style="
-                          width: 10%;
-                          align-items: center;
-                          text-align: center;
-                        ">
-                                            <img width="20" height="20" th:if="${HI_tenureInYears}=='2' " style="
-                            vertical-align: middle;
-                            background-color: white;
-                          " src="https://cdn.pchf.in/pchfl/checkbox-tick.png" />
-                                            <span id="2Y" name="2Y" th:if="${HI_tenureInYears} !='2' " style="
-                            width: 18px;
-                            height: 18px;
-                            margin-left: 8px;
-                            background-color: white;
-                            border: 1px solid black;
-                            padding: 0 8px;
-                          "></span>
-                                            <label for="2Y"></label>
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                            <th style="padding: 5px 10px">3 years</th>
-                            <td>
-                                <table>
-                                    <tr>
-                                        <td style="
-                          width: 10%;
-                          align-items: center;
-                          text-align: center;
-                        ">
-                                            <img width="20" height="20" th:if="${HI_tenureInYears}=='3' " style="
-                            vertical-align: middle;
-                            background-color: white;
-                          " src="https://cdn.pchf.in/pchfl/checkbox-tick.png" />
-                                            <span id="3Y" name="3Y" th:if="${HI_tenureInYears} !='3' " style="
-                            width: 18px;
-                            height: 18px;
-                            margin-left: 8px;
-                            background-color: white;
-                            border: 1px solid black;
-                            padding: 0 8px;
-                          "></span>
-                                            <label for="3Y"></label>
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                            <th style="padding: 5px 10px"></th>
-                            <td style="width: 5%">
-                                <span id="tEmpty1" name="tEmpty1" style="
-                      width: 18px;
-                      height: 18px;
-                      background-color: white;
-                      border: 0px solid black;
-                      padding: 0 8px;
-                      margin: auto;
-                      text-align: center;
-                    "></span>
-                            </td>
-                            <th style="padding: 5px 10px"></th>
-                            <td style="width: 5%">
-                                <span id="tEmpty2" name="tEmpty1" style="
-                      width: 18px;
-                      height: 18px;
-                      background-color: white;
-                      border: 0px solid black;
-                      padding: 0 8px;
-                      margin: auto;
-                      text-align: center;
-                    "></span>
-                            </td>
-                        </tr>
-                    </table>
-                </ol>
-                <table>
-                    <tr>
-                        <td style="
-                  padding: 0 20px;
-                  color: #253746;
-                  font-weight: normal;
-                  font-family: 'Catamaran', sans-serif;
-                ">
-                            Premium (Including GST) :
-                        </td>
-                        <td style="padding: 4px">
-                            <p th:text="*{HI_premiumInclGST}" style="
-                    padding: 5px;
-                    border-bottom: 1px solid gray;
-                    border-radius: 0px;
-                    background-color: white;
-                    width: 40%;
-                    float: left;
-                    height: 28px;
-                    margin: 0;
-                  "></p>
-                        </td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-        <tr>
-            <td style="padding: 10px 5px 5px">
-                <p style="
-              padding: 7px;
-              padding-left: 20px;
-              text-align: left;
-              color: black;
-              background-color: #d3d3d3;
-              border-top-right-radius: 16px;
-              width: 100%;
-              font-family: 'Catamaran', sans-serif;
-              font-weight: bold;
-              font-size: 18px;
-            ">
-                    Declaration of Good Health
-                </p>
-            </td>
-        </tr>
-        <tr>
-            <td style="
-            padding: 0 20px 20px 20px;
-            width: 80%;
-            font-size: 16px;
-            font-family: 'Catamaran', sans-serif;
-            font-weight: normal;
-          ">
-                I hereby declare that all proposed members are in good health and
-                entirely free from any mental or physical impairments or deformities,
-                disease/condition. Neither any of the proposed members have been
-                hospitalized for treatment of an illness or injury for reasons other
-                than common cough, cold or flu nor the habitual consumer of alcohol,
-                tobacco, gutka or any recreational drugs and not involved in any
-                hazardous activity or occupation requiring significant manual labour,
-                working at heights / underground / construction sites, armed forces or
-                participate in adventure sports etc. <br />
-            </td>
-        </tr>
-        <tr>
-            <td style="padding: 0 20px 20px 20px">
-                <table>
-                    <tr>
-                        <td style="width: 15%; align-items: left; text-align: left">
-                            <img width="20" height="20" th:if="${HI_isDeclared}==true"
-                                style="vertical-align: middle; background-color: white"
-                                src="https://cdn.pchf.in/pchfl/checkbox-tick.png" />
-                            <span id="yes" name="yes" th:if="${HI_isDeclared} !=true" style="
-                    width: 18px;
-                    height: 18px;
-                    margin: 0 8px;
-                    background-color: white;
-                    border: 1px solid black;
-                    padding: 0 8px;
-                  "></span>
-                            <label for="yes"> Yes </label>
-                        </td>
-                        <td style="width: 15%; align-items: left; text-align: left">
-                            <img width="20" height="20" th:if="${HI_isDeclared}==false"
-                                style="vertical-align: middle; background-color: white"
-                                src="https://cdn.pchf.in/pchfl/checkbox-tick.png" />
-                            <span id="No" name="No" th:if="${HI_isDeclared} !=false" style="
-                    width: 18px;
-                    height: 18px;
-                    margin: 0 8px;
-                    background-color: white;
-                    border: 1px solid black;
-                    padding: 0 8px;
-                  "></span>
-                            <label for="No"> No </label>
-                        </td>
-                        <td></td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-        <tr>
-            <td style="padding: 0 20px">
-                <table>
-                    <tr>
-                        <td style="width: 6%; font-family: 'Catamaran', sans-serif">
-                            <b style="margin-right: 4px; color: #253746; font-weight: normal">Date :
-                            </b>
-                        </td>
-                        <td style="width: 14%">
-                            <p th:if="${isHIPresent==true}" th:text="*{currentDate}" style="
-                    padding: 5px;
-                    border-bottom: 1px solid black;
-                    background-color: white;
-                    width: 85%;
-                    min-height: 18px;
-                    margin: 0;
-                  " name="date"></p>
-                            <p th:if="${isHIPresent==false}" style="
-                    padding: 5px;
-                    border-bottom: 1px solid black;
-                    background-color: white;
-                    width: 85%;
-                    min-height: 18px;
-                    margin: 0;
-                  " name="date"></p>
-                        </td>
-                        <td style="width: 7%; font-family: 'Catamaran', sans-serif">
-                            <b style="margin-right: 4px; color: #253746; font-weight: normal">Place :
-                            </b>
-                        </td>
-                        <td style="width: 14%">
-                            <p th:if="${isHIPresent==true}" th:text="*{currentPlace}" style="
-                    padding: 5px;
-                    border-bottom: 1px solid black;
-                    background-color: white;
-                    width: 85%;
-                    min-height: 18px;
-                    margin: 0;
-                  " name="place"></p>
-                            <p th:if="${isHIPresent==false}" style="
-                    padding: 5px;
-                    border-bottom: 1px solid black;
-                    background-color: white;
-                    width: 85%;
-                    min-height: 18px;
-                    margin: 0;
-                  " name="place"></p>
-                        </td>
-                        <td style="width: 13%; font-family: 'Catamaran', sans-serif">
-                            <b style="margin-right: 4px; color: #253746; font-weight: normal">Signature :</b>
-                        </td>
-                        <td style="width: 13%">
-                            <p style="
-                    padding: 5px;
-                    border-bottom: 1px solid black;
-                    background-color: white;
-                    width: 91%;
-                    height: 18px;
-                    margin: 0;
-                  " name="Signature"></p>
-                        </td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-        <tr>
-            <td style="padding: 10px 5px 5px">
-                <p style="
-              padding: 7px;
-              padding-left: 20px;
-              text-align: left;
-              color: black;
-              background-color: #d3d3d3;
-              border-top-right-radius: 16px;
-              width: 100%;
-              font-family: 'Catamaran', sans-serif;
-              font-weight: bold;
-              font-size: 18px;
-            ">
-                    For Refund Purpose
-                </p>
-            </td>
-        </tr>
-        <tr>
-            <td style="
-            padding: 20px;
-            width: 80%;
-            font-size: 16px;
-            font-family: 'Catamaran', sans-serif;
-            font-weight: normal;
-            line-height: 30px;
-          ">
-                I
-                <p th:text="*{HI_firstInsuredName}" style="
-              display: inline-block;
-              text-align: center;
-              border-bottom: 1px solid gray;
-              background-color: white;
-              width: 45%;
-              height: 16px;
-              margin: 0 2px;
-              padding: 10px;
-            "></p>
-                hereby authorize Care Health Insurance Limited to refund balance
-                premium directly to Piramal Finance Limited due to cancellation of
-                Health Indemnity policy issued in my / our name against the loan
-                borrowed vide loan account no.
-                <p th:if="${isHIPresent==true}" th:text="*{loanAccountNumber}" style="
-              display: inline-block;
-              text-align: center;
-              border: 1px solid gray;
-              background-color: white;
-              width: 30%;
-              height: 16px;
-              margin: 10px 0 0 10px;
-              padding: 10px;
-            "></p>
-                <p th:if="${isHIPresent==false}" style="
-              display: inline-block;
-              text-align: center;
-              border: 1px solid gray;
-              background-color: white;
-              width: 30%;
-              height: 16px;
-              margin: 10px 0 0 10px;
-              padding: 10px;
-            "></p>
-                <br />
-            </td>
-        </tr>
-        <tr>
-            <td style="padding: 20px">
-                <table>
-                    <tr>
-                        <td style="width: 6%; font-family: 'Catamaran', sans-serif">
-                            <b style="margin-right: 4px; color: #253746; font-weight: normal">Date :</b>
-                        </td>
-                        <td style="width: 14%">
-                            <p th:if="${isHIPresent==true}" th:text="*{currentDate}" style="
-                    padding: 5px;
-                    border-bottom: 1px solid black;
-                    background-color: white;
-                    width: 85%;
-                    min-height: 18px;
-                    margin: 0;
-                  " name="date"></p>
-                            <p th:if="${isHIPresent==false}" style="
-                    padding: 5px;
-                    border-bottom: 1px solid black;
-                    background-color: white;
-                    width: 85%;
-                    min-height: 18px;
-                    margin: 0;
-                  " name="date"></p>
-                        </td>
-                        <td style="width: 7%; font-family: 'Catamaran', sans-serif">
-                            <b style="margin-right: 4px; color: #253746; font-weight: normal">Place :
-                            </b>
-                        </td>
-                        <td style="width: 14%">
-                            <p th:if="${isHIPresent==true}" th:text="*{currentPlace}" style="
-                    padding: 5px;
-                    border-bottom: 1px solid black;
-                    background-color: white;
-                    width: 85%;
-                    min-height: 18px;
-                    margin: 0;
-                  " name="place"></p>
-                            <p th:if="${isHIPresent==false}" style="
-                    padding: 5px;
-                    border-bottom: 1px solid black;
-                    background-color: white;
-                    width: 85%;
-                    min-height: 18px;
-                    margin: 0;
-                  " name="place"></p>
-                        </td>
-                        <td style="width: 13%; font-family: 'Catamaran', sans-serif">
-                            <b style="margin-right: 4px; color: #253746; font-weight: normal">Signature :</b>
-                        </td>
-                        <td style="width: 13%">
-                            <p style="
-                    padding: 5px;
-                    border-bottom: 1px solid black;
-                    background-color: white;
-                    width: 91%;
-                    height: 18px;
-                    margin: 0;
-                  " name="Signature"></p>
-                        </td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-        <tr>
-            <td style="padding: 20px 35px 30px">
-                <table role="presentation">
-                    <tr>
-                        <td style="padding: 0 0 35px; border-bottom: 2px solid black">
-                            <table role="presentation">
-                                <tr>
-                                    <td style="
-                        padding: 0;
-                        vertical-align: middle;
-                        text-align: right;
-                      ">
-                                        <p style="
-                          margin: 0 0 5px;
-                          font-size: 18px;
-                          font-weight: bold;
-                          color: black;
-                          line-height: 24px;
-                          font-family: Arial, sans-serif;
-                        "></p>
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-        <tr></tr>
-        <tr>
-            <td style="padding-left: 20px">Care Health Insurance Limited</td>
-        </tr>
-        <tr>
-            <td style="padding-left: 20px">
-                Registered Office: 5th Floor, 19 Chawla House,Nehru Place,New
-                Delhi-110019 Corresp. Office: Vipul Tech Square, Tower C, 3rd Floor,
-                Golf Course Road, Sector-43, Gurugram-122009 (Haryana)
-            </td>
-        </tr>
-        <tr>
-            <td style="padding-left: 20px">Website: www.careinsurance.com</td>
-        </tr>
-        <tr>
-            <td style="padding-left: 20px; padding-bottom: 20px">
-                CIN: U66000DL2007PLC161503 UIN: RHIHLGP20126V011920 IRDAI Registration
-                No. - 148
-            </td>
-        </tr>
-    </table>
-    <!-- HI Insurance - END -->
-
     <!-- Insurance Section - START -->
     <table class="insurance-section outer-table" style="page-break-before: always;">
         <tr>
@@ -25360,7 +23446,630 @@ sans-serif;background-color:#fff;margin:auto;text-align:justify;width:100%">
         </tr>
     </table>
     <!-- SANCTION LETTER Section - END -->
+    <h1 class="page-break" style="margin-left: 4%">Annex A</h1>
+    <h2 style="margin-left: 4%">Key Facts and Statements</h2>
+    <h3 style="margin-left: 4%">Part 1 (Interest rate and fees/charges)</h3>
+    <table class="annexABC-table">
+        <tr style="font-weight: bold;">
+            <td class="half_col" style="text-align: left;">
+                Generated Date: <span th:text="${generatedDate}"></span>
+            </td>
+            <td class="half_col" style="text-align: right;">
+                Validity: 3 Days
+            </td>
+        </tr>
+    </table>
+    <br />
+    <table class="annexABC-table">
+        <tr style="text-align:left; padding-left:5px; font-weight: bold;">
+            <th class="first-col">Sr No.</th>
+            <th class="second-col">Particulars</th>
+            <th class="third-col">Details</th>
+        </tr>
+        <tr>
+            <td class="first-col">1</td>
+            <td class="second-col" style="font-weight: bold;">Loan Proposal/Account No.</td>
+            <td class="third-col" th:text="${loanAccountNo}"></td>
+        </tr>
+        <tr>
+            <td class="first-col"></td>
+            <td class="second-col" style="font-weight: bold;">Type of Loan</td>
+            <td class="third-col">Unsecured Business Loan<span th:if="${isFlexiLoan}==true">(Flexi Loan)</span></td>
+        </tr>
 
+        <tr>
+            <td class="first-col">2</td>
+            <td class="second-col" style="font-weight: bold;">Sanctioned Loan Amount (in
+                Rupees)</td>
+            <td class="third-col">₹ <span th:text="${loanAmountWithInsurance}"></span></td>
+        </tr>
+
+        <tr>
+            <td class="first-col">3</td>
+            <td class="second-col">
+                <b>Disbursal Schedule</b> <br />
+                (i) Disbursement in stages or 100% upfront.<br />
+                (ii) Disbursement in stages, specify stages and amount at each stage.
+            </td>
+            <td class="third-col" th:text="${disbursal100orNot}">
+            </td>
+        </tr>
+
+        <tr>
+            <td class="first-col">4</td>
+            <td class="second-col" style="font-weight: bold;">Loan term (year/months/days)
+            </td>
+            <td class="third-col"><span th:text="${tenureInMonths}"></span> Months</td>
+        </tr>
+
+        <tr th:if="${isFlexiLoan}==true">
+            <td class="first-col"></td>
+            <td class="second-col">1st Period</td>
+            <td class="third-col"><span th:text="${flexiTenure}"></span> Months</td>
+        </tr>
+
+        <tr th:if="${isFlexiLoan}==true">
+            <td class="first-col"></td>
+            <td class="second-col">2nd Period</td>
+            <td class="third-col"><span th:text="${balanceTenure}"></span> Months</td>
+        </tr>
+
+        <tr>
+            <td class="first-col">5</td>
+            <td colspan="2" style="font-weight: bold;">Instalment details</td>
+        </tr>
+
+        <tr>
+            <td class="first-col"></td>
+            <td class="second-col">Type of Instalments</td>
+            <td class="third-col" th:text="${instalmentType}"></td>
+        </tr>
+
+        <tr>
+            <td class="first-col"></td>
+            <td class="second-col">Number of EMIs</td>
+            <td class="third-col" th:text="${tenureInMonths}"></td>
+        </tr>
+
+        <tr>
+            <td class="first-col"></td>
+            <td class="second-col"> EMI(in Rupees)</td>
+            <td class="third-col" th:if="${isFlexiLoan}==false">₹ <span th:text="${installment}"></span></td>
+            <td class="third-col" th:if="${isFlexiLoan}==true"></td>
+        </tr>
+        <tr th:if="${isFlexiLoan}==true">
+            <td class="first-col"></td>
+            <td class="second-col"> First <span th:text="${flexiTenure}"></span> months</td>
+            <td class="third-col">₹ <span th:text="${flexiEmi}"></span></td>
+        </tr>
+
+        <tr th:if="${isFlexiLoan}==true">
+            <td class="first-col"></td>
+            <td class="second-col"> Balance <span th:text="${balanceTenure}"></span> months</td>
+            <td class="third-col">₹ <span th:text="${balanceEmi}"></span></td>
+        </tr>
+        <tr>
+            <td class="first-col"></td>
+            <td class="second-col">Commencement of repayment, post sanction</td>
+            <td class="third-col">5th of every month</td>
+        </tr>
+        <tr>
+            <td class="first-col">6</td>
+            <td class="second-col" style="font-weight: bold;">Interest rate (%)</td>
+            <td class="third-col"><span th:text="${roi}"></span>%</td>
+        </tr>
+        <tr>
+            <td class="first-col"></td>
+            <td class="second-col" style="font-weight: bold;">Interest Type (Fixed/Floating)</td>
+            <td class="third-col" th:text="${interestRateType}"></td>
+        </tr>
+
+        <tr>
+            <td class="first-col">7</td>
+            <td colspan="2" style="font-weight: bold;">Additional Information in case
+                of Floating rate of interest</td>
+        </tr>
+
+        <tr>
+            <td class="first-col"></td>
+            <td class="second-col">Reference Benchmark</td>
+            <td class="third-col" th:text="${referenceBenchmark}"></td>
+        </tr>
+        <tr>
+            <td class="first-col"></td>
+            <td class="second-col">Benchmark rate (%) (B)</td>
+            <td class="third-col" th:text="${benchmarkRate}"></td>
+        </tr>
+        <tr>
+            <td class="first-col"></td>
+            <td class="second-col">Spread (%) (S)</td>
+            <td class="third-col" th:text="${spreadRate}"></td>
+        </tr>
+        <tr>
+            <td class="first-col"></td>
+            <td class="second-col">Final rate (%)
+                R = (B) + (S)</td>
+            <td class="third-col" th:text="${finalRate}"></td>
+        </tr>
+        <tr>
+            <td class="first-col"></td>
+            <td class="second-col">Reset periodicity
+                (Months)</td>
+            <td class="third-col" th:text="${resetPeriodicity}"></td>
+        </tr>
+        <tr>
+            <td class="first-col"></td>
+            <td class="second-col">Impact of change in the reference benchmark <br />
+                (for 25 bps)</td>
+            <td class="third-col" th:text="${benchmarkImpact}"></td>
+        </tr>
+
+        <tr>
+            <td class="first-col"></td>
+            <td class="second-col">Change in EMI(in Rupees)</td>
+            <td class="third-col" th:text="${installmentifFloating}"></td>
+        </tr>
+        <tr>
+            <td class="first-col"></td>
+            <td class="second-col">Change in No. of EMIs</td>
+            <td class="third-col" th:text="${tenureInMonthsifFloating}"></td>
+        </tr>
+
+        <tr>
+            <td class="first-col">8</td>
+            <td colspan="2" style="font-weight: bold;">Fee/Charges</td>
+        </tr>
+        <tr>
+            <td class="first-col"></td>
+            <td class="second-col" style="font-weight: bold;">1. Payable to PFL (A)</td>
+            <td class="third-col" th:text="${payableToREA}"></td>
+        </tr>
+        <tr>
+            <td class="first-col">(i)</td>
+            <td class="second-col">Login Fee (One-time)</td>
+            <td class="third-col" th:text="${loginFees}"></td>
+
+        </tr>
+        <tr>
+            <td class="first-col">(ii)</td>
+            <td class="second-col">Admin Charges (One-time)</td>
+            <td class="third-col" th:text="${adminFees}"></td>
+        </tr>
+        <tr>
+            <td class="first-col">(iii)</td>
+            <td class="second-col">Processing Fees (One-Time)</td>
+            <td class="third-col">₹ <span th:text="${processingFees}"></span></td>
+        </tr>
+        <tr>
+            <td class="first-col">(iv)</td>
+            <td class="second-col">Stamp Duty Charges</td>
+            <td class="third-col" th:text="${stampDutyChargesForKfs}"></td>
+        </tr>
+        <tr>
+            <td class="first-col"></td>
+            <td class="second-col" style="font-weight: bold;">2. Payable to a third party through PFL (B)</td>
+            <td class="third-col" th:text="${payableToREB}"></td>
+        </tr>
+        <tr>
+            <td class="first-col">(i)</td>
+            <td class="second-col">Valuation Fees (One-Time)</td>
+            <td class="third-col" th:text="${valuationFees}"></td>
+        </tr>
+        <tr>
+            <td class="first-col">(ii)</td>
+            <td class="second-col">CERSAI Charges (One-time)</td>
+            <td class="third-col" th:text="${cersaiCharges}"></td>
+        </tr>
+        <tr>
+            <td class="first-col">(iii)</td>
+            <td class="second-col">Insurance Charges (One-time)</td>
+            <td class="parent_loan_col" th:text="${insuranceCharges}"></td>
+        </tr>
+        <tr>
+            <td class="first-col">(iv)</td>
+            <td class="second-col">MG Fees</td>
+            <td class="third-col" th:text="${mgFees}"></td>
+        </tr>
+        <tr>
+            <td class="first-col">(v)</td>
+            <td class="second-col">CIBIL Charges</td>
+            <td class="third-col" th:text="${cibilCharges}"></td>
+        </tr>
+        <tr>
+            <td class="first-col">9</td>
+            <td class="second-col" style="font-weight: bold;">Annual Percentage Rate (APR)
+                (%)</td>
+            <td class="third-col" th:text="${apr}"></td>
+        </tr>
+        <tr>
+            <td class="first-col">10</td>
+            <td colspan="2" style="font-weight: bold;">Details of Contingent Charges
+                (in Rupees or %, as applicable)</td>
+        </tr>
+        <tr>
+            <td class="first-col">(i)</td>
+            <td class="second-col">Penal Charges, if any, in case of delayed payment
+            </td>
+            <td class="third-col" style="text-align: justify;">
+                24% per annum i.e. 2% p.m. on default of Installment/ EMI from the date of default till the date of
+                actual payment
+            </td>
+        </tr>
+        <tr>
+            <td class="first-col">(ii)</td>
+            <td class="second-col">Other Penal Charges, if any</td>
+            <td class="third-col" style="text-align: justify;">
+                2% p.m. on Outstanding Amount for the non-compliance of the terms and conditions of the Transaction
+                Documents as detailed below by the Borrower, for the period beginning the date of such non-compliance
+                until the same is cured to the satisfaction of the Lender
+            </td>
+        </tr>
+        <tr>
+            <td class="first-col">(iii)</td>
+            <td class="second-col">Pre-payment charges</td>
+            <td class="third-col" style="text-align: justify;">
+                5% of Outstanding amount being repaid + applicable taxes
+            </td>
+        </tr>
+        <tr>
+            <td class="first-col">(iv)</td>
+            <td class="second-col">Part payment charges</td>
+            <td class="third-col" style="text-align: justify;">
+                5% of the amount being repaid + applicable taxes (Part payment charges are not applicable in case of
+                UBL-Flexi for part payment of up to 30% of disbursed amount. For part payment above 30% of disbursed
+                amount part payment charges would apply as mentioned.)
+            </td>
+        </tr>
+        <tr>
+            <td class="first-col">(v)</td>
+            <td class="second-col">Loan pre-closure charges</td>
+            <td class="third-col" style="text-align: justify;">
+                5% of outstanding loan amount + applicable taxes
+            </td>
+        </tr>
+        <tr>
+            <td class="first-col">(vi)</td>
+            <td class="second-col">Charges for switching of loans from floating to fixed rate and vice versa</td>
+            <td class="third-col" style="text-align: justify;">
+                NA
+            </td>
+        </tr>
+        <tr>
+            <td class="first-col">(vii)</td>
+            <td class="second-col">Any other charges, please specify</td>
+            <td class="third-col" style="text-align: justify;">
+                -
+            </td>
+        </tr>
+    </table>
+    <br />
+
+    <h2>Part 2 (Other qualitative information)</h2>
+
+
+    <table class="annexABC-table">
+        <tr>
+            <td class="first-col">1</td>
+            <td class="second-col">Clause of Loan agreement relating to
+                engagement of recovery agents</td>
+            <td class="third-col" style="text-align: justify;">
+                The Borrower expressly recognises and accepts that the Lender shall, without prejudice to its right to
+                perform such activities itself or through its officers or servants, be absolutely entitled and have full
+                powers and authority to appoint &amp;engage at the cost &amp;expenses of the Borrower a recovery agent
+                of the Lender’s choice to assist in the recovery of any Outstanding Amounts due under this Agreement, to
+                visit the premises of the Borrower whether residential or office or otherwise, collect on behalf of the
+                Lender all unpaid dues, getting or verifying any information of the Borrower/ their assets and to
+                perform and execute all act(s), deed(s), matter(s) and thing(s) connected therewith or incidental
+                thereto including sending notices of demand, or otherwise contacting the Borrower, receiving the
+                outstanding (in cash/through bank draft/cheque) from the Borrower, and to perform and execute all lawful
+                acts, deeds, matters and things connected herewith or incidental hereto as the recovery agent may
+                consider appropriate for the purpose.
+                The Borrower expressly agrees that in the event of Lender appointing an agent as aforesaid, the Lender
+                shall be entitled to provide the information held by the Lender in relation to the Borrower/guarantor
+                &amp;Loan to such agent and the Borrower shall co-operate with such agent appointed by the Lender in the
+                same manner as it would with the Lender in terms of this Agreement.
+            </td>
+        </tr>
+        <tr>
+            <td class="first-col">2</td>
+            <td class="second-col">Clause of Loan agreement which details
+                grievance redressal mechanism</td>
+            <td class="third-col" style="text-align: justify;">Grievance Redressal:
+                There can be instances where the Borrower is not satisfied with the services provided. To highlight such
+                instances &amp;register a complaint the Borrower may follow the following process:
+                <ol style="list-style-type: lower-alpha;">
+                    <li>
+                        The Borrower may raise his / her complaint through Toll free number mentioned on
+                        www.piramalfinance.com
+                        or email to customercare@piramal.com or contact the Branch Operations Manager of the respective
+                        dealing
+                        branch within working hours as mentioned on the website</li>
+
+                    <li>If the Borrower is not satisfied with the resolution provided or his/her queries are not solved
+                        within
+                        15 days, the Borrower may escalate to:grievances@piramal.com.</li>
+                    <li>
+                        In case the concern remains unresolved beyond a period of 15 days, the Borrower may escalate the
+                        matter
+                        to “The Nodal Officer”, Piramal Finance Limited. (Formerly Piramal Capital &amp; Housing Finance
+                        Ltd.), Unit No-601, 6th Floor, Piramal
+                        Amiti Building, Piramal Agastya Corporate Park, Kamani Junction, Opp. Fire Station, LBS Marg,
+                        Kurla
+                        (West), Mumbai - 400 070. Email : <a
+                            href="mailto:nodal.officer@piramal.com">nodal.officer@piramal.com</a>,
+                        Contact No: 022-71740555</li>
+                    <li>In case of non-addressal of the complaint to the customer’s satisfaction, within a reasonable
+                        time frame
+                        from the above quarters, the customer may approach the Complaint Redressal Cell of National
+                        Housing Bank
+                        by lodging its complaint in online mode at the link https://grids.nhbonline.org.in/ or may write
+                        to :
+                        National Housing Bank
+                        Complaint Redressal Cell, Department of Regulation &amp;Supervision,
+                        National Housing Bank, 4th Floor, Core 5A, India Habitat Centre, Lodhi Road, New Delhi - 110
+                        003.
+                        https://grids.nhbonline.org.in/</li>
+                </ol>
+            </td>
+        </tr>
+        <tr>
+            <td class="first-col">3</td>
+            <td class="second-col">Phone number and email id of the nodal
+                grievance redressal officer</td>
+            <td class="third-col" style="text-align: justify;">
+                “The Nodal Officer - Hetal Parihar”, 1st Floor, Amiti Building, Agastya Corporate Park, Kamani Junction,
+                Opp. Fire Station, LBS Marg, Kurla (West), Mumbai - 400 070. Contact details: 022-71740555, Email: <a
+                    href="mailto:nodal.officer@piramal.com">nodal.officer@piramal.com</a>
+            </td>
+        </tr>
+        <tr>
+            <td class="first-col">4</td>
+            <td class="second-col">Whether the loan is, or in future maybe,
+                subject
+                to transfer to other REs or securitisation (Yes/ No)</td>
+            <td class="third-col">Yes</td>
+        </tr>
+        <tr>
+            <td class="first-col">5</td>
+            <td class="second-col">In case of lending under collaborative lending
+                arrangements (e.g., co-lending/outsourcing),
+                following additional details may be furnished:
+            </td>
+            <td class="third-col"></td>
+        </tr>
+        <tr>
+            <td class="first-col"></td>
+            <td class="second-col">Name of the originating RE, along with its
+                funding proportion</td>
+            <td class="third-col">NA</td>
+        </tr>
+        <tr>
+            <td class="first-col"></td>
+            <td class="second-col">Name of the partner RE along with its
+                proportion of funding</td>
+            <td class="third-col">NA</td>
+        </tr>
+        <tr>
+            <td class="first-col"></td>
+            <td class="second-col">Blended rate of interest</td>
+            <td class="third-col">NA</td>
+        </tr>
+
+        <tr>
+            <td class="first-col">6</td>
+            <td class="second-col">In Case of Digital Loans</td>
+            <td class="third-col"></td>
+        </tr>
+        <tr>
+            <td class="first-col">(i)</td>
+            <td class="second-col">Cooling Off/Look-up Period, in Terms of RE’s Board Approved Policy</td>
+            <td class="third-col">3 days</td>
+        </tr>
+        <tr>
+            <td class="first-col">(ii)</td>
+            <td class="second-col">Details of LSP Acting as Recovery Agent and Authorized to Approach the Borrower</td>
+            <td class="third-col">Piramal Finance Limited. (Formerly Piramal Capital &amp; Housing Finance Ltd.)</td>
+        </tr>
+    </table>
+    <br />
+    <table>
+        <tr>
+            <td>The above terms and conditions have been explained to me/us and have been acknowledged &amp; understood
+                by me/us.</td>
+        </tr>
+    </table>
+
+    <table>
+        <tr>
+            <td>
+                Borrower Signature:
+            </td>
+
+            <td>
+                Co-Borrower Signature:
+            </td>
+
+            <td>
+                Guarantor Signature:
+            </td>
+        </tr>
+        <tr>
+            <td>
+                ______________________________
+            </td>
+
+            <td>
+                ______________________________
+            </td>
+
+            <td>
+                ______________________________
+            </td>
+        </tr>
+        <tr>
+            <td>
+                Date:
+            </td>
+
+            <td>
+                Date:
+            </td>
+
+            <td>
+                Date:
+            </td>
+        </tr>
+    </table>
+
+    <h1 class="page-break" style="margin-left: 4%">Annex B</h1>
+
+    <h2 style="text-align: center; font-weight: bold;">Computation of APR
+    </h2>
+
+    <table class="annexABC-table">
+        <tr>
+            <th class="first-col">Sr. No.</th>
+            <th class="second-col">Parameter</th>
+            <th class="third-col">Details</th>
+        </tr>
+        <tr>
+            <td class="first-col">1</td>
+            <td class="second-col">Sanctioned Loan Amount</td>
+            <td class="third-col">₹ <span th:text="${loanAmountWithInsurance}"></span></td>
+        </tr>
+        <tr>
+            <td class="first-col">2</td>
+            <td class="second-col" th:if="${isFlexiLoan}==false">Loan Term</td>
+            <td class="second-col" th:if="${isFlexiLoan}==true">Loan Term Total(Months)</td>
+            <td class="third-col" th:text="${tenureInMonths}"></td>
+        </tr>
+        <tr th:if="${isFlexiLoan}==true">
+            <td class="first-col"></td>
+            <td class="second-col">1st Period</td>
+            <td class="third-col"><span th:text="${flexiTenure}"></span> Months</td>
+        </tr>
+        <tr th:if="${isFlexiLoan}==true">
+            <td class="first-col"></td>
+            <td class="second-col">2nd Period</td>
+            <td class="third-col"><span th:text="${balanceTenure}"></span> Months</td>
+        </tr>
+        <tr>
+            <td class="first-col">3</td>
+            <td class="second-col">Interest Type (Fixed/Floating)</td>
+            <td class="third-col" th:text="${interestRateType}"></td>
+        </tr>
+        <tr>
+            <td class="first-col">4</td>
+            <td class="second-col">Rate of Interest</td>
+            <td class="third-col" th:text="${roi}"></td>
+        </tr>
+        <tr>
+            <td class="first-col">5</td>
+            <td class="second-col">Loan EMI (Monthly)</td>
+            <td class="third-col" th:if="${isFlexiLoan}==false">₹ <span th:text="${installment}"></span></td>
+            <td class="third-col" th:if="${isFlexiLoan}==true"></td>
+        </tr>
+        <tr th:if="${isFlexiLoan}==true">
+            <td class="first-col"></td>
+            <td class="second-col"> First <span th:text="${flexiTenure}"></span> months</td>
+            <td class="third-col">₹ <span th:text="${flexiEmi}"></span></td>
+        </tr>
+        <tr th:if="${isFlexiLoan}==true">
+            <td class="first-col"></td>
+            <td class="second-col"> Balance <span th:text="${balanceTenure}"></span> months</td>
+            <td class="third-col">₹ <span th:text="${balanceEmi}"></span></td>
+        </tr>
+        <tr>
+            <td class="first-col">6</td>
+            <td class="second-col">Total Interest Amount to be charged during the entire tenor of the loan as per the
+                rate prevailing on sanction date</td>
+            <td class="third-col">₹ <span th:text="${totalInterestAmount}"></span></td>
+        </tr>
+        <tr>
+            <td class="first-col">7</td>
+            <td class="second-col">Fee/Charges payable</td>
+            <td class="third-col">₹ <span th:text="${feesPayable}"></span></td>
+        </tr>
+        <tr>
+            <td class="first-col">a)</td>
+            <td class="second-col">Payable to PFL</td>
+            <td class="third-col">₹ <span th:text="${payableToREA}"></span></td>
+        </tr>
+        <tr>
+            <td class="first-col">b)</td>
+            <td class="second-col">Payable to third-party</td>
+            <td class="third-col">₹ <span th:text="${payableToREB}"></span></td>
+        </tr>
+        <tr>
+            <td class="first-col">8</td>
+            <td class="second-col">Net disbursed amount</td>
+            <td class="third-col">₹ <span th:text="${netDisbursedAmount}"></span></td>
+        </tr>
+        <tr>
+            <td class="first-col">9</td>
+            <td class="second-col">Total amount to be paid by the borrower (1+5)</td>
+            <td class="third-col">₹ <span th:text="${totalAmountKfs}"></span></td>
+        </tr>
+        <tr>
+            <td class="first-col">10</td>
+            <td class="second-col">Annual Percentage rate- Effective annualized interest rate</td>
+            <td class="third-col" th:text="${apr}"></td>
+        </tr>
+        <tr>
+            <td class="first-col">11</td>
+            <td class="second-col">Schedule of disbursement as per terms and conditions</td>
+            <td class="third-col">Attached as AnnexC of KFS</td>
+        </tr>
+        <tr>
+            <td class="first-col">12</td>
+            <td class="second-col">Due date of payment of instalment and interest</td>
+            <td class="third-col">5th of every month</td>
+        </tr>
+    </table>
+
+    <h1 class="page-break" style="margin-left: 4%">Annex C</h1>
+    <h2 style="margin-left: 4%">Loan Summary</h2>
+
+    <table class="annexABC-table" id="loanDetailsTable">
+        <tr>
+            <th style="border: 1px solid black;text-align: center;">Principal Amount</th>
+            <th style="border: 1px solid black;text-align: center;">Rate of Interest</th>
+            <th style="border: 1px solid black;text-align: center;">Total Interest</th>
+            <th style="border: 1px solid black;text-align: center;">Loan Term (Months)</th>
+            <th style="border: 1px solid black;text-align: center;">Monthly Payment</th>
+            <th style="border: 1px solid black;text-align: center;">Number of Payments</th>
+            <th style="border: 1px solid black;text-align: center;">Early Payments</th>
+            <th style="border: 1px solid black;text-align: center;">Lender Name</th>
+        </tr>
+        <tr>
+            <td style="border: 1px solid black;text-align: center;" th:text="${loanAmountWithInsurance}"></td>
+            <td style="border: 1px solid black;text-align: center;" th:text="${roi}"></td>
+            <td style="border: 1px solid black;text-align: center;" th:text="${totalInterestAmount}"></td>
+            <td style="border: 1px solid black;text-align: center;" th:text="${tenureInMonths}"></td>
+            <td style="border: 1px solid black;text-align: center;" th:text="${installment}"></td>
+            <td style="border: 1px solid black;text-align: center;" th:text="${tenureInMonths}"></td>
+            <td style="border: 1px solid black;text-align: center;">0.00</td>
+            <td style="border: 1px solid black;text-align: center;">Piramal</td>
+        </tr>
+    </table>
+
+    <h2 style="margin-left: 4%">Loan Amortization Schedule</h2>
+
+    <table class="annexABC-table" id="scheduleTable">
+        <tr>
+            <th style="border: 1px solid black; text-align: center;">Month</th>
+            <th style="border: 1px solid black; text-align: center;">Monthly Payment</th>
+            <th style="border: 1px solid black; text-align: center;">Principal Payment</th>
+            <th style="border: 1px solid black; text-align: center;">Interest Payment</th>
+            <th style="border: 1px solid black; text-align: center;">Remaining Balance</th>
+            <th style="border: 1px solid black; text-align: center;">Cumulative Interest</th>
+        </tr>
+        <tr th:each="row: ${rps_rows}">
+            <td style="border: 1px solid black; text-align: center;" th:each="header: ${rps_headers}"
+                th:text="${row.get(header)}">
+            </td>
+        </tr>
+    </table>
     <footer id="pageFooter">
         <table>
             <tr class="border_top">

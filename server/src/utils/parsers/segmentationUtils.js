@@ -173,6 +173,11 @@ const splitByPunctuation = (str, tagMap) => {
     return [balanceSegmentTags(str, tagMap)];
   }
 
+  // Fast path for short text nodes (under 150 chars with 0 or 1 tag): avoid expensive character index mapping
+  if (str.length < 150 && (!str.includes('<') || (str.match(/</g) || []).length <= 2)) {
+    return [balanceSegmentTags(str, tagMap)];
+  }
+
   // Build a mapping from clean-text positions back to original string positions.
   // We strip placeholder tags (e.g. <1>, </2>) so the segmenter sees plain text.
   const cleanToOrig = []; // cleanToOrig[cleanIdx] = origIdx in str
@@ -241,6 +246,7 @@ const restorePlaceholders = (segmentedStr, tagMap) => {
 };
 
 // Separates a segment string into leading tags, clean body, and trailing tags
+// Uses linear scanning to avoid catastrophic regex backtracking (ReDoS)
 const extractSegmentTags = (str) => {
   if (!str) return { leading: "", body: "", trailing: "" };
   if (!str.includes("<")) return { leading: "", body: str, trailing: "" };
@@ -249,21 +255,61 @@ const extractSegmentTags = (str) => {
   let trailing = "";
   let body = str;
 
-  // Match leading tags and whitespace (bullet points are translatable content and stay in the body)
-  const leadingRegex = /^(\s*<\/?\d+>\s*|\s+)+/;
-  const leadingMatch = body.match(leadingRegex);
-  if (leadingMatch) {
-    leading = leadingMatch[0];
-    body = body.substring(leading.length);
+  // Linear scan leading tags and spaces
+  let pos = 0;
+  while (pos < body.length) {
+    if (/\s/.test(body[pos])) {
+      pos++;
+      continue;
+    }
+    if (body[pos] === "<") {
+      const match = body.slice(pos).match(/^<\/?\d+>/);
+      if (match) {
+        pos += match[0].length;
+        continue;
+      }
+    }
+    break;
   }
 
-  // Match trailing tags and spaces
-  const trailingRegex = /(\s*<\/?\d+>\s*|\s+)+$/;
-  const trailingMatch = body.match(trailingRegex);
-  if (trailingMatch) {
-    trailing = trailingMatch[0];
-    body = body.substring(0, body.length - trailing.length);
+  if (pos > 0) {
+    leading = body.slice(0, pos);
+    body = body.slice(pos);
   }
+
+  // Linear scan trailing tags and spaces
+  let endPos = body.length;
+  while (endPos > 0) {
+    const lastChar = body[endPos - 1];
+    if (/\s/.test(lastChar)) {
+      endPos--;
+      continue;
+    }
+    if (lastChar === ">") {
+      const lastTagMatch = body.slice(0, endPos).match(/<\/?\d+>$/);
+      if (lastTagMatch) {
+        endPos -= lastTagMatch[0].length;
+        continue;
+      }
+    }
+    break;
+  }
+
+  if (endPos < body.length) {
+    trailing = body.slice(endPos);
+    body = body.slice(0, endPos);
+  }
+
+  // Absorb any additional leading/trailing whitespace from body into leading/trailing
+  const bodyMatch = body.match(/^(\s*)([\s\S]*?)(\s*)$/);
+  if (bodyMatch && bodyMatch[2]) {
+    leading += bodyMatch[1];
+    trailing = bodyMatch[3] + trailing;
+    body = bodyMatch[2];
+  }
+
+  // Clean internal raw line breaks (\r\n or \n) into a single clean space
+  body = body.replace(/[\r\n]+/g, " ").replace(/ +/g, " ");
 
   return { leading, body, trailing };
 };

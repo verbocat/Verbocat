@@ -20,12 +20,17 @@ const upload = multer({ dest: uploadDir });
 documentRouter.post(["/upload", "/api/upload"], checkAuth, upload.single("file"), async (request, response) => {
   try {
     if (!request.file) {
+      console.error("[HTTP_UPLOAD_ERROR] No file present in upload request");
       return response.status(400).json({ error: "No file was uploaded." });
     }
+
+    console.log(`\n========================================`);
+    console.log(`[HTTP_UPLOAD_START] Received upload request for file: "${request.file.originalname}" (${request.file.size} bytes)`);
 
     const ext = path.extname(request.file.originalname).toLowerCase();
     const DANGEROUS_EXTS = [".exe", ".php", ".sh", ".bat", ".cmd", ".js", ".py", ".vbs", ".ps1", ".dll", ".so", ".app", ".cgi", ".msi", ".scr", ".pif"];
     if (DANGEROUS_EXTS.includes(ext)) {
+      console.error(`[HTTP_UPLOAD_SECURITY_BLOCK] Blocked dangerous file extension: ${ext}`);
       if (fs.existsSync(request.file.path)) fs.unlinkSync(request.file.path);
       return response.status(400).json({ error: `Security Error: Executable or script files (${ext}) are not permitted.` });
     }
@@ -39,9 +44,11 @@ documentRouter.post(["/upload", "/api/upload"], checkAuth, upload.single("file")
     const tgtLang = request.body.target || "hi";
 
     if (srcLang === tgtLang) {
+      console.error(`[HTTP_UPLOAD_ERROR] Source and target languages are identical (${srcLang})`);
       return response.status(400).json({ error: "Source and target language cannot be the same." });
     }
 
+    console.log(`[DB_CREATE_DOCUMENT] Inserting record into "documents" table (DocId: ${documentId}, Name: "${request.file.originalname}")...`);
     // Create document record
     const { error: docError } = await supabase
       .from("documents")
@@ -58,7 +65,9 @@ documentRouter.post(["/upload", "/api/upload"], checkAuth, upload.single("file")
       });
 
     if (docError) {
-      console.error("Document Insert Error:", docError);
+      console.error("[DB_CREATE_DOCUMENT_ERROR] Documents insert error:", docError);
+    } else {
+      console.log(`[DB_CREATE_DOCUMENT_SUCCESS] Document record created successfully!`);
     }
 
     // Automatically insert document_access entry for creator
@@ -70,6 +79,7 @@ documentRouter.post(["/upload", "/api/upload"], checkAuth, upload.single("file")
     }, { onConflict: "document_id,user_id" }).catch(() => {});
 
     // Persist parsed template segments to DB in parallel batches (target_lang: null)
+    console.log(`[DB_PERSIST_TEMPLATE_SEGMENTS] Persisting ${result.segments.length} template segments to "document_segments" (target_lang: null)...`);
     const segmentInserts = result.segments.map((seg, idx) => ({
       document_id: documentId,
       segment_index: idx + 1,
@@ -91,9 +101,13 @@ documentRouter.post(["/upload", "/api/upload"], checkAuth, upload.single("file")
 
     const failed = batchResults.find(res => res.error);
     if (failed) {
+      console.error(`[DB_PERSIST_TEMPLATE_SEGMENTS_ERROR] Failed inserting template segments:`, failed.error);
       await supabase.from("documents").delete().eq("id", documentId);
       return response.status(500).json({ error: `Failed to persist segments: ${failed.error.message || "Database error"}` });
     }
+
+    console.log(`[HTTP_UPLOAD_COMPLETE] Successfully uploaded and persisted document ${documentId} with ${result.segments.length} segments!`);
+    console.log(`========================================\n`);
 
     response.json({
       documentId: documentId,
@@ -191,10 +205,10 @@ documentRouter.post(["/documents/:id/accept-all-changes", "/api/documents/:id/ac
     const { data: segs } = await supabase.from("document_segments").select("*").eq("document_id", id);
     if (segs) {
       for (const s of segs) {
-        if (s.proposed_text) {
+        if (s.original_target_text) {
           await supabase.from("document_segments").update({
-            target_text: s.proposed_text,
-            proposed_text: null,
+            original_target_text: null,
+            tracked_by: null,
             status: "approved"
           }).eq("id", s.id);
         }
@@ -203,6 +217,99 @@ documentRouter.post(["/documents/:id/accept-all-changes", "/api/documents/:id/ac
     response.json({ success: true });
   } catch (error) {
     response.status(500).json({ error: "Failed to accept all changes" });
+  }
+});
+
+// Single Tracked Change Accept / Reject
+documentRouter.post(["/documents/:id/segments/:segmentIndex/accept-change", "/api/documents/:id/segments/:segmentIndex/accept-change"], checkAuth, async (request, response) => {
+  try {
+    const { id, segmentIndex } = request.params;
+    const idx = parseInt(segmentIndex, 10);
+    const targetLang = request.query?.target_lang || request.body?.target_lang || null;
+
+    let query = supabase.from("document_segments").select("*").eq("document_id", id).eq("segment_index", idx);
+    if (targetLang) {
+      query = query.eq("target_lang", targetLang);
+    }
+    let { data: segs, error: fetchErr } = await query;
+
+    if (fetchErr || !segs || segs.length === 0) {
+      // Fallback query without target_lang filter if target_lang row doesn't exist yet
+      const { data: fallbackSegs } = await supabase.from("document_segments").select("*").eq("document_id", id).eq("segment_index", idx);
+      if (!fallbackSegs || fallbackSegs.length === 0) {
+        return response.status(404).json({ error: `Segment ${idx} not found for document ${id}` });
+      }
+      segs = fallbackSegs;
+    }
+
+    const seg = segs[0];
+
+    const { data: updated, error: updateErr } = await supabase
+      .from("document_segments")
+      .update({
+        original_target_text: null,
+        tracked_by: null,
+        status: "translated"
+      })
+      .eq("id", seg.id)
+      .select()
+      .single();
+
+    if (updateErr) {
+      console.error("[ACCEPT_CHANGE_ERROR]", updateErr);
+      return response.status(500).json({ error: updateErr.message });
+    }
+
+    response.json({ success: true, segment: updated });
+  } catch (error) {
+    console.error("Accept change exception:", error);
+    response.status(500).json({ error: "Failed to accept tracked change" });
+  }
+});
+
+documentRouter.post(["/documents/:id/segments/:segmentIndex/reject-change", "/api/documents/:id/segments/:segmentIndex/reject-change"], checkAuth, async (request, response) => {
+  try {
+    const { id, segmentIndex } = request.params;
+    const idx = parseInt(segmentIndex, 10);
+    const targetLang = request.query?.target_lang || request.body?.target_lang || null;
+
+    let query = supabase.from("document_segments").select("*").eq("document_id", id).eq("segment_index", idx);
+    if (targetLang) {
+      query = query.eq("target_lang", targetLang);
+    }
+    let { data: segs, error: fetchErr } = await query;
+
+    if (fetchErr || !segs || segs.length === 0) {
+      const { data: fallbackSegs } = await supabase.from("document_segments").select("*").eq("document_id", id).eq("segment_index", idx);
+      if (!fallbackSegs || fallbackSegs.length === 0) {
+        return response.status(404).json({ error: `Segment ${idx} not found for document ${id}` });
+      }
+      segs = fallbackSegs;
+    }
+
+    const seg = segs[0];
+    const revertedTargetText = seg.original_target_text !== null && seg.original_target_text !== undefined ? seg.original_target_text : seg.target_text;
+
+    const { data: updated, error: updateErr } = await supabase
+      .from("document_segments")
+      .update({
+        target_text: revertedTargetText,
+        original_target_text: null,
+        tracked_by: null
+      })
+      .eq("id", seg.id)
+      .select()
+      .single();
+
+    if (updateErr) {
+      console.error("[REJECT_CHANGE_ERROR]", updateErr);
+      return response.status(500).json({ error: updateErr.message });
+    }
+
+    response.json({ success: true, segment: updated });
+  } catch (error) {
+    console.error("Reject change exception:", error);
+    response.status(500).json({ error: "Failed to reject tracked change" });
   }
 });
 

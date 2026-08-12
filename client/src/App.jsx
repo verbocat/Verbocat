@@ -149,8 +149,7 @@ export default function App() {
       )
     );
     try {
-      const targetSegment = segments.find(s => s.id === segmentId);
-      const segmentIndex = targetSegment?.segmentIndex !== undefined ? targetSegment.segmentIndex : segmentId - 1;
+      const segmentIndex = targetSegment?.segment_index !== undefined ? targetSegment.segment_index : segmentId;
       const token = localStorage.getItem("centroid_token");
       if (documentId) {
         fetch(`${API_BASE_URL}/documents/${documentId}/segments/${segmentIndex}/max-words`, {
@@ -441,14 +440,20 @@ export default function App() {
 
       setDocumentId(activeDocId);
       const rawSegments = Array.isArray(doc.segments) ? doc.segments : (Array.isArray(doc.segments?.segments) ? doc.segments.segments : []);
+      const cleanTextString = (str) => {
+        if (str === null || str === undefined) return "";
+        return String(str).replace(/[\r\n]+/g, " ").replace(/^[\s\uFEFF\xA0]+/, "").replace(/ +/g, " ");
+      };
       const cleanSegs = rawSegments.map((s, idx) => {
         const actualSegIndex = idx + 1;
+        const rawSrc = s.source !== undefined && s.source !== null ? s.source : (s.source_text !== undefined && s.source_text !== null ? s.source_text : "");
+        const rawTgt = s.target !== undefined && s.target !== null ? s.target : (s.target_text !== undefined && s.target_text !== null ? s.target_text : "");
         return {
           ...s,
           id: actualSegIndex,
           segment_index: actualSegIndex,
-          source: s.source !== undefined && s.source !== null ? s.source : (s.source_text !== undefined && s.source_text !== null ? s.source_text : ""),
-          target: s.target !== undefined && s.target !== null ? s.target : (s.target_text !== undefined && s.target_text !== null ? s.target_text : ""),
+          source: cleanTextString(rawSrc),
+          target: cleanTextString(rawTgt),
           uniqueKey: s?.uniqueKey || `seg-${activeDocId}-${actualSegIndex}`
         };
       });
@@ -555,8 +560,8 @@ export default function App() {
         return;
       }
       setSegments((prev) =>
-        prev.map((seg, idx) => {
-          const isMatch = seg.id === segmentIndex || seg.segment_index === segmentIndex || idx === (segmentIndex - 1);
+        prev.map((seg) => {
+          const isMatch = String(seg.id) === String(segmentIndex) || Number(seg.segment_index) === Number(segmentIndex);
           if (isMatch) {
             const updatedSeg = { ...seg };
             if (targetText !== undefined) {
@@ -581,25 +586,17 @@ export default function App() {
       if (targetLang && currentRoute.screen === "editor" && currentRoute.targetLang && targetLang !== currentRoute.targetLang) {
         return;
       }
-      setSegments((prev) => {
-        const targetIdx = typeof segmentIndex === "number"
-          ? (prev.findIndex(s => s.id === segmentIndex || s.segment_index === segmentIndex) !== -1
-              ? prev.findIndex(s => s.id === segmentIndex || s.segment_index === segmentIndex)
-              : (segmentIndex > 0 ? segmentIndex - 1 : segmentIndex))
-          : -1;
-
-        if (targetIdx < 0 || targetIdx >= prev.length) return prev;
-
-        return prev.map((seg, idx) => {
-          if (idx === targetIdx) {
+      setSegments((prev) =>
+        prev.map((seg) => {
+          if (String(seg.id) === String(segmentIndex) || Number(seg.segment_index) === Number(segmentIndex)) {
             const updated = { ...seg, target: targetText };
             if (originalTargetText !== undefined) updated.originalTargetText = originalTargetText;
             if (trackedBy !== undefined) updated.trackedBy = trackedBy;
             return updated;
           }
           return seg;
-        });
-      });
+        })
+      );
     });
 
     socket.on("track-changes-toggled", ({ enabled }) => {
@@ -607,60 +604,7 @@ export default function App() {
       showToast(`Track Changes was toggled ${enabled ? "ON" : "OFF"} by the creator.`, "info");
     });
 
-    socket.on("typing-update", ({ segmentIndex, targetText, originalTargetText, trackedBy, targetLang }) => {
-      if (targetLang && currentRoute.screen === "editor" && currentRoute.targetLang && targetLang !== currentRoute.targetLang) {
-        return;
-      }
-      setSegments((prev) => {
-        const sourceSeg = prev[segmentIndex];
-        if (!sourceSeg) return prev;
 
-        const cleanString = (str) => {
-          if (!str) return "";
-          return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
-        };
-
-        const propagateTranslation = (targetA, sourceB) => {
-          if (!targetA) return "";
-          const tagsInSourceB = sourceB.match(/<[^>]+>/g) || [];
-          let tagIdx = 0;
-          let propagated = targetA.replace(/<[^>]+>/g, () => {
-            if (tagIdx < tagsInSourceB.length) {
-              return tagsInSourceB[tagIdx++];
-            }
-            return "";
-          });
-          while (tagIdx < tagsInSourceB.length) {
-            propagated += tagsInSourceB[tagIdx++];
-          }
-          return propagated;
-        };
-
-        const cleanedSource = cleanString(sourceSeg.source);
-
-        return prev.map((seg, idx) => {
-          if (idx === segmentIndex) {
-            const updated = { ...seg, target: targetText };
-            if (originalTargetText !== undefined) updated.originalTargetText = originalTargetText;
-            if (trackedBy !== undefined) updated.trackedBy = trackedBy;
-            return updated;
-          }
-          if (autoPropagateEnabled && cleanedSource && cleanString(seg.source) === cleanedSource) {
-            const updated = { ...seg, target: propagateTranslation(targetText, seg.source) };
-            if (originalTargetText !== undefined) {
-              if (originalTargetText === null) {
-                updated.originalTargetText = null;
-              } else if (!seg.originalTargetText) {
-                updated.originalTargetText = seg.target || "";
-              }
-            }
-            if (trackedBy !== undefined) updated.trackedBy = trackedBy;
-            return updated;
-          }
-          return seg;
-        });
-      });
-    });
 
     socket.on("all-changes-accepted", ({ targetLang }) => {
       if (targetLang && currentRoute.screen === "editor" && currentRoute.targetLang && targetLang !== currentRoute.targetLang) {
@@ -1801,19 +1745,15 @@ export default function App() {
   };
 
   const handleAcceptChange = async (id) => {
-    if (!documentId) return;
-    const segmentIndex = segments.findIndex((s) => s.id === id);
-    if (segmentIndex === -1) return;
+    const activeDoc = documentId || currentRoute?.fileId;
+    if (!activeDoc) return;
+    const targetSeg = segments.find((s) => String(s.id) === String(id) || Number(s.segment_index) === Number(id));
+    const segIndex = targetSeg?.segment_index || targetSeg?.id || id;
     try {
-      await acceptTrackedChange(documentId, segmentIndex);
-      const cleanString = (str) => {
-        if (!str) return "";
-        return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
-      };
-      const cleanedSource = cleanString(segments[segmentIndex].source);
+      await acceptTrackedChange(activeDoc, segIndex, activeTargetLanguage);
       setSegments((prev) =>
         prev.map((seg) => {
-          if (seg.id === id || (cleanedSource && cleanString(seg.source) === cleanedSource)) {
+          if (String(seg.id) === String(id) || Number(seg.segment_index) === Number(id)) {
             return { ...seg, originalTargetText: null, trackedBy: null };
           }
           return seg;
@@ -1827,20 +1767,15 @@ export default function App() {
   };
 
   const handleRejectChange = async (id) => {
-    if (!documentId) return;
-    const segmentIndex = segments.findIndex((s) => s.id === id);
-    if (segmentIndex === -1) return;
+    const activeDoc = documentId || currentRoute?.fileId;
+    if (!activeDoc) return;
+    const targetSeg = segments.find((s) => String(s.id) === String(id) || Number(s.segment_index) === Number(id));
+    const segIndex = targetSeg?.segment_index || targetSeg?.id || id;
     try {
-      const seg = segments[segmentIndex];
-      await rejectTrackedChange(documentId, segmentIndex);
-      const cleanString = (str) => {
-        if (!str) return "";
-        return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
-      };
-      const cleanedSource = cleanString(seg.source);
+      await rejectTrackedChange(activeDoc, segIndex, activeTargetLanguage);
       setSegments((prev) =>
         prev.map((s) => {
-          if (s.id === id || (cleanedSource && cleanString(s.source) === cleanedSource)) {
+          if (String(s.id) === String(id) || Number(s.segment_index) === Number(id)) {
             const hasOrig = s.originalTargetText !== null && s.originalTargetText !== undefined;
             return {
               ...s,
@@ -1878,7 +1813,7 @@ export default function App() {
     let isTrackInit = false;
     let trackOrig = null;
 
-    const targetSeg = segments.find((s) => s.id === id);
+    const targetSeg = segments.find((s) => String(s.id) === String(id) || Number(s.segment_index) === Number(id));
     const isOwnerLocal = ownerId === user?.id;
 
     let originalTargetTextToSend = undefined;
@@ -1899,7 +1834,7 @@ export default function App() {
     }
 
     setSegments((previous) => {
-      const targetSegLocal = previous.find((s) => s.id === id);
+      const targetSegLocal = previous.find((s) => String(s.id) === String(id) || Number(s.segment_index) === Number(id));
       if (targetSegLocal) {
         sourceText = targetSegLocal.source;
         if (trackChangesEnabled && !isOwnerLocal && !targetSegLocal.originalTargetText) {
@@ -1908,33 +1843,10 @@ export default function App() {
         }
       }
 
-      const cleanString = (str) => {
-        if (!str) return "";
-        return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
-      };
-
-      const propagateTranslation = (targetA, sourceB) => {
-        if (!targetA) return "";
-        const tagsInSourceB = sourceB.match(/<[^>]+>/g) || [];
-        let tagIdx = 0;
-        let propagated = targetA.replace(/<[^>]+>/g, () => {
-          if (tagIdx < tagsInSourceB.length) {
-            return tagsInSourceB[tagIdx++];
-          }
-          return "";
-        });
-        while (tagIdx < tagsInSourceB.length) {
-          propagated += tagsInSourceB[tagIdx++];
-        }
-        return propagated;
-      };
-
-      const cleanedSource = cleanString(sourceText);
-
       const affected = [];
       const updatedList = previous.map((segment) => {
         let updated = { ...segment };
-        if (segment.id === id) {
+        if (String(segment.id) === String(id) || Number(segment.segment_index) === Number(id)) {
           updated.target = value;
           if (trackChangesEnabled && !isOwnerLocal) {
             const orig = segment.originalTargetText !== null && segment.originalTargetText !== undefined
@@ -1955,7 +1867,6 @@ export default function App() {
         return updated;
       });
 
-      // Queue affected segment into pendingBulkSaveRef & trigger 250ms debounced auto-save
       if (affected.length > 0) {
         persistBulkSegmentUpdates(affected, false);
       }
@@ -1964,8 +1875,9 @@ export default function App() {
     });
 
     if (socketRef.current) {
+      const segIdx = targetSeg?.segment_index || targetSeg?.id || id;
       socketRef.current.emit("typing-update", {
-        segmentIndex: id - 1,
+        segmentIndex: segIdx,
         targetText: value,
         originalTargetText: originalTargetTextToSend,
         trackedBy: trackedByToSend
@@ -2193,7 +2105,7 @@ export default function App() {
       return propagated;
     };
 
-    const targetSeg = segments.find((s) => s.id === id);
+    const targetSeg = segments.find((s) => String(s.id) === String(id) || Number(s.segment_index) === Number(id));
     if (targetSeg) {
       sourceText = targetSeg.source;
     }
@@ -2202,11 +2114,14 @@ export default function App() {
     // Compute affected synchronously from current segments array
     const affected = [];
     segments.forEach((segment) => {
-      if (segment.id === id || (autoPropagateEnabled && cleanedSource && cleanString(segment.source) === cleanedSource)) {
-        const valToSet = segment.id === id ? value : propagateTranslation(value, segment.source);
+      const isTarget = String(segment.id) === String(id) || Number(segment.segment_index) === Number(id);
+      const isAutoMatch = autoPropagateEnabled && !isTarget && cleanedSource.length >= 3 && cleanString(segment.source) === cleanedSource;
+
+      if (isTarget || isAutoMatch) {
+        const valToSet = isTarget ? value : propagateTranslation(value, segment.source);
         let updated = { ...segment, target: valToSet, verified: false };
 
-        if (trackChangesEnabled) {
+        if (trackChangesEnabled && isTarget) {
           const orig = (segment.originalTargetText !== null && segment.originalTargetText !== undefined)
             ? segment.originalTargetText
             : (segment.target !== undefined ? segment.target : "");
@@ -2226,15 +2141,16 @@ export default function App() {
 
     setSegments((previous) => {
       return previous.map((segment) => {
-        const match = affected.find((a) => a.id === segment.id);
+        const match = affected.find((a) => String(a.id) === String(segment.id) || Number(a.segment_index) === Number(segment.segment_index));
         return match ? match : segment;
       });
     });
 
     if (socketRef.current) {
-      const affectedItem = affected.find((a) => a.id === id);
+      const segIdx = targetSeg?.segment_index || targetSeg?.id || id;
+      const affectedItem = affected.find((a) => String(a.id) === String(id) || Number(a.segment_index) === Number(id));
       socketRef.current.emit("typing-update", {
-        segmentIndex: id - 1,
+        segmentIndex: segIdx,
         targetText: value,
         originalTargetText: affectedItem?.originalTargetText || null,
         trackedBy: affectedItem?.trackedBy || null

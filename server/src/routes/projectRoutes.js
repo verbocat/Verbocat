@@ -167,16 +167,22 @@ projectRouter.post(
   checkAuth,
   upload.single("file"),
   async (request, response) => {
+    const startTime = Date.now();
     try {
       const { projectId } = request.params;
       if (!request.file) {
+        console.error("[PROJECT_UPLOAD_ERROR] No file object in request");
         return response.status(400).json({ error: "No file was uploaded." });
       }
+
+      console.log(`\n========================================`);
+      console.log(`[PROJECT_UPLOAD_START] Received file: "${request.file.originalname}" (${(request.file.size / 1024).toFixed(1)} KB) for ProjectId: ${projectId}`);
 
       const activeTenantId = request.tenant?.id || request.profile?.organization_id || null;
       const userId = request.user.id;
 
       // 1. Verify project exists
+      console.log(`[PROJECT_UPLOAD_STEP 1/5] Verifying project ${projectId}...`);
       const { data: project, error: projErr } = await supabase
         .from("projects")
         .select("*")
@@ -184,14 +190,22 @@ projectRouter.post(
         .single();
 
       if (projErr || !project) {
+        console.error(`[PROJECT_UPLOAD_ERROR] Project ${projectId} not found or access denied:`, projErr);
         return response.status(404).json({ error: "Project not found or access denied." });
       }
+      console.log(`[PROJECT_UPLOAD_STEP 1/5 SUCCESS] Project verified! Name: "${project.name}" | Target Langs: ${JSON.stringify(project.target_lang)}`);
 
       // 2. Parse uploaded file using processUploadedFile
+      const parseStartTime = Date.now();
+      console.log(`[PROJECT_UPLOAD_STEP 2/5] Parsing file content and extracting segments...`);
       const result = await processUploadedFile(request.file);
+      const parseTimeMs = Date.now() - parseStartTime;
       const documentId = result.fileId;
+      console.log(`[PROJECT_UPLOAD_STEP 2/5 SUCCESS] File parsed in ${parseTimeMs}ms! DocId: ${documentId} | Total Segments: ${result.segments.length}`);
 
       // 3. Create document record bound to project_id and organization_id
+      const dbStartTime = Date.now();
+      console.log(`[PROJECT_UPLOAD_STEP 3/5] Creating document record in "documents" table...`);
       const { data: docRecord, error: docError } = await supabase
         .from("documents")
         .insert({
@@ -208,11 +222,13 @@ projectRouter.post(
         .single();
 
       if (docError) {
-        console.error("Project Document Create Error:", docError);
+        console.error("[PROJECT_UPLOAD_STEP 3/5 ERROR] Document insert error:", docError);
         return response.status(500).json({ error: `Failed to create document: ${docError.message}` });
       }
+      console.log(`[PROJECT_UPLOAD_STEP 3/5 SUCCESS] Document record created!`);
 
-      // 4. Persist parsed template segments to DB in parallel batches (target_lang: null)
+      // 4. Persist parsed template segments to DB in sequential batches with live progress
+      console.log(`[PROJECT_UPLOAD_STEP 4/5] Persisting ${result.segments.length} template segments to "document_segments" (target_lang: null)...`);
       const segmentInserts = result.segments.map((seg, idx) => ({
         document_id: documentId,
         segment_index: idx + 1,
@@ -222,25 +238,33 @@ projectRouter.post(
         status: "draft"
       }));
 
-      const BATCH_SIZE = 1000;
+      const BATCH_SIZE = 500;
       const batches = [];
       for (let i = 0; i < segmentInserts.length; i += BATCH_SIZE) {
         batches.push(segmentInserts.slice(i, i + BATCH_SIZE));
       }
 
-      const batchResults = await Promise.all(
-        batches.map(batch => supabase.from("document_segments").insert(batch))
-      );
+      console.log(`[PROJECT_UPLOAD_STEP 4/5] Inserting ${batches.length} batch(es) of max ${BATCH_SIZE} rows...`);
+      let batchSuccessCount = 0;
 
-      const failed = batchResults.find(res => res.error);
-      if (failed) {
-        console.error("Project Segments Persist Error:", failed.error);
-        await supabase.from("documents").delete().eq("id", documentId);
-        return response.status(500).json({ error: `Failed to persist segments: ${failed.error.message}` });
+      for (let bIdx = 0; bIdx < batches.length; bIdx++) {
+        const batch = batches[bIdx];
+        const { error: batchErr } = await supabase.from("document_segments").insert(batch);
+        if (batchErr) {
+          console.error(`[PROJECT_UPLOAD_STEP 4/5 ERROR] Batch ${bIdx + 1}/${batches.length} failed:`, batchErr);
+          await supabase.from("documents").delete().eq("id", documentId);
+          return response.status(500).json({ error: `Failed to persist segments batch ${bIdx + 1}: ${batchErr.message}` });
+        }
+        batchSuccessCount += batch.length;
+        console.log(`[PROJECT_UPLOAD_STEP 4/5 PROGRESS] Batch ${bIdx + 1}/${batches.length} inserted (${batchSuccessCount}/${result.segments.length} rows saved)...`);
       }
+
+      const dbSaveTimeMs = Date.now() - dbStartTime;
+      console.log(`[PROJECT_UPLOAD_STEP 4/5 SUCCESS] All ${result.segments.length} template segments persisted to DB in ${dbSaveTimeMs}ms!`);
 
       // 5. Create job records for target languages
       const targetLangs = Array.isArray(project.target_lang) ? project.target_lang : [project.target_lang || "hi"];
+      console.log(`[PROJECT_UPLOAD_STEP 5/5] Creating job records for target languages: ${targetLangs.join(', ')}...`);
       const jobsToInsert = targetLangs.map(lang => ({
         project_id: projectId,
         document_id: documentId,
@@ -258,17 +282,30 @@ projectRouter.post(
       if (!jobErr && insertedJobs) {
         createdJobs = insertedJobs;
       }
+      console.log(`[PROJECT_UPLOAD_STEP 5/5 SUCCESS] Created ${createdJobs.length} translation jobs!`);
+
+      const totalTimeMs = Date.now() - startTime;
+      console.log(`[PROJECT_UPLOAD_COMPLETE] Upload & processing finished successfully in ${totalTimeMs}ms (${(totalTimeMs / 1000).toFixed(2)}s)!`);
+      console.log(`========================================\n`);
 
       response.json({
         document: docRecord,
         jobs: createdJobs,
-        segments: result.segments,
+        segmentsCount: result.segments.length,
         type: result.type,
-        documentId
+        metrics: {
+          parseTimeMs,
+          dbSaveTimeMs,
+          batchCount: batches.length,
+          totalTimeMs
+        }
       });
     } catch (error) {
-      console.error("Project Upload Error:", error);
-      response.status(500).json({ error: error.message || "Failed to upload file to project" });
+      console.error("[PROJECT_UPLOAD_EXCEPTION] Unhandled upload error:", error);
+      if (request.file && request.file.path && fs.existsSync(request.file.path)) {
+        fs.unlinkSync(request.file.path);
+      }
+      response.status(500).json({ error: error.message || "Failed to process project file upload" });
     }
   }
 );
