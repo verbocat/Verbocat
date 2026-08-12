@@ -382,7 +382,10 @@ export default function App() {
         
         if (job.status === "completed") {
           setIsAuditing(false);
-          showToast("Quality Control Audit Completed!", "success");
+          loadedDocIdRef.current = null;
+          loadCollaborativeDocument();
+          setShowQaPanel(true);
+          showToast("Quality Control Audit Completed! Opening QA Panel...", "success");
         } else if (job.status === "failed") {
           setIsAuditing(false);
           showToast(`Audit failed: ${job.error_message || "Unknown error"}`, "error");
@@ -1020,7 +1023,7 @@ export default function App() {
         
         
         // MQM issues
-        let mqm = segment.mqmReport;
+        let mqm = segment.mqmReport || segment.mqm_report;
         if (typeof mqm === "string") {
           try {
             mqm = JSON.parse(mqm);
@@ -1667,7 +1670,8 @@ export default function App() {
     setShowEstimateModal(true);
     setEstimateData(null);
     try {
-      const data = await getAuditEstimate(documentId, { ...contextSettings, glossary: translationGlossary });
+      const activeLang = activeTargetLanguage || currentRoute?.targetLang || targetLanguage || "ja";
+      const data = await getAuditEstimate(documentId, { ...contextSettings, targetLang: activeLang, glossary: translationGlossary });
       setEstimateData(data);
     } catch (err) {
       console.error("Failed to fetch pre-flight audit estimate:", err);
@@ -1684,7 +1688,8 @@ export default function App() {
     setShowEstimateModal(false);
     showToast("Starting background Quality Control Audit...", "info");
     try {
-      const result = await startAudit(documentId, { ...contextSettings, glossary: translationGlossary });
+      const activeLang = activeTargetLanguage || currentRoute?.targetLang || targetLanguage || "ja";
+      const result = await startAudit(documentId, { ...contextSettings, targetLang: activeLang, glossary: translationGlossary });
       if (result.success && result.jobId) {
         const job = await getAuditStatus(documentId, result.jobId);
         setActiveJob(job);

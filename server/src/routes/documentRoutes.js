@@ -257,6 +257,212 @@ documentRouter.get(["/documents/:id", "/api/documents/:id"], checkAuth, async (r
   }
 });
 
+// 3.5 QC Audit Endpoints (Pre-flight estimate, Start AI MQM Audit, Cancel, Status)
+documentRouter.post(["/documents/:id/audit/estimate", "/api/documents/:id/audit/estimate"], checkAuth, async (request, response) => {
+  try {
+    const documentId = request.params.id;
+    const targetLang = request.body.contextSettings?.targetLang || request.body.contextSettings?.targetLanguage || request.body.targetLang || request.query.target || "ja";
+
+    let segments;
+    try {
+      segments = await fetchAllSegments(documentId, "*", targetLang);
+    } catch (fetchErr) {
+      console.error("Failed to fetch document segments:", fetchErr);
+      return response.status(500).json({ error: "Failed to fetch document segments." });
+    }
+
+    const segmentCount = (segments || []).length;
+    let totalWordCount = 0;
+    (segments || []).forEach(seg => {
+      const words = (seg.source_text || "").trim().split(/\s+/).filter(Boolean).length;
+      totalWordCount += words;
+    });
+
+    const pass1Calls = Math.ceil(segmentCount / 8);
+    const estErrSegments = Math.ceil(segmentCount * 0.15);
+    const estimatedCalls = pass1Calls + (estErrSegments * 2);
+    const estimatedDurationMin = Math.max(1, Math.round((segmentCount * 0.4) / 60 * 10) / 10);
+    const estimatedCostUsd = Math.round((segmentCount * 0.00015) * 10000) / 10000;
+
+    response.json({
+      segmentCount,
+      totalWordCount,
+      estimatedCalls,
+      estimatedDurationMin,
+      estimatedCostUsd
+    });
+  } catch (error) {
+    console.error("Audit estimate failed:", error);
+    response.status(500).json({ error: "Internal server error." });
+  }
+});
+
+documentRouter.post(["/documents/:id/audit/start", "/api/documents/:id/audit/start"], checkAuth, async (request, response) => {
+  try {
+    const documentId = request.params.id;
+    const targetLang = request.body.contextSettings?.targetLang || request.body.contextSettings?.targetLanguage || request.body.targetLang || request.query.target || "ja";
+
+    const { data: activeJobs } = await supabase
+      .from("audit_jobs")
+      .select("*")
+      .eq("document_id", documentId)
+      .in("status", ["pending", "in_progress"]);
+
+    if (activeJobs && activeJobs.length > 0) {
+      return response.status(400).json({ error: "An audit is already running for this document." });
+    }
+
+    let segments;
+    try {
+      segments = await fetchAllSegments(documentId, "*", targetLang);
+    } catch (fetchErr) {
+      console.error("Failed to fetch document segments for audit check:", fetchErr);
+      return response.status(500).json({ error: "Failed to fetch document segments for credit check." });
+    }
+
+    if (!segments || segments.length === 0) {
+      return response.status(400).json({ error: "No segments found in this document to audit." });
+    }
+
+    let wordCount = 0;
+    segments.forEach(seg => {
+      wordCount += (seg.source_text || "").trim().split(/\s+/).filter(Boolean).length;
+    });
+
+    if (request.profile && request.profile.role !== "admin" && request.profile.role !== "super_admin") {
+      if ((request.profile.credits_consumed || 0) + wordCount > (request.profile.credits_allowed || 50000)) {
+        return response.status(403).json({
+          error: `Credit limit exceeded. Reached ${request.profile.credits_consumed}/${request.profile.credits_allowed} words allowance. Contact admin.`
+        });
+      }
+    }
+
+    const { data: job, error: jobErr } = await supabase
+      .from("audit_jobs")
+      .insert({
+        document_id: documentId,
+        status: "pending",
+        total_segments: segments.length,
+        completed_segments: 0,
+        failed_segments: 0
+      })
+      .select()
+      .single();
+
+    if (jobErr || !job) {
+      console.error("Failed to create audit job:", jobErr);
+      return response.status(500).json({ error: jobErr?.message || "Failed to initiate audit job." });
+    }
+
+    if (wordCount > 0 && request.profile) {
+      const isSeo = request.body.contextSettings?.purpose === "SEO";
+      const actionName = isSeo ? "qc-audit (SEO)" : "qc-audit";
+      await supabase.from("credit_logs").insert({
+        user_id: request.profile.id,
+        email: request.profile.email,
+        action: actionName,
+        word_count: wordCount
+      });
+
+      const newConsumed = (request.profile.credits_consumed || 0) + wordCount;
+      await supabase
+        .from("profiles")
+        .update({ credits_consumed: newConsumed })
+        .eq("id", request.profile.id);
+    }
+
+    response.json({
+      success: true,
+      jobId: job.id,
+      message: "Background audit started."
+    });
+
+    (async () => {
+      try {
+        const { auditDocumentMQM } = require("../services/mqmService");
+        const activeSettings = {
+          ...request.body.contextSettings,
+          targetLang
+        };
+        await auditDocumentMQM(documentId, job.id, activeSettings, request.user.id);
+      } catch (err) {
+        console.error(`[Background Audit Crash] Job ${job.id}:`, err);
+      }
+    })();
+  } catch (error) {
+    console.error("Start audit failed:", error);
+    response.status(500).json({ error: error.message || "Internal server error." });
+  }
+});
+
+documentRouter.post(["/documents/:id/audit/cancel/:jobId", "/api/documents/:id/audit/cancel/:jobId"], checkAuth, async (request, response) => {
+  try {
+    const documentId = request.params.id;
+    const jobId = request.params.jobId;
+
+    const { error } = await supabase
+      .from("audit_jobs")
+      .update({
+        status: "cancelled",
+        error_message: "Cancelled by user",
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", jobId)
+      .eq("document_id", documentId);
+
+    if (error) throw error;
+    response.json({ success: true, message: "Audit cancellation requested successfully." });
+  } catch (error) {
+    console.error("Cancel audit failed:", error);
+    response.status(500).json({ error: error.message || "Failed to cancel audit." });
+  }
+});
+
+documentRouter.get(["/documents/:id/audit/status/:jobId", "/api/documents/:id/audit/status/:jobId"], checkAuth, async (request, response) => {
+  try {
+    const documentId = request.params.id;
+    const jobId = request.params.jobId;
+
+    const staleLimit = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    await supabase
+      .from("audit_jobs")
+      .update({
+        status: "failed",
+        error_message: "Job stale / timed out.",
+        updated_at: new Date().toISOString()
+      })
+      .eq("status", "in_progress")
+      .lt("updated_at", staleLimit);
+
+    const { data: job, error } = await supabase
+      .from("audit_jobs")
+      .select("*")
+      .eq("id", jobId)
+      .eq("document_id", documentId)
+      .maybeSingle();
+
+    if (error || !job) {
+      return response.status(404).json({ error: "Audit job not found." });
+    }
+
+    if (job.status === "pending") {
+      const { count } = await supabase
+        .from("audit_jobs")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending")
+        .lt("created_at", job.created_at);
+      job.queuePosition = (count || 0) + 1;
+    } else {
+      job.queuePosition = 0;
+    }
+
+    response.json(job);
+  } catch (error) {
+    console.error("Fetch audit status failed:", error);
+    response.status(500).json({ error: error.message || "Failed to fetch audit status" });
+  }
+});
+
 // 3. Rename Document
 documentRouter.put(["/documents/:id/rename", "/api/documents/:id/rename"], checkAuth, async (request, response) => {
   try {

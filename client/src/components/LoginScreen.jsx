@@ -692,6 +692,9 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
                               setLoading(true);
                               const res = await api.post("/api/auth/resend-verification", { email });
                               setSuccessMsg(res.data.message || `Verification link resent to ${email}!`);
+                              if (res.data.verificationLink) {
+                                setVerificationLink(res.data.verificationLink);
+                              }
                               setError("");
                             } catch (err) {
                               setError(err.response?.data?.error || "Failed to resend verification email.");
@@ -703,6 +706,26 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
                         >
                           <Mail className="h-3.5 w-3.5" />
                           <span>Resend Verification Email to {email}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              setLoading(true);
+                              const res = await api.post("/api/auth/manual-verify", { email });
+                              setSuccessMsg(res.data.message || `Account for ${email} manually verified! You can now log in.`);
+                              setError("");
+                            } catch (err) {
+                              setError(err.response?.data?.error || "Failed to manually verify account.");
+                            } finally {
+                              setLoading(false);
+                            }
+                          }}
+                          className="w-full py-2.5 px-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          <span>Verify Account Manually Now</span>
                         </button>
                       </div>
                     )}

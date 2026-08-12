@@ -2008,9 +2008,11 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null, userI
       throw new Error("Document not found: " + documentId);
     }
 
+    const targetLang = contextSettings?.targetLang || contextSettings?.targetLanguage || doc.target_lang || "ja";
+
     let segments;
     try {
-      segments = await fetchAllSegments(documentId, "*", doc.target_lang);
+      segments = await fetchAllSegments(documentId, "*", targetLang);
     } catch (fetchErr) {
       console.error("Failed to fetch all segments for audit job:", fetchErr);
       throw new Error("Failed to load document segments for auditing.");
@@ -2033,10 +2035,10 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null, userI
       .eq("id", jobId);
 
     // Phase 1: Run Global Document-Wide Scan (Chunked by Word Count)
-    console.log("[Audit Job " + jobId + "] Running Phase 1: Global document-wide scan...");
+    console.log("[Audit Job " + jobId + "] Running Phase 1: Global document-wide scan for targetLang=\"" + targetLang + "\"...");
     const globalReport = await scanDocumentGlobally(
       segments,
-      doc.target_lang,
+      targetLang,
       doc.source_lang,
       contextSettings
     );
@@ -2086,7 +2088,7 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null, userI
             // ── Pass 1: Batch Error Detection ──
             const rawErrors = await evaluateBatchPass1({
               segments: batch,
-              targetLang: doc.target_lang,
+              targetLang,
               sourceLang: doc.source_lang,
               contextSettings,
               globalReport
@@ -2108,7 +2110,7 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null, userI
               const corrections = await evaluateBatchPass2({
                 batch,
                 detectedErrors,
-                targetLang: doc.target_lang,
+                targetLang,
                 sourceLang: doc.source_lang,
                 contextSettings,
                 globalReport
@@ -2119,7 +2121,7 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null, userI
                 batch,
                 corrections,
                 detectedErrors,
-                targetLang: doc.target_lang,
+                targetLang,
                 sourceLang: doc.source_lang,
                 contextSettings,
                 globalReport
@@ -2242,8 +2244,9 @@ const auditDocumentMQM = async (documentId, jobId, contextSettings = null, userI
 
 const saveSegmentAuditResult = async (documentId, segment, mqmReport, io) => {
   const accuracyScore = mqmReport.evaluationFailed ? segment.mqm_accuracy_score || 100 : mqmReport.accuracyScore;
+  const targetLang = segment.target_lang || "hi";
 
-  const { error } = await supabase
+  let { data: updated } = await supabase
     .from("document_segments")
     .update({
       mqm_accuracy_score: accuracyScore,
@@ -2251,11 +2254,32 @@ const saveSegmentAuditResult = async (documentId, segment, mqmReport, io) => {
       updated_at: new Date().toISOString()
     })
     .eq("document_id", documentId)
-    .eq("segment_index", segment.segment_index);
+    .eq("segment_index", segment.segment_index)
+    .eq("target_lang", targetLang)
+    .select();
 
-  if (error) {
-    console.error(`[Audit Job] Failed database update for segment index ${segment.segment_index}:`, error.message);
-  } else if (io) {
+  if (!updated || updated.length === 0) {
+    let sourceText = segment.source_text || segment.source || "";
+    const { error: upsertErr } = await supabase
+      .from("document_segments")
+      .upsert({
+        document_id: documentId,
+        segment_index: segment.segment_index,
+        target_lang: targetLang,
+        source_text: sourceText,
+        target_text: segment.target_text || "",
+        status: segment.status || "draft",
+        mqm_accuracy_score: accuracyScore,
+        mqm_report: mqmReport,
+        updated_at: new Date().toISOString()
+      }, { onConflict: "document_id,segment_index,target_lang" });
+      
+    if (upsertErr) {
+      console.error(`[Audit Job] Failed database upsert for segment index ${segment.segment_index}:`, upsertErr.message);
+    }
+  }
+
+  if (io) {
     io.to(documentId).emit("segment-updated", {
       segmentIndex: segment.segment_index,
       targetText: segment.target_text,
@@ -2264,6 +2288,7 @@ const saveSegmentAuditResult = async (documentId, segment, mqmReport, io) => {
       contextDescription: segment.context_description || "",
       mqmAccuracyScore: accuracyScore,
       mqmReport: mqmReport,
+      targetLang,
       updatedBy: "System Auditor"
     });
   }
