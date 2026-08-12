@@ -125,6 +125,98 @@ documentRouter.post(["/upload", "/api/upload"], checkAuth, upload.single("file")
   }
 });
 
+// 1.5 Fetch Assigned Documents for Current User (MUST BE DECLARED BEFORE /documents/:id TO PREVENT ROUTE TRAPPING)
+documentRouter.get(["/documents/assigned", "/api/documents/assigned"], checkAuth, async (request, response) => {
+  try {
+    const userId = request.user.id;
+    const userEmail = request.user.email?.trim().toLowerCase();
+
+    // Find all matching profile IDs for this user email to guarantee no missing access records
+    const { data: userProfiles } = await supabase
+      .from("profiles")
+      .select("id")
+      .ilike("email", userEmail || "");
+
+    const validUserIds = Array.from(new Set([userId, ...(userProfiles || []).map(p => p.id)].filter(Boolean)));
+
+    // Query document_access for this user
+    const { data: accessRows, error: accessErr } = await supabase
+      .from("document_access")
+      .select("*, documents(*, projects(*))")
+      .in("user_id", validUserIds)
+      .order("created_at", { ascending: false });
+
+    if (accessErr) {
+      console.error("[FETCH_ASSIGNED_ERR]", accessErr);
+    }
+
+    const assignedList = [];
+    const seenKeys = new Set();
+
+    if (accessRows && accessRows.length > 0) {
+      for (const row of accessRows) {
+        const doc = row.documents;
+        if (!doc) continue;
+
+        const proj = doc.projects || {};
+        
+        // Detect exact target language code
+        let tLang = doc.target_lang;
+        if (!tLang || tLang === "hi") {
+          const match = doc.name?.match(/_([a-z]{2,3})\.[a-z0-9]+$/i);
+          if (match && match[1]) {
+            tLang = match[1].toLowerCase();
+          }
+        }
+        if (!tLang && proj.target_languages && proj.target_languages.length > 0) {
+          tLang = proj.target_languages[0];
+        }
+        if (!tLang) {
+          tLang = "ar";
+        }
+
+        const key = `${doc.id}_${tLang}`;
+        if (seenKeys.has(key)) continue;
+        seenKeys.add(key);
+
+        const ownerId = doc.owner_id || proj.owner_id;
+
+        let assignerEmail = "Project Coordinator";
+        if (ownerId) {
+          const { data: ownerProf } = await supabase
+            .from("profiles")
+            .select("email")
+            .eq("id", ownerId)
+            .maybeSingle();
+          if (ownerProf?.email) {
+            assignerEmail = ownerProf.email;
+          }
+        }
+
+        assignedList.push({
+          id: row.id,
+          documentId: doc.id,
+          fileId: doc.file_id || doc.id,
+          documentName: doc.name || "Untitled Document",
+          projectId: doc.project_id || proj.id || "",
+          projectName: proj.name || "Translation Project",
+          sourceLang: doc.source_lang || proj.source_lang || "en",
+          targetLang: tLang,
+          permission: row.permission || "write",
+          assignedAt: row.created_at || doc.created_at,
+          assignerEmail,
+          assignerRole: "Project Coordinator"
+        });
+      }
+    }
+
+    response.json({ assignments: assignedList });
+  } catch (error) {
+    console.error("Fetch Assigned Documents Error:", error);
+    response.json({ assignments: [] });
+  }
+});
+
 // 2. Get Single Document Metadata and Segments (STRICT PERMISSION GUARD ENFORCED)
 documentRouter.get(["/documents/:id", "/api/documents/:id"], checkAuth, async (request, response) => {
   try {
@@ -313,6 +405,8 @@ documentRouter.post(["/documents/:id/segments/:segmentIndex/reject-change", "/ap
   }
 });
 
+
+
 // 5. Access Management & Public Access Endpoints
 documentRouter.get(["/documents/:id/access", "/api/documents/:id/access"], checkAuth, async (request, response) => {
   try {
@@ -320,15 +414,15 @@ documentRouter.get(["/documents/:id/access", "/api/documents/:id/access"], check
     const { data: doc } = await supabase.from("documents").select("owner_id").eq("id", id).maybeSingle();
     let owner = null;
     if (doc?.owner_id) {
-      const { data: ownerProf } = await supabase.from("profiles").select("id, email, full_name, role").eq("id", doc.owner_id).maybeSingle();
+      const { data: ownerProf } = await supabase.from("profiles").select("id, email, role").eq("id", doc.owner_id).maybeSingle();
       owner = ownerProf;
     }
-    const { data: shares } = await supabase.from("document_access").select("*, profiles(id, email, full_name, role)").eq("document_id", id);
+    const { data: shares } = await supabase.from("document_access").select("*, profiles(id, email, role)").eq("document_id", id);
     const collaborators = (shares || []).map(s => ({
       userId: s.user_id,
       shareId: s.id,
       email: s.profiles?.email || "",
-      fullName: s.profiles?.full_name || s.profiles?.email || "User",
+      fullName: s.profiles?.email || "User",
       permission: s.permission || "write"
     }));
     response.json({ access: shares || [], collaborators, owner });
@@ -344,39 +438,70 @@ documentRouter.post(["/documents/:id/access", "/api/documents/:id/access"], chec
     if (!email) return response.status(400).json({ error: "Email is required" });
 
     const cleanEmail = String(email).trim().toLowerCase();
-    const { data: targetProfile } = await supabase
+    let { data: targetProfile } = await supabase
       .from("profiles")
-      .select("id, email, full_name, role")
+      .select("id, email, role")
       .ilike("email", cleanEmail)
       .maybeSingle();
 
     if (!targetProfile) {
-      return response.status(404).json({ error: `User with email '${cleanEmail}' not found.` });
+      // Auto-create profile if giving access to a new user email
+      const { data: newProf, error: createErr } = await supabase
+        .from("profiles")
+        .insert({
+          email: cleanEmail,
+          role: "linguist",
+          status: "active"
+        })
+        .select("id, email, role")
+        .single();
+
+      if (!createErr && newProf) {
+        targetProfile = newProf;
+      } else {
+        return response.status(404).json({ error: `User with email '${cleanEmail}' not found.` });
+      }
     }
+
+    // Fetch target document to check if there are sibling target language documents with the same file_id
+    const { data: targetDoc } = await supabase
+      .from("documents")
+      .select("id, file_id, project_id")
+      .eq("id", id)
+      .maybeSingle();
+
+    let docIdsToShare = [id];
+    if (targetDoc?.file_id) {
+      const { data: siblingDocs } = await supabase
+        .from("documents")
+        .select("id")
+        .eq("file_id", targetDoc.file_id);
+      if (siblingDocs && siblingDocs.length > 0) {
+        docIdsToShare = Array.from(new Set([...docIdsToShare, ...siblingDocs.map(d => d.id)]));
+      }
+    }
+
+    const inserts = docIdsToShare.map(dId => ({
+      document_id: dId,
+      user_id: targetProfile.id,
+      permission: permission || "write"
+    }));
 
     const { data: shareRow, error: upsertErr } = await supabase
       .from("document_access")
-      .upsert(
-        {
-          document_id: id,
-          user_id: targetProfile.id,
-          permission: permission || "write"
-        },
-        { onConflict: "document_id,user_id" }
-      )
-      .select("*, profiles(id, email, full_name, role)")
-      .single();
+      .upsert(inserts, { onConflict: "document_id,user_id" })
+      .select("*, profiles(id, email, role)");
 
     if (upsertErr) throw upsertErr;
 
     response.json({
       success: true,
-      share: shareRow,
+      share: shareRow?.[0] || shareRow,
       collaborator: {
         userId: targetProfile.id,
-        shareId: shareRow?.id,
+        shareId: shareRow?.[0]?.id || shareRow?.id,
         email: targetProfile.email,
-        fullName: targetProfile.full_name || targetProfile.email,
+        fullName: targetProfile.email,
         permission: permission || "write"
       }
     });

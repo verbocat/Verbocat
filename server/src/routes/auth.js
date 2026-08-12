@@ -889,11 +889,16 @@ authRouter.get("/users/search", checkAuth, async (request, response) => {
       return response.json({ users: [] });
     }
 
-    const { data: users } = await supabase
+    const { data: users, error } = await supabase
       .from("profiles")
-      .select("id, email, full_name, role")
-      .or(`email.ilike.%${queryStr}%,full_name.ilike.%${queryStr}%`)
+      .select("id, email, role")
+      .ilike("email", `%${queryStr}%`)
       .limit(10);
+
+    if (error) {
+      console.error("[USER_SEARCH_ERROR]", error);
+      return response.json({ users: [] });
+    }
 
     response.json({ users: users || [] });
   } catch (error) {

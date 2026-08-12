@@ -370,6 +370,11 @@ export const searchUsers = async (query) => {
   return response.data?.users || [];
 };
 
+export const fetchAssignedDocuments = async () => {
+  const response = await api.get("/api/documents/assigned");
+  return response.data?.assignments || [];
+};
+
 export const fetchRequestStatus = async (documentId) => {
   const response = await api.get(`/api/documents/${documentId}/request-status`);
   return response.data;

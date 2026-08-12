@@ -116,7 +116,7 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
     const value = e.target.value;
     setEmail(value);
     
-    if (value.trim().length >= 2) {
+    if (value.trim().length >= 1) {
       try {
         const results = await searchUsers(value.trim());
         setEmailSuggestions(results);
@@ -244,16 +244,23 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
               
               {/* Email Suggestions Dropdown */}
               {showSuggestions && emailSuggestions.length > 0 && (
-                <div className="absolute left-0 right-0 mt-2 z-50 max-h-[160px] overflow-y-auto bg-[var(--bg-elevated)] border border-[var(--border-medium)] rounded-xl shadow-2xl divide-y divide-[var(--border-subtle)]">
+                <div className="absolute left-0 right-0 mt-2 z-50 max-h-[200px] overflow-y-auto bg-[var(--bg-elevated)] border border-[var(--border-medium)] rounded-xl shadow-2xl divide-y divide-[var(--border-subtle)]">
                   {emailSuggestions.map((user) => (
                     <button
                       key={user.email}
                       type="button"
                       onClick={() => selectSuggestion(user.email)}
-                      className="w-full text-left px-4 py-3 hover:bg-[var(--bg-hover)] transition-colors flex flex-col justify-center cursor-pointer"
+                      className="w-full text-left px-4 py-2.5 hover:bg-[var(--bg-hover)] transition-colors flex items-center justify-between cursor-pointer"
                     >
-                      <span className="text-xs font-bold text-[var(--text-primary)] truncate">{user.email.split("@")[0]}</span>
-                      <span className="text-[10px] text-[var(--text-secondary)] truncate mt-0.5">{user.email}</span>
+                      <div className="flex flex-col min-w-0 pr-2">
+                        <span className="text-xs font-bold text-[var(--text-primary)] truncate">{user.email.split("@")[0]}</span>
+                        <span className="text-[10px] text-[var(--text-secondary)] truncate">{user.email}</span>
+                      </div>
+                      {user.role && (
+                        <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[var(--accent)]/15 text-[var(--accent)] border border-[var(--accent)]/30 flex-shrink-0">
+                          {user.role}
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>

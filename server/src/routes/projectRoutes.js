@@ -113,6 +113,94 @@ projectRouter.post(["/projects", "/api/projects"], checkAuth, async (request, re
   }
 });
 
+// 2.5 Fetch Global Audit History (MUST BE DECLARED BEFORE /projects/:id TO PREVENT ROUTE TRAPPING)
+projectRouter.get(["/projects/history", "/api/projects/history"], checkAuth, async (request, response) => {
+  try {
+    const history = [];
+
+    // 1. Fetch recent projects
+    const { data: projs } = await supabase
+      .from("projects")
+      .select("*, profiles(email)")
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (projs && projs.length > 0) {
+      projs.forEach(proj => {
+        history.push({
+          id: `proj_${proj.id}`,
+          event_type: "PROJECT_CREATED",
+          user_name: proj.profiles?.email || "Project Owner",
+          projectName: proj.name,
+          created_at: proj.created_at,
+          details: {
+            projectName: proj.name,
+            sourceLang: proj.source_lang,
+            targetLanguages: proj.target_languages
+          }
+        });
+      });
+    }
+
+    // 2. Fetch recent documents
+    const { data: docs } = await supabase
+      .from("documents")
+      .select("*, projects(name), profiles(email)")
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (docs && docs.length > 0) {
+      docs.forEach(doc => {
+        history.push({
+          id: `doc_${doc.id}`,
+          event_type: "FILE_UPLOADED",
+          user_name: doc.profiles?.email || "Coordinator",
+          projectName: doc.projects?.name || "Project",
+          created_at: doc.created_at,
+          details: {
+            fileName: doc.name,
+            fileSize: doc.file_size,
+            wordCount: doc.word_count || 0,
+            targetLang: doc.target_lang
+          }
+        });
+      });
+    }
+
+    // 3. Fetch recent shares
+    const { data: shares } = await supabase
+      .from("document_access")
+      .select("*, profiles(email), documents(name, projects(name))")
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (shares && shares.length > 0) {
+      shares.forEach(s => {
+        history.push({
+          id: `share_${s.id}`,
+          event_type: "PROJECT_SHARED",
+          user_name: "Project Coordinator",
+          projectName: s.documents?.projects?.name || "Project",
+          created_at: s.created_at,
+          details: {
+            sharedWith: s.profiles?.email || "collaborator",
+            fileName: s.documents?.name,
+            accessLevel: s.permission || "editor"
+          }
+        });
+      });
+    }
+
+    // Sort all history entries by created_at descending
+    history.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+
+    response.json({ history });
+  } catch (error) {
+    console.error("Fetch Global History Error:", error);
+    response.json({ history: [] });
+  }
+});
+
 // 3. Get Single Project Details
 projectRouter.get(["/projects/:id", "/api/projects/:id"], checkAuth, async (request, response) => {
   try {
@@ -310,21 +398,115 @@ projectRouter.post(
   }
 );
 
-// 5. Fetch Project Activities
+// 5. Fetch Project Activities (Audit History)
 projectRouter.get(["/projects/:projectId/activities", "/api/projects/:projectId/activities"], checkAuth, async (request, response) => {
   try {
     const { projectId } = request.params;
-    const { data: activities } = await supabase
-      .from("activity_logs")
-      .select("*")
+    const history = [];
+
+    // 1. Fetch Project Details
+    const { data: proj } = await supabase
+      .from("projects")
+      .select("*, profiles(email)")
+      .eq("id", projectId)
+      .maybeSingle();
+
+    if (proj) {
+      history.push({
+        id: `proj_created_${proj.id}`,
+        event_type: "PROJECT_CREATED",
+        user_name: proj.profiles?.email || "Project Owner",
+        projectName: proj.name,
+        created_at: proj.created_at,
+        details: {
+          projectName: proj.name,
+          sourceLang: proj.source_lang,
+          targetLanguages: proj.target_languages
+        }
+      });
+    }
+
+    // 2. Fetch Documents uploaded to this project
+    const { data: docs } = await supabase
+      .from("documents")
+      .select("*, profiles(email)")
       .eq("project_id", projectId)
       .order("created_at", { ascending: false });
 
-    response.json({ activities: activities || [] });
+    const docIds = [];
+    if (docs && docs.length > 0) {
+      docs.forEach(doc => {
+        docIds.push(doc.id);
+        history.push({
+          id: `file_uploaded_${doc.id}`,
+          event_type: "FILE_UPLOADED",
+          user_name: doc.profiles?.email || proj?.profiles?.email || "Coordinator",
+          projectName: proj?.name || "Project",
+          created_at: doc.created_at,
+          details: {
+            fileName: doc.name,
+            fileSize: doc.file_size,
+            wordCount: doc.word_count || 0,
+            targetLang: doc.target_lang
+          }
+        });
+      });
+    }
+
+    // 3. Fetch Access shares for documents in this project
+    if (docIds.length > 0) {
+      const { data: shares } = await supabase
+        .from("document_access")
+        .select("*, profiles(email), documents(name)")
+        .in("document_id", docIds)
+        .order("created_at", { ascending: false });
+
+      if (shares && shares.length > 0) {
+        shares.forEach(s => {
+          history.push({
+            id: `share_${s.id}`,
+            event_type: "PROJECT_SHARED",
+            user_name: "Project Coordinator",
+            projectName: proj?.name || "Project",
+            created_at: s.created_at,
+            details: {
+              sharedWith: s.profiles?.email || "collaborator",
+              fileName: s.documents?.name,
+              accessLevel: s.permission || "editor"
+            }
+          });
+        });
+      }
+    }
+
+    // 4. Safely query activity_logs if table exists
+    try {
+      const { data: actLogs } = await supabase
+        .from("activity_logs")
+        .select("*")
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: false });
+
+      if (actLogs && actLogs.length > 0) {
+        actLogs.forEach(log => {
+          history.push(log);
+        });
+      }
+    } catch (_) {
+      // Ignore missing activity_logs table
+    }
+
+    // Sort all history entries by created_at descending
+    history.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+
+    response.json({ activities: history });
   } catch (error) {
+    console.error("Fetch Project Activities Error:", error);
     response.json({ activities: [] });
   }
 });
+
+
 
 // 6. Fetch Project Analytics
 projectRouter.get(["/projects/:projectId/analytics", "/api/projects/:projectId/analytics"], checkAuth, async (request, response) => {
@@ -429,7 +611,7 @@ projectRouter.get(["/projects/:projectId/shares", "/api/projects/:projectId/shar
     const { data: proj } = await supabase.from("projects").select("owner_id").eq("id", projectId).maybeSingle();
     let owner = null;
     if (proj?.owner_id) {
-      const { data: ownerProf } = await supabase.from("profiles").select("id, email, full_name, role").eq("id", proj.owner_id).maybeSingle();
+      const { data: ownerProf } = await supabase.from("profiles").select("id, email, role").eq("id", proj.owner_id).maybeSingle();
       owner = ownerProf;
     }
 
@@ -438,7 +620,7 @@ projectRouter.get(["/projects/:projectId/shares", "/api/projects/:projectId/shar
 
     let collaborators = [];
     if (docIds.length > 0) {
-      const { data: shares } = await supabase.from("document_access").select("*, profiles(id, email, full_name, role)").in("document_id", docIds);
+      const { data: shares } = await supabase.from("document_access").select("*, profiles(id, email, role)").in("document_id", docIds);
       const uniqueUsers = new Map();
       (shares || []).forEach(s => {
         if (!uniqueUsers.has(s.user_id)) {
@@ -446,7 +628,7 @@ projectRouter.get(["/projects/:projectId/shares", "/api/projects/:projectId/shar
             userId: s.user_id,
             shareId: s.id,
             email: s.profiles?.email || "",
-            fullName: s.profiles?.full_name || s.profiles?.email || "User",
+            fullName: s.profiles?.email || "User",
             accessLevel: s.permission || "editor"
           });
         }
@@ -471,7 +653,7 @@ projectRouter.post(["/projects/:projectId/share", "/api/projects/:projectId/shar
     const cleanEmail = String(email).trim().toLowerCase();
     const { data: targetUser } = await supabase
       .from("profiles")
-      .select("id, email, full_name, role")
+      .select("id, email, role")
       .ilike("email", cleanEmail)
       .maybeSingle();
 
@@ -497,7 +679,7 @@ projectRouter.post(["/projects/:projectId/share", "/api/projects/:projectId/shar
       collaborator: {
         userId: targetUser.id,
         email: targetUser.email,
-        fullName: targetUser.full_name || targetUser.email,
+        fullName: targetUser.email,
         accessLevel
       }
     });
