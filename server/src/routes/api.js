@@ -8,7 +8,12 @@ const { glossaryRouter } = require("./glossaryRoutes");
 const { exportRouter } = require("./exportRoutes");
 const { screenshotRouter } = require("./screenshotRoutes");
 
+const publicApiRouter = require("./v1/publicApiRoutes");
+
 const apiRouter = express.Router();
+
+// Mount public API v1 endpoints
+apiRouter.use("/v1", publicApiRouter);
 
 // Mount modular sub-routers
 apiRouter.use(documentRouter);
@@ -22,7 +27,8 @@ apiRouter.use(screenshotRouter);
 
 apiRouter.get("/", (request, response) => {
   response.json({
-    message: "Server Running"
+    message: "Server Running",
+    api_v1: "/api/v1/health"
   });
 });
 
