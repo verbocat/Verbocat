@@ -465,6 +465,88 @@ authRouter.post("/manual-verify", authRateLimiter, async (request, response) => 
   }
 });
 
+// 1d. Temporary Test Email Dispatcher
+authRouter.post("/test-email", authRateLimiter, async (request, response) => {
+  try {
+    const { email } = request.body;
+    if (!email) {
+      return response.status(400).json({ error: "Target email address is required" });
+    }
+
+    const cleanEmail = normalizeEmail(email);
+
+    let redirectTo = request.headers.origin || "http://localhost:5173";
+    if (!redirectTo.endsWith("/")) {
+      redirectTo += "/";
+    }
+
+    let actionLink = null;
+    try {
+      let linkRes = await supabaseAdmin.auth.admin.generateLink({
+        type: "signup",
+        email: cleanEmail,
+        options: { redirectTo }
+      });
+      actionLink = linkRes?.data?.properties?.action_link;
+
+      if (!actionLink) {
+        linkRes = await supabaseAdmin.auth.admin.generateLink({
+          type: "magiclink",
+          email: cleanEmail,
+          options: { redirectTo }
+        });
+        actionLink = linkRes?.data?.properties?.action_link;
+      }
+    } catch (_) {}
+
+    try {
+      const mailResult = await sendEmail({
+        to: cleanEmail,
+        subject: "Centroid CAT Test Verification Email",
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 20px; background-color: #ffffff; color: #0f172a;">
+            <div style="margin-bottom: 20px; text-align: center;">
+              <h1 style="color: #4f46e5; font-size: 24px; font-weight: 800; margin: 0;">Centroid CAT</h1>
+              <p style="color: #64748b; font-size: 12px; margin-top: 4px; font-weight: 500;">Next-Gen Enterprise Localization</p>
+            </div>
+            
+            <h2 style="font-size: 18px; font-weight: 700; color: #0f172a; margin-top: 0;">Test Email Verification 👋</h2>
+            <p style="font-size: 14px; color: #475569; line-height: 1.6;">
+              This is a test email sent to <strong>${cleanEmail}</strong>. If you are reading this, your email transport is working properly!
+            </p>
+
+            ${actionLink ? `
+            <div style="margin: 28px 0; text-align: center;">
+              <a href="${actionLink}" target="_blank" style="background-color: #4f46e5; color: #ffffff; font-size: 14px; font-weight: 700; padding: 14px 28px; text-decoration: none; border-radius: 14px; display: inline-block; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);">
+                Verify Email & Activate Account →
+              </a>
+            </div>
+            ` : ''}
+          </div>
+        `
+      });
+
+      return response.json({
+        success: true,
+        message: `Test email sent successfully to ${cleanEmail} via ${mailResult.provider || "SMTP"}! Please check your inbox.`,
+        provider: mailResult.provider,
+        verificationLink: actionLink
+      });
+    } catch (sendErr) {
+      console.error("Test Email Send Failure:", sendErr);
+      const errMsg = sendErr.response?.data?.message || sendErr.message || "Mailer transport failed";
+      return response.status(400).json({
+        error: `Email delivery failed via server mailer: ${errMsg}`,
+        verificationLink: actionLink,
+        details: "Please verify your SMTP credentials (or RESEND_API_KEY) in server/.env, or click the direct verification button below."
+      });
+    }
+  } catch (error) {
+    console.error("Test Email Endpoint Error:", error);
+    response.status(500).json({ error: "Failed to dispatch test email" });
+  }
+});
+
 
 
 

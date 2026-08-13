@@ -84,12 +84,22 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// Auto logout and refresh if token is invalid or expired (fallback retry)
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config;
-    if (error.response && error.response.status === 401 && !originalRequest._retry) {
+    const originalRequest = error.config || {};
+    const requestUrl = String(originalRequest.url || "");
+    const isPublicAuthRoute = requestUrl.includes("/auth/login") ||
+                              requestUrl.includes("/auth/register") ||
+                              requestUrl.includes("/auth/forgot-password") ||
+                              requestUrl.includes("/auth/reset-password") ||
+                              requestUrl.includes("/auth/resend-verification") ||
+                              requestUrl.includes("/auth/manual-verify") ||
+                              requestUrl.includes("/auth/test-email");
+
+    const hasRefreshToken = !!localStorage.getItem("centroid_refresh_token");
+
+    if (error.response && error.response.status === 401 && !originalRequest._retry && !isPublicAuthRoute && hasRefreshToken) {
       originalRequest._retry = true;
       try {
         const newToken = await refreshSessionToken();

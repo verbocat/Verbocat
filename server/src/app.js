@@ -23,7 +23,9 @@ app.use(resolveTenant);
 
 // Mount authentication and administration routers
 app.use("/api/auth", authRouter);
+app.use("/auth", authRouter);
 app.use("/api/admin", adminRouter);
+app.use("/admin", adminRouter);
 
 // Mount chat router
 app.use("/api/chat", chatRouter);

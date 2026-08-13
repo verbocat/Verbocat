@@ -3142,6 +3142,10 @@ export default function App() {
 
   if (isAuth && (!user || loading)) {
     if (authError) {
+      if (/authorization|expired|invalid|token/i.test(authError)) {
+        logout();
+        return null;
+      }
       return (
         <div className={`h-screen w-screen flex flex-col items-center justify-center ${theme.bg} p-6 overflow-hidden`}>
           <Toast toast={toast} />

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Folder, User, Calendar, Trash2, Search, Filter, Globe, BookOpen, Settings, ChevronRight, LayoutDashboard, Users, Share2, MoreVertical, Copy, StickyNote, History, Check, XCircle, Sparkles, Layers, FileText, CheckCircle2, TrendingUp, LogOut, PauseCircle, Clock, ChevronDown, Archive } from "lucide-react";
+import { Plus, Folder, User, Calendar, Trash2, Search, Filter, Globe, BookOpen, Settings, ChevronRight, LayoutDashboard, Users, Share2, MoreVertical, Copy, StickyNote, History, Check, XCircle, Sparkles, Layers, FileText, CheckCircle2, TrendingUp, LogOut, PauseCircle, Clock, ChevronDown, Archive, Mail } from "lucide-react";
 import { fetchProjects, createProject, deleteProject, duplicateProject, updateProjectDetails } from "../services/api";
 import { LANGUAGES } from "../constants/languages";
 import { ShareModal } from "./ShareModal";
@@ -11,6 +11,7 @@ import { normalizeStatus, formatStatusLabel, getStatusColorClass, getStatusDotCo
 
 import { DuplicateProjectModal } from "./DuplicateProjectModal";
 import { SmartAIProjectBar } from "./SmartAIProjectBar";
+import { TestEmailModal } from "./TestEmailModal";
 
 import io from "socket.io-client";
 
@@ -42,6 +43,7 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
   const [notesModalProject, setNotesModalProject] = useState(null);
   const [settingsModalProjectId, setSettingsModalProjectId] = useState(null);
   const [showGlobalHistoryModal, setShowGlobalHistoryModal] = useState(false);
+  const [showTestEmailModal, setShowTestEmailModal] = useState(false);
   const [openMenuProjectId, setOpenMenuProjectId] = useState(null);
   const [openStatusMenuProjectId, setOpenStatusMenuProjectId] = useState(null);
   const [duplicateModalProject, setDuplicateModalProject] = useState(null);
@@ -263,6 +265,15 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
           >
             <History size={14} className="text-indigo-400" />
             <span>Activity Log</span>
+          </button>
+
+          <button
+            onClick={() => setShowTestEmailModal(true)}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 text-xs font-bold text-purple-400 transition-all cursor-pointer shadow-xs"
+            title="Mail Delivery & Live Debug Console"
+          >
+            <Mail size={14} className="text-purple-400" />
+            <span>Mail Debugger</span>
           </button>
 
           {(userRole === "admin" || userRole === "super_admin") && (
@@ -1094,6 +1105,13 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
           showToast={showToast}
         />
       )}
+
+      {/* Mail Delivery & Live Debug Console Modal */}
+      <TestEmailModal
+        isOpen={showTestEmailModal}
+        onClose={() => setShowTestEmailModal(false)}
+        showToast={showToast}
+      />
 
       {/* Fixed Bottom Google Gemini AI Bar */}
       <SmartAIProjectBar

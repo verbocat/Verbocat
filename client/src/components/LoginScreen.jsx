@@ -134,6 +134,9 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [verificationLink, setVerificationLink] = useState("");
+  const [testEmailTarget, setTestEmailTarget] = useState("");
+  const [testEmailLoading, setTestEmailLoading] = useState(false);
+  const [showTestEmailBox, setShowTestEmailBox] = useState(false);
 
 
   // Speedometer & Rotator Sync States
@@ -839,6 +842,74 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
                     </button>
                   </div>
                 )}
+
+                {/* Temporary Test Email Tool */}
+                <div className="pt-4 border-t border-slate-200/80 mt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowTestEmailBox(!showTestEmailBox)}
+                    className="w-full py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs flex items-center justify-between transition-colors cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Mail className="h-3.5 w-3.5 text-indigo-600" />
+                      <span>🧪 Temporary Email Test Tool</span>
+                    </span>
+                    <span className="text-[10px] font-bold text-indigo-600 uppercase">
+                      {showTestEmailBox ? "Hide" : "Open"}
+                    </span>
+                  </button>
+
+                  {showTestEmailBox && (
+                    <div className="mt-3 p-3.5 rounded-2xl bg-indigo-50/70 border border-indigo-100 space-y-2.5">
+                      <p className="text-[11px] font-medium text-slate-600 leading-snug">
+                        Enter any email address to test server email dispatch and verify if your email provider is delivering messages:
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="email"
+                          value={testEmailTarget}
+                          onChange={(e) => setTestEmailTarget(e.target.value)}
+                          placeholder="your.email@example.com"
+                          className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-900 outline-indigo-500 placeholder-slate-400"
+                        />
+                        <button
+                          type="button"
+                          disabled={testEmailLoading || !testEmailTarget}
+                          onClick={async () => {
+                            try {
+                              setTestEmailLoading(true);
+                              setError("");
+                              setSuccessMsg("");
+                              const res = await api.post("/api/auth/test-email", { email: testEmailTarget });
+                              setSuccessMsg(res.data.message || `Test email dispatched to ${testEmailTarget}!`);
+                              if (res.data.verificationLink) {
+                                setVerificationLink(res.data.verificationLink);
+                              }
+                            } catch (err) {
+                              const errText = err.response?.data?.error || err.message || "Failed to send test email.";
+                              setError(errText);
+                              if (err.response?.data?.verificationLink) {
+                                setVerificationLink(err.response.data.verificationLink);
+                              }
+                            } finally {
+                              setTestEmailLoading(false);
+                            }
+                          }}
+                          className="py-2 px-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shrink-0 cursor-pointer disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                        >
+                          {testEmailLoading ? (
+                            <span>Sending...</span>
+                          ) : (
+                            <>
+                              <span>Send Test Email</span>
+                              <ArrowRight className="h-3 w-3" />
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
               </form>
 

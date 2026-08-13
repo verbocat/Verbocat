@@ -68,7 +68,6 @@ export const useUserStore = create((set, get) => ({
         
         console.warn("[Space Session Notice]", errorText);
         logout();
-        set({ error: errorText, loading: false });
       } else if (err.response && err.response.status === 502) {
         set({ 
           error: "Backend server is currently restarting or unavailable (502 Bad Gateway). Retrying connection...", 
