@@ -41,14 +41,21 @@ async function sendEmail({ to, subject, text, html }) {
   if (process.env.SMTP_HOST) {
     try {
       const nodemailer = require("nodemailer");
+      const cleanPass = String(process.env.SMTP_PASS || "")
+        .split("#")[0]
+        .replace(/\s+/g, "");
+
       const transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST,
         port: parseInt(process.env.SMTP_PORT || "587", 10),
         secure: process.env.SMTP_SECURE === "true", // true for 465, false for 587/25
         auth: {
           user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
+          pass: cleanPass,
         },
+        connectionTimeout: 5000,
+        greetingTimeout: 5000,
+        socketTimeout: 5000
       });
 
       const info = await transporter.sendMail({

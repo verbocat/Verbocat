@@ -54,6 +54,19 @@ async function findExistingAuthUser(cleanEmail) {
     }
   }
 
+  // Fallback: Search auth.users directly via supabaseAdmin
+  try {
+    const { data: usersData } = await supabaseAdmin.auth.admin.listUsers();
+    if (usersData?.users) {
+      const authUser = usersData.users.find(u => u.email?.toLowerCase() === cleanEmail);
+      if (authUser) {
+        return authUser;
+      }
+    }
+  } catch (err) {
+    console.warn("findExistingAuthUser listUsers fallback error:", err?.message);
+  }
+
   return null;
 }
 
@@ -97,9 +110,12 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
       });
 
       if (loginError) {
-        return response.status(400).json({
-          error: "Incorrect password. Please try again with your existing account password."
-        });
+        const isUnconfirmedErr = /email not confirmed/i.test(loginError.message || "");
+        if (!isUnconfirmedErr) {
+          return response.status(400).json({
+            error: "An account with this email already exists, but the password provided was incorrect. Please sign in with your existing account password or request a password reset."
+          });
+        }
       }
 
       if (!isAlreadyConfirmed) {
@@ -146,13 +162,22 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
 
       let actionLink = null;
       try {
-        const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
+        let linkRes = await supabaseAdmin.auth.admin.generateLink({
           type: "signup",
           email: cleanEmail,
           password,
           options: { redirectTo }
         });
-        actionLink = linkData?.properties?.action_link;
+        actionLink = linkRes?.data?.properties?.action_link;
+
+        if (!actionLink) {
+          linkRes = await supabaseAdmin.auth.admin.generateLink({
+            type: "magiclink",
+            email: cleanEmail,
+            options: { redirectTo }
+          });
+          actionLink = linkRes?.data?.properties?.action_link;
+        }
       } catch (err) {
         console.error("Register generate link error:", err?.message);
       }
@@ -223,13 +248,22 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
 
     let actionLink = null;
     try {
-      const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
+      let linkRes = await supabaseAdmin.auth.admin.generateLink({
         type: "signup",
         email: cleanEmail,
         password,
         options: { redirectTo }
       });
-      actionLink = linkData?.properties?.action_link;
+      actionLink = linkRes?.data?.properties?.action_link;
+
+      if (!actionLink) {
+        linkRes = await supabaseAdmin.auth.admin.generateLink({
+          type: "magiclink",
+          email: cleanEmail,
+          options: { redirectTo }
+        });
+        actionLink = linkRes?.data?.properties?.action_link;
+      }
     } catch (err) {
       console.error("Register generate link error:", err?.message);
     }
@@ -326,12 +360,21 @@ authRouter.post("/resend-verification", authRateLimiter, async (request, respons
 
     let actionLink = null;
     try {
-      const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
+      let linkRes = await supabaseAdmin.auth.admin.generateLink({
         type: "signup",
         email: cleanEmail,
         options: { redirectTo }
       });
-      actionLink = linkData?.properties?.action_link;
+      actionLink = linkRes?.data?.properties?.action_link;
+
+      if (!actionLink) {
+        linkRes = await supabaseAdmin.auth.admin.generateLink({
+          type: "magiclink",
+          email: cleanEmail,
+          options: { redirectTo }
+        });
+        actionLink = linkRes?.data?.properties?.action_link;
+      }
     } catch (err) {
       console.error("Resend generate link error:", err?.message);
     }
@@ -476,7 +519,28 @@ authRouter.post("/login", authRateLimiter, async (request, response) => {
     }
 
     if (!profile) {
-      return response.status(401).json({ error: "User profile record missing" });
+      console.warn(`[Login] Profile record missing for user ${user.id} (${user.email}). Auto-creating profile...`);
+      const defaultName = user.user_metadata?.name || user.user_metadata?.full_name || user.email?.split("@")[0] || "User";
+      const { data: newProfile, error: createProfileErr } = await supabase
+        .from("profiles")
+        .upsert({
+          id: user.id,
+          email: user.email,
+          name: defaultName,
+          full_name: defaultName,
+          role: "linguist",
+          status: isConfirmed ? "active" : "pending_verification",
+          email_verified: isConfirmed,
+          credits_allowed: 50000
+        }, { onConflict: "id" })
+        .select("*")
+        .maybeSingle();
+
+      if (createProfileErr || !newProfile) {
+        console.error("[Login] Failed to auto-create missing profile:", createProfileErr);
+        return response.status(401).json({ error: "User profile record missing" });
+      }
+      profile = newProfile;
     }
 
     // Enforce email verification check
