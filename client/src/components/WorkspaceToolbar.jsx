@@ -393,28 +393,24 @@ export const WorkspaceToolbar = ({
           </div>
         )}
 
-        {/* Source language */}
-        <div className="lang-wrap">
-          <select value={sourceLanguage} onChange={(e) => onSourceLanguageChange(e.target.value)} className="lang-select" disabled={!isOwner}>
-            {LANGUAGES.filter((l) => !l.hidden).map((l) => (
-              <option key={`src-${l.code}`} value={l.code}>{l.flag} {l.name}</option>
-            ))}
-          </select>
-          <span className="lang-arrow">▼</span>
-        </div>
-
-        {/* Arrow */}
-        <ArrowRight style={{ width: 11, height: 11, color: "var(--text-muted)", flexShrink: 0 }} />
-
-        {/* Target language */}
-        <div className="lang-wrap">
-          <select value={targetLanguage} onChange={(e) => onTargetLanguageChange(e.target.value)} className="lang-select" disabled={!isOwner}>
-            {LANGUAGES.filter((l) => !l.hidden).map((l) => (
-              <option key={`tgt-${l.code}`} value={l.code}>{l.flag} {l.name}</option>
-            ))}
-          </select>
-          <span className="lang-arrow">▼</span>
-        </div>
+        {/* Fixed Project Language Pair Indicator (Read-Only as configured at project creation) */}
+        {(() => {
+          const srcLangObj = LANGUAGES.find((l) => l.code === sourceLanguage);
+          const tgtLangObj = LANGUAGES.find((l) => l.code === targetLanguage);
+          return (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/60 border border-slate-700/60 text-xs font-bold text-slate-200 select-none shadow-xs shrink-0" title="Project Language Pair (Defined during project creation)">
+              <span className="flex items-center gap-1">
+                <span>{srcLangObj ? srcLangObj.flag : "🌐"}</span>
+                <span>{srcLangObj ? srcLangObj.name : sourceLanguage?.toUpperCase()}</span>
+              </span>
+              <ArrowRight style={{ width: 11, height: 11, color: "var(--text-muted)", flexShrink: 0 }} />
+              <span className="flex items-center gap-1">
+                <span>{tgtLangObj ? tgtLangObj.flag : "🌐"}</span>
+                <span className="text-indigo-400 font-extrabold">{tgtLangObj ? tgtLangObj.name : targetLanguage?.toUpperCase()}</span>
+              </span>
+            </div>
+          );
+        })()}
 
         <div className="action-sep" />
 
