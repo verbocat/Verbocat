@@ -322,7 +322,7 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
     try {
       if (mode === "login") {
         console.log("[Auth Submit Debug] Sending login request...");
-        const response = await api.post("/api/auth/login", { email, password }, { timeout: 10000 });
+        const response = await api.post("/api/auth/login", { email, password }, { timeout: 35000 });
         console.log("[Auth Submit Debug] Login success response:", response.data);
         loginAction(
           response.data.token, 
@@ -346,7 +346,7 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
         }
 
         console.log("[Auth Submit Debug] Sending registration API request...");
-        const response = await api.post("/api/auth/register", { name: name.trim(), email, password }, { timeout: 10000 });
+        const response = await api.post("/api/auth/register", { name: name.trim(), email, password }, { timeout: 35000 });
         console.log("[Auth Submit Debug] Registration success response payload:", response.data);
         
         setSuccessMsg(response.data.message || `Account created! A verification email has been sent to ${email}. Please check your inbox and click the verification button in your email to activate your account.`);
@@ -357,7 +357,7 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
 
       else if (mode === "forgot") {
         console.log("[Auth Submit Debug] Sending forgot password request...");
-        const response = await api.post("/api/auth/forgot-password", { email }, { timeout: 10000 });
+        const response = await api.post("/api/auth/forgot-password", { email }, { timeout: 35000 });
         console.log("[Auth Submit Debug] Forgot password response:", response.data);
         setSuccessMsg(response.data.message || "Recovery email dispatched. Please check your inbox.");
         setEmail("");
@@ -375,7 +375,7 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
         console.log("[Auth Submit Debug] Sending reset password request...");
         const response = await api.post("/api/auth/reset-password", 
           { password },
-          { headers: { Authorization: `Bearer ${token}` }, timeout: 10000 }
+          { headers: { Authorization: `Bearer ${token}` }, timeout: 35000 }
         );
         console.log("[Auth Submit Debug] Reset password response:", response.data);
         setSuccessMsg(response.data.message || "Password updated successfully!");

@@ -64,30 +64,21 @@ function resolveRedirectUrl(request) {
 }
 
 async function findExistingAuthUser(cleanEmail) {
-  const { data: profileRow } = await supabase
-    .from("profiles")
-    .select("id, email")
-    .eq("email", cleanEmail)
-    .maybeSingle();
-
-  if (profileRow?.id) {
-    const { data: adminUserRes } = await supabaseAdmin.auth.admin.getUserById(profileRow.id);
-    if (adminUserRes?.user) {
-      return adminUserRes.user;
-    }
-  }
-
-  // Fallback: Search auth.users directly via supabaseAdmin
   try {
-    const { data: usersData } = await supabaseAdmin.auth.admin.listUsers();
-    if (usersData?.users) {
-      const authUser = usersData.users.find(u => u.email?.toLowerCase() === cleanEmail);
-      if (authUser) {
-        return authUser;
+    const { data: profileRow } = await supabase
+      .from("profiles")
+      .select("id, email")
+      .eq("email", cleanEmail)
+      .maybeSingle();
+
+    if (profileRow?.id) {
+      const { data: adminUserRes } = await supabaseAdmin.auth.admin.getUserById(profileRow.id);
+      if (adminUserRes?.user) {
+        return adminUserRes.user;
       }
     }
   } catch (err) {
-    console.warn("findExistingAuthUser listUsers fallback error:", err?.message);
+    console.warn("findExistingAuthUser lookup error:", err?.message);
   }
 
   return null;
