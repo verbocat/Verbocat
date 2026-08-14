@@ -37,6 +37,7 @@ exportRouter.post("/export", async (request, response) => {
     else if (ext === ".pdf") mimeType = "application/pdf";
     else if (ext === ".docx") mimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     else if (ext === ".xlf" || ext === ".xliff") mimeType = "application/x-xliff+xml";
+    else if (ext === ".srt") mimeType = "application/x-subrip";
 
     const downloadName = fileName ? (fileName.endsWith(ext) ? fileName : `${fileName}${ext}`) : `translated_document${ext}`;
 

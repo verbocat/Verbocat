@@ -265,7 +265,7 @@ export const WorkspaceToolbar = ({
                 <label className={`dropdown-item ${!canAct ? "opacity-30 pointer-events-none" : "cursor-pointer"}`}>
                   <Link2 style={{ width: 13, height: 13, opacity: 0.65, flexShrink: 0 }} />
                   Relink Template
-                  <input type="file" accept=".html,.htm,.docx,.pptx,.xlsx,.txt,.pdf"
+                  <input type="file" accept=".html,.htm,.docx,.pptx,.xlsx,.txt,.pdf,.srt"
                     onChange={(e) => { onRelinkHtml(e); setShowDocMenu(false); }}
                     className="hidden" disabled={!canAct} />
                 </label>

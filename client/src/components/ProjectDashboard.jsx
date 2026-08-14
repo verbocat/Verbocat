@@ -1002,7 +1002,7 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
                   <div className="relative border border-dashed border-indigo-500/30 hover:border-indigo-500/60 rounded-xl p-3 bg-indigo-500/5 transition-all text-center">
                     <input
                       type="file"
-                      accept=".pdf,.docx,.txt,.html,.md,.csv"
+                      accept=".pdf,.docx,.txt,.html,.md,.csv,.srt"
                       onChange={(e) => setReferenceFile(e.target.files[0] || null)}
                       className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                     />

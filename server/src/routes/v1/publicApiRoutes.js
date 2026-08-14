@@ -300,6 +300,7 @@ publicApiRouter.get("/documents/:id/export", async (req, res) => {
     if (ext === ".html" || ext === ".htm") mimeType = "text/html";
     else if (ext === ".pdf") mimeType = "application/pdf";
     else if (ext === ".docx") mimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    else if (ext === ".srt") mimeType = "application/x-subrip";
 
     const baseName = doc?.name ? path.parse(doc.name).name : "translated_document";
     const downloadName = `${baseName}_${targetLang}${ext}`;

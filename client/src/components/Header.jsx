@@ -129,7 +129,7 @@ export const Header = ({
           <label className="btn-cta btn-cta-premium flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold shadow-md shadow-indigo-500/20 transition-all cursor-pointer">
             <Plus style={{ width: 14, height: 14 }} />
             <span>Open Document</span>
-            <input type="file" accept=".pdf,.docx,.pptx,.xlsx,.txt,.html,.htm,.xlf,.xliff,.sdlxliff" onChange={onUpload} className="hidden" />
+            <input type="file" accept=".pdf,.docx,.pptx,.xlsx,.txt,.html,.htm,.xlf,.xliff,.sdlxliff,.srt" onChange={onUpload} className="hidden" />
           </label>
         )}
 

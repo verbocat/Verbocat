@@ -10,13 +10,13 @@ export const EmptyWorkspace = ({ darkMode, onLoadProject, onOpenGlossary, onUplo
 
       <h1 className="empty-heading">Open a file to begin</h1>
       <p className="empty-sub">
-        Supports PDF, HTML, DOCX, PPTX, XLSX, TXT, XLIFF, and SDLXLIFF. Click below to choose a file.
+        Supports PDF, HTML, DOCX, PPTX, XLSX, TXT, SRT, XLIFF, and SDLXLIFF. Click below to choose a file.
       </p>
 
       <label className="empty-primary-btn" style={{ cursor: "pointer", display: "inline-flex" }}>
         <Upload style={{ width: 15, height: 15 }} />
         Choose File
-        <input type="file" accept=".pdf,.docx,.pptx,.xlsx,.txt,.html,.htm,.xlf,.xliff,.sdlxliff" onChange={onUpload} className="hidden" />
+        <input type="file" accept=".pdf,.docx,.pptx,.xlsx,.txt,.html,.htm,.xlf,.xliff,.sdlxliff,.srt" onChange={onUpload} className="hidden" />
       </label>
 
       <div className="empty-secondary-row">

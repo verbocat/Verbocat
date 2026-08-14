@@ -1068,7 +1068,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                     <span>{project?.settings?.referenceContext ? "Change Reference File" : "Upload Reference File"}</span>
                     <input
                       type="file"
-                      accept=".pdf,.docx,.txt,.html,.md,.csv"
+                      accept=".pdf,.docx,.txt,.html,.md,.csv,.srt"
                       onChange={handleUploadReferenceFile}
                       className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                     />

@@ -8,6 +8,7 @@ const docxParser = require("../utils/parsers/docxParser");
 const pptxParser = require("../utils/parsers/pptxParser");
 const xlsxParser = require("../utils/parsers/xlsxParser");
 const txtParser = require("../utils/parsers/txtParser");
+const srtParser = require("../utils/parsers/srtParser");
 const pdfParser = require("../utils/parsers/pdfParser");
 const { parseXliff, generateXliff } = require("../utils/exporters");
 const { execSync } = require('child_process');
@@ -152,6 +153,7 @@ const getParser = (ext) => {
     case '.xlsx':
     case '.csv': return xlsxParser;
     case '.txt': return txtParser;
+    case '.srt': return srtParser;
     case '.pdf': return pdfParser;
     case '.xlf':
     case '.xliff':
