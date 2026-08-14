@@ -40,7 +40,7 @@ async function sendEmail({ to, subject, text, html }) {
             "Content-Type": "application/json",
             "Accept": "application/json"
           },
-          timeout: 10000
+          timeout: 5000
         }
       );
       console.log("[Mailer] Brevo API Email Sent Successfully!", response.data);
@@ -68,7 +68,7 @@ async function sendEmail({ to, subject, text, html }) {
             "Authorization": `Bearer ${process.env.RESEND_API_KEY.trim()}`,
             "Content-Type": "application/json",
           },
-          timeout: 10000
+          timeout: 5000
         }
       );
       console.log("[Mailer] Resend API Email Sent Successfully:", response.data);
@@ -97,9 +97,9 @@ async function sendEmail({ to, subject, text, html }) {
           user: (process.env.SMTP_USER || "").trim(),
           pass: cleanPass,
         },
-        connectionTimeout: 8000,
-        greetingTimeout: 8000,
-        socketTimeout: 10000
+        connectionTimeout: 4000,
+        greetingTimeout: 4000,
+        socketTimeout: 5000
       });
 
       const info = await transporter.sendMail({

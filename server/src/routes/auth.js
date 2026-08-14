@@ -203,38 +203,34 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
       }
 
       if (actionLink) {
-        try {
-          await sendEmail({
-            to: cleanEmail,
-            subject: "Verify Your Centroid Workspace Account",
-            html: `
-              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 20px; background-color: #ffffff; color: #0f172a;">
-                <div style="margin-bottom: 20px; text-align: center;">
-                  <h1 style="color: #4f46e5; font-size: 24px; font-weight: 800; margin: 0;">Centroid CAT</h1>
-                  <p style="color: #64748b; font-size: 12px; margin-top: 4px; font-weight: 500;">Next-Gen Enterprise Localization</p>
-                </div>
-                
-                <h2 style="font-size: 18px; font-weight: 700; color: #0f172a; margin-top: 0;">Welcome back, ${cleanName}! 👋</h2>
-                <p style="font-size: 14px; color: #475569; line-height: 1.6;">
-                  You requested to register for the <strong>${tenantName}</strong> workspace. Please click the button below to verify your email (<strong>${cleanEmail}</strong>) and activate your access.
-                </p>
-
-                <div style="margin: 28px 0; text-align: center;">
-                  <a href="${actionLink}" target="_blank" style="background-color: #4f46e5; color: #ffffff; font-size: 14px; font-weight: 700; padding: 14px 28px; text-decoration: none; border-radius: 14px; display: inline-block; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);">
-                    Verify Email & Activate Account →
-                  </a>
-                </div>
-
-                <p style="font-size: 12px; color: #94a3b8; line-height: 1.5; border-top: 1px solid #f1f5f9; pt: 16px;">
-                  If the button doesn't work, copy and paste this link into your browser:<br/>
-                  <a href="${actionLink}" style="color: #4f46e5; word-break: break-all;">${actionLink}</a>
-                </p>
+        sendEmail({
+          to: cleanEmail,
+          subject: "Verify Your Centroid Workspace Account",
+          html: `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 20px; background-color: #ffffff; color: #0f172a;">
+              <div style="margin-bottom: 20px; text-align: center;">
+                <h1 style="color: #4f46e5; font-size: 24px; font-weight: 800; margin: 0;">Centroid CAT</h1>
+                <p style="color: #64748b; font-size: 12px; margin-top: 4px; font-weight: 500;">Next-Gen Enterprise Localization</p>
               </div>
-            `
-          });
-        } catch (e) {
-          console.error("Register mailer error:", e?.message || e);
-        }
+              
+              <h2 style="font-size: 18px; font-weight: 700; color: #0f172a; margin-top: 0;">Welcome back, ${cleanName}! 👋</h2>
+              <p style="font-size: 14px; color: #475569; line-height: 1.6;">
+                You requested to register for the <strong>${tenantName}</strong> workspace. Please click the button below to verify your email (<strong>${cleanEmail}</strong>) and activate your access.
+              </p>
+
+              <div style="margin: 28px 0; text-align: center;">
+                <a href="${actionLink}" target="_blank" style="background-color: #4f46e5; color: #ffffff; font-size: 14px; font-weight: 700; padding: 14px 28px; text-decoration: none; border-radius: 14px; display: inline-block; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);">
+                  Verify Email & Activate Account →
+                </a>
+              </div>
+
+              <p style="font-size: 12px; color: #94a3b8; line-height: 1.5; border-top: 1px solid #f1f5f9; pt: 16px;">
+                If the button doesn't work, copy and paste this link into your browser:<br/>
+                <a href="${actionLink}" style="color: #4f46e5; word-break: break-all;">${actionLink}</a>
+              </p>
+            </div>
+          `
+        }).catch(e => console.error("Register mailer error:", e?.message || e));
       }
 
       return response.json({
@@ -291,40 +287,36 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
       console.error("Register generate link error:", err?.message);
     }
 
-      if (actionLink) {
-        try {
-          await sendEmail({
-            to: cleanEmail,
-            subject: "Verify Your Centroid Workspace Account",
-            html: `
-              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 20px; background-color: #ffffff; color: #0f172a;">
-                <div style="margin-bottom: 20px; text-align: center;">
-                  <h1 style="color: #4f46e5; font-size: 24px; font-weight: 800; margin: 0;">Centroid CAT</h1>
-                  <p style="color: #64748b; font-size: 12px; margin-top: 4px; font-weight: 500;">Next-Gen Enterprise Localization</p>
-                </div>
-                
-                <h2 style="font-size: 18px; font-weight: 700; color: #0f172a; margin-top: 0;">Welcome, ${cleanName}! 👋</h2>
-                <p style="font-size: 14px; color: #475569; line-height: 1.6;">
-                  Thank you for creating an account. Please click the button below to verify your email address (<strong>${cleanEmail}</strong>) and activate your account.
-                </p>
+    if (actionLink) {
+      sendEmail({
+        to: cleanEmail,
+        subject: "Verify Your Centroid Workspace Account",
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 20px; background-color: #ffffff; color: #0f172a;">
+            <div style="margin-bottom: 20px; text-align: center;">
+              <h1 style="color: #4f46e5; font-size: 24px; font-weight: 800; margin: 0;">Centroid CAT</h1>
+              <p style="color: #64748b; font-size: 12px; margin-top: 4px; font-weight: 500;">Next-Gen Enterprise Localization</p>
+            </div>
+            
+            <h2 style="font-size: 18px; font-weight: 700; color: #0f172a; margin-top: 0;">Welcome, ${cleanName}! 👋</h2>
+            <p style="font-size: 14px; color: #475569; line-height: 1.6;">
+              Thank you for creating an account. Please click the button below to verify your email address (<strong>${cleanEmail}</strong>) and activate your account.
+            </p>
 
-                <div style="margin: 28px 0; text-align: center;">
-                  <a href="${actionLink}" target="_blank" style="background-color: #4f46e5; color: #ffffff; font-size: 14px; font-weight: 700; padding: 14px 28px; text-decoration: none; border-radius: 14px; display: inline-block; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);">
-                    Verify Email & Activate Account →
-                  </a>
-                </div>
+            <div style="margin: 28px 0; text-align: center;">
+              <a href="${actionLink}" target="_blank" style="background-color: #4f46e5; color: #ffffff; font-size: 14px; font-weight: 700; padding: 14px 28px; text-decoration: none; border-radius: 14px; display: inline-block; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);">
+                Verify Email & Activate Account →
+              </a>
+            </div>
 
-                <p style="font-size: 12px; color: #94a3b8; line-height: 1.5; border-top: 1px solid #f1f5f9; pt: 16px;">
-                  If the button doesn't work, copy and paste this link into your browser:<br/>
-                  <a href="${actionLink}" style="color: #4f46e5; word-break: break-all;">${actionLink}</a>
-                </p>
-              </div>
-            `
-          });
-        } catch (e) {
-          console.error("Register mailer error:", e?.message || e);
-        }
-      }
+            <p style="font-size: 12px; color: #94a3b8; line-height: 1.5; border-top: 1px solid #f1f5f9; pt: 16px;">
+              If the button doesn't work, copy and paste this link into your browser:<br/>
+              <a href="${actionLink}" style="color: #4f46e5; word-break: break-all;">${actionLink}</a>
+            </p>
+          </div>
+        `
+      }).catch(e => console.error("Register mailer error:", e?.message || e));
+    }
 
     if (user) {
       await supabase
@@ -403,38 +395,34 @@ authRouter.post("/resend-verification", authRateLimiter, async (request, respons
     }
 
     if (actionLink) {
-      try {
-        await sendEmail({
-          to: cleanEmail,
-          subject: "Verify Your Centroid Workspace Account",
-          html: `
-            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 20px; background-color: #ffffff; color: #0f172a;">
-              <div style="margin-bottom: 20px; text-align: center;">
-                <h1 style="color: #4f46e5; font-size: 24px; font-weight: 800; margin: 0;">Centroid CAT</h1>
-                <p style="color: #64748b; font-size: 12px; margin-top: 4px; font-weight: 500;">Next-Gen Enterprise Localization</p>
-              </div>
-              
-              <h2 style="font-size: 18px; font-weight: 700; color: #0f172a; margin-top: 0;">Account Verification 👋</h2>
-              <p style="font-size: 14px; color: #475569; line-height: 1.6;">
-                Please click the button below to verify your email address (<strong>${cleanEmail}</strong>) and activate your account.
-              </p>
-
-              <div style="margin: 28px 0; text-align: center;">
-                <a href="${actionLink}" target="_blank" style="background-color: #4f46e5; color: #ffffff; font-size: 14px; font-weight: 700; padding: 14px 28px; text-decoration: none; border-radius: 14px; display: inline-block; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);">
-                  Verify Email & Activate Account →
-                </a>
-              </div>
-
-              <p style="font-size: 12px; color: #94a3b8; line-height: 1.5; border-top: 1px solid #f1f5f9; pt: 16px;">
-                If the button doesn't work, copy and paste this link into your browser:<br/>
-                <a href="${actionLink}" style="color: #4f46e5; word-break: break-all;">${actionLink}</a>
-              </p>
+      sendEmail({
+        to: cleanEmail,
+        subject: "Verify Your Centroid Workspace Account",
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 20px; background-color: #ffffff; color: #0f172a;">
+            <div style="margin-bottom: 20px; text-align: center;">
+              <h1 style="color: #4f46e5; font-size: 24px; font-weight: 800; margin: 0;">Centroid CAT</h1>
+              <p style="color: #64748b; font-size: 12px; margin-top: 4px; font-weight: 500;">Next-Gen Enterprise Localization</p>
             </div>
-          `
-        });
-      } catch (e) {
-        console.error("Resend mailer error:", e?.message || e);
-      }
+            
+            <h2 style="font-size: 18px; font-weight: 700; color: #0f172a; margin-top: 0;">Account Verification 👋</h2>
+            <p style="font-size: 14px; color: #475569; line-height: 1.6;">
+              Please click the button below to verify your email address (<strong>${cleanEmail}</strong>) and activate your account.
+            </p>
+
+            <div style="margin: 28px 0; text-align: center;">
+              <a href="${actionLink}" target="_blank" style="background-color: #4f46e5; color: #ffffff; font-size: 14px; font-weight: 700; padding: 14px 28px; text-decoration: none; border-radius: 14px; display: inline-block; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);">
+                Verify Email & Activate Account →
+              </a>
+            </div>
+
+            <p style="font-size: 12px; color: #94a3b8; line-height: 1.5; border-top: 1px solid #f1f5f9; pt: 16px;">
+              If the button doesn't work, copy and paste this link into your browser:<br/>
+              <a href="${actionLink}" style="color: #4f46e5; word-break: break-all;">${actionLink}</a>
+            </p>
+          </div>
+        `
+      }).catch(e => console.error("Resend mailer error:", e?.message || e));
     } else {
       await supabase.auth.resend({
         type: "signup",
