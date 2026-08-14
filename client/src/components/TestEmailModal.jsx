@@ -8,7 +8,6 @@ export const TestEmailModal = ({ isOpen, onClose, showToast }) => {
   const [emailTarget, setEmailTarget] = useState(currentUser?.email || "");
   const [loading, setLoading] = useState(false);
   const [logs, setLogs] = useState([]);
-  const [verificationLink, setVerificationLink] = useState("");
   const [copied, setCopied] = useState(false);
 
   if (!isOpen) return null;
@@ -26,7 +25,6 @@ export const TestEmailModal = ({ isOpen, onClose, showToast }) => {
     }
 
     setLoading(true);
-    setVerificationLink("");
     const cleanEmail = emailTarget.trim();
 
     addLog(`Initiating test email dispatch to: ${cleanEmail}`, "info");
@@ -56,11 +54,6 @@ export const TestEmailModal = ({ isOpen, onClose, showToast }) => {
         addLog(`Mail Provider: ${response.data.provider}`, "success");
       }
 
-      if (response.data.verificationLink) {
-        setVerificationLink(response.data.verificationLink);
-        addLog(`Generated Action Link: ${response.data.verificationLink}`, "success");
-      }
-
       if (showToast) showToast(`Test email sent to ${cleanEmail}!`, "success");
     } catch (err) {
       console.error("[Test Email Error]", err);
@@ -68,14 +61,18 @@ export const TestEmailModal = ({ isOpen, onClose, showToast }) => {
       const statusCode = err.response?.status || 500;
       
       addLog(`HTTP ${statusCode} Error: ${serverErr}`, "error");
+      addLog(`Request URL: ${err.config?.baseURL || ""}${err.config?.url || ""}`, "error");
+
+      if (err.response?.data) {
+        addLog(`Server Response Data: ${JSON.stringify(err.response.data)}`, "error");
+      }
+
+      if (statusCode === 404) {
+        addLog(`[DIAGNOSTIC 404] The Node process running on port 5000 was started before new routes were compiled. Restarting backend server resolves this.`, "warn");
+      }
 
       if (err.response?.data?.details) {
         addLog(`Diagnostics: ${err.response.data.details}`, "warn");
-      }
-
-      if (err.response?.data?.verificationLink) {
-        setVerificationLink(err.response.data.verificationLink);
-        addLog(`Fallback Direct Action Link: ${err.response.data.verificationLink}`, "warn");
       }
 
       if (showToast) showToast(`Email dispatch error: ${serverErr}`, "error");
@@ -161,29 +158,7 @@ export const TestEmailModal = ({ isOpen, onClose, showToast }) => {
             </div>
           </form>
 
-          {/* Action Verification Link Shortcut */}
-          {verificationLink && (
-            <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
-                  <CheckCircle2 className="h-4 w-4" />
-                  Direct Action Verification Link Available
-                </span>
-                <a
-                  href={verificationLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
-                >
-                  <span>Verify / Activate Account Now</span>
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-              </div>
-              <p className="text-[11px] text-emerald-300/80 font-mono break-all bg-slate-950/60 p-2 rounded-lg border border-emerald-500/10">
-                {verificationLink}
-              </p>
-            </div>
-          )}
+
 
           {/* Terminal Debug Logs Console */}
           <div className="space-y-2">

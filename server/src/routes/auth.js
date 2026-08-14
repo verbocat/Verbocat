@@ -33,12 +33,35 @@ const sanitizeSearchQuery = (queryStr) => {
     .replace(/[%_,]/g, "");
 };
 
-const includeVerificationLink = (actionLink) => {
-  if (process.env.NODE_ENV !== "production" && actionLink) {
-    return { verificationLink: actionLink };
+function resolveRedirectUrl(request) {
+  const envUrl = process.env.CLIENT_URL || process.env.APP_URL || process.env.PUBLIC_APP_URL || process.env.VITE_CLIENT_URL;
+  if (envUrl && envUrl.trim()) {
+    const clean = envUrl.trim();
+    return clean.endsWith("/") ? clean : `${clean}/`;
   }
-  return {};
-};
+
+  if (request.headers.origin && request.headers.origin.startsWith("http")) {
+    const clean = request.headers.origin.trim();
+    return clean.endsWith("/") ? clean : `${clean}/`;
+  }
+
+  if (request.headers.referer) {
+    try {
+      const refUrl = new URL(request.headers.referer);
+      const clean = refUrl.origin;
+      return clean.endsWith("/") ? clean : `${clean}/`;
+    } catch (_) {}
+  }
+
+  const host = request.headers["x-forwarded-host"] || request.headers.host;
+  const proto = request.headers["x-forwarded-proto"] || "https";
+  if (host && !host.includes("localhost")) {
+    const clean = `${proto}://${host}`;
+    return clean.endsWith("/") ? clean : `${clean}/`;
+  }
+
+  return "http://localhost:5173/";
+}
 
 async function findExistingAuthUser(cleanEmail) {
   const { data: profileRow } = await supabase
@@ -96,10 +119,7 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
       console.warn("Register user lookup error:", err?.message);
     }
 
-    let redirectTo = request.headers.origin || "http://localhost:5173";
-    if (!redirectTo.endsWith("/")) {
-      redirectTo += "/";
-    }
+    let redirectTo = resolveRedirectUrl(request);
 
     if (existingUser) {
       const isAlreadyConfirmed = !!(existingUser.email_confirmed_at || existingUser.confirmed_at);
@@ -216,8 +236,7 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
       return response.json({
         message: `Signup successful! A verification email has been dispatched to ${cleanEmail}. Please check your inbox and click the verification button to activate your account.`,
         user: { id: existingUser.id, email: cleanEmail, name: cleanName },
-        requiresVerification: true,
-        ...includeVerificationLink(actionLink)
+        requiresVerification: true
       });
     }
 
@@ -332,8 +351,7 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
     return response.json({
       message: `Account created successfully! A verification email has been sent to ${cleanEmail}. Please check your inbox and click the verification button to activate your account before signing in.`,
       user: { id: user.id, email: user.email, name: cleanName },
-      requiresVerification: true,
-      ...includeVerificationLink(actionLink)
+      requiresVerification: true
     });
 
 
@@ -353,10 +371,7 @@ authRouter.post("/resend-verification", authRateLimiter, async (request, respons
 
     const cleanEmail = normalizeEmail(email);
 
-    let redirectTo = request.headers.origin || "http://localhost:5173";
-    if (!redirectTo.endsWith("/")) {
-      redirectTo += "/";
-    }
+    let redirectTo = resolveRedirectUrl(request);
 
     let actionLink = null;
     try {
@@ -417,8 +432,7 @@ authRouter.post("/resend-verification", authRateLimiter, async (request, respons
     }
 
     response.json({
-      message: `A new verification email has been sent to ${cleanEmail}. Please check your inbox.`,
-      ...includeVerificationLink(actionLink)
+      message: `A new verification email has been sent to ${cleanEmail}. Please check your inbox.`
     });
   } catch (error) {
     console.error("Resend Verification Error:", error);
@@ -475,10 +489,7 @@ authRouter.post("/test-email", authRateLimiter, async (request, response) => {
 
     const cleanEmail = normalizeEmail(email);
 
-    let redirectTo = request.headers.origin || "http://localhost:5173";
-    if (!redirectTo.endsWith("/")) {
-      redirectTo += "/";
-    }
+    let redirectTo = resolveRedirectUrl(request);
 
     let actionLink = null;
     try {
@@ -529,16 +540,14 @@ authRouter.post("/test-email", authRateLimiter, async (request, response) => {
       return response.json({
         success: true,
         message: `Test email sent successfully to ${cleanEmail} via ${mailResult.provider || "SMTP"}! Please check your inbox.`,
-        provider: mailResult.provider,
-        verificationLink: actionLink
+        provider: mailResult.provider
       });
     } catch (sendErr) {
       console.error("Test Email Send Failure:", sendErr);
       const errMsg = sendErr.response?.data?.message || sendErr.message || "Mailer transport failed";
       return response.status(400).json({
         error: `Email delivery failed via server mailer: ${errMsg}`,
-        verificationLink: actionLink,
-        details: "Please verify your SMTP credentials (or RESEND_API_KEY) in server/.env, or click the direct verification button below."
+        details: "Please verify your SMTP/API credentials in server/.env."
       });
     }
   } catch (error) {
@@ -848,10 +857,7 @@ authRouter.post("/forgot-password", async (request, response) => {
       return response.status(404).json({ error: "No account found with this email address." });
     }
 
-    let redirectTo = request.headers.origin || "http://localhost:5173";
-    if (!redirectTo.endsWith("/")) {
-      redirectTo += "/";
-    }
+    let redirectTo = resolveRedirectUrl(request);
     const referer = request.headers.referer;
     if (referer) {
       try {
