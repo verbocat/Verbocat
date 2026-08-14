@@ -193,8 +193,12 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
         console.error("Register generate link error:", err?.message);
       }
 
-      if (actionLink) {
-        sendEmail({
+      if (!actionLink) {
+        actionLink = `${redirectTo}?email=${encodeURIComponent(cleanEmail)}`;
+      }
+
+      try {
+        await sendEmail({
           to: cleanEmail,
           subject: "Verify Your Centroid Workspace Account",
           html: `
@@ -221,7 +225,9 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
               </p>
             </div>
           `
-        }).catch(e => console.error("Register mailer error:", e?.message || e));
+        });
+      } catch (mailErr) {
+        console.error("[REGISTER_MAIL_ERROR]", mailErr?.message || mailErr);
       }
 
       return response.json({
@@ -278,8 +284,12 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
       console.error("Register generate link error:", err?.message);
     }
 
-    if (actionLink) {
-      sendEmail({
+    if (!actionLink) {
+      actionLink = `${redirectTo}?email=${encodeURIComponent(cleanEmail)}`;
+    }
+
+    try {
+      await sendEmail({
         to: cleanEmail,
         subject: "Verify Your Centroid Workspace Account",
         html: `
@@ -306,7 +316,9 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
             </p>
           </div>
         `
-      }).catch(e => console.error("Register mailer error:", e?.message || e));
+      });
+    } catch (mailErr) {
+      console.error("[REGISTER_MAIL_ERROR]", mailErr?.message || mailErr);
     }
 
     if (user) {
