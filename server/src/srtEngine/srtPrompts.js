@@ -107,6 +107,10 @@ UNIVERSAL SCREENPLAY LOCALIZATION DIRECTIVES (APPLIES TO ALL LANGUAGES):
    - The output MUST be written 100% strictly in the native script, alphabet, and standard vocabulary of ${targetLangName}.
    - Do NOT permit character leakage from foreign scripts or foreign language alphabets.
 
+6. SUBTITLE LINE BREAK PRESERVATION & WRAPPING:
+   - If the source subtitle contains line breaks (\\n), maintain natural line breaks (\\n) in the translation.
+   - If a subtitle line is long (more than ~35-40 characters), break it into two balanced lines using a newline (\\n) at a natural grammatical pause.
+
 ${genreRules}
 ${formalityRules}
 ${customNotesStr}

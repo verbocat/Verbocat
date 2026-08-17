@@ -202,7 +202,7 @@ function checkRole(allowedRoles) {
  * 4. Verifies if a user has access/permission to view or edit a document.
  * Returns { hasAccess: boolean, permission: "read" | "write" | null, document: object | null }
  */
-async function getDocumentPermission(documentId, user, profile) {
+async function getDocumentPermission(documentId, user, profile, tenantId = null) {
   if (!documentId || !user || !profile) {
     return { hasAccess: false, permission: null, document: null };
   }
@@ -220,6 +220,14 @@ async function getDocumentPermission(documentId, user, profile) {
 
   const role = profile.role || "";
   const userId = user.id;
+  const isSuperAdmin = role === "super_admin";
+  const userOrgId = tenantId || profile.organization_id || null;
+
+  // STRICT MULTI-TENANT ISOLATION:
+  // If the document belongs to a specific organization space and user is not super_admin, block cross-tenant access!
+  if (!isSuperAdmin && doc.organization_id && userOrgId && doc.organization_id !== userOrgId) {
+    return { hasAccess: false, permission: null, document: doc };
+  }
 
   // 2. Super admin, Admin, Project Manager, or VerboLabs Staff on same workspace have full write access
   const isStaffOrAdmin = ["super_admin", "admin", "project_manager", "verbolabs_staff"].includes(role);
@@ -237,12 +245,17 @@ async function getDocumentPermission(documentId, user, profile) {
     try {
       const { data: proj } = await supabase
         .from("projects")
-        .select("owner_id")
+        .select("owner_id, organization_id")
         .eq("id", doc.project_id)
         .single();
 
-      if (proj && proj.owner_id === userId) {
-        return { hasAccess: true, permission: "write", document: doc };
+      if (proj) {
+        if (!isSuperAdmin && proj.organization_id && userOrgId && proj.organization_id !== userOrgId) {
+          return { hasAccess: false, permission: null, document: doc };
+        }
+        if (proj.owner_id === userId) {
+          return { hasAccess: true, permission: "write", document: doc };
+        }
       }
     } catch (_) {}
   }
@@ -291,7 +304,8 @@ function checkDocumentAccess({ requiredPermission = "read" } = {}) {
         return next();
       }
 
-      const access = await getDocumentPermission(documentId, request.user, request.profile);
+      const activeTenantId = request.tenant?.id || request.profile?.organization_id;
+      const access = await getDocumentPermission(documentId, request.user, request.profile, activeTenantId);
       if (!access.hasAccess) {
         return response.status(403).json({
           error: "Access Denied: You do not have permission to access this document workspace. Please request access from the owner or administrator to participate."

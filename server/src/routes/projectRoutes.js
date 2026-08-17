@@ -117,13 +117,21 @@ projectRouter.post(["/projects", "/api/projects"], checkAuth, async (request, re
 projectRouter.get(["/projects/history", "/api/projects/history"], checkAuth, async (request, response) => {
   try {
     const history = [];
+    const activeTenantId = request.tenant?.id || request.profile?.organization_id;
+    const isSuperAdmin = request.profile?.role === "super_admin";
 
     // 1. Fetch recent projects
-    const { data: projs } = await supabase
+    let projsQuery = supabase
       .from("projects")
       .select("*, profiles(email)")
       .order("created_at", { ascending: false })
       .limit(50);
+
+    if (!isSuperAdmin && activeTenantId) {
+      projsQuery = projsQuery.eq("organization_id", activeTenantId);
+    }
+
+    const { data: projs } = await projsQuery;
 
     if (projs && projs.length > 0) {
       projs.forEach(proj => {
@@ -143,11 +151,17 @@ projectRouter.get(["/projects/history", "/api/projects/history"], checkAuth, asy
     }
 
     // 2. Fetch recent documents
-    const { data: docs } = await supabase
+    let docsQuery = supabase
       .from("documents")
       .select("*, projects(name), profiles(email)")
       .order("created_at", { ascending: false })
       .limit(50);
+
+    if (!isSuperAdmin && activeTenantId) {
+      docsQuery = docsQuery.eq("organization_id", activeTenantId);
+    }
+
+    const { data: docs } = await docsQuery;
 
     if (docs && docs.length > 0) {
       docs.forEach(doc => {

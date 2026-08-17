@@ -16,6 +16,47 @@ const {
 } = require("../services/translationProviders");
 
 /**
+ * Ensures line breaks (\n) strictly match the source subtitle cue:
+ * - If source cue has NO line break (\n), target MUST NOT have line breaks (single line).
+ * - If source cue HAS line breaks (\n), target MUST have matching line breaks (\n).
+ */
+function restoreSrtLineBreaks(sourceText, targetText) {
+  if (!targetText || typeof targetText !== "string") return targetText;
+
+  const cleanTarget = targetText.replace(/\r\n/g, "\n");
+  const sourceHasLineBreak = String(sourceText || "").includes("\n");
+
+  // 1. If source does NOT have a line break (single line cue):
+  // Flatten target text into a single line (remove any unexpected \n from AI).
+  if (!sourceHasLineBreak) {
+    return cleanTarget.replace(/\n+/g, " ").trim();
+  }
+
+  // 2. If source DOES have line breaks:
+  // If target already has line breaks, keep them as-is!
+  if (cleanTarget.includes("\n")) {
+    return cleanTarget.trim();
+  }
+
+  // If target missing line breaks, split target into matching lines around punctuation/midpoint
+  const words = cleanTarget.trim().split(/\s+/);
+  if (words.length >= 2) {
+    let splitIndex = Math.floor(words.length / 2);
+    for (let i = 1; i < words.length - 1; i++) {
+      if (/[,\.\!;\?।|:]$/.test(words[i])) {
+        splitIndex = i + 1;
+        break;
+      }
+    }
+    const line1 = words.slice(0, splitIndex).join(" ");
+    const line2 = words.slice(splitIndex).join(" ");
+    return `${line1}\n${line2}`;
+  }
+
+  return cleanTarget;
+}
+
+/**
  * Main translation handler for SRT subtitle files.
  */
 async function translateSrtSegments(segments, targetLang, sourceLang = "en", srtContextSettings = {}, userId = null, organizationId = null) {
@@ -144,6 +185,14 @@ async function translateSrtSegments(segments, targetLang, sourceLang = "en", srt
     }
   } catch (polishErr) {
     console.warn("[SRT_ENGINE_WARN] Two-pass polish pass warning:", polishErr.message);
+  }
+
+  // 4b. Line Break Preservation & Subtitle Line Wrapping Sweep
+  for (let i = 0; i < results.length; i++) {
+    const seg = results[i];
+    if (seg.target) {
+      seg.target = restoreSrtLineBreaks(seg.source, seg.target);
+    }
   }
 
   // 5. Save translated segments to translation_memory in background

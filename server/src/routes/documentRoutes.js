@@ -153,10 +153,18 @@ documentRouter.get(["/documents/assigned", "/api/documents/assigned"], checkAuth
     const assignedList = [];
     const seenKeys = new Set();
 
+    const activeTenantId = request.tenant?.id || request.profile?.organization_id;
+    const isSuperAdmin = request.profile?.role === "super_admin";
+
     if (accessRows && accessRows.length > 0) {
       for (const row of accessRows) {
         const doc = row.documents;
         if (!doc) continue;
+
+        // STRICT MULTI-TENANT ISOLATION: Filter out assigned documents belonging to another client workspace
+        if (!isSuperAdmin && activeTenantId && doc.organization_id && doc.organization_id !== activeTenantId) {
+          continue;
+        }
 
         const proj = doc.projects || {};
         

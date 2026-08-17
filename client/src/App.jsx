@@ -3419,7 +3419,7 @@ export default function App() {
             targetLanguage={targetLanguage}
           />
 
-          {(fileExtension?.toLowerCase() === ".srt" || fileName?.toLowerCase().endsWith(".srt")) ? (
+          {(String(fileExtension || "").toLowerCase().includes("srt") || String(fileName || "").toLowerCase().endsWith(".srt")) ? (
             <SrtContextSettingsModal
               show={showContextPanel}
               onClose={() => setShowContextPanel(false)}

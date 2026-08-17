@@ -713,12 +713,12 @@ export const AdminDashboard = ({ onClose, theme }) => {
                       </td>
                       <td className="px-6 py-4 font-mono select-all">
                         <a
-                          href={`https://centroid.verbolabs.com/?space=${org.subdomain}`}
+                          href={`https://${org.subdomain}.centroid.verbolabs.com`}
                           target="_blank"
                           rel="noreferrer"
                           className="text-indigo-400 font-mono font-bold hover:underline"
                         >
-                          https://centroid.verbolabs.com/?space={org.subdomain}
+                          https://{org.subdomain}.centroid.verbolabs.com
                         </a>
                       </td>
                       <td className="px-4 py-4 text-slate-300 font-bold">
@@ -1335,18 +1335,19 @@ export const AdminDashboard = ({ onClose, theme }) => {
 
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 select-none">
-                  Tenant Space Identifier Slug
+                  Client Subdomain Address
                 </label>
-                <div className="flex items-center rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-xs">
-                  <span className="text-slate-500 font-mono select-none shrink-0">https://centroid.verbolabs.com/?space=</span>
+                <div className="flex items-center rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-xs overflow-x-auto">
+                  <span className="text-slate-500 font-mono select-none shrink-0">https://</span>
                   <input
                     type="text"
                     required
-                    placeholder="branch"
+                    placeholder="alpha"
                     value={newOrgSubdomain}
                     onChange={(e) => setNewOrgSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
-                    className="w-full bg-transparent text-indigo-400 font-bold outline-none font-mono"
+                    className="bg-transparent text-indigo-400 font-bold outline-none font-mono px-1 min-w-[60px] text-center"
                   />
+                  <span className="text-slate-500 font-mono select-none shrink-0">.centroid.verbolabs.com</span>
                 </div>
               </div>
 
@@ -1392,7 +1393,7 @@ export const AdminDashboard = ({ onClose, theme }) => {
             <div className="flex items-center justify-between pb-4 border-b border-white/5 mb-5">
               <div>
                 <h3 className="text-base font-black text-white">Edit Client Space</h3>
-                <span className="text-[10px] text-indigo-400 font-mono font-bold block mt-0.5">centroid.verbolabs.com/?space={editingOrg.subdomain}</span>
+                <span className="text-[10px] text-indigo-400 font-mono font-bold block mt-0.5">https://{editingOrg.subdomain}.centroid.verbolabs.com</span>
               </div>
               <button
                 onClick={() => setEditingOrg(null)}
