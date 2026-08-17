@@ -225,7 +225,7 @@ const ForbiddenHighlight = ({ term, children }) => {
 /* ── Tag conversion helpers ──────────────────────────────────── */
 const targetToHtml = (str, forbiddenTerms = [], forbiddenTermsEnabled = true) => {
   if (!str) return "";
-  let cleanStr = String(str).replace(/[\r\n]+/g, " ").replace(/^[\s\uFEFF\xA0]+/, "").replace(/ +/g, " ");
+  let cleanStr = String(str).replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/^[\s\uFEFF\xA0]+/, "");
   let html = cleanStr.replace(/</g, "&lt;").replace(/>/g, "&gt;");
   html = html.replace(/&lt;(\/?[^&>]*)\&gt;/gi, (match, inner) => {
     if (!inner) return match;
@@ -924,7 +924,7 @@ export const SegmentCard = ({
         <div className="seg-arrow">
           <button
             onClick={() => {
-              const cleanSourceStr = (segment.source || "").replace(/[\r\n]+/g, " ").replace(/^[\s\uFEFF\xA0]+/, "").replace(/ +/g, " ");
+              const cleanSourceStr = String(segment.source || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/^[\s\uFEFF\xA0]+/, "");
               onUpdateTranslation(segment.id, cleanSourceStr);
             }}
             className="seg-arrow-btn"

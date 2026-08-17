@@ -22,6 +22,7 @@ projectRouter.get(["/projects", "/api/projects"], checkAuth, async (request, res
       return response.status(403).json({ error: "Access denied. Linguist accounts do not have access to project management lists." });
     }
 
+    const userId = request.user.id;
     const activeTenantId = request.tenant?.id || request.profile?.organization_id;
     const isSuperAdmin = request.profile?.role === "super_admin";
 
@@ -36,6 +37,26 @@ projectRouter.get(["/projects", "/api/projects"], checkAuth, async (request, res
 
     const { data: projects, error } = await query;
     if (error) throw error;
+
+    // PRIVATE PROJECT SCOPING:
+    // Non-superadmin users ONLY see projects they created (owner_id === userId)
+    // OR projects where documents have been explicitly shared with them via document_access!
+    if (!isSuperAdmin) {
+      const { data: accessRows } = await supabase
+        .from("document_access")
+        .select("document_id, documents(project_id)")
+        .eq("user_id", userId);
+
+      const sharedProjectIds = new Set();
+      (accessRows || []).forEach(row => {
+        if (row.documents?.project_id) {
+          sharedProjectIds.add(row.documents.project_id);
+        }
+      });
+
+      const filteredProjects = (projects || []).filter(p => p.owner_id === userId || sharedProjectIds.has(p.id));
+      return response.json({ projects: filteredProjects });
+    }
 
     response.json({ projects: projects || [] });
   } catch (error) {
@@ -234,6 +255,20 @@ projectRouter.get(["/projects/:id", "/api/projects/:id"], checkAuth, async (requ
     const { data: project, error } = await query.single();
     if (error || !project) {
       return response.status(404).json({ error: "Project not found or access denied" });
+    }
+
+    const userId = request.user.id;
+    if (!isSuperAdmin && project.owner_id !== userId) {
+      const { data: accessRow } = await supabase
+        .from("document_access")
+        .select("id, documents!inner(project_id)")
+        .eq("user_id", userId)
+        .eq("documents.project_id", id)
+        .limit(1);
+
+      if (!accessRow || accessRow.length === 0) {
+        return response.status(403).json({ error: "Access denied. This project is private to its owner and has not been shared with you." });
+      }
     }
 
     // Fetch documents belonging to this project
@@ -664,15 +699,54 @@ projectRouter.post(["/projects/:projectId/share", "/api/projects/:projectId/shar
     const { email, accessLevel = "editor" } = request.body;
     if (!email) return response.status(400).json({ error: "Email is required" });
 
+    const activeTenantId = request.tenant?.id || request.profile?.organization_id;
+    const isSuperAdmin = request.profile?.role === "super_admin";
+
+    // 1. Fetch project to verify existence & tenant space
+    const { data: project } = await supabase
+      .from("projects")
+      .select("id, organization_id, owner_id")
+      .eq("id", projectId)
+      .maybeSingle();
+
+    if (!project) {
+      return response.status(404).json({ error: "Project not found." });
+    }
+
+    const projectOrgId = project.organization_id || activeTenantId;
+
+    // 2. Find target user profile by email
     const cleanEmail = String(email).trim().toLowerCase();
     const { data: targetUser } = await supabase
       .from("profiles")
-      .select("id, email, role")
+      .select("id, email, role, organization_id")
       .ilike("email", cleanEmail)
       .maybeSingle();
 
     if (!targetUser) {
       return response.status(404).json({ error: `User with email '${cleanEmail}' not found.` });
+    }
+
+    // 3. STRICT WORKSPACE RESTRICTION:
+    // Verify target user belongs to the SAME workspace organization where the project was created!
+    let isSameWorkspace = targetUser.organization_id === projectOrgId;
+
+    if (!isSameWorkspace && projectOrgId) {
+      const { data: mem } = await supabase
+        .from("user_tenant_memberships")
+        .select("id")
+        .eq("user_id", targetUser.id)
+        .eq("organization_id", projectOrgId)
+        .maybeSingle();
+      if (mem) {
+        isSameWorkspace = true;
+      }
+    }
+
+    if (!isSameWorkspace && !isSuperAdmin && projectOrgId) {
+      return response.status(403).json({
+        error: `User '${cleanEmail}' does not belong to this workspace space. Projects can only be shared with members of the workspace where the project was created.`
+      });
     }
 
     const { data: docs } = await supabase.from("documents").select("id").eq("project_id", projectId);

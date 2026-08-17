@@ -446,7 +446,7 @@ export default function App() {
       const rawSegments = Array.isArray(doc.segments) ? doc.segments : (Array.isArray(doc.segments?.segments) ? doc.segments.segments : []);
       const cleanTextString = (str) => {
         if (str === null || str === undefined) return "";
-        return String(str).replace(/[\r\n]+/g, " ").replace(/^[\s\uFEFF\xA0]+/, "").replace(/ +/g, " ");
+        return String(str).replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/^[\s\uFEFF\xA0]+/, "");
       };
       const cleanSegs = rawSegments.map((s, idx) => {
         const actualSegIndex = idx + 1;

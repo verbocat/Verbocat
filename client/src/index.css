@@ -1011,6 +1011,7 @@ code, .font-mono { font-family: "IBM Plex Mono", monospace; }
   color: var(--text-secondary);
   line-height: 1.6;
   word-break: break-words;
+  white-space: pre-wrap;
 }
 
 /* Copy button - shown on hover */
