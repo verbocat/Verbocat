@@ -22,6 +22,7 @@ const express = require("express");
 const { supabase, fetchAllSegments } = require("../config/supabase");
 const { checkAuth, checkTranslateAccess, checkDocumentAccess } = require("../utils/authMiddleware");
 const { translateSegments } = require("../services/translationService");
+const { translateSrtSegments } = require("../srtEngine/srtTranslationService");
 const { getDocumentRoomId } = require("../services/socket");
 const { calculateProgress } = require("../utils/segmentProgress");
 
@@ -40,7 +41,25 @@ segmentRouter.post(["/translate-batch", "/api/translate-batch"], checkAuth, chec
     }
     const updatedContextSettings = { ...contextSettings, fileExtension };
     const organizationId = request.tenant?.id || request.profile?.organization_id || null;
-    const { results, wordCount } = await translateSegments(segments, target, source, updatedContextSettings, request.user.id, organizationId);
+
+    let results = [];
+    let wordCount = 0;
+
+    const normExt = String(fileExtension || "").toLowerCase();
+    const normCtxExt = String(contextSettings?.fileExtension || "").toLowerCase();
+    const normName = String(fileName || "").toLowerCase();
+    const isSrt = normExt.includes("srt") || normCtxExt.includes("srt") || normName.endsWith(".srt");
+
+    if (isSrt) {
+      console.log(`[ROUTE_ROUTING] Routing SRT translation request to dedicated srtEngine (ext="${fileExtension}", name="${fileName}")...`);
+      const srtRes = await translateSrtSegments(segments, target, source, updatedContextSettings, request.user.id, organizationId);
+      results = srtRes.results;
+      wordCount = srtRes.wordCount;
+    } else {
+      const docRes = await translateSegments(segments, target, source, updatedContextSettings, request.user.id, organizationId);
+      results = docRes.results;
+      wordCount = docRes.wordCount;
+    }
     
     if (documentId && results && results.length > 0) {
       const { getIo } = require("../services/socket");

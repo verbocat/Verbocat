@@ -129,12 +129,26 @@ publicApiRouter.post("/documents/:id/translate", async (req, res) => {
   try {
     const documentId = req.params.id;
     const targetLang = req.body.target_lang || req.body.target || "hi";
-    const sourceLang = req.body.source_lang || req.body.source || "en";
 
-    // 1. Fetch template source segments (target_lang IS NULL)
+    // 1. Fetch document & template segments
+    const { data: doc } = await supabase
+      .from("documents")
+      .select("*")
+      .eq("id", documentId)
+      .single();
+
+    if (!doc) {
+      return res.status(404).json({ error: "Document not found." });
+    }
+
+    const sourceLang = doc.source_lang || "en";
+    const fileExt = String(doc.file_extension || "").toLowerCase();
+    const fileNameStr = String(doc.name || "").toLowerCase();
+    const isSrt = fileExt.includes("srt") || fileNameStr.endsWith(".srt");
+
     const sourceSegments = await fetchAllSegments(documentId, "*", "source");
     if (!sourceSegments || sourceSegments.length === 0) {
-      return res.status(404).json({ error: "Document or source segments not found." });
+      return res.status(400).json({ error: "Document has no source segments to translate." });
     }
 
     // 2. Format payload for translationService
@@ -146,15 +160,34 @@ publicApiRouter.post("/documents/:id/translate", async (req, res) => {
     const userId = req.user?.id || "00000000-0000-0000-0000-000000000000";
     const orgId = req.organization?.id || req.profile?.organization_id || null;
 
-    // 3. Execute translation service
-    const { results } = await translateSegments(
-      segmentsToTranslate,
-      targetLang,
-      sourceLang,
-      null,
-      userId,
-      orgId
-    );
+    // 3. Execute translation service (routed for .srt files)
+    let results = [];
+    if (isSrt) {
+      const srtRes = await translateSrtSegments(
+        segmentsToTranslate,
+        targetLang,
+        sourceLang,
+        { fileExtension: ".srt" },
+        userId,
+        orgId
+      );
+      results = srtRes.results.map(r => ({
+        id: r.id,
+        source: r.source,
+        translated: r.target,
+        provider: r.provider
+      }));
+    } else {
+      const docRes = await translateSegments(
+        segmentsToTranslate,
+        targetLang,
+        sourceLang,
+        null,
+        userId,
+        orgId
+      );
+      results = docRes.results;
+    }
 
     // 4. Build target language rows with mandatory source_text (obeying schema constraint)
     const targetSegmentRows = results.map(item => {

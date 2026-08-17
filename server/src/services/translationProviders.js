@@ -442,13 +442,15 @@ Keep the translation concise, natural, and strictly within the specified maximum
     }
   }
 
+  const isSrtFile = String(contextSettings?.fileExtension || "").toLowerCase() === ".srt";
+
   const payload = {
     model: OPENAI_MODEL,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: JSON.stringify({ texts: protectedTexts }) + userContext }
     ],
-    temperature: 0.0,
+    temperature: isSrtFile ? 0.65 : 0.0,
     max_tokens: 16000,
     response_format: { type: "json_object" }
   };
@@ -946,13 +948,15 @@ DIRECTIVES FOR USING CONTEXT:
     });
   }
 
+  const isSrtFile = String(contextSettings?.fileExtension || "").toLowerCase() === ".srt";
+
   const payload = {
     model: OPENAI_MODEL,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userContent }
     ],
-    temperature: 0.0,
+    temperature: isSrtFile ? 0.65 : 0.0,
     response_format: { type: "json_object" }
   };
 
@@ -998,7 +1002,7 @@ ${nextTarget ? `- Next Translation: "${nextTarget}"` : ""}`;
         { role: "system", content: proofreadSysPrompt },
         { role: "user", content: proofreadUserPrompt }
       ],
-      temperature: 0.0,
+      temperature: isSrtFile ? 0.65 : 0.0,
       response_format: { type: "json_object" }
     };
 

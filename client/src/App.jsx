@@ -14,6 +14,7 @@ import { PageSkeleton } from "./components/SkeletonLoader.jsx";
 import { SegmentBoard } from "./components/SegmentBoard.jsx";
 import { LoadingOverlay } from "./components/LoadingOverlay.jsx";
 import { ContextSettingsModal } from "./components/ContextSettingsModal.jsx";
+import { SrtContextSettingsModal } from "./components/SrtContextSettingsModal.jsx";
 import { SearchReplaceModal } from "./components/SearchReplaceModal.jsx";
 import { ForbiddenTermsModal } from "./components/ForbiddenTermsModal.jsx";
 import { SettingsModal } from "./components/SettingsModal.jsx";
@@ -794,6 +795,12 @@ export default function App() {
     terminologyStrictness: "Flexible",
     seoOptimization: "Off"
   });
+  const [srtContextSettings, setSrtContextSettings] = useState({
+    genre: "Cinema & Drama",
+    formality: "Casual & Conversational",
+    conciseness: "Balanced Reading Speed",
+    customDirectorNotes: ""
+  });
 
   const [showForbiddenTermsModal, setShowForbiddenTermsModal] = useState(false);
   const [forbiddenTermsEnabled, setForbiddenTermsEnabled] = useState(() => {
@@ -1425,8 +1432,12 @@ export default function App() {
 
       for (let i = 0; i < segmentsToTranslate.length; i += BATCH_SIZE) {
         const batch = segmentsToTranslate.slice(i, i + BATCH_SIZE);
+        const activeContext = (fileExtension?.toLowerCase() === ".srt" || fileName?.toLowerCase().endsWith(".srt"))
+          ? srtContextSettings
+          : contextSettings;
+
         const data = await translateBatch(batch, targetLanguage, sourceLanguage, {
-          ...contextSettings,
+          ...activeContext,
           glossary: translationGlossary,
           lengthRestrictionEnabled,
           maxWordsMap
@@ -3408,16 +3419,28 @@ export default function App() {
             targetLanguage={targetLanguage}
           />
 
-          <ContextSettingsModal
-            show={showContextPanel}
-            onClose={() => setShowContextPanel(false)}
-            contextSettings={contextSettings}
-            setContextSettings={setContextSettings}
-            theme={theme}
-            documentId={documentId}
-            segments={segments}
-            showToast={showToast}
-          />
+          {(fileExtension?.toLowerCase() === ".srt" || fileName?.toLowerCase().endsWith(".srt")) ? (
+            <SrtContextSettingsModal
+              show={showContextPanel}
+              onClose={() => setShowContextPanel(false)}
+              srtContextSettings={srtContextSettings}
+              setSrtContextSettings={setSrtContextSettings}
+              theme={theme}
+              documentId={documentId}
+              showToast={showToast}
+            />
+          ) : (
+            <ContextSettingsModal
+              show={showContextPanel}
+              onClose={() => setShowContextPanel(false)}
+              contextSettings={contextSettings}
+              setContextSettings={setContextSettings}
+              theme={theme}
+              documentId={documentId}
+              segments={segments}
+              showToast={showToast}
+            />
+          )}
 
           <SearchReplaceModal
             show={showSearchReplace}

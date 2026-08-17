@@ -1,0 +1,176 @@
+/**
+ * srtTranslationService.js
+ * Dedicated Translation Engine for SRT Subtitle Files.
+ * Independent module completely separated from document translation pipelines.
+ */
+
+const { supabase } = require("../config/supabase");
+const { buildSlidingWindowPayload } = require("./srtSlidingWindow");
+const { buildSrtSystemPrompt } = require("./srtPrompts");
+const { runTwoPassSrtPolish } = require("./srtPolishPipeline");
+const { enqueue } = require("../services/queueManager");
+const {
+  createProviderState,
+  isScriptValidForLanguage,
+  isLegitimatelyIdentical
+} = require("../services/translationProviders");
+
+/**
+ * Main translation handler for SRT subtitle files.
+ */
+async function translateSrtSegments(segments, targetLang, sourceLang = "en", srtContextSettings = {}, userId = null, organizationId = null) {
+  if (!segments || segments.length === 0) {
+    return { results: [], wordCount: 0 };
+  }
+
+  console.log(`\n========================================`);
+  console.log(`[SRT_ENGINE_START] Processing ${segments.length} subtitle cues for target: "${targetLang}" | Genre: "${srtContextSettings.genre || 'Cinema & Drama'}" | Register: "${srtContextSettings.formality || 'Casual & Conversational'}"`);
+
+  const actualSourceLang = sourceLang || "en";
+
+  // 1. Fetch existing TM matches from database
+  const uniqueSources = [...new Set(segments.map(s => s.source || s.source_text).filter(Boolean))];
+  
+  let existingTranslations = [];
+  const CHUNK_SIZE = 50;
+  for (let i = 0; i < uniqueSources.length; i += CHUNK_SIZE) {
+    const chunk = uniqueSources.slice(i, i + CHUNK_SIZE);
+    let tmQuery = supabase
+      .from("translation_memory")
+      .select("*")
+      .in("source_text", chunk)
+      .eq("target_lang", targetLang);
+    if (organizationId) {
+      tmQuery = tmQuery.or(`organization_id.eq.${organizationId},organization_id.is.null`);
+    }
+    const { data } = await tmQuery;
+    if (data) existingTranslations.push(...data);
+  }
+
+  const tmMap = {};
+  existingTranslations.forEach((item) => {
+    const existing = tmMap[item.source_text];
+    if (!existing || item.provider.startsWith("Linguist (ICE)") || item.created_at > existing.created_at) {
+      tmMap[item.source_text] = item;
+    }
+  });
+
+  // 2. Identify missing subtitle segments requiring AI translation
+  const results = segments.map((seg, idx) => ({
+    id: seg.id || (idx + 1),
+    source: seg.source || seg.source_text || "",
+    target: seg.target || seg.target_text || "",
+    provider: "Draft",
+    blockNum: seg.blockNum || seg.id || (idx + 1),
+    timestamp: seg.timestamp || ""
+  }));
+
+  // Create provider state for model rotation
+  const providerState = createProviderState();
+
+  // Helper AI caller function for Pass 1 & Pass 2
+  const callAiProvider = async (systemPrompt, userPromptText) => {
+    const { fetchWithFallbackChain } = require("../services/translationProviders");
+    const aiResponse = await fetchWithFallbackChain({
+      textToTranslate: userPromptText,
+      targetLang,
+      sourceLang: actualSourceLang,
+      customSystemPrompt: systemPrompt,
+      contextSettings: { fileExtension: ".srt", ...srtContextSettings },
+      providerState
+    });
+    return aiResponse?.translated || "";
+  };
+
+  // 3. Pass 1: Translate missing subtitle cues using Multi-Cue Sliding Context Windows
+  let totalWordCount = 0;
+
+  for (let i = 0; i < results.length; i++) {
+    const seg = results[i];
+    const sourceText = seg.source;
+    if (!sourceText) continue;
+
+    totalWordCount += sourceText.split(/\s+/).length;
+
+    // Only reuse human Linguist (ICE) matches for SRT files, ignoring old literal machine TM entries
+    const tmMatch = tmMap[sourceText];
+    if (tmMatch && tmMatch.provider && tmMatch.provider.startsWith("Linguist (ICE)") && tmMatch.target_text && isScriptValidForLanguage(tmMatch.target_text, targetLang, sourceText)) {
+      seg.target = tmMatch.target_text;
+      seg.provider = tmMatch.provider;
+      continue;
+    }
+
+    // Build Multi-Cue Sliding Context Window (3 preceding cues + target cue + 2 following cues)
+    const windowPayload = buildSlidingWindowPayload(results, i, 3, 2);
+    const systemPrompt = buildSrtSystemPrompt(targetLang, actualSourceLang, srtContextSettings);
+
+    try {
+      const estimatedTokens = 800 + Math.round(windowPayload.fullPromptText.length / 4);
+      
+      const translatedText = await enqueue({
+        type: "translation",
+        estimatedTokens,
+        userId,
+        execute: () => callAiProvider(systemPrompt, windowPayload.fullPromptText)
+      });
+
+      const cleanTranslated = String(translatedText || "").trim();
+      
+      if (cleanTranslated && isScriptValidForLanguage(cleanTranslated, targetLang, sourceText)) {
+        seg.target = cleanTranslated;
+        seg.provider = "SRT AI Engine (Pass 1)";
+      } else {
+        // Fallback to original source if translation failed script purity
+        seg.target = sourceText;
+        seg.provider = "Fallback (Raw)";
+      }
+    } catch (err) {
+      console.error(`[SRT_ENGINE_ERROR] Pass 1 translation failed for cue #${seg.id}:`, err.message);
+      seg.target = sourceText;
+      seg.provider = "Fallback (Error)";
+    }
+  }
+
+  // 4. Pass 2: Run Cinematic Dialogue Polish over consecutive subtitle blocks
+  try {
+    const polishedResults = await runTwoPassSrtPolish(results, srtContextSettings, targetLang, callAiProvider);
+    for (let i = 0; i < results.length; i++) {
+      if (polishedResults[i] && polishedResults[i].target) {
+        results[i].target = polishedResults[i].target;
+        if (polishedResults[i].polished) {
+          results[i].provider = "SRT Cinematic Polish Engine";
+        }
+      }
+    }
+  } catch (polishErr) {
+    console.warn("[SRT_ENGINE_WARN] Two-pass polish pass warning:", polishErr.message);
+  }
+
+  // 5. Save translated segments to translation_memory in background
+  const memoryRows = results
+    .filter(r => r.target && r.target !== r.source && r.provider.includes("Engine"))
+    .map(r => ({
+      source_text: r.source,
+      target_text: r.target,
+      source_lang: actualSourceLang,
+      target_lang: targetLang,
+      provider: r.provider,
+      organization_id: organizationId
+    }));
+
+  if (memoryRows.length > 0) {
+    supabase.from("translation_memory").upsert(memoryRows, { onConflict: "source_text,source_lang,target_lang" }).catch(() => {});
+  }
+
+  console.log(`[SRT_ENGINE_SUCCESS] Finished processing ${results.length} subtitle cues!`);
+  console.log(`========================================\n`);
+
+  return {
+    results,
+    wordCount: totalWordCount
+  };
+}
+
+module.exports = {
+  translateSrtSegments
+};
