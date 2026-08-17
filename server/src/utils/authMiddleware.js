@@ -289,7 +289,18 @@ async function getDocumentPermission(documentId, user, profile, tenantId = null)
     }
   } catch (_) {}
 
-  // 7. No matching permission found -> ACCESS DENIED
+  // 7. Check public link access on document ("Anyone with the link")
+  if (doc.public_access && doc.public_access !== "none") {
+    let perm = "read";
+    if (doc.public_access === "write") {
+      perm = "write";
+    } else if (doc.public_access === "comment") {
+      perm = "comment";
+    }
+    return { hasAccess: true, permission: perm, document: doc };
+  }
+
+  // 8. No matching permission found -> ACCESS DENIED
   return { hasAccess: false, permission: null, document: doc };
 }
 

@@ -823,8 +823,6 @@ projectRouter.put(["/projects/:id/public-access", "/api/projects/:id/public-acce
       await supabase.from("projects").update({ public_access: accessVal }).eq("id", id);
     } catch (_) {}
 
-    await supabase.from("documents").update({ public_access: accessVal }).eq("project_id", id);
-
     response.json({ success: true, publicAccess: accessVal });
   } catch (error) {
     console.error("Update Project Public Access Error:", error);
