@@ -5,7 +5,8 @@ import { fetchMySpaces, joinSpace } from "../services/api.js";
 import {
   BookOpen, Users, Settings as SettingsIcon,
   Plus, LockKeyhole, Sliders, ChevronDown, Check,
-  ChevronRight, FileText, LayoutDashboard, Sparkles, LogOut
+  ChevronRight, FileText, LayoutDashboard, Sparkles, LogOut,
+  RefreshCw, CheckCircle2, AlertCircle
 } from "lucide-react";
 
 const NavBtn = ({ children, onClick, disabled = false, title = "", iconOnly = false, active = false }) => (
@@ -26,7 +27,7 @@ export const Header = ({
   targetLanguage, onTargetLanguageChange, stats, onDeleteProject, onSaveProject,
   onRelinkHtml, onImportXliff, onOpenContext, onOpenSettings,
   userRole, onOpenAdmin, creditsAllowed, creditsConsumed, onLogout, onUpload,
-  collaborators, onOpenShare, onTeleport
+  collaborators, onOpenShare, onTeleport, dbSaveStatus = "saved"
 }) => {
   const [showSpaceMenu, setShowSpaceMenu] = useState(false);
   const [joinedSpaces, setJoinedSpaces] = useState([]);
@@ -103,6 +104,42 @@ export const Header = ({
               </div>
             </>
           )}
+
+          {/* Live DB Save Status Loading Animation & Badge */}
+          <span className="topbar-sep-dot">·</span>
+          <div
+            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-xs font-semibold transition-all duration-300 ${
+              dbSaveStatus === "saving"
+                ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-xs shadow-amber-500/10"
+                : dbSaveStatus === "error"
+                ? "bg-rose-500/15 text-rose-300 border border-rose-500/30"
+                : "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+            }`}
+            title={
+              dbSaveStatus === "saving"
+                ? "Storing translations into database... Please wait."
+                : dbSaveStatus === "error"
+                ? "Database save failed. Retrying..."
+                : "All translations stored completely in database"
+            }
+          >
+            {dbSaveStatus === "saving" ? (
+              <>
+                <RefreshCw style={{ width: 11, height: 11 }} className="animate-spin text-amber-400 shrink-0" />
+                <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider">Storing to DB...</span>
+              </>
+            ) : dbSaveStatus === "error" ? (
+              <>
+                <AlertCircle style={{ width: 11, height: 11 }} className="text-rose-400 shrink-0" />
+                <span className="text-[10px] font-bold text-rose-300 uppercase tracking-wider">Save Error</span>
+              </>
+            ) : (
+              <>
+                <CheckCircle2 style={{ width: 11, height: 11 }} className="text-emerald-400 shrink-0" />
+                <span className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider">Stored in DB</span>
+              </>
+            )}
+          </div>
         </div>
       ) : (
         <div style={{ flex: 1 }} />

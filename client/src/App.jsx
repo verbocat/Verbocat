@@ -117,6 +117,10 @@ export default function App() {
   const [cellLocks, setCellLocks] = useState(new Map());
   const [showShareModal, setShowShareModal] = useState(false);
 
+  // DB Save Status state ('saving' | 'saved' | 'error')
+  const [dbSaveStatus, setDbSaveStatus] = useState("saved");
+  const activeSaveCountRef = useRef(0);
+
   // Live Preview states
   const [showLivePreview, setShowLivePreview] = useState(false);
   const [previewBuffer, setPreviewBuffer] = useState(null);
@@ -1942,20 +1946,42 @@ export default function App() {
 
     console.log(`[CLIENT_SAVE_TRIGGER] 💾 Saving ${updates.length} segment(s) to DB for doc ${activeDocId} (target_lang: "${activeTargetLanguage}")...`, updates);
 
+    activeSaveCountRef.current += 1;
+    setDbSaveStatus("saving");
+    const saveStartTime = Date.now();
+
     try {
       const res = await updateSegmentsBulk(activeDocId, updates, autoPropagateEnabled, activeTargetLanguage);
       console.log(`[CLIENT_SAVE_SUCCESS] ✅ DB updated successfully! Saved ${res?.saved !== undefined ? res.saved : updates.length} segment(s) to Supabase for target_lang "${activeTargetLanguage}". Response:`, res);
+      
+      activeSaveCountRef.current = Math.max(0, activeSaveCountRef.current - 1);
+      if (activeSaveCountRef.current === 0 && pendingBulkSaveRef.current.size === 0) {
+        const elapsed = Date.now() - saveStartTime;
+        const minDelay = Math.max(0, 300 - elapsed);
+        setTimeout(() => {
+          if (activeSaveCountRef.current === 0 && pendingBulkSaveRef.current.size === 0) {
+            setDbSaveStatus("saved");
+          }
+        }, minDelay);
+      }
     } catch (err) {
       console.error("[CLIENT_SAVE_ERROR] Failed to bulk save segments to DB, retrying once...", err);
       // Retry once before giving up
       try {
         const retryRes = await updateSegmentsBulk(activeDocId, updates, autoPropagateEnabled, activeTargetLanguage);
         console.log(`[CLIENT_SAVE_RETRY_SUCCESS] DB updated on retry for docId: ${activeDocId}!`, retryRes);
+        
+        activeSaveCountRef.current = Math.max(0, activeSaveCountRef.current - 1);
+        if (activeSaveCountRef.current === 0 && pendingBulkSaveRef.current.size === 0) {
+          setDbSaveStatus("saved");
+        }
       } catch (retryErr) {
         console.error("[CLIENT_SAVE_RETRY_FAIL] Retry failed — re-queuing segments:", retryErr);
         itemsToSave.forEach((seg) => {
           pendingBulkSaveRef.current.set(seg.id, seg);
         });
+        activeSaveCountRef.current = Math.max(0, activeSaveCountRef.current - 1);
+        setDbSaveStatus("error");
       }
     }
   }, [documentId, currentRoute?.screen, currentRoute?.fileId, autoPropagateEnabled, activeTargetLanguage]);
@@ -1966,6 +1992,8 @@ export default function App() {
     updatedSegmentsList.forEach((seg) => {
       pendingBulkSaveRef.current.set(seg.id, seg);
     });
+
+    setDbSaveStatus("saving");
 
     if (pendingBulkSaveTimerRef.current) {
       clearTimeout(pendingBulkSaveTimerRef.current);
@@ -3494,6 +3522,7 @@ export default function App() {
             onExport={() => setShowExportModal(true)}
             onOpenQa={() => setShowQaPanel((value) => !value)}
             onSearchReplace={() => setShowSearchReplace(true)}
+            dbSaveStatus={dbSaveStatus}
           />
 
           {/* ── Zone 2+3: Action bar + Editor (or empty state) ── */}
@@ -3565,6 +3594,7 @@ export default function App() {
                 onCopySourceToTargetSelected={permission === "write" ? handleCopySourceToTargetSelected : null}
                 onClearTargetSelected={permission === "write" ? handleClearTargetSelected : null}
                 onClearSelection={() => setSelectedSegmentIds(new Set())}
+                dbSaveStatus={dbSaveStatus}
               />
 
               {/* QA panel (collapsible modal) */}

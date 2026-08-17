@@ -4,7 +4,7 @@ import {
   FileText, ArrowRight, Search, Filter, Sparkles, Eye,
   Save, Upload, Download, Trash2, RefreshCw, ChevronDown, Plus, Link2,
   FolderOpen, Sliders, GitBranch, Check, BookOpen, ShieldAlert,
-  CheckCircle2, XCircle, X
+  CheckCircle2, XCircle, X, AlertCircle
 } from "lucide-react";
 
 export const WorkspaceToolbar = ({
@@ -23,7 +23,7 @@ export const WorkspaceToolbar = ({
   onTranslateSelected, onVerifySelected, onUnverifySelected,
   onCopySourceToTargetSelected, onClearTargetSelected, onClearSelection,
   showLivePreview = false, onToggleLivePreview, isPreviewLoading = false,
-  hasAutoTranslation = true, hasAutoQc = true
+  hasAutoTranslation = true, hasAutoQc = true, dbSaveStatus = "saved"
 }) => {
 
   const [showDocMenu, setShowDocMenu] = useState(false);
@@ -278,6 +278,41 @@ export const WorkspaceToolbar = ({
 
         {/* ── Stats strip — restored ── */}
 
+
+        {/* ── DB Save Status Indicator ── */}
+        <div
+          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all duration-300 ${
+            dbSaveStatus === "saving"
+              ? "bg-amber-500/15 text-amber-300 border-amber-500/30 shadow-xs shadow-amber-500/10"
+              : dbSaveStatus === "error"
+              ? "bg-rose-500/15 text-rose-300 border-rose-500/30"
+              : "bg-emerald-500/10 text-emerald-300 border-emerald-500/20"
+          }`}
+          title={
+            dbSaveStatus === "saving"
+              ? "Storing translations in database... Please wait."
+              : dbSaveStatus === "error"
+              ? "Save failed. Retrying..."
+              : "All translations are completely stored in the database"
+          }
+        >
+          {dbSaveStatus === "saving" ? (
+            <>
+              <RefreshCw style={{ width: 12, height: 12 }} className="animate-spin text-amber-400 shrink-0" />
+              <span className="text-[11px] font-bold text-amber-300">Storing to DB...</span>
+            </>
+          ) : dbSaveStatus === "error" ? (
+            <>
+              <AlertCircle style={{ width: 12, height: 12 }} className="text-rose-400 shrink-0" />
+              <span className="text-[11px] font-bold text-rose-300">Save Error</span>
+            </>
+          ) : (
+            <>
+              <CheckCircle2 style={{ width: 12, height: 12 }} className="text-emerald-400 shrink-0" />
+              <span className="text-[11px] font-bold text-emerald-300">DB Synced</span>
+            </>
+          )}
+        </div>
 
         {/* Push Export to the right */}
         <div style={{ flex: 1 }} />
