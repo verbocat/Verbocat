@@ -485,6 +485,16 @@ export const updatePublicAccess = async (documentId, publicAccess) => {
   return response.data;
 };
 
+export const fetchProjectPublicAccess = async (projectId) => {
+  const response = await api.get(`/api/projects/${projectId}/public-access`);
+  return response.data;
+};
+
+export const updateProjectPublicAccess = async (projectId, publicAccess) => {
+  const response = await api.put(`/api/projects/${projectId}/public-access`, { publicAccess });
+  return response.data;
+};
+
 export const deleteDocument = async (documentId) => {
   const response = await api.delete(`/api/documents/${documentId}`);
   return response.data;

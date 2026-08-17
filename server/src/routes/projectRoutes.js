@@ -795,6 +795,43 @@ projectRouter.delete(["/projects/:projectId/shares/:targetId", "/api/projects/:p
   }
 });
 
+// 12. Get Project Public Access
+projectRouter.get(["/projects/:id/public-access", "/api/projects/:id/public-access"], checkAuth, async (request, response) => {
+  try {
+    const { id } = request.params;
+    const { data: project } = await supabase.from("projects").select("public_access").eq("id", id).maybeSingle();
+    let access = project?.public_access;
+    if (!access) {
+      const { data: doc } = await supabase.from("documents").select("public_access").eq("project_id", id).limit(1).maybeSingle();
+      access = doc?.public_access || "none";
+    }
+    response.json({ publicAccess: access || "none" });
+  } catch (error) {
+    console.error("Get Project Public Access Error:", error);
+    response.json({ publicAccess: "none" });
+  }
+});
+
+// 13. Update Project Public Access
+projectRouter.put(["/projects/:id/public-access", "/api/projects/:id/public-access"], checkAuth, async (request, response) => {
+  try {
+    const { id } = request.params;
+    const { publicAccess } = request.body;
+    const accessVal = publicAccess || "none";
+
+    try {
+      await supabase.from("projects").update({ public_access: accessVal }).eq("id", id);
+    } catch (_) {}
+
+    await supabase.from("documents").update({ public_access: accessVal }).eq("project_id", id);
+
+    response.json({ success: true, publicAccess: accessVal });
+  } catch (error) {
+    console.error("Update Project Public Access Error:", error);
+    response.status(500).json({ error: "Failed to update project public access" });
+  }
+});
+
 module.exports = {
   projectRouter
 };

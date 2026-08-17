@@ -3,7 +3,8 @@ import { X, Copy, Check, Lock, Globe, Shield, Link, Users, ChevronDown } from "l
 import { 
   fetchDocumentAccess, grantDocumentAccess, revokeDocumentAccess, 
   fetchProjectShares, shareProject, revokeProjectShare,
-  searchUsers, fetchPublicAccess, updatePublicAccess 
+  searchUsers, fetchPublicAccess, updatePublicAccess,
+  fetchProjectPublicAccess, updateProjectPublicAccess
 } from "../services/api.js";
 
 export function ShareModal({ isOpen, onClose, documentId, docName, projectId, targetLang, isOwner = true }) {
@@ -78,6 +79,13 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
         const list = Array.isArray(res) ? res : (res?.collaborators || res?.access || res?.shares || []);
         setAccessList(list);
         setOwner(res?.owner || null);
+
+        try {
+          const pubRes = await fetchProjectPublicAccess(projectId);
+          setPublicAccess(pubRes?.publicAccess || "none");
+        } catch (_) {
+          setPublicAccess("none");
+        }
       } else if (documentId) {
         const res = await fetchDocumentAccess(documentId);
         const list = Array.isArray(res) ? res : (res?.collaborators || res?.access || res?.shares || []);
@@ -101,14 +109,19 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
   };
 
   const handlePublicAccessChange = async (value) => {
-    if (!documentId) return;
+    if (!documentId && !projectId) return;
     setError("");
     try {
-      const res = await updatePublicAccess(documentId, value);
-      setPublicAccess(res.publicAccess);
+      let res;
+      if (documentId) {
+        res = await updatePublicAccess(documentId, value);
+      } else if (projectId) {
+        res = await updateProjectPublicAccess(projectId, value);
+      }
+      setPublicAccess(res?.publicAccess !== undefined ? res.publicAccess : value);
     } catch (err) {
-      console.error(err);
-      setError("Failed to update link sharing settings.");
+      console.error("Failed to update public access:", err);
+      setError(err.response?.data?.error || "Failed to update link sharing settings.");
     }
   };
 
@@ -371,10 +384,10 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
                         handlePublicAccessChange("read"); // defaults to viewer
                       }
                     }}
-                    className="bg-transparent border-none outline-none text-xs font-bold text-[var(--text-primary)] cursor-pointer py-0.5 rounded transition-colors"
+                    className="bg-[#181926] text-white border border-slate-700/80 rounded-lg px-2.5 py-1 text-xs font-bold outline-none cursor-pointer hover:border-indigo-500 transition-colors"
                   >
-                    <option value="none">Restricted</option>
-                    <option value="link">Anyone with the link</option>
+                    <option value="none" className="bg-[#181926] text-white font-bold py-1">Restricted</option>
+                    <option value="link" className="bg-[#181926] text-white font-bold py-1">Anyone with the link</option>
                   </select>
                 </div>
                 <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">
@@ -394,11 +407,11 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
                   <select
                     value={publicAccess}
                     onChange={(e) => handlePublicAccessChange(e.target.value)}
-                    className="bg-transparent border-none outline-none text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer py-0.5 rounded transition-colors"
+                    className="bg-[#181926] text-white border border-slate-700/80 rounded-lg px-2.5 py-1 text-xs font-bold outline-none cursor-pointer hover:border-indigo-500 transition-colors"
                   >
-                    <option value="read">Viewer</option>
-                    <option value="comment">Commenter</option>
-                    <option value="write">Editor</option>
+                    <option value="read" className="bg-[#181926] text-white font-bold py-1">Viewer</option>
+                    <option value="comment" className="bg-[#181926] text-white font-bold py-1">Commenter</option>
+                    <option value="write" className="bg-[#181926] text-white font-bold py-1">Editor</option>
                   </select>
                 </div>
               )}

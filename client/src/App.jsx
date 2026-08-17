@@ -60,7 +60,7 @@ import { ShareModal } from "./components/ShareModal.jsx";
 import { io } from "socket.io-client";
 import { applyGlossaryTerms } from "./utils/glossary.js";
 import { getTheme } from "./utils/theme.js";
-import { Globe } from "lucide-react";
+import { Globe, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react";
 import ProjectDashboard from "./components/ProjectDashboard.jsx";
 import ProjectDetails from "./components/ProjectDetails.jsx";
 import { LinguistRestrictedScreen } from "./components/LinguistRestrictedScreen.jsx";
@@ -3891,6 +3891,43 @@ export default function App() {
           {/* ── Footer bar ── */}
           {segments.length > 0 && stats && (
             <footer className="workspace-footer">
+              {/* Live DB Save Status Loading Animation & Badge */}
+              <div
+                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-semibold border transition-all duration-300 ${
+                  dbSaveStatus === "saving"
+                    ? "bg-amber-500/15 text-amber-300 border-amber-500/30 shadow-xs shadow-amber-500/10"
+                    : dbSaveStatus === "error"
+                    ? "bg-rose-500/15 text-rose-300 border-rose-500/30"
+                    : "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+                }`}
+                title={
+                  dbSaveStatus === "saving"
+                    ? "Storing translations into database... Please wait."
+                    : dbSaveStatus === "error"
+                    ? "Database save failed. Retrying..."
+                    : "All translations stored completely in database"
+                }
+              >
+                {dbSaveStatus === "saving" ? (
+                  <>
+                    <RefreshCw style={{ width: 11, height: 11 }} className="animate-spin text-amber-400 shrink-0" />
+                    <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider">Storing to DB...</span>
+                  </>
+                ) : dbSaveStatus === "error" ? (
+                  <>
+                    <AlertCircle style={{ width: 11, height: 11 }} className="text-rose-400 shrink-0" />
+                    <span className="text-[10px] font-bold text-rose-300 uppercase tracking-wider">Save Error</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 style={{ width: 11, height: 11 }} className="text-emerald-400 shrink-0" />
+                    <span className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider">Stored in DB</span>
+                  </>
+                )}
+              </div>
+
+              <div style={{ flex: 1 }} />
+
               <div className="footer-stat-item">
                 <span className="footer-stat-label">Words</span>
                 <span className="footer-stat-value">{stats.words.toLocaleString()}</span>
