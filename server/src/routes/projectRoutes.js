@@ -727,6 +727,13 @@ projectRouter.post(["/projects/:projectId/share", "/api/projects/:projectId/shar
       return response.status(404).json({ error: `User with email '${cleanEmail}' not found.` });
     }
 
+    // 2b. RESTRICT LINGUISTS FROM WHOLE PROJECT ACCESS:
+    if (targetUser.role === "linguist") {
+      return response.status(400).json({
+        error: "Entire project sharing is reserved for Project Coordinators and VerbiLabs Staff. To assign tasks to a linguist, please share specific files or target languages."
+      });
+    }
+
     // 3. STRICT WORKSPACE RESTRICTION:
     // Verify target user belongs to the SAME workspace organization where the project was created!
     let isSameWorkspace = targetUser.organization_id === projectOrgId;

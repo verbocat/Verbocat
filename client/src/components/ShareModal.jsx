@@ -1,21 +1,41 @@
 import React, { useState, useEffect, useRef } from "react";
-import { X, Copy, Check, Lock, Globe, Shield, Link, Users, ChevronDown } from "lucide-react";
+import { X, Copy, Check, Lock, Globe, Shield, Link, Users, ChevronDown, Plus, FileText, Sparkles, UserCheck, AlertCircle, ExternalLink } from "lucide-react";
 import { 
   fetchDocumentAccess, grantDocumentAccess, revokeDocumentAccess, 
   fetchProjectShares, shareProject, revokeProjectShare,
-  searchUsers, fetchPublicAccess, updatePublicAccess,
+  searchUsers, fetchLinguists, bulkShareDocuments, fetchPublicAccess, updatePublicAccess,
   fetchProjectPublicAccess, updateProjectPublicAccess
 } from "../services/api.js";
+import { LANGUAGES } from "../constants/languages";
 
-export function ShareModal({ isOpen, onClose, documentId, docName, projectId, targetLang, isOwner = true }) {
-  const [email, setEmail] = useState("");
+export function ShareModal({ 
+  isOpen, 
+  onClose, 
+  documentId, 
+  docName, 
+  projectId, 
+  targetLang, 
+  isOwner = true,
+  mode = null, // 'project' | 'file' | 'bulk_files' | 'language'
+  selectedDocumentIds = [],
+  selectedDocNames = [],
+  languageName = null,
+  documentCount = 0,
+  targetLanguages = [],
+  selectedJobItems = []
+}) {
+  const [emailInput, setEmailInput] = useState("");
+  const [selectedEmails, setSelectedEmails] = useState([]);
   const [permission, setPermission] = useState("write");
   const [accessList, setAccessList] = useState([]);
+  const [availableLinguists, setAvailableLinguists] = useState([]);
   const [owner, setOwner] = useState(null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedSingleCode, setCopiedSingleCode] = useState(null);
   const [error, setError] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
   
   const [publicAccess, setPublicAccess] = useState("none");
 
@@ -23,6 +43,9 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
   const [emailSuggestions, setEmailSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const dropdownRef = useRef(null);
+
+  const activeMode = mode || (projectId && !documentId ? "project" : "file");
+  const isProjectMode = activeMode === "project";
 
   // Build space-aware base URL so share links always carry the correct tenant
   const getSpaceSuffix = () => {
@@ -33,109 +56,181 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
     return "";
   };
 
-  const getShareUrl = () => {
-    const spaceSuffix = getSpaceSuffix();
-    if (projectId && documentId && targetLang) {
-      return `${window.location.origin}/project/${projectId}/file/${documentId}/lang/${targetLang}${spaceSuffix}`;
-    }
-    if (projectId) {
-      return `${window.location.origin}/project/${projectId}${spaceSuffix}`;
-    }
-    if (documentId) {
-      return `${window.location.origin}/?doc=${documentId}${spaceSuffix}`;
-    }
-    return window.location.origin;
+  const getLanguageName = (code) => {
+    if (!code) return "";
+    const found = LANGUAGES.find(l => l.code === code.toLowerCase());
+    return found ? found.name : code.toUpperCase();
   };
 
-  const shareUrl = getShareUrl();
+  const getLanguageFlag = (code) => {
+    if (!code) return "🌐";
+    const found = LANGUAGES.find(l => l.code === code.toLowerCase());
+    return found?.flag || "🌐";
+  };
 
+  // Generate All Direct Links (Project Workspace + Specific Job / File Editor Links)
+  const generateAllDirectLinks = () => {
+    const spaceSuffix = getSpaceSuffix();
+    const origin = window.location.origin;
+    const links = [];
 
-  // Fetch access list when modal is opened
-  useEffect(() => {
-    if (isOpen && (documentId || projectId)) {
-      loadAccessList();
+    // 1. If explicit selected job items are provided (e.g. 6 French jobs across 6 files)
+    if (selectedJobItems && selectedJobItems.length > 0) {
+      selectedJobItems.forEach((jobItem, idx) => {
+        const lName = jobItem.langName || getLanguageName(jobItem.targetLang);
+        const flag = getLanguageFlag(jobItem.targetLang);
+        const dName = jobItem.docName || `Document ${idx + 1}`;
+        const url = `${origin}/project/${projectId}/file/${jobItem.fileId}/lang/${jobItem.targetLang}${spaceSuffix}`;
+        links.push({
+          label: `${dName} (${lName})`,
+          code: `${jobItem.fileId}_${jobItem.targetLang}`,
+          flag,
+          url
+        });
+      });
+      return links;
     }
-  }, [isOpen, documentId, projectId]);
+
+    // 2. If multiple document IDs are selected for a target language (e.g. 6 files for French)
+    if (selectedDocumentIds && selectedDocumentIds.length > 1 && targetLang) {
+      const lName = languageName || getLanguageName(targetLang);
+      const flag = getLanguageFlag(targetLang);
+      selectedDocumentIds.forEach((docId, idx) => {
+        const dName = selectedDocNames[idx] || `Document ${idx + 1}`;
+        const url = `${origin}/project/${projectId}/file/${docId}/lang/${targetLang}${spaceSuffix}`;
+        links.push({
+          label: `${dName} (${lName})`,
+          code: `${docId}_${targetLang}`,
+          flag,
+          url
+        });
+      });
+      return links;
+    }
+
+    // 3. Single file or project workspace links
+    if (projectId && documentId && targetLang) {
+      const lName = languageName || getLanguageName(targetLang);
+      const flag = getLanguageFlag(targetLang);
+      links.push({
+        label: `${docName || 'Document'} (${lName}) Editor`,
+        code: `${documentId}_${targetLang}`,
+        flag,
+        url: `${origin}/project/${projectId}/file/${documentId}/lang/${targetLang}${spaceSuffix}`
+      });
+      return links;
+    }
+
+    if (projectId && documentId && targetLanguages && targetLanguages.length > 0) {
+      targetLanguages.forEach((tCode) => {
+        const lName = getLanguageName(tCode);
+        const flag = getLanguageFlag(tCode);
+        links.push({
+          label: `${docName || 'Document'} (${lName}) Editor`,
+          code: `${documentId}_${tCode}`,
+          flag,
+          url: `${origin}/project/${projectId}/file/${documentId}/lang/${tCode}${spaceSuffix}`
+        });
+      });
+      return links;
+    }
+
+    // Fallback Project Workspace Link
+    if (projectId) {
+      links.push({
+        label: "Project Workspace",
+        code: "project",
+        flag: "📁",
+        url: `${origin}/project/${projectId}${spaceSuffix}`
+      });
+    }
+
+    return links;
+  };
+
+  const allDirectLinks = generateAllDirectLinks();
+
+  const copyAllLinksToClipboard = () => {
+    if (allDirectLinks.length === 0) return;
+    const formattedText = allDirectLinks
+      .map(l => `${l.label} (${l.code}): ${l.url}`)
+      .join("\n");
+    navigator.clipboard.writeText(formattedText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  const copySingleLinkToClipboard = (url, code) => {
+    navigator.clipboard.writeText(url);
+    setCopiedSingleCode(code);
+    setTimeout(() => setCopiedSingleCode(null), 2000);
+  };
+
+  // Fetch access list & available linguists when modal is opened
+  useEffect(() => {
+    if (isOpen) {
+      setEmailInput("");
+      setSelectedEmails([]);
+      setError("");
+      setSuccessMsg("");
+      loadAccessList();
+      loadAvailableLinguists();
+    }
+  }, [isOpen, documentId, projectId, activeMode]);
 
   // Click outside listener for suggestions dropdown
   useEffect(() => {
-    function handleClickOutside(event) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setShowSuggestions(false);
       }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
     };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  const loadAvailableLinguists = async () => {
+    try {
+      const data = await fetchLinguists();
+      setAvailableLinguists(data.linguists || []);
+    } catch (err) {
+      console.error("Failed to load linguists:", err);
+    }
+  };
 
   const loadAccessList = async () => {
     setLoading(true);
-    setError("");
     try {
-      if (projectId && !documentId) {
-        const res = await fetchProjectShares(projectId);
-        const list = Array.isArray(res) ? res : (res?.collaborators || res?.access || res?.shares || []);
-        setAccessList(list);
-        setOwner(res?.owner || null);
-
-        try {
-          const pubRes = await fetchProjectPublicAccess(projectId);
-          setPublicAccess(pubRes?.publicAccess || "none");
-        } catch (_) {
-          setPublicAccess("none");
-        }
+      if (isProjectMode && projectId) {
+        const data = await fetchProjectShares(projectId);
+        setAccessList(data.shares || []);
+        setOwner(data.owner || null);
+        const pubData = await fetchProjectPublicAccess(projectId);
+        setPublicAccess(pubData.publicAccess || "none");
       } else if (documentId) {
-        const res = await fetchDocumentAccess(documentId);
-        const list = Array.isArray(res) ? res : (res?.collaborators || res?.access || res?.shares || []);
-        setAccessList(list);
-        setOwner(res?.owner || null);
-
-        try {
-          const pubRes = await fetchPublicAccess(documentId);
-          setPublicAccess(pubRes?.publicAccess || "none");
-        } catch (_) {
-          setPublicAccess("none");
-        }
+        const data = await fetchDocumentAccess(documentId);
+        setAccessList(data.access || []);
+        setOwner(data.owner || null);
+        const pubData = await fetchPublicAccess(documentId);
+        setPublicAccess(pubData.publicAccess || "none");
       }
     } catch (err) {
-      console.error("Load access list error:", err);
+      console.error(err);
       setError("Failed to load access list.");
-      setAccessList([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePublicAccessChange = async (value) => {
-    if (!documentId && !projectId) return;
-    setError("");
-    try {
-      let res;
-      if (documentId) {
-        res = await updatePublicAccess(documentId, value);
-      } else if (projectId) {
-        res = await updateProjectPublicAccess(projectId, value);
-      }
-      setPublicAccess(res?.publicAccess !== undefined ? res.publicAccess : value);
-    } catch (err) {
-      console.error("Failed to update public access:", err);
-      setError(err.response?.data?.error || "Failed to update link sharing settings.");
-    }
-  };
-
-  const handleEmailChange = async (e) => {
-    const value = e.target.value;
-    setEmail(value);
-    
-    if (value.trim().length >= 1) {
+  const handleEmailInputChange = async (val) => {
+    setEmailInput(val);
+    if (val.trim().length > 1) {
       try {
-        const results = await searchUsers(value.trim());
-        setEmailSuggestions(results);
-        setShowSuggestions(results.length > 0);
+        const res = await searchUsers(val.trim());
+        setEmailSuggestions(res.users || []);
+        setShowSuggestions(true);
       } catch (err) {
-        console.error("Suggestions fetch error:", err);
+        console.error(err);
       }
     } else {
       setEmailSuggestions([]);
@@ -143,51 +238,83 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
     }
   };
 
-  const selectSuggestion = (userEmail) => {
-    setEmail(userEmail);
-    setEmailSuggestions([]);
-    setShowSuggestions(false);
-  };
-
-  const handleGrant = async (e) => {
-    e.preventDefault();
-    if (!email) return;
-    if (!isOwner) {
-      setError("Only the project owner can invite users.");
+  const addEmailTag = (emailToUse) => {
+    const emailToAdd = emailToUse || emailInput.trim();
+    if (!emailToAdd) return;
+    if (!emailToAdd.includes("@")) {
+      setError("Please enter a valid email address.");
       return;
     }
+    if (!selectedEmails.includes(emailToAdd.toLowerCase())) {
+      setSelectedEmails(prev => [...prev, emailToAdd.toLowerCase()]);
+    }
+    setEmailInput("");
+    setShowSuggestions(false);
+    setError("");
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" || e.key === "," || e.key === " ") {
+      e.preventDefault();
+      addEmailTag();
+    }
+  };
+
+  const removeEmailTag = (emailToRemove) => {
+    setSelectedEmails(prev => prev.filter(e => e !== emailToRemove));
+  };
+
+  const handleGrantAccess = async (e) => {
+    e.preventDefault();
+    const emailsToProcess = [...selectedEmails];
+    if (emailInput.trim()) {
+      const pendingEmail = emailInput.trim();
+      if (pendingEmail.includes("@") && !emailsToProcess.includes(pendingEmail.toLowerCase())) {
+        emailsToProcess.push(pendingEmail.toLowerCase());
+      }
+    }
+
+    if (emailsToProcess.length === 0) {
+      setError("Please select or type at least one user email.");
+      return;
+    }
+
     setSubmitting(true);
     setError("");
+    setSuccessMsg("");
+
     try {
-      if (projectId && !documentId) {
-        await shareProject(projectId, email, "editor");
+      if (isProjectMode && projectId) {
+        await shareProject(projectId, emailsToProcess, permission);
+        setSuccessMsg(`Project access granted to ${emailsToProcess.length} user(s)!`);
+      } else if (activeMode === "bulk_files" || activeMode === "language" || selectedDocumentIds.length > 1) {
+        await bulkShareDocuments(selectedDocumentIds, emailsToProcess, permission, targetLang);
+        setSuccessMsg(`Access granted to ${emailsToProcess.length} user(s) for ${selectedDocumentIds.length} document(s)!`);
       } else if (documentId) {
-        await grantDocumentAccess(documentId, email, "write");
+        await grantDocumentAccess(documentId, emailsToProcess, permission, targetLang);
+        setSuccessMsg(`Access granted to ${emailsToProcess.length} user(s)!`);
       }
-      setEmail("");
-      setEmailSuggestions([]);
-      setShowSuggestions(false);
+
+      setSelectedEmails([]);
+      setEmailInput("");
       loadAccessList();
     } catch (err) {
       console.error(err);
-      setError(err.response?.data?.error || "Failed to grant access. Double check user email.");
+      const errMsg = err.response?.data?.error || err.message || "Failed to grant access.";
+      setError(errMsg);
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleRevoke = async (targetId) => {
-    if (!isOwner) {
-      setError("Only the project owner can revoke access.");
-      return;
-    }
-    setError("");
+  const handleRevoke = async (identifier) => {
     try {
-      if (projectId && !documentId) {
-        await revokeProjectShare(projectId, targetId);
+      if (isProjectMode && projectId) {
+        await revokeProjectShare(projectId, identifier);
       } else if (documentId) {
-        await revokeDocumentAccess(documentId, targetId);
+        await revokeDocumentAccess(documentId, identifier);
       }
+      setSuccessMsg("Access revoked.");
       loadAccessList();
     } catch (err) {
       console.error(err);
@@ -195,10 +322,19 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
     }
   };
 
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(shareUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handlePublicAccessChange = async (newAccess) => {
+    setPublicAccess(newAccess);
+    try {
+      if (isProjectMode && projectId) {
+        await updateProjectPublicAccess(projectId, newAccess);
+      } else if (documentId) {
+        await updatePublicAccess(documentId, newAccess);
+      }
+      setSuccessMsg(`Public link access updated to: ${newAccess}`);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to update link access settings.");
+    }
   };
 
   const getAvatarInitials = (emailStr) => {
@@ -224,132 +360,277 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card max-w-2xl select-none text-left p-6 flex flex-col gap-6" style={{ borderRadius: "6px" }}>
+      <div className="modal-card max-w-2xl select-text text-left p-5 flex flex-col gap-4 border border-indigo-500/30 shadow-2xl rounded-xl">
         
-        {/* Header */}
+        {/* Modal Header Banner */}
         <div className="flex justify-between items-start">
-          <div>
-            <h3 className="text-lg font-bold text-[var(--text-primary)] leading-snug">
-              Share {projectId && !documentId ? "Project" : "Document"} "{docName || (projectId ? "Project" : "Untitled Document")}"
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${
+                isProjectMode 
+                  ? "bg-amber-500/10 text-amber-400 border-amber-500/30" 
+                  : activeMode === "language"
+                    ? "bg-purple-500/10 text-purple-400 border-purple-500/30"
+                    : "bg-indigo-500/10 text-indigo-400 border-indigo-500/30"
+              }`}>
+                {isProjectMode ? "Project Coordinator Access" : activeMode === "language" ? "Language Package Assignment" : activeMode === "bulk_files" ? "Bulk Assignment" : "File Share & Assignment"}
+              </span>
+            </div>
+
+            <h3 className="text-base font-black text-[var(--text-primary)] leading-snug">
+              {isProjectMode && `Share Project "${docName || "Untitled Project"}"`}
+              {activeMode === "language" && `Assign ${languageName || targetLang?.toUpperCase() || "Target Language"} Files`}
+              {activeMode === "bulk_files" && `Assign ${selectedDocumentIds.length} Selected Items`}
+              {activeMode === "file" && `Assign Document "${docName || "Untitled Document"}"`}
             </h3>
+
+            <p className="text-xs text-[var(--text-secondary)] font-medium">
+              {isProjectMode && "Grant workspace access to Project Coordinators and VerbiLabs Staff."}
+              {activeMode === "language" && `Assigning all file(s) for ${languageName || targetLang} to linguists.`}
+              {activeMode === "bulk_files" && `Assigning selected files/jobs to linguists simultaneously.`}
+              {activeMode === "file" && "Assign this file to linguists or collaborators."}
+            </p>
           </div>
+
           <button 
             onClick={onClose}
-            className="p-1.5 rounded-full hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all cursor-pointer"
+            className="p-1 rounded-full hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all cursor-pointer"
             title="Close modal"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Form to Add Collaborators (Only visible to Owner) */}
-        {isOwner ? (
-          <form onSubmit={handleGrant} className="flex gap-2 relative z-50 h-[42px]">
-            <div className="flex-1 relative h-full" ref={dropdownRef}>
+        {/* Selected Items Summary Pill List */}
+        {!isProjectMode && selectedDocNames.length > 0 && (
+          <div className="bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-lg p-2.5 max-h-20 overflow-y-auto space-y-1">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-muted)] block">
+              Included Items ({selectedDocNames.length}):
+            </span>
+            <div className="flex flex-wrap gap-1">
+              {selectedDocNames.map((name, i) => (
+                <span key={i} className="text-[10px] bg-[var(--bg-surface)] border border-[var(--border-subtle)] px-2 py-0.5 rounded font-mono text-indigo-300">
+                  📄 {name}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Multi-Email Assignment Form */}
+        <form onSubmit={handleGrantAccess} className="space-y-3">
+          
+          <div className="space-y-1.5 relative" ref={dropdownRef}>
+            <label className="text-xs font-bold text-[var(--text-secondary)] flex items-center justify-between">
+              <span>Enter Email Addresses or Pick Linguist(s)</span>
+              {availableLinguists.length > 0 && (
+                <span className="text-[10px] text-indigo-400 font-normal">
+                  {availableLinguists.length} Linguists Available
+                </span>
+              )}
+            </label>
+
+            {/* Quick Linguist Pills Selection */}
+            {availableLinguists.length > 0 && (
+              <div className="flex items-center gap-1.5 overflow-x-auto py-1">
+                <span className="text-[10px] font-bold text-[var(--text-muted)] shrink-0">Quick Add:</span>
+                {availableLinguists.slice(0, 6).map((ling) => {
+                  const isAdded = selectedEmails.includes(ling.email.toLowerCase());
+                  return (
+                    <button
+                      type="button"
+                      key={ling.id}
+                      onClick={() => {
+                        if (isAdded) removeEmailTag(ling.email.toLowerCase());
+                        else addEmailTag(ling.email.toLowerCase());
+                      }}
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border transition-all cursor-pointer shrink-0 flex items-center gap-1 ${
+                        isAdded
+                          ? "bg-indigo-600 text-white border-indigo-500"
+                          : "bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-white"
+                      }`}
+                    >
+                      <UserCheck size={10} />
+                      <span>{ling.full_name || ling.email.split("@")[0]}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Chips Multi-Email Tag Container */}
+            <div className="min-h-[42px] bg-[var(--bg-input)] border border-[var(--border-medium)] focus-within:border-indigo-500 rounded-lg p-2 flex flex-wrap items-center gap-1.5 transition-all">
+              {selectedEmails.map((email) => (
+                <span key={email} className="inline-flex items-center gap-1 bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded text-xs font-semibold">
+                  <span>{email}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeEmailTag(email)}
+                    className="hover:text-rose-400 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+
               <input
                 type="email"
-                required
-                placeholder="Add people by email..."
-                value={email}
-                onChange={handleEmailChange}
-                className="w-full h-full rounded-xl border border-[var(--border-medium)] bg-[var(--bg-input)] px-4 text-[var(--text-primary)] outline-none transition-all focus:border-[var(--accent)] text-xs font-semibold placeholder-[var(--text-muted)]"
+                placeholder={selectedEmails.length === 0 ? "Type email and press Enter or comma..." : "Add another email..."}
+                value={emailInput}
+                onChange={(e) => handleEmailInputChange(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="flex-1 bg-transparent text-xs font-semibold text-[var(--text-primary)] outline-none min-w-[160px] placeholder-[var(--text-muted)]"
               />
-              
-              {/* Email Suggestions Dropdown */}
-              {showSuggestions && emailSuggestions.length > 0 && (
-                <div className="absolute left-0 right-0 mt-2 z-50 max-h-[200px] overflow-y-auto bg-[var(--bg-elevated)] border border-[var(--border-medium)] rounded-xl shadow-2xl divide-y divide-[var(--border-subtle)]">
-                  {emailSuggestions.map((user) => (
-                    <button
-                      key={user.email}
-                      type="button"
-                      onClick={() => selectSuggestion(user.email)}
-                      className="w-full text-left px-4 py-2.5 hover:bg-[var(--bg-hover)] transition-colors flex items-center justify-between cursor-pointer"
-                    >
-                      <div className="flex flex-col min-w-0 pr-2">
-                        <span className="text-xs font-bold text-[var(--text-primary)] truncate">{user.email.split("@")[0]}</span>
-                        <span className="text-[10px] text-[var(--text-secondary)] truncate">{user.email}</span>
-                      </div>
-                      {user.role && (
-                        <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[var(--accent)]/15 text-[var(--accent)] border border-[var(--accent)]/30 flex-shrink-0">
-                          {user.role}
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
+
+            {/* Auto-complete Dropdown */}
+            {showSuggestions && emailSuggestions.length > 0 && (
+              <div className="absolute left-0 right-0 top-full mt-1 bg-[var(--bg-surface)] border border-[var(--border-medium)] rounded-lg shadow-2xl z-50 max-h-48 overflow-y-auto divide-y divide-[var(--border-subtle)]">
+                {emailSuggestions.map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => addEmailTag(u.email)}
+                    className="w-full text-left px-3 py-2 text-xs font-semibold hover:bg-[var(--bg-hover)] transition-colors flex items-center justify-between cursor-pointer"
+                  >
+                    <span className="text-[var(--text-primary)] font-bold">{u.email}</span>
+                    <span className="text-[10px] text-indigo-400 uppercase font-mono bg-indigo-500/10 px-1.5 py-0.5 rounded">{u.role}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <select
+              value={permission}
+              onChange={(e) => setPermission(e.target.value)}
+              className="bg-[var(--bg-input)] border border-[var(--border-medium)] rounded-lg px-3 py-2 text-xs font-semibold text-[var(--text-primary)] outline-none cursor-pointer"
+            >
+              <option value="write">Translator / Editor (Can Translate & Edit)</option>
+              <option value="read">Reviewer / Viewer (Read-only Access)</option>
+              <option value="admin">Project Manager (Full Access)</option>
+            </select>
 
             <button
               type="submit"
-              disabled={submitting || !email}
-              className="flex items-center justify-center bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold px-6 rounded-xl transition-all cursor-pointer shadow-sm disabled:opacity-50 h-full"
+              disabled={submitting}
+              className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-black py-2 rounded-lg transition-all shadow-md cursor-pointer active:scale-[0.98]"
             >
-              Add
+              {submitting ? "Granting Access..." : "Grant Access & Assign"}
             </button>
-          </form>
-        ) : (
-          <div className="text-xs text-[var(--text-secondary)] bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-xl p-3 font-medium">
-            Only the project owner can invite new collaborators or manage sharing access.
           </div>
-        )}
+        </form>
 
-        {/* Error Message */}
+        {/* Feedback Messages */}
         {error && (
-          <div className="text-xs font-semibold text-[var(--text-rose)] bg-[var(--rose)]/10 border border-[var(--rose)]/20 rounded-xl p-3">
-            {error}
+          <div className="bg-rose-500/10 border border-rose-500/30 rounded-lg p-2.5 text-xs text-rose-400 font-semibold flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{error}</span>
           </div>
         )}
 
-        {/* People with Access */}
-        <div className="flex flex-col gap-2.5">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-            People with access
-          </span>
-          <div className="flex flex-col gap-3 max-h-[190px] overflow-y-auto pr-1">
+        {successMsg && (
+          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-2.5 text-xs text-emerald-400 font-semibold flex items-center gap-2">
+            <Check className="w-4 h-4 shrink-0" />
+            <span>{successMsg}</span>
+          </div>
+        )}
+
+        {/* DIRECT LINKS BREAKDOWN SECTION (ALL TARGET LANGUAGE LINKS) */}
+        {allDirectLinks.length > 0 && (
+          <div className="bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-lg p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5">
+                <Link className="w-3 h-3 text-indigo-400" />
+                <span>Direct Access Links Breakdown ({allDirectLinks.length}):</span>
+              </span>
+              
+              <button
+                type="button"
+                onClick={copyAllLinksToClipboard}
+                className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 px-2 py-0.5 rounded transition-all cursor-pointer flex items-center gap-1"
+              >
+                {copied ? <Check size={10} className="text-emerald-400" /> : <Copy size={10} />}
+                <span>{copied ? "All 4 Links Copied!" : "Copy All Direct Links"}</span>
+              </button>
+            </div>
+
+            <div className="space-y-1.5 max-h-36 overflow-y-auto">
+              {allDirectLinks.map((item) => {
+                const isItemCopied = copiedSingleCode === item.code;
+                return (
+                  <div key={item.code} className="flex items-center justify-between gap-2 bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded px-2.5 py-1 text-[11px]">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-sm">{item.flag}</span>
+                      <span className="font-extrabold text-[var(--text-primary)] shrink-0">{item.label}:</span>
+                      <span className="text-[10px] font-mono text-[var(--text-muted)] truncate select-all">{item.url}</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => copySingleLinkToClipboard(item.url, item.code)}
+                      className="p-1 text-[var(--text-muted)] hover:text-indigo-400 transition-colors shrink-0 cursor-pointer"
+                      title={`Copy ${item.label} URL`}
+                    >
+                      {isItemCopied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Existing Access List Section */}
+        <div className="space-y-2 border-t border-[var(--border-subtle)] pt-3">
+          <h4 className="text-xs font-bold text-[var(--text-secondary)]">People with Access</h4>
+
+          <div className="space-y-1.5 max-h-40 overflow-y-auto">
             {loading ? (
-              <div className="py-4 text-center text-xs text-[var(--text-muted)] font-bold">Loading members...</div>
+              <p className="text-xs text-[var(--text-muted)] italic animate-pulse">Loading access records...</p>
             ) : (
               <>
-                {/* Render Owner - Permanent access, no remove button */}
                 {owner && (
-                  <div className="flex items-center justify-between py-1">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 ${getAvatarColor(owner.email)}`}>
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-[var(--bg-input)] border border-[var(--border-subtle)]">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center text-xs font-bold">
                         {getAvatarInitials(owner.email)}
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-[var(--text-primary)] truncate">{owner.name}</p>
-                        <p className="text-[10px] text-[var(--text-secondary)] truncate mt-0.5">{owner.email}</p>
+                      <div>
+                        <p className="text-xs font-bold text-[var(--text-primary)]">{owner.email}</p>
+                        <p className="text-[10px] text-[var(--text-muted)]">Project Creator</p>
                       </div>
                     </div>
-                    <span className="text-[10px] font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded-md select-none">
+                    <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
                       Owner
                     </span>
                   </div>
                 )}
 
-                {/* Render Collaborators */}
                 {accessList.map((item) => (
-                  <div key={item.userId || item.shareId || item.email} className="flex items-center justify-between py-1">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 ${getAvatarColor(item.email)}`}>
+                  <div key={item.shareId || item.accessId} className="flex items-center justify-between p-2 rounded-lg bg-[var(--bg-panel)] border border-[var(--border-subtle)]">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${getAvatarColor(item.email)}`}>
                         {getAvatarInitials(item.email)}
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-[var(--text-primary)] truncate">{item.name}</p>
-                        <p className="text-[10px] text-[var(--text-secondary)] truncate mt-0.5">{item.email}</p>
+                      <div>
+                        <p className="text-xs font-bold text-[var(--text-primary)]">{item.email}</p>
+                        <p className="text-[10px] text-[var(--text-muted)]">
+                          {item.role ? `Role: ${item.role}` : "Collaborator"}
+                        </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-[10px] font-bold text-purple-400 bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 rounded-md">
-                        Editor
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded uppercase border border-indigo-500/20">
+                        {item.permission || "write"}
                       </span>
                       {isOwner && (
                         <button
                           type="button"
                           onClick={() => handleRevoke(item.userId || item.shareId)}
-                          className="text-xs font-bold text-[var(--text-rose)] hover:text-red-400 cursor-pointer transition-colors"
+                          className="text-xs font-bold text-rose-400 hover:text-red-300 cursor-pointer transition-colors"
                         >
                           Remove
                         </button>
@@ -362,83 +643,26 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
           </div>
         </div>
 
-        {/* General Access */}
-        <div className="flex flex-col gap-2.5">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-            General access
-          </span>
-          <div className="flex items-start gap-4">
-            <div className="w-9 h-9 rounded-full bg-[var(--bg-input)] border border-[var(--border-medium)] flex items-center justify-center text-[var(--text-secondary)] flex-shrink-0 mt-0.5">
-              {publicAccess === "none" ? <Lock className="w-4 h-4" /> : <Globe className="w-4 h-4 text-[var(--text-accent)]" />}
-            </div>
-            <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <div className="flex items-center gap-2">
-                  <select
-                    value={publicAccess === "none" ? "none" : "link"}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val === "none") {
-                        handlePublicAccessChange("none");
-                      } else {
-                        handlePublicAccessChange("read"); // defaults to viewer
-                      }
-                    }}
-                    className="bg-[#181926] text-white border border-slate-700/80 rounded-lg px-2.5 py-1 text-xs font-bold outline-none cursor-pointer hover:border-indigo-500 transition-colors"
-                  >
-                    <option value="none" className="bg-[#181926] text-white font-bold py-1">Restricted</option>
-                    <option value="link" className="bg-[#181926] text-white font-bold py-1">Anyone with the link</option>
-                  </select>
-                </div>
-                <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">
-                  {publicAccess === "none" 
-                    ? "Only people added can open with this link" 
-                    : publicAccess === "write"
-                      ? "Anyone on the Internet with this link can edit"
-                      : publicAccess === "comment"
-                        ? "Anyone on the Internet with this link can comment"
-                        : "Anyone on the Internet with this link can view"
-                  }
-                </p>
-              </div>
-
-              {publicAccess !== "none" && (
-                <div>
-                  <select
-                    value={publicAccess}
-                    onChange={(e) => handlePublicAccessChange(e.target.value)}
-                    className="bg-[#181926] text-white border border-slate-700/80 rounded-lg px-2.5 py-1 text-xs font-bold outline-none cursor-pointer hover:border-indigo-500 transition-colors"
-                  >
-                    <option value="read" className="bg-[#181926] text-white font-bold py-1">Viewer</option>
-                    <option value="comment" className="bg-[#181926] text-white font-bold py-1">Commenter</option>
-                    <option value="write" className="bg-[#181926] text-white font-bold py-1">Editor</option>
-                  </select>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
         {/* Footer Actions */}
-        <div className="flex items-center justify-between border-t border-[var(--border-subtle)] pt-4 mt-2">
+        <div className="flex items-center justify-between border-t border-[var(--border-subtle)] pt-3 mt-1">
           <button
             type="button"
-            onClick={copyToClipboard}
-            className={`flex items-center justify-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold border transition-all cursor-pointer ${
+            onClick={copyAllLinksToClipboard}
+            className={`flex items-center justify-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-bold border transition-all cursor-pointer ${
               copied 
-                ? "bg-[var(--emerald-glow)] border-[var(--emerald-glow)] text-[var(--text-emerald)]" 
+                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" 
                 : "bg-transparent border-[var(--border-medium)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
             }`}
           >
             {copied ? (
               <>
-                <Check className="w-3.5 h-3.5" />
-                Link copied
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <span>All Links Copied!</span>
               </>
             ) : (
               <>
                 <Link className="w-3.5 h-3.5" />
-                Copy link
+                <span>Copy Direct Links (All {allDirectLinks.length})</span>
               </>
             )}
           </button>
@@ -446,7 +670,7 @@ export function ShareModal({ isOpen, onClose, documentId, docName, projectId, ta
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-black px-6 py-2 transition-all cursor-pointer shadow-sm"
+            className="rounded-md bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black px-5 py-1.5 transition-all cursor-pointer shadow-sm active:scale-[0.98]"
           >
             Done
           </button>

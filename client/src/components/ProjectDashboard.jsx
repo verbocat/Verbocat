@@ -11,7 +11,6 @@ import { normalizeStatus, formatStatusLabel, getStatusColorClass, getStatusDotCo
 
 import { DuplicateProjectModal } from "./DuplicateProjectModal";
 import { SmartAIProjectBar } from "./SmartAIProjectBar";
-import { TestEmailModal } from "./TestEmailModal";
 
 import io from "socket.io-client";
 
@@ -43,7 +42,6 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
   const [notesModalProject, setNotesModalProject] = useState(null);
   const [settingsModalProjectId, setSettingsModalProjectId] = useState(null);
   const [showGlobalHistoryModal, setShowGlobalHistoryModal] = useState(false);
-  const [showTestEmailModal, setShowTestEmailModal] = useState(false);
   const [openMenuProjectId, setOpenMenuProjectId] = useState(null);
   const [openStatusMenuProjectId, setOpenStatusMenuProjectId] = useState(null);
   const [duplicateModalProject, setDuplicateModalProject] = useState(null);
@@ -265,15 +263,6 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
           >
             <History size={14} className="text-indigo-400" />
             <span>Activity Log</span>
-          </button>
-
-          <button
-            onClick={() => setShowTestEmailModal(true)}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 text-xs font-bold text-purple-400 transition-all cursor-pointer shadow-xs"
-            title="Mail Delivery & Live Debug Console"
-          >
-            <Mail size={14} className="text-purple-400" />
-            <span>Mail Debugger</span>
           </button>
 
           {(userRole === "admin" || userRole === "super_admin") && (
@@ -568,8 +557,9 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
                                     setOpenMenuProjectId(null);
                                   }}
                                   className="w-full text-left px-3.5 py-2 hover:bg-[var(--bg-hover)] flex items-center gap-2.5 font-bold text-[var(--text-primary)] cursor-pointer"
+                                  title="Share whole project workspace with Project Coordinators"
                                 >
-                                  <Users size={14} className="text-indigo-400" /> Share Project
+                                  <Users size={14} className="text-indigo-400" /> Share Project (Coordinators)
                                 </button>
 
                                 <button
@@ -1058,6 +1048,7 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
           projectId={shareModalProject.id}
           docName={shareModalProject.name}
           isOwner={!shareModalProject.isShared}
+          mode="project"
         />
       )}
 
@@ -1105,13 +1096,6 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
           showToast={showToast}
         />
       )}
-
-      {/* Mail Delivery & Live Debug Console Modal */}
-      <TestEmailModal
-        isOpen={showTestEmailModal}
-        onClose={() => setShowTestEmailModal(false)}
-        showToast={showToast}
-      />
 
       {/* Fixed Bottom Google Gemini AI Bar */}
       <SmartAIProjectBar

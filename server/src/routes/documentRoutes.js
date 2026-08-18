@@ -901,6 +901,114 @@ documentRouter.delete(["/documents/:id", "/api/documents/:id"], checkAuth, async
   }
 });
 
+// 7. Bulk Share Documents with Multiple Users/Linguists
+documentRouter.post(["/documents/bulk-share", "/api/documents/bulk-share"], checkAuth, async (request, response) => {
+  try {
+    const { documentIds = [], emails = [], permission = "write" } = request.body;
+    
+    if (!Array.isArray(documentIds) || documentIds.length === 0) {
+      return response.status(400).json({ error: "At least one document ID is required for bulk share." });
+    }
+
+    const emailList = (Array.isArray(emails) ? emails : [emails])
+      .map(e => String(e).trim().toLowerCase())
+      .filter(Boolean);
+
+    if (emailList.length === 0) {
+      return response.status(400).json({ error: "At least one valid user email is required." });
+    }
+
+    // 1. Resolve or auto-create profiles for each email
+    const targetUserIds = [];
+    const resolvedEmails = [];
+
+    for (const cleanEmail of emailList) {
+      let { data: targetProfile } = await supabase
+        .from("profiles")
+        .select("id, email, role")
+        .ilike("email", cleanEmail)
+        .maybeSingle();
+
+      if (!targetProfile) {
+        // Auto-create profile if giving access to a new user email
+        const { data: newProf, error: createErr } = await supabase
+          .from("profiles")
+          .insert({
+            email: cleanEmail,
+            role: "linguist",
+            status: "active"
+          })
+          .select("id, email, role")
+          .single();
+
+        if (!createErr && newProf) {
+          targetProfile = newProf;
+        }
+      }
+
+      if (targetProfile) {
+        targetUserIds.push(targetProfile.id);
+        resolvedEmails.push(targetProfile.email);
+      }
+    }
+
+    if (targetUserIds.length === 0) {
+      return response.status(404).json({ error: "No valid profiles could be found or created for provided emails." });
+    }
+
+    // 2. Expand document IDs to include sibling target language files (same file_id)
+    const { data: targetDocs } = await supabase
+      .from("documents")
+      .select("id, file_id")
+      .in("id", documentIds);
+
+    const fileIds = Array.from(new Set((targetDocs || []).map(d => d.file_id).filter(Boolean)));
+    let allDocIds = Array.from(new Set(documentIds));
+
+    if (fileIds.length > 0) {
+      const { data: siblingDocs } = await supabase
+        .from("documents")
+        .select("id")
+        .in("file_id", fileIds);
+      if (siblingDocs && siblingDocs.length > 0) {
+        allDocIds = Array.from(new Set([...allDocIds, ...siblingDocs.map(d => d.id)]));
+      }
+    }
+
+    // 3. Build access insert rows for all combinations of document and user
+    const accessInserts = [];
+    for (const docId of allDocIds) {
+      for (const uId of targetUserIds) {
+        accessInserts.push({
+          document_id: docId,
+          user_id: uId,
+          permission: permission || "write"
+        });
+      }
+    }
+
+    if (accessInserts.length > 0) {
+      const { error: upsertErr } = await supabase
+        .from("document_access")
+        .upsert(accessInserts, { onConflict: "document_id,user_id" });
+
+      if (upsertErr) throw upsertErr;
+    }
+
+    response.json({
+      success: true,
+      message: `Successfully shared ${allDocIds.length} document(s) with ${resolvedEmails.length} user(s).`,
+      sharedEmails: resolvedEmails,
+      documentCount: allDocIds.length,
+      accessCount: accessInserts.length
+    });
+  } catch (error) {
+    console.error("Bulk Share Documents Error:", error);
+    response.status(500).json({ error: error.message || "Failed to bulk share documents" });
+  }
+});
+
 module.exports = {
   documentRouter
 };
+

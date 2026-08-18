@@ -94,8 +94,7 @@ api.interceptors.response.use(
                               requestUrl.includes("/auth/forgot-password") ||
                               requestUrl.includes("/auth/reset-password") ||
                               requestUrl.includes("/auth/resend-verification") ||
-                              requestUrl.includes("/auth/manual-verify") ||
-                              requestUrl.includes("/auth/test-email");
+                              requestUrl.includes("/auth/manual-verify");
 
     const hasRefreshToken = !!localStorage.getItem("centroid_refresh_token");
 
@@ -378,6 +377,21 @@ export const deleteProjectNote = async (projectId, noteId) => {
 export const searchUsers = async (query) => {
   const response = await api.get(`/api/auth/users/search?query=${encodeURIComponent(query)}`);
   return response.data?.users || [];
+};
+
+export const fetchLinguists = async () => {
+  const response = await api.get("/api/auth/users/linguists");
+  return response.data?.linguists || [];
+};
+
+export const bulkShareDocuments = async (documentIds, emails, permission = "write", targetLang = null) => {
+  const response = await api.post("/api/documents/bulk-share", {
+    documentIds,
+    emails,
+    permission,
+    targetLang
+  });
+  return response.data;
 };
 
 export const fetchAssignedDocuments = async () => {
