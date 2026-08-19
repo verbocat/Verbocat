@@ -715,68 +715,79 @@ projectRouter.post(["/projects/:projectId/share", "/api/projects/:projectId/shar
 
     const projectOrgId = project.organization_id || activeTenantId;
 
-    // 2. Find target user profile by email
-    const cleanEmail = String(email).trim().toLowerCase();
-    const { data: targetUser } = await supabase
-      .from("profiles")
-      .select("id, email, role, organization_id")
-      .ilike("email", cleanEmail)
-      .maybeSingle();
+    // 2. Parse emails (single string or array of emails)
+    const emailList = (Array.isArray(email) ? email : [email])
+      .map(e => String(e).trim().toLowerCase())
+      .filter(Boolean);
 
-    if (!targetUser) {
-      return response.status(404).json({ error: `User with email '${cleanEmail}' not found.` });
+    if (emailList.length === 0) {
+      return response.status(400).json({ error: "At least one valid user email is required." });
     }
 
-    // 2b. RESTRICT LINGUISTS FROM WHOLE PROJECT ACCESS:
-    if (targetUser.role === "linguist") {
-      return response.status(400).json({
-        error: "Entire project sharing is reserved for Project Coordinators and VerbiLabs Staff. To assign tasks to a linguist, please share specific files or target languages."
-      });
-    }
-
-    // 3. STRICT WORKSPACE RESTRICTION:
-    // Verify target user belongs to the SAME workspace organization where the project was created!
-    let isSameWorkspace = targetUser.organization_id === projectOrgId;
-
-    if (!isSameWorkspace && projectOrgId) {
-      const { data: mem } = await supabase
-        .from("user_tenant_memberships")
-        .select("id")
-        .eq("user_id", targetUser.id)
-        .eq("organization_id", projectOrgId)
-        .maybeSingle();
-      if (mem) {
-        isSameWorkspace = true;
-      }
-    }
-
-    if (!isSameWorkspace && !isSuperAdmin && projectOrgId) {
-      return response.status(403).json({
-        error: `User '${cleanEmail}' does not belong to this workspace space. Projects can only be shared with members of the workspace where the project was created.`
-      });
-    }
-
+    const grantedCollaborators = [];
     const { data: docs } = await supabase.from("documents").select("id").eq("project_id", projectId);
     const docIds = (docs || []).map(d => d.id);
 
-    if (docIds.length > 0) {
-      const accessInserts = docIds.map(docId => ({
-        document_id: docId,
-        user_id: targetUser.id,
-        permission: accessLevel === "viewer" ? "read" : "write"
-      }));
+    for (const cleanEmail of emailList) {
+      const { data: targetUser } = await supabase
+        .from("profiles")
+        .select("id, email, role, organization_id")
+        .ilike("email", cleanEmail)
+        .maybeSingle();
 
-      await supabase.from("document_access").upsert(accessInserts, { onConflict: "document_id,user_id" });
-    }
+      if (!targetUser) {
+        return response.status(404).json({ error: `User with email '${cleanEmail}' not found.` });
+      }
 
-    response.json({
-      success: true,
-      collaborator: {
+      // RESTRICT LINGUISTS FROM WHOLE PROJECT ACCESS:
+      if (targetUser.role === "linguist") {
+        return response.status(400).json({
+          error: `User '${cleanEmail}' is registered as a Linguist. Entire project sharing is reserved for Project Coordinators and VerbiLabs Staff. To assign tasks to a linguist, please share specific files or target languages.`
+        });
+      }
+
+      // STRICT WORKSPACE RESTRICTION:
+      let isSameWorkspace = targetUser.organization_id === projectOrgId;
+      if (!isSameWorkspace && projectOrgId) {
+        const { data: mem } = await supabase
+          .from("user_tenant_memberships")
+          .select("id")
+          .eq("user_id", targetUser.id)
+          .eq("organization_id", projectOrgId)
+          .maybeSingle();
+        if (mem) {
+          isSameWorkspace = true;
+        }
+      }
+
+      if (!isSameWorkspace && !isSuperAdmin && projectOrgId) {
+        return response.status(403).json({
+          error: `User '${cleanEmail}' does not belong to this workspace space. Projects can only be shared with members of the workspace where the project was created.`
+        });
+      }
+
+      if (docIds.length > 0) {
+        const accessInserts = docIds.map(docId => ({
+          document_id: docId,
+          user_id: targetUser.id,
+          permission: accessLevel === "viewer" ? "read" : "write"
+        }));
+
+        await supabase.from("document_access").upsert(accessInserts, { onConflict: "document_id,user_id" });
+      }
+
+      grantedCollaborators.push({
         userId: targetUser.id,
         email: targetUser.email,
         fullName: targetUser.email,
         accessLevel
-      }
+      });
+    }
+
+    response.json({
+      success: true,
+      collaborators: grantedCollaborators,
+      collaborator: grantedCollaborators[0] || null
     });
   } catch (error) {
     console.error("Share Project Error:", error);

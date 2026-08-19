@@ -11,6 +11,7 @@ import {
   updateProjectDetails, renameDocument, duplicateDocument, deleteProject, uploadProjectReferenceFile
 } from "../services/api";
 import { LANGUAGES } from "../constants/languages";
+import { getSocketUrl } from "../utils/socketUrl.js";
 import { ShareModal } from "./ShareModal";
 import { ProjectNotesModal } from "./ProjectNotesModal";
 import { ProjectHistoryModal } from "./ProjectHistoryModal";
@@ -111,8 +112,8 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
     loadAnalytics();
 
     // Setup real-time socket updates for queue progress
-    const socketUrl = import.meta.env.VITE_API_URL || window.location.origin;
-    const socket = io(socketUrl, { auth: { token } });
+    const socketUrl = getSocketUrl();
+    const socket = io(socketUrl, { auth: { token }, transports: ["websocket", "polling"] });
     socketRef.current = socket;
 
     socket.on("global-job-update", ({ jobId, status, progress, errorMessage }) => {

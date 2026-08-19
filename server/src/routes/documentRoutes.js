@@ -648,7 +648,7 @@ documentRouter.get(["/documents/:id/access", "/api/documents/:id/access"], check
 documentRouter.post(["/documents/:id/access", "/api/documents/:id/access"], checkAuth, async (request, response) => {
   try {
     const { id } = request.params;
-    const { email, permission = "write" } = request.body;
+    const { email, permission = "write", targetLang } = request.body;
     if (!email) return response.status(400).json({ error: "Email is required" });
 
     const cleanEmail = String(email).trim().toLowerCase();
@@ -677,19 +677,23 @@ documentRouter.post(["/documents/:id/access", "/api/documents/:id/access"], chec
       }
     }
 
-    // Fetch target document to check if there are sibling target language documents with the same file_id
+    // Fetch target document to check target_lang and file_id
     const { data: targetDoc } = await supabase
       .from("documents")
-      .select("id, file_id, project_id")
+      .select("id, file_id, project_id, target_lang")
       .eq("id", id)
       .maybeSingle();
 
+    const langToUse = targetLang || targetDoc?.target_lang;
     let docIdsToShare = [id];
-    if (targetDoc?.file_id) {
+
+    // Strictly scope sibling sharing to the SPECIFIC target language requested
+    if (targetDoc?.file_id && langToUse) {
       const { data: siblingDocs } = await supabase
         .from("documents")
         .select("id")
-        .eq("file_id", targetDoc.file_id);
+        .eq("file_id", targetDoc.file_id)
+        .eq("target_lang", langToUse);
       if (siblingDocs && siblingDocs.length > 0) {
         docIdsToShare = Array.from(new Set([...docIdsToShare, ...siblingDocs.map(d => d.id)]));
       }
@@ -904,7 +908,7 @@ documentRouter.delete(["/documents/:id", "/api/documents/:id"], checkAuth, async
 // 7. Bulk Share Documents with Multiple Users/Linguists
 documentRouter.post(["/documents/bulk-share", "/api/documents/bulk-share"], checkAuth, async (request, response) => {
   try {
-    const { documentIds = [], emails = [], permission = "write" } = request.body;
+    const { documentIds = [], emails = [], permission = "write", targetLang } = request.body;
     
     if (!Array.isArray(documentIds) || documentIds.length === 0) {
       return response.status(400).json({ error: "At least one document ID is required for bulk share." });
@@ -956,20 +960,21 @@ documentRouter.post(["/documents/bulk-share", "/api/documents/bulk-share"], chec
       return response.status(404).json({ error: "No valid profiles could be found or created for provided emails." });
     }
 
-    // 2. Expand document IDs to include sibling target language files (same file_id)
+    // 2. Expand document IDs scoped STRICTLY to targetLang if provided
     const { data: targetDocs } = await supabase
       .from("documents")
-      .select("id, file_id")
+      .select("id, file_id, target_lang")
       .in("id", documentIds);
 
     const fileIds = Array.from(new Set((targetDocs || []).map(d => d.file_id).filter(Boolean)));
     let allDocIds = Array.from(new Set(documentIds));
 
     if (fileIds.length > 0) {
-      const { data: siblingDocs } = await supabase
-        .from("documents")
-        .select("id")
-        .in("file_id", fileIds);
+      let query = supabase.from("documents").select("id").in("file_id", fileIds);
+      if (targetLang) {
+        query = query.eq("target_lang", targetLang);
+      }
+      const { data: siblingDocs } = await query;
       if (siblingDocs && siblingDocs.length > 0) {
         allDocIds = Array.from(new Set([...allDocIds, ...siblingDocs.map(d => d.id)]));
       }

@@ -21,6 +21,7 @@ import { SettingsModal } from "./components/SettingsModal.jsx";
 import { LiveDocumentViewer } from "./components/LiveDocumentViewer.jsx";
 import { ScreenshotContextModal } from "./components/ScreenshotContextModal.jsx";
 import { LANGUAGES } from "./constants/languages.js";
+import { getSocketUrl } from "./utils/socketUrl.js";
 import { useGlossaryManager } from "./hooks/useGlossaryManager.js";
 import { useUserStore } from "./services/userStore.js";
 import {
@@ -534,9 +535,10 @@ export default function App() {
   useEffect(() => {
     if (!documentId || !token) return;
 
-    const socketUrl = import.meta.env.VITE_API_URL || window.location.origin;
+    const socketUrl = getSocketUrl();
     const socket = io(socketUrl, {
-      auth: { token }
+      auth: { token },
+      transports: ["websocket", "polling"]
     });
 
     socketRef.current = socket;

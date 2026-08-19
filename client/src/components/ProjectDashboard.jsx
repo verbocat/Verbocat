@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Plus, Folder, User, Calendar, Trash2, Search, Filter, Globe, BookOpen, Settings, ChevronRight, LayoutDashboard, Users, Share2, MoreVertical, Copy, StickyNote, History, Check, XCircle, Sparkles, Layers, FileText, CheckCircle2, TrendingUp, LogOut, PauseCircle, Clock, ChevronDown, Archive, Mail } from "lucide-react";
 import { fetchProjects, createProject, deleteProject, duplicateProject, updateProjectDetails } from "../services/api";
 import { LANGUAGES } from "../constants/languages";
+import { getSocketUrl } from "../utils/socketUrl.js";
 import { ShareModal } from "./ShareModal";
 import { ProjectNotesModal } from "./ProjectNotesModal";
 import { SettingsModal } from "./SettingsModal";
@@ -61,8 +62,8 @@ export default function ProjectDashboard({ onOpenProject, showToast, theme, user
   useEffect(() => {
     loadProjects();
 
-    const socketUrl = import.meta.env.VITE_API_URL || window.location.origin;
-    const socket = io(socketUrl, { auth: { token: localStorage.getItem("centroid_token") } });
+    const socketUrl = getSocketUrl();
+    const socket = io(socketUrl, { auth: { token: localStorage.getItem("centroid_token") }, transports: ["websocket", "polling"] });
 
     socket.on("global-job-update", () => {
       fetchProjects().then(data => setProjects(data || [])).catch(() => {});
