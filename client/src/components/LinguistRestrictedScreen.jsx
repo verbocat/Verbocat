@@ -170,7 +170,7 @@ export function LinguistRestrictedScreen({ user, onLogout }) {
                 <CheckCircle2 className="w-4 h-4" /> Active & Ready
               </span>
             </div>
-          </div>
+          </div> 
 
         </div>
 
