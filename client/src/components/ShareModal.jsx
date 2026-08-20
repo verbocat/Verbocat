@@ -7,6 +7,7 @@ import {
   fetchProjectPublicAccess, updateProjectPublicAccess
 } from "../services/api.js";
 import { LANGUAGES } from "../constants/languages";
+import { LanguageFlag } from "./LanguageFlag.jsx";
 
 export function ShareModal({ 
   isOpen, 
@@ -63,9 +64,7 @@ export function ShareModal({
   };
 
   const getLanguageFlag = (code) => {
-    if (!code) return "🌐";
-    const found = LANGUAGES.find(l => l.code === code.toLowerCase());
-    return found?.flag || "🌐";
+    return <LanguageFlag code={code} />;
   };
 
   // Generate All Direct Links (Project Workspace + Specific Job / File Editor Links)

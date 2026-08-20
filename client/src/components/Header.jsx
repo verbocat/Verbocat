@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { LANGUAGES } from "../constants/languages.js";
+import { LanguageFlag } from "./LanguageFlag.jsx";
 import { CollaboratorsList } from "./CollaboratorsList.jsx";
 import { fetchMySpaces, joinSpace } from "../services/api.js";
 import {
@@ -52,10 +53,10 @@ export const Header = ({
           <Sparkles className="h-4 w-4 text-white animate-pulse" />
         </div>
         <div className="flex flex-col">
-          <span className="topbar-brand-name font-black tracking-tight text-sm bg-gradient-to-r from-white via-neutral-200 to-neutral-400 bg-clip-text text-transparent leading-none">
+          <span className="topbar-brand-name font-normal tracking-tight text-sm bg-gradient-to-r from-white via-neutral-200 to-neutral-400 bg-clip-text text-transparent leading-none">
             Centroid
           </span>
-          <span className="text-[9px] font-semibold text-indigo-300/80 tracking-normal mt-0.5">
+          <span className="text-[9px] font-normal text-indigo-300/80 tracking-normal mt-0.5">
             Next-Gen Enterprise Language Intelligence Platform
           </span>
         </div>
@@ -98,9 +99,9 @@ export const Header = ({
             <>
               <span className="topbar-sep-dot">·</span>
               <div className="topbar-langpair px-2 py-0.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs font-semibold">
-                <span className="flex items-center gap-1">{srcLang.flag} {srcLang.code.toUpperCase()}</span>
+                <span className="flex items-center gap-1.5"><LanguageFlag code={srcLang.code} /> <span>{srcLang.code.toUpperCase()}</span></span>
                 <ChevronRight style={{ width: 11, height: 11, opacity: 0.5, flexShrink: 0 }} />
-                <span className="flex items-center gap-1">{tgtLang.flag} {tgtLang.code.toUpperCase()}</span>
+                <span className="flex items-center gap-1.5"><LanguageFlag code={tgtLang.code} /> <span>{tgtLang.code.toUpperCase()}</span></span>
               </div>
             </>
           )}

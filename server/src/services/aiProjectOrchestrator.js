@@ -1,6 +1,7 @@
 const axios = require("axios");
 const { v4: uuidv4 } = require("uuid");
 const { supabase, fetchAllSegments } = require("../config/supabase");
+const { recordActivity } = require("../utils/activityLogger");
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const DEFAULT_MODEL = process.env.OPENAI_PROJECT_AI_MODEL || "gpt-4o-mini";
@@ -78,11 +79,27 @@ async function createProjectAction({
           organization_id: organizationId
         }));
 
-        const { data: jobs } = await supabase.from("jobs").insert(jobsToInsert).select();
+        const { data: jobs } = await supabase.from("translation_jobs").insert(jobsToInsert).select();
         if (jobs) createdJobs.push(...jobs);
       }
     }
   }
+
+  // Record PROJECT_CREATED audit log
+  recordActivity({
+    projectId: project.id,
+    projectName: project.name,
+    eventType: "PROJECT_CREATED",
+    details: {
+      projectName: project.name,
+      sourceLang: sLang,
+      targetLanguages: tLangs,
+      domain: (project.settings && project.settings.domain) || "General"
+    },
+    userName: "Project Owner",
+    userId,
+    organizationId
+  });
 
   return {
     success: true,
@@ -248,11 +265,28 @@ async function duplicateProjectAction({
           organization_id: organizationId || doc.organization_id
         }));
 
-        const { data: newJobs } = await supabase.from("jobs").insert(jobsToInsert).select();
+        const { data: newJobs } = await supabase.from("translation_jobs").insert(jobsToInsert).select();
         if (newJobs) clonedJobs.push(...newJobs);
       }
     }
   }
+
+  // Record PROJECT_DUPLICATED audit log
+  recordActivity({
+    projectId: duplicatedProject.id,
+    projectName: duplicatedProject.name,
+    eventType: "PROJECT_DUPLICATED",
+    details: {
+      originalProject: origProject.name,
+      newProject: duplicatedProject.name,
+      scope,
+      sourceLang: duplicatedProject.source_lang,
+      targetLanguages: duplicatedProject.target_languages
+    },
+    userName: "Project Owner",
+    userId,
+    organizationId
+  });
 
   return {
     success: true,
@@ -310,7 +344,7 @@ async function addTargetLanguagesAction({ projectId, targetLangs = [], userId, o
       for (const lang of newLangs) {
         // Check if job already exists
         const { data: existingJob } = await supabase
-          .from("jobs")
+          .from("translation_jobs")
           .select("id")
           .eq("document_id", doc.id)
           .eq("target_lang", lang)
@@ -318,7 +352,7 @@ async function addTargetLanguagesAction({ projectId, targetLangs = [], userId, o
 
         if (!existingJob) {
           const { data: job } = await supabase
-            .from("jobs")
+            .from("translation_jobs")
             .insert({
               project_id: projectId,
               document_id: doc.id,
@@ -475,6 +509,20 @@ async function deleteProjectAction({ projectId = null, projectName = null, delet
   if (error) {
     throw new Error(`Failed to delete project: ${error.message}`);
   }
+
+  // Record PROJECT_DELETED audit log
+  recordActivity({
+    projectId: targetId,
+    projectName: proj?.name || "Project",
+    eventType: "PROJECT_DELETED",
+    details: {
+      projectName: proj?.name || "Project",
+      deletedAt: new Date().toISOString()
+    },
+    userName: "Project Owner",
+    userId,
+    organizationId
+  });
 
   return {
     success: true,

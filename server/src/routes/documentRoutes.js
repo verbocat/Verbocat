@@ -48,7 +48,16 @@ documentRouter.post(["/upload", "/api/upload"], checkAuth, upload.single("file")
       return response.status(400).json({ error: "Source and target language cannot be the same." });
     }
 
-    console.log(`[DB_CREATE_DOCUMENT] Inserting record into "documents" table (DocId: ${documentId}, Name: "${request.file.originalname}")...`);
+    const totalWordCount = (result.segments || []).reduce((sum, seg) => {
+      const clean = (seg.source || seg.source_text || "")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/__TAG_\d+__/g, " ")
+        .replace(/&nbsp;/g, " ")
+        .trim();
+      return sum + (clean && /[\p{L}\p{N}]/u.test(clean) ? clean.split(/\s+/).filter(Boolean).length : 0);
+    }, 0);
+
+    console.log(`[DB_CREATE_DOCUMENT] Inserting record into "documents" table (DocId: ${documentId}, Name: "${request.file.originalname}", Words: ${totalWordCount})...`);
     // Create document record
     const { error: docError } = await supabase
       .from("documents")
@@ -61,6 +70,8 @@ documentRouter.post(["/upload", "/api/upload"], checkAuth, upload.single("file")
         owner_id: userId,
         organization_id: activeTenantId,
         file_extension: ext,
+        word_count: totalWordCount,
+        file_size: request.file.size || 0,
         status: "active"
       });
 

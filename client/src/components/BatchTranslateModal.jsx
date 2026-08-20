@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { X, Play, CheckSquare, Square, ChevronDown, ChevronRight, FileText, Globe, CheckCircle2, Clock, AlertCircle, Sparkles, Loader2, StopCircle } from "lucide-react";
 import { controlJobQueue, fetchJobStatus } from "../services/api.js";
 import { LANGUAGES } from "../constants/languages.js";
+import { LanguageFlag } from "./LanguageFlag.jsx";
 
 export function BatchTranslateModal({ isOpen, onClose, files = [], jobs = [], project = {}, showToast, onReloadProject }) {
   const [expandedFileIds, setExpandedFileIds] = useState([]);
@@ -407,10 +408,12 @@ export function BatchTranslateModal({ isOpen, onClose, files = [], jobs = [], pr
                                   )}
                                 </button>
 
-                                <Globe className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
-                                <span className="font-bold text-[var(--text-primary)] truncate">
-                                  {getLanguageName(job.target_lang)}
-                                </span>
+                                <div className="flex items-center gap-2 truncate">
+                                  <LanguageFlag code={job.target_lang} />
+                                  <span className="font-bold text-[var(--text-primary)] truncate">
+                                    {LANGUAGES.find(l => l.code === job.target_lang)?.name || (job.target_lang || "").toUpperCase()}
+                                  </span>
+                                </div>
                               </div>
 
                               <div className="flex items-center gap-3 flex-shrink-0">

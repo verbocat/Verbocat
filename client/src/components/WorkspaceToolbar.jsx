@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { LANGUAGES } from "../constants/languages.js";
+import { LanguageFlag } from "./LanguageFlag.jsx";
 import {
   FileText, ArrowRight, Search, Filter, Sparkles, Eye,
   Save, Upload, Download, Trash2, RefreshCw, ChevronDown, Plus, Link2,
@@ -399,13 +400,13 @@ export const WorkspaceToolbar = ({
           const tgtLangObj = LANGUAGES.find((l) => l.code === targetLanguage);
           return (
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/60 border border-slate-700/60 text-xs font-bold text-slate-200 select-none shadow-xs shrink-0" title="Project Language Pair (Defined during project creation)">
-              <span className="flex items-center gap-1">
-                <span>{srcLangObj ? srcLangObj.flag : "🌐"}</span>
+              <span className="flex items-center gap-1.5">
+                <LanguageFlag code={sourceLanguage} />
                 <span>{srcLangObj ? srcLangObj.name : sourceLanguage?.toUpperCase()}</span>
               </span>
               <ArrowRight style={{ width: 11, height: 11, color: "var(--text-muted)", flexShrink: 0 }} />
-              <span className="flex items-center gap-1">
-                <span>{tgtLangObj ? tgtLangObj.flag : "🌐"}</span>
+              <span className="flex items-center gap-1.5">
+                <LanguageFlag code={targetLanguage} />
                 <span className="text-indigo-400 font-extrabold">{tgtLangObj ? tgtLangObj.name : targetLanguage?.toUpperCase()}</span>
               </span>
             </div>

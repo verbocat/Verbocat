@@ -115,6 +115,151 @@
   background: #cbd5e1 !important;
 }
 
+/* ================================================================
+   Minimalist Theme-Matched Buttons & Tabs (Light + Dark Modes)
+   ================================================================ */
+.btn-batch-translate {
+  background-color: rgba(168, 85, 247, 0.10) !important;
+  color: #c084fc !important;
+  border: 1px solid transparent !important;
+}
+.btn-batch-translate:hover {
+  background-color: rgba(168, 85, 247, 0.18) !important;
+  color: #e9d5ff !important;
+}
+:root.light-mode .btn-batch-translate {
+  background-color: #faf5ff !important;
+  color: #7e22ce !important;
+  border: 1px solid #f3e8ff !important;
+}
+:root.light-mode .btn-batch-translate:hover {
+  background-color: #f3e8ff !important;
+  color: #6b21a8 !important;
+}
+
+.btn-share-project {
+  background-color: rgba(99, 102, 241, 0.10) !important;
+  color: #a5b4fc !important;
+  border: 1px solid transparent !important;
+}
+.btn-share-project:hover {
+  background-color: rgba(99, 102, 241, 0.18) !important;
+  color: #e0e7ff !important;
+}
+:root.light-mode .btn-share-project {
+  background-color: #eef2ff !important;
+  color: #4338ca !important;
+  border: 1px solid #e0e7ff !important;
+}
+:root.light-mode .btn-share-project:hover {
+  background-color: #e0e7ff !important;
+  color: #3730a3 !important;
+}
+
+.btn-add-locale {
+  background-color: transparent !important;
+  color: var(--text-secondary) !important;
+  border: 1px dashed var(--border-medium) !important;
+}
+.btn-add-locale:hover {
+  background-color: var(--bg-hover) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-strong) !important;
+}
+:root.light-mode .btn-add-locale {
+  background-color: #ffffff !important;
+  color: #475569 !important;
+  border: 1px dashed #cbd5e1 !important;
+}
+:root.light-mode .btn-add-locale:hover {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  border-color: #94a3b8 !important;
+}
+
+/* Minimalist Language Tabs */
+.tab-lang-all-active,
+.tab-lang-target-active {
+  background-color: var(--bg-panel) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-medium) !important;
+}
+:root.light-mode .tab-lang-all-active,
+:root.light-mode .tab-lang-target-active {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.tab-lang-btn-inactive {
+  background-color: transparent !important;
+  color: var(--text-muted) !important;
+  border: 1px solid transparent !important;
+}
+.tab-lang-btn-inactive:hover {
+  background-color: var(--bg-hover) !important;
+  color: var(--text-secondary) !important;
+}
+:root.light-mode .tab-lang-btn-inactive {
+  background-color: transparent !important;
+  color: #64748b !important;
+  border: 1px solid transparent !important;
+}
+:root.light-mode .tab-lang-btn-inactive:hover {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+  color: #1e293b !important;
+}
+
+.btn-assign-linguist {
+  background-color: var(--bg-surface) !important;
+  color: var(--text-secondary) !important;
+  border: 1px solid var(--border-subtle) !important;
+}
+.btn-assign-linguist:hover {
+  background-color: var(--bg-hover) !important;
+  color: var(--text-primary) !important;
+}
+:root.light-mode .btn-assign-linguist {
+  background-color: #f8fafc !important;
+  color: #475569 !important;
+  border: 1px solid #e2e8f0 !important;
+}
+:root.light-mode .btn-assign-linguist:hover {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+.badge-locale-item {
+  background-color: var(--bg-surface) !important;
+  border: 1px solid var(--border-subtle) !important;
+  color: var(--text-secondary) !important;
+}
+:root.light-mode .badge-locale-item {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #475569 !important;
+}
+
+.topbar-icon-action {
+  color: var(--text-secondary) !important;
+  border: 1px solid transparent !important;
+}
+.topbar-icon-action:hover {
+  background-color: var(--bg-hover) !important;
+  color: var(--text-primary) !important;
+}
+:root.light-mode .topbar-icon-action {
+  color: #64748b !important;
+  border: 1px solid transparent !important;
+}
+:root.light-mode .topbar-icon-action:hover {
+  background-color: rgba(0, 0, 0, 0.05) !important;
+  color: #0f172a !important;
+}
+
+
 /* Font Size Classes */
 :root.font-very-small {
   --editor-font-size-source: 9.5px;

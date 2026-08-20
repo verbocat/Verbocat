@@ -517,6 +517,7 @@ export const deleteDocument = async (documentId) => {
 // ── PROJECT-BASED TRANSLATION MANAGEMENT SYSTEM CLIENT API ────────────────
 
 export const createProject = async (name, client, description, sourceLanguage, targetLanguages, deadline = null, settings = {}, referenceFile = null) => {
+  const statusVal = settings.status || "active";
   if (referenceFile) {
     const formData = new FormData();
     formData.append("name", name);
@@ -525,6 +526,7 @@ export const createProject = async (name, client, description, sourceLanguage, t
     formData.append("sourceLanguage", sourceLanguage);
     formData.append("targetLanguages", JSON.stringify(targetLanguages));
     if (deadline) formData.append("dueDate", deadline);
+    formData.append("status", statusVal);
     formData.append("settings", JSON.stringify(settings));
     formData.append("referenceFile", referenceFile);
 
@@ -542,6 +544,7 @@ export const createProject = async (name, client, description, sourceLanguage, t
     targetLanguages,
     deadline,
     dueDate: deadline,
+    status: statusVal,
     settings
   });
   return response.data;
@@ -715,6 +718,13 @@ export const updateJobSegmentByPath = async (documentId, lang, segmentIndex, tar
 
 export const fetchTmAnalysis = async (documentId, lang) => {
   const response = await api.get(`/api/documents/${documentId}/lang/${lang}/tm-analysis`);
+  return response.data;
+};
+
+export const fetchProjectTmAnalysis = async (projectId, lang, { mode = "exclusive", crossFile = true } = {}) => {
+  const response = await api.get(`/api/projects/${projectId}/tm-analysis`, {
+    params: { lang, mode, crossFile }
+  });
   return response.data;
 };
 

@@ -66,6 +66,18 @@ export function ProjectHistoryModal({ isOpen, onClose, projectId = null, project
 
   const getEventBadge = (eventType) => {
     const type = (eventType || "").toUpperCase();
+    if (type.includes("PROJECT_CREATED") || type === "PROJECT_CREATED") {
+      return { icon: <Plus className="w-3.5 h-3.5 text-emerald-400" />, label: "Project Created", color: "bg-emerald-500/10 border-emerald-500/20 text-emerald-300" };
+    }
+    if (type.includes("PROJECT_DELETED") || type === "PROJECT_DELETED" || type.includes("PROJECT_DELETE")) {
+      return { icon: <Trash2 className="w-3.5 h-3.5 text-rose-400" />, label: "Project Deleted", color: "bg-rose-500/10 border-rose-500/20 text-rose-300" };
+    }
+    if (type.includes("PROJECT_DUPLICATED") || type === "PROJECT_DUPLICATED") {
+      return { icon: <Copy className="w-3.5 h-3.5 text-sky-400" />, label: "Project Duplicated", color: "bg-sky-500/10 border-sky-500/20 text-sky-300" };
+    }
+    if (type.includes("PROJECT_UPDATED") || type === "PROJECT_UPDATED" || type.includes("STATUS_CHANGED")) {
+      return { icon: <Clock className="w-3.5 h-3.5 text-amber-400" />, label: "Project Updated", color: "bg-amber-500/10 border-amber-500/20 text-amber-300" };
+    }
     if (type.includes("FILE_UPLOAD") || type.includes("FILE_UPLOADED")) {
       return { icon: <FileText className="w-3.5 h-3.5 text-indigo-400" />, label: "File Upload", color: "bg-indigo-500/10 border-indigo-500/20 text-indigo-300" };
     }
@@ -92,7 +104,16 @@ export function ProjectHistoryModal({ isOpen, onClose, projectId = null, project
     const type = (act.event_type || "").toUpperCase();
 
     if (type === "PROJECT_CREATED") {
-      return `Created project "${details.projectName || act.projectName || 'New Project'}"`;
+      const src = (details.sourceLang || 'EN').toUpperCase();
+      const tgts = Array.isArray(details.targetLanguages) ? details.targetLanguages.map(t => String(t).toUpperCase()).join(', ') : '';
+      const langStr = tgts ? ` (${src} → ${tgts})` : '';
+      return `Created project "${details.projectName || act.projectName || 'New Project'}"${langStr}`;
+    }
+    if (type === "PROJECT_DELETED") {
+      return `Deleted project "${details.projectName || act.projectName || 'Project'}"`;
+    }
+    if (type === "PROJECT_UPDATED") {
+      return details.action || `Updated settings for project "${details.projectName || act.projectName || 'Project'}"`;
     }
     if (type === "PROJECT_DUPLICATED") {
       return `Duplicated project from "${details.originalProject || 'Source'}" as "${details.newProject || 'Copy'}"`;

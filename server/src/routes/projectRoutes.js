@@ -5,6 +5,7 @@ const path = require("path");
 const { supabase } = require("../config/supabase");
 const { checkAuth } = require("../utils/authMiddleware");
 const { processUploadedFile } = require("../services/fileService");
+const { recordActivity, getActivityLogs } = require("../utils/activityLogger");
 
 const projectRouter = express.Router();
 
@@ -28,7 +29,7 @@ projectRouter.get(["/projects", "/api/projects"], checkAuth, async (request, res
 
     let query = supabase
       .from("projects")
-      .select("*, documents(*)")
+      .select("*, documents(*), translation_jobs(*)")
       .order("created_at", { ascending: false });
 
     if (!isSuperAdmin && activeTenantId) {
@@ -38,9 +39,22 @@ projectRouter.get(["/projects", "/api/projects"], checkAuth, async (request, res
     const { data: projects, error } = await query;
     if (error) throw error;
 
+    const enrichProject = (p) => {
+      const docs = p.documents || [];
+      const jobs = p.translation_jobs || [];
+      const totalWords = docs.reduce((sum, d) => sum + (d.word_count || 0), 0);
+      const progress = jobs.length > 0
+        ? Math.round(jobs.reduce((sum, j) => sum + (j.progress || 0), 0) / jobs.length)
+        : 0;
+      return {
+        ...p,
+        totalWords,
+        progress,
+        documentsCount: docs.length
+      };
+    };
+
     // PRIVATE PROJECT SCOPING:
-    // Non-superadmin users ONLY see projects they created (owner_id === userId)
-    // OR projects where documents have been explicitly shared with them via document_access!
     if (!isSuperAdmin) {
       const { data: accessRows } = await supabase
         .from("document_access")
@@ -54,11 +68,15 @@ projectRouter.get(["/projects", "/api/projects"], checkAuth, async (request, res
         }
       });
 
-      const filteredProjects = (projects || []).filter(p => p.owner_id === userId || sharedProjectIds.has(p.id));
+      const filteredProjects = (projects || [])
+        .filter(p => p.owner_id === userId || sharedProjectIds.has(p.id))
+        .map(enrichProject);
+
       return response.json({ projects: filteredProjects });
     }
 
-    response.json({ projects: projects || [] });
+    const enrichedProjects = (projects || []).map(enrichProject);
+    response.json({ projects: enrichedProjects });
   } catch (error) {
     console.error("List Projects Error:", error);
     response.status(500).json({ error: "Failed to fetch projects" });
@@ -66,11 +84,12 @@ projectRouter.get(["/projects", "/api/projects"], checkAuth, async (request, res
 });
 
 // 2. Create Project
-projectRouter.post(["/projects", "/api/projects"], checkAuth, async (request, response) => {
+projectRouter.post(["/projects", "/api/projects"], checkAuth, upload.single("referenceFile"), async (request, response) => {
   try {
-    const {
+    let {
       name,
       client,
+      status,
       description,
       source_lang,
       target_lang,
@@ -90,6 +109,16 @@ projectRouter.post(["/projects", "/api/projects"], checkAuth, async (request, re
       return response.status(400).json({ error: "Project name is required" });
     }
 
+    if (typeof target_languages === "string") {
+      try { target_languages = JSON.parse(target_languages); } catch (_) {}
+    }
+    if (typeof targetLanguages === "string") {
+      try { targetLanguages = JSON.parse(targetLanguages); } catch (_) {}
+    }
+    if (typeof settings === "string") {
+      try { settings = JSON.parse(settings); } catch (_) {}
+    }
+
     const sLang = source_lang || sourceLanguage || "en";
     const tLangRaw = target_languages || targetLanguages || target_lang || ["hi"];
     const tLangsArray = Array.isArray(tLangRaw) ? tLangRaw : [tLangRaw];
@@ -100,7 +129,27 @@ projectRouter.post(["/projects", "/api/projects"], checkAuth, async (request, re
 
     const dDate = due_date || deadline || dueDate || null;
     const projDescription = description || notes || "";
-    const mergedSettings = { ...(settings || {}), due_date: dDate };
+    const projStatus = status || (settings && settings.status) || "active";
+    const mergedSettings = { ...(settings || {}), due_date: dDate, status: projStatus };
+
+    // If reference file was uploaded, extract text & sample context
+    if (request.file) {
+      try {
+        const { extractTextFromReferenceFile, analyzeReferenceContext } = require("../utils/referenceSampler");
+        const fullText = await extractTextFromReferenceFile(request.file.path);
+        if (fullText) {
+          const analysis = await analyzeReferenceContext(fullText, request.file.originalname);
+          mergedSettings.referenceFileName = request.file.originalname;
+          mergedSettings.referenceContext = analysis.referenceContext || "";
+          mergedSettings.domain = analysis.domain || mergedSettings.domain || "General";
+          mergedSettings.tone = analysis.tone || "Formal";
+        }
+      } catch (refErr) {
+        console.warn("[PROJECT_CREATE] Reference file sampling warning:", refErr.message);
+      } finally {
+        try { fs.unlinkSync(request.file.path); } catch (_) {}
+      }
+    }
 
     const insertPayload = {
       name: name.trim(),
@@ -109,6 +158,7 @@ projectRouter.post(["/projects", "/api/projects"], checkAuth, async (request, re
       target_languages: tLangsArray,
       description: projDescription,
       settings: mergedSettings,
+      status: projStatus,
       organization_id: activeTenantId
     };
 
@@ -127,6 +177,23 @@ projectRouter.post(["/projects", "/api/projects"], checkAuth, async (request, re
       throw error;
     }
 
+    // Record PROJECT_CREATED audit log
+    recordActivity({
+      projectId: project.id,
+      projectName: project.name,
+      eventType: "PROJECT_CREATED",
+      details: {
+        projectName: project.name,
+        sourceLang: sLang,
+        targetLanguages: tLangsArray,
+        domain: mergedSettings.domain || "General",
+        status: projStatus
+      },
+      userName: request.user?.email || request.profile?.email || "Project Owner",
+      userId: userId,
+      organizationId: activeTenantId
+    });
+
     response.json({ project });
   } catch (error) {
     console.error("Create Project Error:", error);
@@ -137,97 +204,13 @@ projectRouter.post(["/projects", "/api/projects"], checkAuth, async (request, re
 // 2.5 Fetch Global Audit History (MUST BE DECLARED BEFORE /projects/:id TO PREVENT ROUTE TRAPPING)
 projectRouter.get(["/projects/history", "/api/projects/history"], checkAuth, async (request, response) => {
   try {
-    const history = [];
     const activeTenantId = request.tenant?.id || request.profile?.organization_id;
     const isSuperAdmin = request.profile?.role === "super_admin";
 
-    // 1. Fetch recent projects
-    let projsQuery = supabase
-      .from("projects")
-      .select("*, profiles(email)")
-      .order("created_at", { ascending: false })
-      .limit(50);
-
-    if (!isSuperAdmin && activeTenantId) {
-      projsQuery = projsQuery.eq("organization_id", activeTenantId);
-    }
-
-    const { data: projs } = await projsQuery;
-
-    if (projs && projs.length > 0) {
-      projs.forEach(proj => {
-        history.push({
-          id: `proj_${proj.id}`,
-          event_type: "PROJECT_CREATED",
-          user_name: proj.profiles?.email || "Project Owner",
-          projectName: proj.name,
-          created_at: proj.created_at,
-          details: {
-            projectName: proj.name,
-            sourceLang: proj.source_lang,
-            targetLanguages: proj.target_languages
-          }
-        });
-      });
-    }
-
-    // 2. Fetch recent documents
-    let docsQuery = supabase
-      .from("documents")
-      .select("*, projects(name), profiles(email)")
-      .order("created_at", { ascending: false })
-      .limit(50);
-
-    if (!isSuperAdmin && activeTenantId) {
-      docsQuery = docsQuery.eq("organization_id", activeTenantId);
-    }
-
-    const { data: docs } = await docsQuery;
-
-    if (docs && docs.length > 0) {
-      docs.forEach(doc => {
-        history.push({
-          id: `doc_${doc.id}`,
-          event_type: "FILE_UPLOADED",
-          user_name: doc.profiles?.email || "Coordinator",
-          projectName: doc.projects?.name || "Project",
-          created_at: doc.created_at,
-          details: {
-            fileName: doc.name,
-            fileSize: doc.file_size,
-            wordCount: doc.word_count || 0,
-            targetLang: doc.target_lang
-          }
-        });
-      });
-    }
-
-    // 3. Fetch recent shares
-    const { data: shares } = await supabase
-      .from("document_access")
-      .select("*, profiles(email), documents(name, projects(name))")
-      .order("created_at", { ascending: false })
-      .limit(50);
-
-    if (shares && shares.length > 0) {
-      shares.forEach(s => {
-        history.push({
-          id: `share_${s.id}`,
-          event_type: "PROJECT_SHARED",
-          user_name: "Project Coordinator",
-          projectName: s.documents?.projects?.name || "Project",
-          created_at: s.created_at,
-          details: {
-            sharedWith: s.profiles?.email || "collaborator",
-            fileName: s.documents?.name,
-            accessLevel: s.permission || "editor"
-          }
-        });
-      });
-    }
-
-    // Sort all history entries by created_at descending
-    history.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    const history = await getActivityLogs({
+      organizationId: activeTenantId,
+      isSuperAdmin
+    });
 
     response.json({ history });
   } catch (error) {
@@ -278,19 +261,86 @@ projectRouter.get(["/projects/:id", "/api/projects/:id"], checkAuth, async (requ
       .eq("project_id", id)
       .order("created_at", { ascending: false });
 
-    // Fetch jobs belonging to this project
+    // Fetch jobs belonging to this project from translation_jobs
     const { data: jobs } = await supabase
-      .from("jobs")
+      .from("translation_jobs")
       .select("*, documents(*)")
       .eq("project_id", id)
       .order("created_at", { ascending: false });
 
+    const targetLangs = Array.isArray(project.target_languages) && project.target_languages.length > 0
+      ? project.target_languages
+      : (Array.isArray(project.target_lang) ? project.target_lang : [project.target_lang || "hi"]);
+
     const filesList = docs && docs.length > 0 ? docs : (project.documents || []);
+    let activeJobs = jobs || [];
+
+    // Auto-sync word_count and job progress for each document if missing
+    for (const doc of filesList) {
+      const { data: segs } = await supabase
+        .from("document_segments")
+        .select("source_text, target_text, target_lang, status")
+        .eq("document_id", doc.id);
+
+      const templateSegs = (segs || []).filter(s => !s.target_lang || s.target_lang === null);
+      const countableSegs = templateSegs.length > 0 ? templateSegs : (segs || []);
+
+      const calculatedWordCount = countableSegs.reduce((acc, s) => {
+        const clean = (s.source_text || "")
+          .replace(/<[^>]+>/g, " ")
+          .replace(/__TAG_\d+__/g, " ")
+          .replace(/&nbsp;/g, " ")
+          .trim();
+        return acc + (clean && /[\p{L}\p{N}]/u.test(clean) ? clean.split(/\s+/).filter(Boolean).length : 0);
+      }, 0);
+
+      if (calculatedWordCount > 0 && (!doc.word_count || doc.word_count === 0)) {
+        doc.word_count = calculatedWordCount;
+        await supabase.from("documents").update({ word_count: calculatedWordCount }).eq("id", doc.id);
+      }
+
+      // Ensure jobs exist for all configured target languages and have accurate progress
+      for (const tLang of targetLangs) {
+        let job = activeJobs.find(j => j.document_id === doc.id && j.target_lang === tLang);
+        const translatedCount = (segs || []).filter(s => s.target_lang === tLang && s.target_text && s.target_text.trim() !== "").length;
+        const totalCountable = countableSegs.length;
+        const computedProgress = totalCountable > 0 ? Math.round((translatedCount / totalCountable) * 100) : 0;
+        const computedStatus = computedProgress === 100 ? "completed" : (computedProgress > 0 ? "in_progress" : "pending");
+
+        if (!job) {
+          const { data: createdJob } = await supabase
+            .from("translation_jobs")
+            .insert({
+              project_id: id,
+              document_id: doc.id,
+              target_lang: tLang,
+              status: computedStatus,
+              progress: computedProgress,
+              word_count: doc.word_count || calculatedWordCount,
+              organization_id: activeTenantId || project.organization_id
+            })
+            .select("*, documents(*)")
+            .single();
+
+          if (createdJob) {
+            activeJobs.push(createdJob);
+          }
+        } else if (job.progress !== computedProgress || job.word_count !== (doc.word_count || calculatedWordCount)) {
+          job.progress = computedProgress;
+          job.status = computedStatus;
+          job.word_count = doc.word_count || calculatedWordCount;
+          await supabase
+            .from("translation_jobs")
+            .update({ progress: computedProgress, status: computedStatus, word_count: job.word_count })
+            .eq("id", job.id);
+        }
+      }
+    }
 
     response.json({
       project,
       files: filesList,
-      jobs: jobs || []
+      jobs: activeJobs
     });
   } catch (error) {
     console.error("Get Project Error:", error);
@@ -330,7 +380,7 @@ projectRouter.post(
         console.error(`[PROJECT_UPLOAD_ERROR] Project ${projectId} not found or access denied:`, projErr);
         return response.status(404).json({ error: "Project not found or access denied." });
       }
-      console.log(`[PROJECT_UPLOAD_STEP 1/5 SUCCESS] Project verified! Name: "${project.name}" | Target Langs: ${JSON.stringify(project.target_lang)}`);
+      console.log(`[PROJECT_UPLOAD_STEP 1/5 SUCCESS] Project verified! Name: "${project.name}" | Target Langs: ${JSON.stringify(project.target_lang || project.target_languages)}`);
 
       // 2. Parse uploaded file using processUploadedFile
       const parseStartTime = Date.now();
@@ -340,9 +390,19 @@ projectRouter.post(
       const documentId = result.fileId;
       console.log(`[PROJECT_UPLOAD_STEP 2/5 SUCCESS] File parsed in ${parseTimeMs}ms! DocId: ${documentId} | Total Segments: ${result.segments.length}`);
 
+      // Calculate total word count from parsed segments
+      const totalWordCount = (result.segments || []).reduce((sum, seg) => {
+        const clean = (seg.source || seg.source_text || "")
+          .replace(/<[^>]+>/g, " ")
+          .replace(/__TAG_\d+__/g, " ")
+          .replace(/&nbsp;/g, " ")
+          .trim();
+        return sum + (clean && /[\p{L}\p{N}]/u.test(clean) ? clean.split(/\s+/).filter(Boolean).length : 0);
+      }, 0);
+
       // 3. Create document record bound to project_id and organization_id
       const dbStartTime = Date.now();
-      console.log(`[PROJECT_UPLOAD_STEP 3/5] Creating document record in "documents" table...`);
+      console.log(`[PROJECT_UPLOAD_STEP 3/5] Creating document record in "documents" table (Words: ${totalWordCount})...`);
       const { data: docRecord, error: docError } = await supabase
         .from("documents")
         .insert({
@@ -352,8 +412,11 @@ projectRouter.post(
           file_id: documentId,
           project_id: projectId,
           source_lang: project.source_lang || "en",
-          target_lang: project.target_lang || "hi",
-          organization_id: activeTenantId
+          target_lang: Array.isArray(project.target_languages) && project.target_languages[0] ? project.target_languages[0] : (project.target_lang || "hi"),
+          organization_id: activeTenantId,
+          word_count: totalWordCount,
+          file_size: request.file.size || 0,
+          status: "active"
         })
         .select()
         .single();
@@ -399,20 +462,25 @@ projectRouter.post(
       const dbSaveTimeMs = Date.now() - dbStartTime;
       console.log(`[PROJECT_UPLOAD_STEP 4/5 SUCCESS] All ${result.segments.length} template segments persisted to DB in ${dbSaveTimeMs}ms!`);
 
-      // 5. Create job records for target languages
-      const targetLangs = Array.isArray(project.target_lang) ? project.target_lang : [project.target_lang || "hi"];
-      console.log(`[PROJECT_UPLOAD_STEP 5/5] Creating job records for target languages: ${targetLangs.join(', ')}...`);
+      // 5. Create translation_jobs records for target languages
+      const targetLangs = Array.isArray(project.target_languages) && project.target_languages.length > 0
+        ? project.target_languages
+        : (Array.isArray(project.target_lang) ? project.target_lang : [project.target_lang || "hi"]);
+
+      console.log(`[PROJECT_UPLOAD_STEP 5/5] Creating job records in translation_jobs for target languages: ${targetLangs.join(', ')}...`);
       const jobsToInsert = targetLangs.map(lang => ({
         project_id: projectId,
         document_id: documentId,
         target_lang: lang,
-        status: "in_progress",
+        status: "pending",
+        progress: 0,
+        word_count: totalWordCount,
         organization_id: activeTenantId
       }));
 
       let createdJobs = [];
       const { data: insertedJobs, error: jobErr } = await supabase
-        .from("jobs")
+        .from("translation_jobs")
         .insert(jobsToInsert)
         .select("*, documents(*)");
 
@@ -420,6 +488,22 @@ projectRouter.post(
         createdJobs = insertedJobs;
       }
       console.log(`[PROJECT_UPLOAD_STEP 5/5 SUCCESS] Created ${createdJobs.length} translation jobs!`);
+
+      // Record FILE_UPLOADED audit log
+      recordActivity({
+        projectId,
+        projectName: project.name,
+        eventType: "FILE_UPLOADED",
+        details: {
+          fileId: docRecord.id,
+          fileName: request.file.originalname,
+          fileSize: request.file.size,
+          wordCount: totalWordCount
+        },
+        userName: request.user?.email || request.profile?.email || "Project Coordinator",
+        userId: request.user.id,
+        organizationId: activeTenantId
+      });
 
       const totalTimeMs = Date.now() - startTime;
       console.log(`[PROJECT_UPLOAD_COMPLETE] Upload & processing finished successfully in ${totalTimeMs}ms (${(totalTimeMs / 1000).toFixed(2)}s)!`);
@@ -451,144 +535,65 @@ projectRouter.post(
 projectRouter.get(["/projects/:projectId/activities", "/api/projects/:projectId/activities"], checkAuth, async (request, response) => {
   try {
     const { projectId } = request.params;
-    const history = [];
+    const activeTenantId = request.tenant?.id || request.profile?.organization_id;
+    const isSuperAdmin = request.profile?.role === "super_admin";
 
-    // 1. Fetch Project Details
-    const { data: proj } = await supabase
-      .from("projects")
-      .select("*, profiles(email)")
-      .eq("id", projectId)
-      .maybeSingle();
+    const activities = await getActivityLogs({
+      projectId,
+      organizationId: activeTenantId,
+      isSuperAdmin
+    });
 
-    if (proj) {
-      history.push({
-        id: `proj_created_${proj.id}`,
-        event_type: "PROJECT_CREATED",
-        user_name: proj.profiles?.email || "Project Owner",
-        projectName: proj.name,
-        created_at: proj.created_at,
-        details: {
-          projectName: proj.name,
-          sourceLang: proj.source_lang,
-          targetLanguages: proj.target_languages
-        }
-      });
-    }
-
-    // 2. Fetch Documents uploaded to this project
-    const { data: docs } = await supabase
-      .from("documents")
-      .select("*, profiles(email)")
-      .eq("project_id", projectId)
-      .order("created_at", { ascending: false });
-
-    const docIds = [];
-    if (docs && docs.length > 0) {
-      docs.forEach(doc => {
-        docIds.push(doc.id);
-        history.push({
-          id: `file_uploaded_${doc.id}`,
-          event_type: "FILE_UPLOADED",
-          user_name: doc.profiles?.email || proj?.profiles?.email || "Coordinator",
-          projectName: proj?.name || "Project",
-          created_at: doc.created_at,
-          details: {
-            fileName: doc.name,
-            fileSize: doc.file_size,
-            wordCount: doc.word_count || 0,
-            targetLang: doc.target_lang
-          }
-        });
-      });
-    }
-
-    // 3. Fetch Access shares for documents in this project
-    if (docIds.length > 0) {
-      const { data: shares } = await supabase
-        .from("document_access")
-        .select("*, profiles(email), documents(name)")
-        .in("document_id", docIds)
-        .order("created_at", { ascending: false });
-
-      if (shares && shares.length > 0) {
-        shares.forEach(s => {
-          history.push({
-            id: `share_${s.id}`,
-            event_type: "PROJECT_SHARED",
-            user_name: "Project Coordinator",
-            projectName: proj?.name || "Project",
-            created_at: s.created_at,
-            details: {
-              sharedWith: s.profiles?.email || "collaborator",
-              fileName: s.documents?.name,
-              accessLevel: s.permission || "editor"
-            }
-          });
-        });
-      }
-    }
-
-    // 4. Safely query activity_logs if table exists
-    try {
-      const { data: actLogs } = await supabase
-        .from("activity_logs")
-        .select("*")
-        .eq("project_id", projectId)
-        .order("created_at", { ascending: false });
-
-      if (actLogs && actLogs.length > 0) {
-        actLogs.forEach(log => {
-          history.push(log);
-        });
-      }
-    } catch (_) {
-      // Ignore missing activity_logs table
-    }
-
-    // Sort all history entries by created_at descending
-    history.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-
-    response.json({ activities: history });
+    response.json({ activities });
   } catch (error) {
     console.error("Fetch Project Activities Error:", error);
     response.json({ activities: [] });
   }
 });
 
-
-
 // 6. Fetch Project Analytics
 projectRouter.get(["/projects/:projectId/analytics", "/api/projects/:projectId/analytics"], checkAuth, async (request, response) => {
   try {
     const { projectId } = request.params;
+    const { data: project } = await supabase.from("projects").select("target_lang, target_languages").eq("id", projectId).maybeSingle();
+    const targetLangs = Array.isArray(project?.target_languages) && project.target_languages.length > 0
+      ? project.target_languages
+      : (Array.isArray(project?.target_lang) ? project.target_lang : [project?.target_lang || "hi"]);
+
     const { data: docs } = await supabase
       .from("documents")
-      .select("id, name")
+      .select("id, name, word_count")
       .eq("project_id", projectId);
 
     const docIds = (docs || []).map(d => d.id);
-    let totalSegments = 0;
+    let totalTemplateSegments = 0;
     let translatedSegments = 0;
 
     if (docIds.length > 0) {
       const { data: segs } = await supabase
         .from("document_segments")
-        .select("status")
+        .select("source_text, target_text, target_lang, status")
         .in("document_id", docIds);
 
-      if (segs) {
-        totalSegments = segs.length;
-        translatedSegments = segs.filter(s => s.status === "translated" || s.status === "approved").length;
+      if (segs && segs.length > 0) {
+        const templateSegs = segs.filter(s => !s.target_lang || s.target_lang === null);
+        const countableCount = templateSegs.length > 0 ? templateSegs.length : Math.round(segs.length / Math.max(1, targetLangs.length));
+        totalTemplateSegments = Math.round(countableCount * targetLangs.length);
+
+        translatedSegments = segs.filter(s => s.target_lang && s.target_text && s.target_text.trim() !== "").length;
       }
     }
 
+    const completionRate = totalTemplateSegments > 0 ? Math.round((translatedSegments / totalTemplateSegments) * 100) : 0;
+
     response.json({
       totalDocuments: docIds.length,
-      totalSegments,
+      totalSegments: totalTemplateSegments,
       translatedSegments,
-      completionRate: totalSegments > 0 ? Math.round((translatedSegments / totalSegments) * 100) : 0
+      completionRate
     });
   } catch (error) {
+    console.error("Analytics Error:", error);
     response.json({ totalDocuments: 0, totalSegments: 0, translatedSegments: 0, completionRate: 0 });
   }
 });
@@ -597,22 +602,42 @@ projectRouter.get(["/projects/:projectId/analytics", "/api/projects/:projectId/a
 projectRouter.put(["/projects/:id", "/api/projects/:id"], checkAuth, async (request, response) => {
   try {
     const { id } = request.params;
-    const { name, status, due_date, notes, description } = request.body;
+    let { name, status, due_date, dueDate, notes, description, client, sourceLanguage, source_lang, targetLanguages, target_languages, settings } = request.body;
     const activeTenantId = request.tenant?.id || request.profile?.organization_id;
     const isSuperAdmin = request.profile?.role === "super_admin";
 
-    const { data: currProject } = await supabase.from("projects").select("settings").eq("id", id).single();
+    const { data: currProject } = await supabase.from("projects").select("*").eq("id", id).single();
     const currSettings = currProject?.settings || {};
 
     const updateData = {};
     if (name !== undefined) updateData.name = name.trim();
+    if (client !== undefined) updateData.client = client.trim();
     if (description !== undefined || notes !== undefined) {
       updateData.description = description || notes || "";
     }
+    if (source_lang !== undefined || sourceLanguage !== undefined) {
+      updateData.source_lang = source_lang || sourceLanguage;
+    }
 
-    const newSettings = { ...currSettings };
-    if (status !== undefined) newSettings.status = status;
-    if (due_date !== undefined) newSettings.due_date = due_date;
+    const rawTargetLangs = target_languages || targetLanguages;
+    if (rawTargetLangs !== undefined) {
+      let parsedTargetLangs = rawTargetLangs;
+      if (typeof rawTargetLangs === "string") {
+        try { parsedTargetLangs = JSON.parse(rawTargetLangs); } catch (_) { parsedTargetLangs = [rawTargetLangs]; }
+      }
+      if (Array.isArray(parsedTargetLangs)) {
+        updateData.target_languages = parsedTargetLangs;
+        updateData.target_lang = parsedTargetLangs[0] || "hi";
+      }
+    }
+
+    const newSettings = { ...currSettings, ...(settings || {}) };
+    if (status !== undefined) {
+      newSettings.status = status;
+      updateData.status = status;
+    }
+    const finalDueDate = due_date || dueDate;
+    if (finalDueDate !== undefined) newSettings.due_date = finalDueDate;
     updateData.settings = newSettings;
     updateData.updated_at = new Date().toISOString();
 
@@ -623,6 +648,49 @@ projectRouter.put(["/projects/:id", "/api/projects/:id"], checkAuth, async (requ
 
     const { data: updatedProject, error } = await query.select().single();
     if (error) throw error;
+
+    // If target languages were updated, ensure translation_jobs exist for new target languages
+    if (updateData.target_languages && Array.isArray(updateData.target_languages)) {
+      const { data: projectDocs } = await supabase.from("documents").select("id, word_count").eq("project_id", id);
+      for (const doc of projectDocs || []) {
+        for (const tLang of updateData.target_languages) {
+          const { data: existingJob } = await supabase
+            .from("translation_jobs")
+            .select("id")
+            .eq("document_id", doc.id)
+            .eq("target_lang", tLang)
+            .maybeSingle();
+
+          if (!existingJob) {
+            await supabase.from("translation_jobs").insert({
+              project_id: id,
+              document_id: doc.id,
+              target_lang: tLang,
+              status: "pending",
+              progress: 0,
+              word_count: doc.word_count || 0,
+              organization_id: activeTenantId || currProject.organization_id
+            });
+          }
+        }
+      }
+    }
+
+    if (status !== undefined || name !== undefined) {
+      recordActivity({
+        projectId: id,
+        projectName: updatedProject?.name || currProject?.name || "Project",
+        eventType: "PROJECT_UPDATED",
+        details: {
+          projectName: updatedProject?.name || currProject?.name || "Project",
+          action: status !== undefined ? `Changed status to "${status}"` : `Renamed project to "${name}"`,
+          status
+        },
+        userName: request.user?.email || request.profile?.email || "Project Coordinator",
+        userId: request.user.id,
+        organizationId: activeTenantId
+      });
+    }
 
     response.json({ project: updatedProject });
   } catch (error) {
@@ -638,6 +706,16 @@ projectRouter.delete(["/projects/:id", "/api/projects/:id"], checkAuth, async (r
     const activeTenantId = request.tenant?.id || request.profile?.organization_id;
     const isSuperAdmin = request.profile?.role === "super_admin";
 
+    // 1. Fetch project details before deletion to preserve in audit trail
+    const { data: currProject } = await supabase
+      .from("projects")
+      .select("id, name, source_lang, target_languages")
+      .eq("id", id)
+      .maybeSingle();
+
+    const deletedProjName = currProject?.name || "Project";
+
+    // 2. Perform deletion
     let query = supabase.from("projects").delete().eq("id", id);
     if (!isSuperAdmin && activeTenantId) {
       query = query.eq("organization_id", activeTenantId);
@@ -645,6 +723,22 @@ projectRouter.delete(["/projects/:id", "/api/projects/:id"], checkAuth, async (r
 
     const { error } = await query;
     if (error) throw error;
+
+    // 3. Record PROJECT_DELETED audit log
+    recordActivity({
+      projectId: id,
+      projectName: deletedProjName,
+      eventType: "PROJECT_DELETED",
+      details: {
+        projectName: deletedProjName,
+        sourceLang: currProject?.source_lang,
+        targetLanguages: currProject?.target_languages,
+        deletedAt: new Date().toISOString()
+      },
+      userName: request.user?.email || request.profile?.email || "Project Owner",
+      userId: request.user.id,
+      organizationId: activeTenantId
+    });
 
     response.json({ message: "Project deleted successfully" });
   } catch (error) {

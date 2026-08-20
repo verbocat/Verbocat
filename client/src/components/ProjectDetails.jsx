@@ -16,6 +16,7 @@ import { ShareModal } from "./ShareModal";
 import { ProjectNotesModal } from "./ProjectNotesModal";
 import { ProjectHistoryModal } from "./ProjectHistoryModal";
 import { BatchTranslateModal } from "./BatchTranslateModal";
+import { TmAnalysisModal } from "./TmAnalysisModal";
 import { 
   ProjectDetailsOverviewSkeleton, 
   ProjectDetailsFilesSkeleton, 
@@ -24,6 +25,7 @@ import {
 } from "./SkeletonLoader";
 import { ProtectedContentPanel } from "./ProtectedContentPanel";
 import { normalizeStatus, formatStatusLabel, getStatusColorClass, getStatusDotColor, STATUS_OPTIONS } from "../utils/projectStatusUtils";
+import { LanguageFlag } from "./LanguageFlag";
 
 export default function ProjectDetails({ projectId, onBack, onOpenEditor, showToast, theme, token, onOpenSettings, userId, userRole, onOpenAdmin, onLogout }) {
   const [project, setProject] = useState(null);
@@ -56,6 +58,9 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showBatchTranslateModal, setShowBatchTranslateModal] = useState(false);
+  const [showTmAnalysisModal, setShowTmAnalysisModal] = useState(false);
+  const [analysisTargetDocId, setAnalysisTargetDocId] = useState(null);
+  const [analysisTargetDocName, setAnalysisTargetDocName] = useState("");
   
   // Navigation Tabs state: "studio" (default workspace), "analytics"
   const [activeTab, setActiveTab] = useState("studio");
@@ -560,9 +565,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
   };
 
   const getLanguageFlag = (code) => {
-    if (!code) return "🌐";
-    const found = LANGUAGES.find(l => l.code === code.toLowerCase());
-    return found?.flag || "🌐";
+    return <LanguageFlag code={code} />;
   };
 
   const handleOpenEditorWithLang = (fileId, langCode) => {
@@ -626,148 +629,170 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
       {hiddenFileInput}
 
       {/* TOP COMMAND BAR */}
-      <div className="border-b border-[var(--border-subtle)] bg-[var(--bg-panel)]/95 backdrop-blur-xl sticky top-0 z-40 py-2 -mx-4 md:-mx-6 px-4 md:px-6">
-        <div className="w-full flex flex-wrap items-center justify-between gap-3">
+      <div className="border-b border-[var(--border-subtle)] bg-[var(--bg-panel)]/95 backdrop-blur-xl sticky top-0 z-40 py-2.5 -mx-4 md:-mx-6 px-4 md:px-6">
+        <div className="w-full flex items-center justify-between gap-3">
           
-          {/* Left: Breadcrumb, Project Name, Status Pill & Smooth Inline Metrics */}
-          <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
+          {/* Left: Breadcrumb, Project Name & Status Selector */}
+          <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={onBack}
-              className="p-1 rounded-md text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border border-[var(--border-subtle)] transition-all cursor-pointer"
+              className="h-8 w-8 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border border-[var(--border-subtle)] transition-all cursor-pointer flex items-center justify-center shrink-0"
               title="Back to Dashboard"
             >
               <ArrowLeft size={14} />
             </button>
 
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--text-muted)] shrink-0">
-              <span>Projects</span>
-              <ChevronRight size={11} />
-              <span className="text-xs font-black text-[var(--text-primary)] select-text">{project?.name || "Project"}</span>
+            <div className="flex items-center gap-2 text-xs truncate">
+              <span className="text-sm font-normal tracking-tight text-[var(--text-primary)] cursor-pointer hover:text-indigo-400 transition-colors" onClick={onBack}>
+                Centroid
+              </span>
+              <span className="text-[var(--text-muted)] font-light text-xs">/</span>
+              <span className="text-xs font-normal text-[var(--text-secondary)] cursor-pointer hover:text-[var(--text-primary)] transition-colors" onClick={onBack}>
+                Projects
+              </span>
+              <span className="text-[var(--text-muted)] font-light text-xs">/</span>
+              <span className="text-xs font-normal text-[var(--text-primary)] truncate">
+                {project?.name || "Project"}
+              </span>
             </div>
 
-            {/* Compact Status Dropdown */}
+            {/* Clean Status Dropdown */}
             <div className="relative shrink-0" ref={statusDropdownRef}>
               <button
+                type="button"
                 onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                className={`flex items-center gap-1.5 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border cursor-pointer transition-all ${getStatusColorClass(currentStatus)}`}
+                className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-[var(--bg-hover)] text-xs font-normal transition-colors cursor-pointer border border-transparent hover:border-[var(--border-subtle)] group"
+                title="Click to change project status"
               >
-                <span className={`w-1.5 h-1.5 rounded-full ${getStatusDotColor(currentStatus)}`} />
-                <span>{formatStatusLabel(currentStatus)}</span>
-                <ChevronDown size={10} />
+                <span className={`w-1.5 h-1.5 rounded-xs ${getStatusDotColor(currentStatus)}`} />
+                <span className="text-[var(--text-primary)] font-normal">{formatStatusLabel(currentStatus)}</span>
+                <ChevronDown size={11} className="text-[var(--text-muted)] opacity-60 group-hover:opacity-100 transition-opacity" />
               </button>
 
               {showStatusDropdown && (
-                <div className="absolute left-0 mt-1 w-40 bg-[var(--bg-surface)] border border-[var(--border-medium)] rounded-lg p-1 shadow-2xl z-50 divide-y divide-[var(--border-subtle)]">
-                  {STATUS_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      onClick={() => handleStatusChange(opt.value)}
-                      className="w-full text-left px-3 py-1.5 rounded-md text-[11px] font-bold hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-2 cursor-pointer"
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full ${getStatusDotColor(opt.value)}`} />
-                      <span>{opt.label}</span>
-                    </button>
-                  ))}
+                <div className="absolute left-0 mt-1 w-36 bg-[var(--bg-surface)] border border-[var(--border-medium)] rounded-xl shadow-2xl z-50 py-1 text-xs select-none text-left animate-in fade-in zoom-in-95 duration-100">
+                  <div className="px-2.5 py-1 text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider border-b border-[var(--border-subtle)] mb-0.5">
+                    Change Status
+                  </div>
+                  {STATUS_OPTIONS.map((opt) => {
+                    const isCurrent = normalizeStatus(currentStatus) === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => handleStatusChange(opt.value)}
+                        className={`w-full text-left px-2.5 py-1.5 hover:bg-[var(--bg-hover)] flex items-center justify-between text-xs transition-colors cursor-pointer ${
+                          isCurrent ? "font-semibold text-indigo-400 bg-indigo-500/5" : "text-[var(--text-primary)]"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className={`w-1.5 h-1.5 rounded-xs ${opt.dotColor}`} />
+                          <span>{opt.label}</span>
+                        </div>
+                        {isCurrent && <Check size={12} className="text-indigo-400" />}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
-
-            {/* SMOOTH INLINE METRICS STRIP */}
-            <div className="flex items-center gap-2 text-[10px] font-bold bg-[var(--bg-surface)] border border-[var(--border-subtle)] px-2.5 py-1 rounded-md text-[var(--text-secondary)] select-text">
-              <span>📄 {totalFiles} Files</span>
-              <span>·</span>
-              <span>💬 {totalWordsCount.toLocaleString()} Words</span>
-              <span>·</span>
-              <span className="flex items-center gap-1">
-                <span>🌐 {totalTargetLangs} Locales:</span>
-                {project?.target_languages?.map(t => (
-                  <span key={t}>{getLanguageFlag(t)}</span>
-                ))}
-              </span>
-              <span>·</span>
-              <span className="text-emerald-400 font-extrabold">📈 {overallTranslationProgress}% Progress</span>
-            </div>
-
           </div>
 
-          {/* Right: Precision Action Buttons with Explicit Settings */}
+          {/* Right: Executive Action Controls */}
           <div className="flex items-center gap-1.5 shrink-0">
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-extrabold h-7 px-3 rounded-md shadow-sm transition-all cursor-pointer active:scale-[0.98]"
+              className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium h-8 px-3 rounded-lg shadow-xs transition-all cursor-pointer active:scale-95"
             >
-              <Upload size={13} /> Add Document
+              <Upload size={13} />
+              <span>Add Document</span>
             </button>
 
             <button
               onClick={() => setShowBatchTranslateModal(true)}
-              className="flex items-center gap-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 text-[11px] font-extrabold h-7 px-2.5 rounded-md transition-all cursor-pointer"
+              className="btn-batch-translate flex items-center gap-1.5 text-xs font-medium h-8 px-2.5 rounded-lg transition-all cursor-pointer shadow-xs"
               title="Batch AI Translation"
             >
-              <Sparkles size={13} /> Batch Translate
+              <Sparkles size={13} />
+              <span className="hidden sm:inline">Batch Translate</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setAnalysisTargetDocId(null);
+                setAnalysisTargetDocName("");
+                setShowTmAnalysisModal(true);
+              }}
+              className="btn-batch-translate flex items-center gap-1.5 text-xs font-medium h-8 px-2.5 rounded-lg transition-all cursor-pointer shadow-xs"
+              title="Exclusive Cross-File & Project TM Volume Analysis"
+            >
+              <BarChart3 size={13} className="text-cyan-400" />
+              <span className="hidden sm:inline">Volume Analysis</span>
             </button>
 
             <button
               onClick={openProjectShareModal}
-              className="flex items-center gap-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 text-[11px] font-extrabold h-7 px-2.5 rounded-md transition-all cursor-pointer"
-              title="Share Project Workspace (Coordinators)"
+              className="btn-share-project flex items-center gap-1.5 text-xs font-medium h-8 px-2.5 rounded-lg transition-all cursor-pointer shadow-xs"
+              title="Share Project Workspace"
             >
-              <Users size={13} /> Share Project
+              <Users size={13} />
+              <span className="hidden sm:inline">Share</span>
             </button>
 
-            {/* Explicit Settings Button */}
-            <button
-              onClick={() => {
-                if (onOpenSettings) onOpenSettings();
-                else setShowSettingsModal(true);
-              }}
-              className="flex items-center gap-1.5 bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] text-[11px] font-extrabold h-7 px-2.5 rounded-md transition-all cursor-pointer"
-              title="Project Settings"
-            >
-              <Settings size={13} /> Settings
-            </button>
+            <div className="h-4 w-[1px] bg-[var(--border-subtle)] mx-1" />
 
             <button
               onClick={handleExportReports}
-              className="p-1.5 rounded-md border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer"
+              className="topbar-icon-action h-8 w-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer shadow-xs"
               title="Export CSV Report"
             >
-              <FileCode size={14} />
-            </button>
-
-            <button
-              onClick={() => setShowHistoryModal(true)}
-              className="p-1.5 rounded-md border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer"
-              title="Project History & Audit Log"
-            >
-              <History size={14} />
+              <FileCode size={15} />
             </button>
 
             <button
               onClick={() => setShowNotesModal(true)}
-              className="p-1.5 rounded-md border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer"
+              className="topbar-icon-action h-8 w-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer shadow-xs"
               title="Project Notes"
             >
-              <StickyNote size={14} />
+              <StickyNote size={15} />
+            </button>
+
+            <button
+              onClick={() => setShowHistoryModal(true)}
+              className="topbar-icon-action h-8 w-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer shadow-xs"
+              title="Activity Audit Log"
+            >
+              <History size={15} />
             </button>
 
             {(userRole === "admin" || userRole === "super_admin") && (
               <button
                 onClick={onOpenAdmin}
-                className="p-1.5 rounded-md border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer"
-                title="Admin Panel"
+                className="topbar-icon-action h-8 w-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer shadow-xs"
+                title="Admin Console"
               >
-                <LayoutDashboard size={14} />
+                <LayoutDashboard size={15} />
               </button>
             )}
+
+            <button
+              onClick={() => {
+                if (onOpenSettings) onOpenSettings();
+                else setShowSettingsModal(true);
+              }}
+              className="h-8 w-8 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center transition-colors cursor-pointer border border-transparent hover:border-[var(--border-subtle)]"
+              title="Project Settings"
+            >
+              <Settings size={15} />
+            </button>
 
             {onLogout && (
               <button
                 onClick={onLogout}
-                className="p-1.5 rounded-md border border-rose-500/20 text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer"
-                title="Log Out"
+                className="h-8 w-8 rounded-lg hover:bg-rose-500/10 text-[var(--text-secondary)] hover:text-rose-400 flex items-center justify-center transition-colors cursor-pointer border border-transparent hover:border-rose-500/20"
+                title="Sign Out"
               >
-                <LogOut size={14} />
+                <LogOut size={15} />
               </button>
             )}
           </div>
@@ -779,7 +804,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
       <div className="flex items-center gap-2 border-b border-[var(--border-subtle)] pb-2">
         <button
           onClick={() => setActiveTab("studio")}
-          className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-extrabold transition-all cursor-pointer ${
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
             activeTab === "studio"
               ? "bg-[var(--accent)] text-white shadow-xs"
               : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
@@ -790,7 +815,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
 
         <button
           onClick={() => setActiveTab("analytics")}
-          className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-extrabold transition-all cursor-pointer ${
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
             activeTab === "analytics"
               ? "bg-[var(--accent)] text-white shadow-xs"
               : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
@@ -811,10 +836,10 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
             <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
               <button
                 onClick={() => setActiveLangTab("all")}
-                className={`flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-1 rounded-md border transition-all cursor-pointer shrink-0 ${
+                className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-md border transition-all cursor-pointer shrink-0 ${
                   activeLangTab === "all"
-                    ? "bg-indigo-600/20 text-indigo-300 border-indigo-500/40 shadow-xs"
-                    : "bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                    ? "tab-lang-all-active shadow-xs"
+                    : "tab-lang-btn-inactive"
                 }`}
               >
                 <FileText size={12} />
@@ -828,13 +853,13 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                   <button
                     key={tLang}
                     onClick={() => setActiveLangTab(tLang)}
-                    className={`flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-1 rounded-md border transition-all cursor-pointer shrink-0 ${
+                    className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-md border transition-all cursor-pointer shrink-0 ${
                       isSelected
-                        ? "bg-purple-600/20 text-purple-300 border-purple-500/40 shadow-xs"
-                        : "bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                        ? "tab-lang-target-active shadow-xs"
+                        : "tab-lang-btn-inactive"
                     }`}
                   >
-                    <span>{getLanguageFlag(tLang)}</span>
+                    <LanguageFlag code={tLang} />
                     <span>{langName}</span>
                   </button>
                 );
@@ -845,7 +870,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                   setSelectedAddLangs(project?.target_languages || []);
                   setShowAddLangModal(true);
                 }}
-                className="flex items-center gap-1 text-[10px] font-extrabold text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 px-2 py-1 rounded-md transition-all cursor-pointer shrink-0"
+                className="btn-add-locale flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-md transition-all cursor-pointer shrink-0 shadow-xs"
               >
                 <Plus size={11} /> Add Locale
               </button>
@@ -860,17 +885,17 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                   placeholder="Search documents..."
                   value={fileSearchQuery}
                   onChange={(e) => setFileSearchQuery(e.target.value)}
-                  className="w-full pl-7 pr-2.5 py-1 rounded-md border border-[var(--border-medium)] bg-[var(--bg-input)] text-[11px] font-semibold text-[var(--text-primary)] outline-none focus:border-indigo-500 transition-all placeholder-[var(--text-muted)]"
+                  className="w-full pl-7 pr-2.5 py-1 rounded-md border border-[var(--border-medium)] bg-[var(--bg-input)] text-xs font-normal text-[var(--text-primary)] outline-none focus:border-indigo-500 transition-all placeholder-[var(--text-muted)]"
                 />
               </div>
 
               {/* Sort Dropdown */}
-              <div className="flex items-center gap-1 bg-[var(--bg-surface)] border border-[var(--border-medium)] rounded-md px-2 py-1 text-[11px] font-bold">
+              <div className="flex items-center gap-1 bg-[var(--bg-surface)] border border-[var(--border-medium)] rounded-md px-2 py-1 text-xs font-normal">
                 <ArrowUpDown size={12} className="text-[var(--text-muted)]" />
                 <select
                   value={fileSortBy}
                   onChange={(e) => setFileSortBy(e.target.value)}
-                  className="bg-transparent text-[var(--text-primary)] outline-none cursor-pointer text-[11px] font-bold"
+                  className="bg-transparent text-[var(--text-primary)] outline-none cursor-pointer text-xs font-normal"
                 >
                   <option value="newest" className="bg-[var(--bg-panel)] text-[var(--text-primary)]">Newest First</option>
                   <option value="oldest" className="bg-[var(--bg-panel)] text-[var(--text-primary)]">Oldest First</option>
@@ -887,7 +912,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
           {/* Upload Progress Banner */}
           {isUploading && uploadProgress && (
             <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-md p-2.5 space-y-1 animate-pulse">
-              <div className="flex justify-between items-center text-[11px] font-bold text-indigo-300">
+              <div className="flex justify-between items-center text-xs font-medium text-indigo-300">
                 <span>{uploadProgress.status} ({uploadProgress.current}/{uploadProgress.total})</span>
                 <span>{uploadProgress.percent || 0}%</span>
               </div>
@@ -905,13 +930,13 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
               <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-lg p-3 flex flex-wrap items-center justify-between gap-3 shadow-xs">
                 <div className="flex items-center gap-2.5">
                   <div className="h-8 w-8 rounded-md bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-lg shrink-0">
-                    {getLanguageFlag(activeLangTab)}
+                    <LanguageFlag code={activeLangTab} />
                   </div>
                   <div>
-                    <h3 className="text-xs font-black text-[var(--text-primary)] select-text">
+                    <h3 className="text-xs font-semibold text-[var(--text-primary)] select-text">
                       {getLanguageName(activeLangTab)} ({activeLangTab.toUpperCase()}) Workspace
                     </h3>
-                    <p className="text-[10px] text-[var(--text-muted)] font-medium select-text">
+                    <p className="text-[10px] text-[var(--text-muted)] font-normal select-text">
                       Showing all {sortedFiles.length} file(s) for {getLanguageName(activeLangTab)} translation.
                     </p>
                   </div>
@@ -920,14 +945,14 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => openLanguageShareModal(activeLangTab, getLanguageName(activeLangTab))}
-                    className="flex items-center gap-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-[11px] font-extrabold h-6 px-2.5 rounded-md shadow-xs transition-all cursor-pointer active:scale-[0.98]"
+                    className="flex items-center gap-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-medium h-6 px-2.5 rounded-md shadow-xs transition-all cursor-pointer active:scale-[0.98]"
                   >
                     <Users size={11} /> Assign All {getLanguageName(activeLangTab)} Files
                   </button>
 
                   <button
                     onClick={() => handleDownloadZipLanguage(activeLangTab)}
-                    className="flex items-center gap-1 bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] text-[11px] font-bold h-6 px-2 rounded-md transition-all cursor-pointer"
+                    className="flex items-center gap-1 bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] text-xs font-medium h-6 px-2 rounded-md transition-all cursor-pointer"
                   >
                     <Download size={11} /> Download ZIP
                   </button>
@@ -936,17 +961,17 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
 
               {/* Data Table for this specific language */}
               <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-lg overflow-hidden shadow-xs">
-                <table className="w-full text-left border-collapse text-[11px]">
+                <table className="w-full text-left border-collapse text-xs">
                   <thead>
-                    <tr className="border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]/60 text-[10px] uppercase font-black tracking-wider text-[var(--text-muted)]">
-                      <th className="py-2 px-3">Document Name</th>
-                      <th className="py-2 px-3">Word Count</th>
-                      <th className="py-2 px-3">Translation Progress</th>
-                      <th className="py-2 px-3">Assignee</th>
-                      <th className="py-2 px-3 text-right">Action</th>
+                    <tr className="border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]/60 text-[10px] uppercase font-semibold tracking-wider text-[var(--text-muted)]">
+                      <th className="py-2 px-3 font-semibold">Document Name</th>
+                      <th className="py-2 px-3 font-semibold">Word Count</th>
+                      <th className="py-2 px-3 font-semibold">Translation Progress</th>
+                      <th className="py-2 px-3 font-semibold">Assignee</th>
+                      <th className="py-2 px-3 text-right font-semibold">Action</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[var(--border-subtle)] font-semibold select-text">
+                  <tbody className="divide-y divide-[var(--border-subtle)] font-normal select-text">
                     {sortedFiles.map((file) => {
                       const job = jobs.find(j => j.document_id === file.id && j.target_lang === activeLangTab);
                       const progress = job?.progress || 0;
@@ -957,10 +982,10 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                           <td className="py-2 px-3">
                             <div className="flex items-center gap-2">
                               <FileText size={14} className="text-indigo-400 shrink-0" />
-                              <span className="font-extrabold text-[var(--text-primary)] select-text">{file.name}</span>
+                              <span className="font-medium text-[var(--text-primary)] select-text">{file.name}</span>
                             </div>
                           </td>
-                          <td className="py-2 px-3 text-[var(--text-secondary)] select-text font-mono">
+                          <td className="py-2 px-3 text-[var(--text-secondary)] select-text font-mono text-[11px]">
                             {file.word_count?.toLocaleString() || 0} words
                           </td>
                           <td className="py-2 px-3">
@@ -968,13 +993,13 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                               <div className="flex-1 bg-[var(--bg-input)] h-1 rounded-full overflow-hidden border border-[var(--border-subtle)]">
                                 <div className="bg-indigo-500 h-full rounded-full" style={{ width: `${progress}%` }} />
                               </div>
-                              <span className="text-[10px] font-bold text-emerald-400">{progress}%</span>
+                              <span className="text-[10px] font-medium text-emerald-400">{progress}%</span>
                             </div>
                           </td>
                           <td className="py-2 px-3">
                             <button
                               onClick={() => openLanguageJobShareModal(file.id, file.name, activeLangTab, langName)}
-                              className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-300 hover:text-white bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 px-2 py-0.5 rounded-md transition-all cursor-pointer"
+                              className="btn-assign-linguist inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-md transition-all cursor-pointer shadow-xs"
                             >
                               <Users size={10} /> Assign Linguist
                             </button>
@@ -982,7 +1007,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                           <td className="py-2 px-3 text-right">
                             <button
                               onClick={() => handleOpenEditorWithLang(file.id, activeLangTab)}
-                              className="inline-flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-extrabold h-6 px-2.5 rounded-md transition-all cursor-pointer active:scale-[0.98]"
+                              className="inline-flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium h-6 px-2.5 rounded-md transition-all cursor-pointer active:scale-[0.98]"
                             >
                               <span>Editor</span>
                               <ChevronRight size={10} />
@@ -1000,23 +1025,23 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
 
             /* MASTER ALL FILES DATA TABLE WITH JOB-LEVEL SELECTION CHECKBOXES & SCROLLABLE MULTI-LANGUAGE MATRIX */
             <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-lg overflow-hidden shadow-xs">
-              <table className="w-full text-left border-collapse text-[11px]">
+              <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]/60 text-[10px] uppercase font-black tracking-wider text-[var(--text-muted)]">
+                  <tr className="border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]/60 text-[10px] uppercase font-semibold tracking-wider text-[var(--text-muted)]">
                     <th className="py-2 px-3 w-8"></th>
                     <th className="py-2 px-3 w-8">
                       <button onClick={toggleSelectAllFiles} className="cursor-pointer text-[var(--text-muted)] hover:text-white" title="Select/Deselect All Files">
                         {selectedFiles.length === files.length && files.length > 0 ? <CheckSquare size={14} className="text-indigo-400" /> : <Square size={14} />}
                       </button>
                     </th>
-                    <th className="py-2 px-3">Document Name</th>
-                    <th className="py-2 px-3">Words</th>
-                    <th className="py-2 px-3">Configured Locales</th>
-                    <th className="py-2 px-3">Overall Progress</th>
-                    <th className="py-2 px-3 text-right">Actions</th>
+                    <th className="py-2 px-3 font-semibold">Document Name</th>
+                    <th className="py-2 px-3 font-semibold">Words</th>
+                    <th className="py-2 px-3 font-semibold">Configured Locales</th>
+                    <th className="py-2 px-3 font-semibold">Overall Progress</th>
+                    <th className="py-2 px-3 text-right font-semibold">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[var(--border-subtle)] font-semibold select-text">
+                <tbody className="divide-y divide-[var(--border-subtle)] font-normal select-text">
                   {sortedFiles.map((file) => {
                     const isExpanded = expandedFileIds.includes(file.id);
                     const isSelected = selectedFiles.includes(file.id);
@@ -1050,19 +1075,19 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                           <td className="py-2 px-3">
                             <div className="flex items-center gap-2">
                               <FileText size={14} className="text-indigo-400 shrink-0" />
-                              <span className="font-extrabold text-[var(--text-primary)] select-text">{file.name}</span>
+                              <span className="font-medium text-[var(--text-primary)] select-text">{file.name}</span>
                             </div>
                           </td>
 
-                          <td className="py-2 px-3 text-[var(--text-secondary)] font-mono select-text">
+                          <td className="py-2 px-3 text-[var(--text-secondary)] font-mono select-text text-xs">
                             {file.word_count?.toLocaleString() || 0}
                           </td>
 
                           <td className="py-2 px-3">
                             <div className="flex items-center gap-1 flex-wrap">
                               {project?.target_languages?.map(t => (
-                                <span key={t} className="text-[10px] bg-[var(--bg-surface)] border border-[var(--border-subtle)] px-1.5 py-0.5 rounded font-mono uppercase text-indigo-300">
-                                  {getLanguageFlag(t)} {t}
+                                <span key={t} className="badge-locale-item text-[10px] px-1.5 py-0.5 rounded font-mono uppercase">
+                                  <LanguageFlag code={t} /> {t}
                                 </span>
                               ))}
                             </div>
@@ -1073,12 +1098,23 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                               <div className="flex-1 bg-[var(--bg-input)] h-1 rounded-full overflow-hidden border border-[var(--border-subtle)]">
                                 <div className="bg-indigo-500 h-full rounded-full" style={{ width: `${avgProgress}%` }} />
                               </div>
-                              <span className="text-[10px] font-bold text-emerald-400">{avgProgress}%</span>
+                              <span className="text-[10px] font-medium text-emerald-400">{avgProgress}%</span>
                             </div>
                           </td>
 
                           <td className="py-2 px-3 text-right">
                             <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() => {
+                                  setAnalysisTargetDocId(file.id);
+                                  setAnalysisTargetDocName(file.name);
+                                  setShowTmAnalysisModal(true);
+                                }}
+                                className="p-1 rounded text-[var(--text-muted)] hover:text-cyan-400 cursor-pointer"
+                                title="Run TM Volume Analysis for this file"
+                              >
+                                <BarChart3 size={13} />
+                              </button>
                               <button
                                 onClick={() => openSingleFileShareModal(file.id, file.name)}
                                 className="p-1 rounded text-[var(--text-muted)] hover:text-indigo-400 cursor-pointer"
@@ -1102,8 +1138,8 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                           <tr className="bg-[var(--bg-surface)]/50">
                             <td colSpan={7} className="p-2.5 pl-8">
                               <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-md max-h-72 overflow-y-auto shadow-xs">
-                                <table className="w-full text-left border-collapse text-[10px]">
-                                  <thead className="sticky top-0 z-10 bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] text-[9px] uppercase font-black tracking-wider text-[var(--text-muted)]">
+                                <table className="w-full text-left border-collapse text-xs">
+                                  <thead className="sticky top-0 z-10 bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] text-[9px] uppercase font-semibold tracking-wider text-[var(--text-muted)]">
                                     <tr>
                                       <th className="py-1.5 px-3 w-8 text-center">
                                         <button
@@ -1114,13 +1150,13 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                                           {allJobsSelectedForFile ? <CheckSquare size={13} className="text-indigo-400" /> : <Square size={13} />}
                                         </button>
                                       </th>
-                                      <th className="py-1.5 px-3">Target Locale</th>
-                                      <th className="py-1.5 px-3">Translation Progress</th>
-                                      <th className="py-1.5 px-3">Assigned Linguist</th>
-                                      <th className="py-1.5 px-3 text-right">Actions</th>
+                                      <th className="py-1.5 px-3 font-semibold">Target Locale</th>
+                                      <th className="py-1.5 px-3 font-semibold">Translation Progress</th>
+                                      <th className="py-1.5 px-3 font-semibold">Assigned Linguist</th>
+                                      <th className="py-1.5 px-3 text-right font-semibold">Actions</th>
                                     </tr>
                                   </thead>
-                                  <tbody className="divide-y divide-[var(--border-subtle)] font-semibold select-text">
+                                  <tbody className="divide-y divide-[var(--border-subtle)] font-normal select-text">
                                     {project?.target_languages?.map((tCode) => {
                                       const job = fileJobs.find(j => j.target_lang === tCode);
                                       const progress = job?.progress || 0;
@@ -1140,8 +1176,8 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
 
                                           <td className="py-1.5 px-3">
                                             <div className="flex items-center gap-1.5">
-                                              <span className="text-sm">{getLanguageFlag(tCode)}</span>
-                                              <span className="font-extrabold text-[var(--text-primary)] select-text">{langName}</span>
+                                              <LanguageFlag code={tCode} />
+                                              <span className="font-medium text-[var(--text-primary)] select-text">{langName}</span>
                                               <span className="text-[9px] font-mono text-indigo-400 uppercase select-text">({tCode})</span>
                                             </div>
                                           </td>
@@ -1151,14 +1187,14 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                                               <div className="flex-1 bg-[var(--bg-input)] h-1 rounded-full overflow-hidden border border-[var(--border-subtle)]">
                                                 <div className="bg-indigo-500 h-full rounded-full" style={{ width: `${progress}%` }} />
                                               </div>
-                                              <span className="text-[10px] font-bold text-emerald-400">{progress}%</span>
+                                              <span className="text-[10px] font-medium text-emerald-400">{progress}%</span>
                                             </div>
                                           </td>
 
                                           <td className="py-1.5 px-3">
                                             <button
                                               onClick={() => openLanguageJobShareModal(file.id, file.name, tCode, langName)}
-                                              className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-300 hover:text-white bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded cursor-pointer"
+                                              className="btn-assign-linguist inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded cursor-pointer shadow-xs"
                                               title={`Assign ${langName} job to linguist`}
                                             >
                                               <Users size={10} /> Assign {tCode.toUpperCase()}
@@ -1168,7 +1204,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                                           <td className="py-1.5 px-3 text-right">
                                             <button
                                               onClick={() => handleOpenEditorWithLang(file.id, tCode)}
-                                              className="inline-flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-extrabold h-5 px-2 rounded cursor-pointer active:scale-[0.98]"
+                                              className="inline-flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium h-5 px-2 rounded cursor-pointer active:scale-[0.98]"
                                             >
                                               <span>Editor</span>
                                               <ChevronRight size={10} />
@@ -1197,7 +1233,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
             <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-[var(--bg-surface)]/95 border border-indigo-500/40 rounded-lg px-3.5 py-1.5 shadow-2xl backdrop-blur-xl flex items-center gap-3 animate-slide-up select-none">
               <div className="flex items-center gap-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse" />
-                <span className="text-[11px] font-extrabold text-[var(--text-primary)]">
+                <span className="text-xs font-medium text-[var(--text-primary)]">
                   {selectedFiles.length > 0 ? `${selectedFiles.length} File(s)` : `${selectedJobs.length} Language Job(s)`} Selected
                 </span>
               </div>
@@ -1209,28 +1245,28 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                   <>
                     <button
                       onClick={openBulkFileShareModal}
-                      className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-extrabold h-6 px-2 rounded-md cursor-pointer transition-all active:scale-[0.98]"
+                      className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium h-6 px-2 rounded-md cursor-pointer transition-all active:scale-[0.98]"
                     >
                       <Users size={11} /> Share Selected Files
                     </button>
 
                     <button
                       onClick={() => setShowBatchTranslateModal(true)}
-                      className="flex items-center gap-1 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 text-[10px] font-bold h-6 px-2 rounded-md cursor-pointer transition-all active:scale-[0.98]"
+                      className="btn-batch-translate flex items-center gap-1 text-xs font-medium h-6 px-2 rounded-md cursor-pointer transition-all active:scale-[0.98] shadow-xs"
                     >
                       <Sparkles size={11} /> Batch Translate
                     </button>
 
                     <button
                       onClick={handleBulkDownload}
-                      className="flex items-center gap-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 text-[10px] font-bold h-6 px-2 rounded-md cursor-pointer transition-all active:scale-[0.98]"
+                      className="flex items-center gap-1 bg-blue-600/15 hover:bg-blue-600/25 text-blue-700 dark:text-blue-400 border border-blue-500/30 dark:border-blue-500/20 text-xs font-medium h-6 px-2 rounded-md cursor-pointer transition-all active:scale-[0.98]"
                     >
                       <Download size={11} /> Download
                     </button>
 
                     <button
                       onClick={handleBulkDelete}
-                      className="flex items-center gap-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 text-[10px] font-bold h-6 px-2 rounded-md cursor-pointer transition-all active:scale-[0.98]"
+                      className="flex items-center gap-1 bg-rose-600/15 hover:bg-rose-600/25 text-rose-700 dark:text-rose-400 border border-rose-500/30 dark:border-rose-500/20 text-xs font-medium h-6 px-2 rounded-md cursor-pointer transition-all active:scale-[0.98]"
                     >
                       <Trash2 size={11} /> Delete
                     </button>
@@ -1239,14 +1275,14 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                   <>
                     <button
                       onClick={openBulkJobsShareModal}
-                      className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-extrabold h-6 px-2.5 rounded-md cursor-pointer transition-all active:scale-[0.98]"
+                      className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium h-6 px-2.5 rounded-md cursor-pointer transition-all active:scale-[0.98]"
                     >
                       <Users size={11} /> Assign {selectedJobs.length} Selected Jobs to Linguist(s)
                     </button>
 
                     <button
                       onClick={handleBulkDownload}
-                      className="flex items-center gap-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 text-[10px] font-bold h-6 px-2 rounded-md cursor-pointer transition-all active:scale-[0.98]"
+                      className="flex items-center gap-1 bg-blue-600/15 hover:bg-blue-600/25 text-blue-700 dark:text-blue-400 border border-blue-500/30 dark:border-blue-500/20 text-xs font-medium h-6 px-2 rounded-md cursor-pointer transition-all active:scale-[0.98]"
                     >
                       <Download size={11} /> Download Jobs
                     </button>
@@ -1275,14 +1311,14 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
           
           <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-lg p-3 flex flex-wrap items-center justify-between gap-3 shadow-xs">
             <div>
-              <h3 className="text-xs font-black uppercase tracking-wider text-[var(--text-primary)]">Executive Translation Analytics & TM Leverage</h3>
-              <p className="text-[10px] text-[var(--text-muted)] mt-0.5 font-medium">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-primary)]">Executive Translation Analytics & TM Leverage</h3>
+              <p className="text-[10px] text-[var(--text-muted)] mt-0.5 font-normal">
                 Breakdown of Translation Memory match rates, fuzzy leverage, cost savings, and QA pass rates.
               </p>
             </div>
             <button
               onClick={handleExportReports}
-              className="flex items-center gap-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-[11px] font-bold h-6 px-2.5 rounded-md transition-all cursor-pointer"
+              className="flex items-center gap-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-xs font-medium h-6 px-2.5 rounded-md transition-all cursor-pointer"
             >
               <BarChart3 size={12} /> Export CSV Report
             </button>
@@ -1290,27 +1326,27 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] p-3 rounded-lg space-y-1">
-              <span className="text-[10px] font-black uppercase text-[var(--text-muted)] tracking-wider">ICE Match (101%)</span>
-              <h4 className="text-lg font-black text-emerald-400">{analytics?.iceMatchPercent || 0}%</h4>
-              <p className="text-[10px] text-[var(--text-secondary)] font-medium">In-Context Exact matches saved from pre-translation.</p>
+              <span className="text-[10px] font-semibold uppercase text-[var(--text-muted)] tracking-wider">ICE Match (101%)</span>
+              <h4 className="text-lg font-bold text-emerald-400">{analytics?.iceMatchPercent || 0}%</h4>
+              <p className="text-[10px] text-[var(--text-secondary)] font-normal">In-Context Exact matches saved from pre-translation.</p>
             </div>
 
             <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] p-3 rounded-lg space-y-1">
-              <span className="text-[10px] font-black uppercase text-[var(--text-muted)] tracking-wider">Exact Match (100%)</span>
-              <h4 className="text-lg font-black text-indigo-400">{analytics?.exactMatchPercent || 0}%</h4>
-              <p className="text-[10px] text-[var(--text-secondary)] font-medium">Exact segment matches retrieved from global TM.</p>
+              <span className="text-[10px] font-semibold uppercase text-[var(--text-muted)] tracking-wider">Exact Match (100%)</span>
+              <h4 className="text-lg font-bold text-indigo-400">{analytics?.exactMatchPercent || 0}%</h4>
+              <p className="text-[10px] text-[var(--text-secondary)] font-normal">Exact segment matches retrieved from global TM.</p>
             </div>
 
             <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] p-3 rounded-lg space-y-1">
-              <span className="text-[10px] font-black uppercase text-[var(--text-muted)] tracking-wider">Fuzzy Match (75-99%)</span>
-              <h4 className="text-lg font-black text-purple-400">{analytics?.fuzzyMatchPercent || 0}%</h4>
-              <p className="text-[10px] text-[var(--text-secondary)] font-medium">Partial matches leveraged during translation.</p>
+              <span className="text-[10px] font-semibold uppercase text-[var(--text-muted)] tracking-wider">Fuzzy Match (75-99%)</span>
+              <h4 className="text-lg font-bold text-purple-400">{analytics?.fuzzyMatchPercent || 0}%</h4>
+              <p className="text-[10px] text-[var(--text-secondary)] font-normal">Partial matches leveraged during translation.</p>
             </div>
 
             <div className="bg-[var(--bg-panel)] border border-[var(--border-subtle)] p-3 rounded-lg space-y-1">
-              <span className="text-[10px] font-black uppercase text-[var(--text-muted)] tracking-wider">MT Post-Edit</span>
-              <h4 className="text-lg font-black text-amber-400">{analytics?.mtPercent || 0}%</h4>
-              <p className="text-[10px] text-[var(--text-secondary)] font-medium">AI Machine translation suggestions confirmed.</p>
+              <span className="text-[10px] font-semibold uppercase text-[var(--text-muted)] tracking-wider">MT Post-Edit</span>
+              <h4 className="text-lg font-bold text-amber-400">{analytics?.mtPercent || 0}%</h4>
+              <p className="text-[10px] text-[var(--text-secondary)] font-normal">AI Machine translation suggestions confirmed.</p>
             </div>
           </div>
 
@@ -1348,7 +1384,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                       isChecked ? "bg-indigo-600 text-white" : "hover:bg-[var(--bg-hover)] text-[var(--text-secondary)]"
                     }`}
                   >
-                    <span>{lang.flag}</span>
+                    <LanguageFlag code={lang.code} />
                     <span className="truncate">{lang.name} ({lang.code})</span>
                   </button>
                 );
@@ -1488,6 +1524,66 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
           }}
         />
       )}
+
+      {/* TM & Cross-File Volume Analysis Modal */}
+      {showTmAnalysisModal && (
+        <TmAnalysisModal
+          show={showTmAnalysisModal}
+          onClose={() => setShowTmAnalysisModal(false)}
+          projectId={analysisTargetDocId ? null : projectId}
+          projectName={project?.name}
+          documentId={analysisTargetDocId}
+          targetLanguage={activeLangTab !== "all" ? activeLangTab : (project?.target_languages?.[0] || "hi")}
+          availableLanguages={project?.target_languages || ["hi"]}
+          showToast={showToast}
+        />
+      )}
+
+      {/* ── WORKSPACE FOOTER STATUS BAR (INLINE METRICS & LOCALES) ── */}
+      <footer className="fixed bottom-0 left-0 right-0 z-30 bg-[var(--bg-panel)]/95 backdrop-blur-xl border-t border-[var(--border-subtle)] px-6 py-2.5 flex items-center justify-between text-xs text-[var(--text-secondary)] shadow-lg select-none">
+        {/* Left: Essential Project Metrics */}
+        <div className="flex items-center gap-4 text-xs font-normal overflow-x-auto">
+          <div className="flex items-center gap-1.5 shrink-0" title="Total Files in Workspace">
+            <FileText size={13} className="text-indigo-400" />
+            <span className="font-semibold text-[var(--text-primary)]">{totalFiles}</span>
+            <span className="text-[var(--text-muted)]">{totalFiles === 1 ? "File" : "Files"}</span>
+          </div>
+
+          <span className="text-[var(--border-medium)] shrink-0">·</span>
+
+          <div className="flex items-center gap-1.5 shrink-0" title="Total Translatable Words">
+            <FileCode size={13} className="text-purple-400" />
+            <span className="font-semibold text-[var(--text-primary)]">{totalWordsCount.toLocaleString()}</span>
+            <span className="text-[var(--text-muted)]">Words</span>
+          </div>
+
+          <span className="text-[var(--border-medium)] shrink-0">·</span>
+
+          <div className="flex items-center gap-1.5 shrink-0" title="Configured Target Locales">
+            <Globe size={13} className="text-sky-400" />
+            <span className="font-semibold text-[var(--text-primary)]">{totalTargetLangs}</span>
+            <span className="text-[var(--text-muted)]">{totalTargetLangs === 1 ? "Locale" : "Locales"}</span>
+          </div>
+
+          <span className="text-[var(--border-medium)] shrink-0">·</span>
+
+          <div className="flex items-center gap-1.5 shrink-0" title="Overall Project Translation Progress">
+            <TrendingUp size={13} className="text-emerald-400" />
+            <span className="font-semibold text-emerald-400">{overallTranslationProgress}%</span>
+            <span className="text-[var(--text-muted)]">Progress</span>
+          </div>
+        </div>
+
+        {/* Right: Domain & Status Metadata */}
+        <div className="hidden sm:flex items-center gap-3 text-[11px] text-[var(--text-muted)] shrink-0 font-mono">
+          <div className="flex items-center gap-1.5">
+            <span className={`w-1.5 h-1.5 rounded-xs ${getStatusDotColor(currentStatus)}`} />
+            <span className="text-[var(--text-secondary)] font-sans font-normal">{formatStatusLabel(currentStatus)}</span>
+          </div>
+          <span>·</span>
+          <span className="truncate">{project?.settings?.domain || "General"}</span>
+        </div>
+      </footer>
 
     </div>
   );
