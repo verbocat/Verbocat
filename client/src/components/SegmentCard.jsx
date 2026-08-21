@@ -1563,10 +1563,11 @@ export const SegmentCard = ({
                     Tracked edit by <strong style={{ color: "var(--text-primary)", fontWeight: 700 }}>{segment.trackedBy}</strong>
                   </span>
                 </div>
-                {isOwner && (
+                {(isOwner || onAcceptChange) && (
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <button
-                      onClick={() => onAcceptChange(segment.id)}
+                      type="button"
+                      onClick={() => onAcceptChange && onAcceptChange(segment.id)}
                       style={{
                         padding: "5px 12px",
                         borderRadius: "5px",
@@ -1584,7 +1585,8 @@ export const SegmentCard = ({
                       Accept
                     </button>
                     <button
-                      onClick={() => onRejectChange(segment.id)}
+                      type="button"
+                      onClick={() => onRejectChange && onRejectChange(segment.id)}
                       style={{
                         padding: "5px 12px",
                         borderRadius: "5px",

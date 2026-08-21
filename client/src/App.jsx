@@ -463,12 +463,18 @@ export default function App() {
         const actualSegIndex = idx + 1;
         const rawSrc = s.source !== undefined && s.source !== null ? s.source : (s.source_text !== undefined && s.source_text !== null ? s.source_text : "");
         const rawTgt = s.target !== undefined && s.target !== null ? s.target : (s.target_text !== undefined && s.target_text !== null ? s.target_text : "");
+        const origTgt = s.originalTargetText !== undefined && s.originalTargetText !== null
+          ? s.originalTargetText
+          : (s.original_target_text !== undefined && s.original_target_text !== null ? s.original_target_text : null);
+        const trBy = s.trackedBy || s.tracked_by || null;
         return {
           ...s,
           id: actualSegIndex,
           segment_index: actualSegIndex,
           source: cleanTextString(rawSrc),
           target: cleanTextString(rawTgt),
+          originalTargetText: origTgt,
+          trackedBy: trBy,
           uniqueKey: s?.uniqueKey || `seg-${activeDocId}-${actualSegIndex}`
         };
       });
@@ -1842,13 +1848,12 @@ export default function App() {
     let trackOrig = null;
 
     const targetSeg = segments.find((s) => String(s.id) === String(id) || Number(s.segment_index) === Number(id));
-    const isOwnerLocal = ownerId === user?.id;
 
     let originalTargetTextToSend = undefined;
     let trackedByToSend = undefined;
 
-    if (targetSeg && trackChangesEnabled && !isOwnerLocal) {
-      const orig = targetSeg.originalTargetText !== null && targetSeg.originalTargetText !== undefined
+    if (targetSeg && trackChangesEnabled) {
+      const orig = (targetSeg.originalTargetText !== null && targetSeg.originalTargetText !== undefined)
         ? targetSeg.originalTargetText
         : (targetSeg.target || "");
       
@@ -1857,7 +1862,7 @@ export default function App() {
         trackedByToSend = null;
       } else {
         originalTargetTextToSend = orig;
-        trackedByToSend = user?.email;
+        trackedByToSend = user?.email || "Editor";
       }
     }
 
@@ -1865,7 +1870,7 @@ export default function App() {
       const targetSegLocal = previous.find((s) => String(s.id) === String(id) || Number(s.segment_index) === Number(id));
       if (targetSegLocal) {
         sourceText = targetSegLocal.source;
-        if (trackChangesEnabled && !isOwnerLocal && !targetSegLocal.originalTargetText) {
+        if (trackChangesEnabled && (targetSegLocal.originalTargetText === null || targetSegLocal.originalTargetText === undefined)) {
           isTrackInit = true;
           trackOrig = targetSegLocal.target || "";
         }
@@ -1876,8 +1881,8 @@ export default function App() {
         let updated = { ...segment };
         if (String(segment.id) === String(id) || Number(segment.segment_index) === Number(id)) {
           updated.target = value;
-          if (trackChangesEnabled && !isOwnerLocal) {
-            const orig = segment.originalTargetText !== null && segment.originalTargetText !== undefined
+          if (trackChangesEnabled) {
+            const orig = (segment.originalTargetText !== null && segment.originalTargetText !== undefined)
               ? segment.originalTargetText
               : (isTrackInit ? trackOrig : null);
             if (orig !== null) {
@@ -1886,7 +1891,7 @@ export default function App() {
                 updated.trackedBy = null;
               } else {
                 updated.originalTargetText = orig;
-                updated.trackedBy = user?.email;
+                updated.trackedBy = user?.email || "Editor";
               }
             }
           }
@@ -1908,7 +1913,8 @@ export default function App() {
         segmentIndex: segIdx,
         targetText: value,
         originalTargetText: originalTargetTextToSend,
-        trackedBy: trackedByToSend
+        trackedBy: trackedByToSend,
+        targetLang: activeTargetLanguage
       });
     }
   };
@@ -3664,10 +3670,12 @@ export default function App() {
                         onFocusSegment={handleFocusSegment}
                         onBlurSegment={handleBlurSegment}
                         readOnly={permission === "read"}
+                        permission={permission}
+                        trackChangesEnabled={trackChangesEnabled}
                         onSaveContext={saveSegmentContext}
                         onTranslateWithContext={handleTranslateSegmentWithContext}
                         onTyping={handleSegmentTyping}
-                        isOwner={ownerId === user?.id}
+                        isOwner={ownerId === user?.id || ["admin", "super_admin", "verbolabs_staff"].includes(user?.role)}
                         onAcceptChange={handleAcceptChange}
                         onRejectChange={handleRejectChange}
                         autocompleteEnabled={autocompleteEnabled}
