@@ -176,9 +176,98 @@ Classify the document into context variables. Respond ONLY with a valid JSON obj
   return defaultRes;
 }
 
+/**
+ * Analyzes raw document text/segments directly to detect context variables
+ */
+async function analyzeDocumentTextContext(rawText, docName = '') {
+  const sampledText = extractLowCostSample(rawText);
+  const detectedHeuristicDomain = heuristicDomainDetect(sampledText);
+
+  const defaultRes = {
+    domain: detectedHeuristicDomain,
+    contentType: "General",
+    audience: "General",
+    purpose: "General",
+    tone: "Formal",
+    formality: "Formal",
+    terminologyStrictness: "Strict",
+    referenceContext: `Domain: ${detectedHeuristicDomain}. Tone: Formal. Document: ${docName}`,
+    customPrompt: `Maintain formal ${detectedHeuristicDomain.toLowerCase()} terminology and binding professional tone.`
+  };
+
+  if (!rawText || rawText.trim().length === 0) return defaultRes;
+
+  const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+  if (!OPENAI_API_KEY) {
+    console.log("[REFERENCE SAMPLER] OpenAI API key missing, using heuristic detection:", detectedHeuristicDomain);
+    return defaultRes;
+  }
+
+  const prompt = `Analyze this sampled text from a document ("${docName}"):
+---
+${sampledText}
+---
+Classify the document into translation context settings. Respond ONLY with a valid JSON object matching this schema:
+{
+  "domain": (select best match from ${JSON.stringify(DOMAINS)}),
+  "contentType": (select best match from ${JSON.stringify(CONTENT_TYPES)}),
+  "audience": (select best match from ${JSON.stringify(AUDIENCES)}),
+  "purpose": (select best match from ${JSON.stringify(PURPOSES)}),
+  "tone": (select best match from ${JSON.stringify(TONES)}),
+  "formality": (select best match from ${JSON.stringify(FORMALITIES)}),
+  "terminologyStrictness": (select best match from ${JSON.stringify(STRICTNESS)}),
+  "referenceContext": "3 bullet point summary of Domain, Tone, and Key Terminology",
+  "customPrompt": "2-3 sentence style and translation instruction prompt for translators"
+}`;
+
+  try {
+    const openAiResponse = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: "You are a translation context detection system. Output strictly raw JSON." },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.1,
+        response_format: { type: "json_object" }
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        timeout: 25000
+      }
+    );
+
+    const content = openAiResponse.data?.choices?.[0]?.message?.content;
+    if (content) {
+      const parsed = JSON.parse(content);
+      const domainVal = DOMAINS.includes(parsed.domain) ? parsed.domain : detectedHeuristicDomain;
+      return {
+        domain: domainVal,
+        contentType: CONTENT_TYPES.includes(parsed.contentType) ? parsed.contentType : "General",
+        audience: AUDIENCES.includes(parsed.audience) ? parsed.audience : "General",
+        purpose: PURPOSES.includes(parsed.purpose) ? parsed.purpose : "General",
+        tone: TONES.includes(parsed.tone) ? parsed.tone : "Formal",
+        formality: FORMALITIES.includes(parsed.formality || parsed.formalities) ? (parsed.formality || parsed.formalities) : "Formal",
+        terminologyStrictness: STRICTNESS.includes(parsed.terminologyStrictness) ? parsed.terminologyStrictness : "Strict",
+        referenceContext: parsed.referenceContext || parsed.customPrompt || `Domain: ${domainVal}. Tone: Formal.`,
+        customPrompt: parsed.customPrompt || parsed.referenceContext || `Maintain formal ${domainVal.toLowerCase()} terminology.`
+      };
+    }
+  } catch (err) {
+    console.error('[REFERENCE SAMPLER ERROR] OpenAI call failed:', err.message);
+  }
+
+  return defaultRes;
+}
+
 module.exports = {
   extractLowCostSample,
   extractTextFromReferenceFile,
   analyzeReferenceContext,
+  analyzeDocumentTextContext,
   heuristicDomainDetect
 };

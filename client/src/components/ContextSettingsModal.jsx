@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { X, Sliders, Check, Sparkles, Loader, Upload, FileText, Trash2, ShieldCheck } from "lucide-react";
 import { ProtectedContentPanel } from "./ProtectedContentPanel";
+import { autoDetectDocumentContext } from "../services/api";
 
 const DOMAINS = ["General", "Marketing", "Legal", "Medical", "Pharmaceutical", "Financial", "Banking", "Insurance", "Technical", "Software", "IT & Cybersecurity", "E-commerce", "Automotive", "Manufacturing", "Engineering", "Telecommunications", "Gaming", "Education", "Government", "HR & Recruitment", "Travel & Tourism", "Hospitality", "Retail", "Energy & Utilities", "Real Estate", "Life Sciences", "Healthcare", "Aerospace", "Agriculture", "Media & Entertainment"];
 
@@ -334,24 +335,23 @@ export const ContextSettingsModal = ({ show, onClose, contextSettings, setContex
     if (!documentId) return;
     setIsDetecting(true);
     try {
-      const token = localStorage.getItem("centroid_token") || "";
-      const response = await fetch(`/api/documents/${documentId}/auto-detect-context`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        }
-      });
-      const data = await response.json();
-      if (response.ok && data.success && data.contextSettings) {
+      const data = await autoDetectDocumentContext(documentId);
+      if (data && data.success && data.contextSettings) {
         setContextSettings(prev => ({ ...prev, ...data.contextSettings }));
         setActiveProfile("Custom");
+        if (showToast) {
+          showToast("Context successfully detected and applied from document!", "success");
+        }
       } else {
-        alert(data.error || "Failed to auto-detect context settings.");
+        const errorMsg = data?.error || "Failed to auto-detect context settings.";
+        if (showToast) showToast(errorMsg, "error");
+        else alert(errorMsg);
       }
     } catch (err) {
-      console.error(err);
-      alert("Error occurred during context analysis.");
+      console.error("Auto-detect context error:", err);
+      const errorMsg = err.response?.data?.error || "Error occurred during context analysis.";
+      if (showToast) showToast(errorMsg, "error");
+      else alert(errorMsg);
     } finally {
       setIsDetecting(false);
     }

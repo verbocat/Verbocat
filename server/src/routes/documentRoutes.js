@@ -276,6 +276,54 @@ documentRouter.get(["/documents/:id", "/api/documents/:id"], checkAuth, async (r
   }
 });
 
+// 3.4 Auto-detect Document Context Settings
+documentRouter.post(
+  ["/documents/:id/auto-detect-context", "/api/documents/:id/auto-detect-context"],
+  checkAuth,
+  async (request, response) => {
+    try {
+      const documentId = request.params.id;
+      const { data: doc, error: docErr } = await supabase
+        .from("documents")
+        .select("id, name, context_settings")
+        .eq("id", documentId)
+        .single();
+
+      if (docErr || !doc) {
+        return response.status(404).json({ error: "Document not found." });
+      }
+
+      // Fetch segments to extract source text
+      const segments = await fetchAllSegments(documentId, "source_text", null);
+      const textSample = (segments || []).map(s => s.source_text || "").filter(Boolean).join("\n");
+
+      const { analyzeDocumentTextContext } = require("../utils/referenceSampler");
+      const detectedContext = await analyzeDocumentTextContext(textSample, doc.name || "Document");
+
+      const currentSettings = doc.context_settings || {};
+      const mergedSettings = {
+        ...currentSettings,
+        ...detectedContext
+      };
+
+      // Save back to documents table
+      await supabase
+        .from("documents")
+        .update({ context_settings: mergedSettings })
+        .eq("id", documentId);
+
+      response.json({
+        success: true,
+        contextSettings: mergedSettings,
+        message: "Context detected and saved successfully."
+      });
+    } catch (error) {
+      console.error("Auto-detect context error:", error);
+      response.status(500).json({ error: error.message || "Failed to auto-detect context." });
+    }
+  }
+);
+
 // 3.5 QC Audit Endpoints (Pre-flight estimate, Start AI MQM Audit, Cancel, Status)
 documentRouter.post(["/documents/:id/audit/estimate", "/api/documents/:id/audit/estimate"], checkAuth, async (request, response) => {
   try {

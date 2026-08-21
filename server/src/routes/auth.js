@@ -623,6 +623,7 @@ authRouter.post("/login", authRateLimiter, async (request, response) => {
     if (!isConfirmed || profile.status === "pending_verification" || profile.email_verified === false) {
       if (isConfirmed) {
         // User HAS clicked the email verification link in their email! Promote profile status to active!
+        try {
           await supabase
             .from("profiles")
             .update({ status: "active", email_verified: true })
