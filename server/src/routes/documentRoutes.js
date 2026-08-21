@@ -178,26 +178,6 @@ documentRouter.get(["/documents/assigned", "/api/documents/assigned"], checkAuth
         }
 
         const proj = doc.projects || {};
-        
-        // Detect exact target language code
-        let tLang = doc.target_lang;
-        if (!tLang || tLang === "hi") {
-          const match = doc.name?.match(/_([a-z]{2,3})\.[a-z0-9]+$/i);
-          if (match && match[1]) {
-            tLang = match[1].toLowerCase();
-          }
-        }
-        if (!tLang && proj.target_languages && proj.target_languages.length > 0) {
-          tLang = proj.target_languages[0];
-        }
-        if (!tLang) {
-          tLang = "ar";
-        }
-
-        const key = `${doc.id}_${tLang}`;
-        if (seenKeys.has(key)) continue;
-        seenKeys.add(key);
-
         const ownerId = doc.owner_id || proj.owner_id;
 
         let assignerEmail = "Project Coordinator";
@@ -212,20 +192,68 @@ documentRouter.get(["/documents/assigned", "/api/documents/assigned"], checkAuth
           }
         }
 
-        assignedList.push({
-          id: row.id,
-          documentId: doc.id,
-          fileId: doc.file_id || doc.id,
-          documentName: doc.name || "Untitled Document",
-          projectId: doc.project_id || proj.id || "",
-          projectName: proj.name || "Translation Project",
-          sourceLang: doc.source_lang || proj.source_lang || "en",
-          targetLang: tLang,
-          permission: row.permission || "write",
-          assignedAt: row.created_at || doc.created_at,
-          assignerEmail,
-          assignerRole: "Project Coordinator"
-        });
+        // Check if specific target languages were assigned to this linguist in project settings
+        const linguistAssignments = proj.settings?.linguistAssignments || {};
+        const userAssignments = validUserIds.flatMap(uId => linguistAssignments[uId] || []);
+        const matchingDocAssignments = userAssignments.filter(a => a.documentId === doc.id);
+
+        if (matchingDocAssignments.length > 0) {
+          for (const assignment of matchingDocAssignments) {
+            const assignedLang = assignment.targetLang;
+            const key = `${doc.id}_${assignedLang}`;
+            if (seenKeys.has(key)) continue;
+            seenKeys.add(key);
+
+            assignedList.push({
+              id: `${row.id}_${assignedLang}`,
+              documentId: doc.id,
+              fileId: doc.file_id || doc.id,
+              documentName: doc.name || "Untitled Document",
+              projectId: doc.project_id || proj.id || "",
+              projectName: proj.name || "Translation Project",
+              sourceLang: doc.source_lang || proj.source_lang || "en",
+              targetLang: assignedLang,
+              permission: assignment.permission || row.permission || "write",
+              assignedAt: row.created_at || doc.created_at,
+              assignerEmail,
+              assignerRole: "Project Coordinator"
+            });
+          }
+        } else {
+          // Detect exact target language code fallback
+          let tLang = doc.target_lang;
+          if (!tLang || tLang === "hi") {
+            const match = doc.name?.match(/_([a-z]{2,3})\.[a-z0-9]+$/i);
+            if (match && match[1]) {
+              tLang = match[1].toLowerCase();
+            }
+          }
+          if (!tLang && proj.target_languages && proj.target_languages.length > 0) {
+            tLang = proj.target_languages[0];
+          }
+          if (!tLang) {
+            tLang = "hi";
+          }
+
+          const key = `${doc.id}_${tLang}`;
+          if (seenKeys.has(key)) continue;
+          seenKeys.add(key);
+
+          assignedList.push({
+            id: row.id,
+            documentId: doc.id,
+            fileId: doc.file_id || doc.id,
+            documentName: doc.name || "Untitled Document",
+            projectId: doc.project_id || proj.id || "",
+            projectName: proj.name || "Translation Project",
+            sourceLang: doc.source_lang || proj.source_lang || "en",
+            targetLang: tLang,
+            permission: row.permission || "write",
+            assignedAt: row.created_at || doc.created_at,
+            assignerEmail,
+            assignerRole: "Project Coordinator"
+          });
+        }
       }
     }
 
@@ -708,22 +736,48 @@ documentRouter.post(["/documents/:id/segments/:segmentIndex/reject-change", "/ap
 documentRouter.get(["/documents/:id/access", "/api/documents/:id/access"], checkAuth, async (request, response) => {
   try {
     const { id } = request.params;
-    const { data: doc } = await supabase.from("documents").select("owner_id").eq("id", id).maybeSingle();
+    const { data: doc } = await supabase.from("documents").select("owner_id, project_id").eq("id", id).maybeSingle();
     let owner = null;
     if (doc?.owner_id) {
       const { data: ownerProf } = await supabase.from("profiles").select("id, email, role").eq("id", doc.owner_id).maybeSingle();
       owner = ownerProf;
     }
+
+    let jobAssignments = {};
+    if (doc?.project_id) {
+      const { data: proj } = await supabase.from("projects").select("settings").eq("id", doc.project_id).maybeSingle();
+      jobAssignments = proj?.settings?.jobAssignments || {};
+    }
+
     const { data: shares } = await supabase.from("document_access").select("*, profiles(id, email, role)").eq("document_id", id);
-    const collaborators = (shares || []).map(s => ({
-      userId: s.user_id,
-      shareId: s.id,
-      email: s.profiles?.email || "",
-      fullName: s.profiles?.email || "User",
-      permission: s.permission || "write"
-    }));
-    response.json({ access: shares || [], collaborators, owner });
+    
+    const accessList = (shares || []).map(s => {
+      const userEmail = s.profiles?.email || "";
+      let assignedTargetLang = null;
+      for (const [key, val] of Object.entries(jobAssignments)) {
+        if (key.startsWith(`${id}_`) && (val.userId === s.user_id || val.email?.toLowerCase() === userEmail.toLowerCase())) {
+          assignedTargetLang = val.targetLang;
+          break;
+        }
+      }
+
+      return {
+        id: s.id,
+        accessId: s.id,
+        shareId: s.id,
+        userId: s.user_id,
+        email: userEmail,
+        fullName: s.profiles?.email || "User",
+        role: s.profiles?.role || "linguist",
+        permission: s.permission || "write",
+        targetLang: assignedTargetLang,
+        createdAt: s.created_at
+      };
+    });
+
+    response.json({ access: accessList, collaborators: accessList, owner });
   } catch (error) {
+    console.error("Fetch Document Access Error:", error);
     response.json({ access: [], collaborators: [], owner: null });
   }
 });
@@ -795,6 +849,46 @@ documentRouter.post(["/documents/:id/access", "/api/documents/:id/access"], chec
 
     if (upsertErr) throw upsertErr;
 
+    // Save language assignment in project settings
+    if (targetDoc?.project_id && langToUse) {
+      try {
+        const { data: proj } = await supabase.from("projects").select("id, settings").eq("id", targetDoc.project_id).maybeSingle();
+        if (proj) {
+          const settings = proj.settings || {};
+          const jobAssignments = { ...(settings.jobAssignments || {}) };
+          const linguistAssignments = { ...(settings.linguistAssignments || {}) };
+
+          for (const dId of docIdsToShare) {
+            const assignKey = `${dId}_${langToUse}`;
+            jobAssignments[assignKey] = {
+              userId: targetProfile.id,
+              email: targetProfile.email,
+              targetLang: langToUse,
+              permission: permission || "write",
+              assignedAt: new Date().toISOString()
+            };
+
+            const userList = [...(linguistAssignments[targetProfile.id] || [])];
+            const exists = userList.some(item => item.documentId === dId && item.targetLang === langToUse);
+            if (!exists) {
+              userList.push({ documentId: dId, targetLang: langToUse, permission: permission || "write" });
+            }
+            linguistAssignments[targetProfile.id] = userList;
+          }
+
+          await supabase.from("projects").update({
+            settings: {
+              ...settings,
+              jobAssignments,
+              linguistAssignments
+            }
+          }).eq("id", proj.id);
+        }
+      } catch (saveAssignErr) {
+        console.error("[SAVE_ASSIGNMENT_WARN]", saveAssignErr);
+      }
+    }
+
     response.json({
       success: true,
       share: shareRow?.[0] || shareRow,
@@ -803,7 +897,9 @@ documentRouter.post(["/documents/:id/access", "/api/documents/:id/access"], chec
         shareId: shareRow?.[0]?.id || shareRow?.id,
         email: targetProfile.email,
         fullName: targetProfile.email,
-        permission: permission || "write"
+        role: targetProfile.role || "linguist",
+        permission: permission || "write",
+        targetLang: langToUse
       }
     });
   } catch (error) {
@@ -1081,6 +1177,53 @@ documentRouter.post(["/documents/bulk-share", "/api/documents/bulk-share"], chec
         .upsert(accessInserts, { onConflict: "document_id,user_id" });
 
       if (upsertErr) throw upsertErr;
+
+      // Save language assignment in project settings
+      if (targetLang) {
+        try {
+          const { data: firstDoc } = await supabase.from("documents").select("project_id").in("id", allDocIds).limit(1).maybeSingle();
+          if (firstDoc?.project_id) {
+            const { data: proj } = await supabase.from("projects").select("id, settings").eq("id", firstDoc.project_id).maybeSingle();
+            if (proj) {
+              const settings = proj.settings || {};
+              const jobAssignments = { ...(settings.jobAssignments || {}) };
+              const linguistAssignments = { ...(settings.linguistAssignments || {}) };
+
+              for (const docId of allDocIds) {
+                for (let i = 0; i < targetUserIds.length; i++) {
+                  const uId = targetUserIds[i];
+                  const email = resolvedEmails[i];
+                  const assignKey = `${docId}_${targetLang}`;
+                  jobAssignments[assignKey] = {
+                    userId: uId,
+                    email,
+                    targetLang,
+                    permission: permission || "write",
+                    assignedAt: new Date().toISOString()
+                  };
+
+                  const userList = [...(linguistAssignments[uId] || [])];
+                  const exists = userList.some(item => item.documentId === docId && item.targetLang === targetLang);
+                  if (!exists) {
+                    userList.push({ documentId: docId, targetLang, permission: permission || "write" });
+                  }
+                  linguistAssignments[uId] = userList;
+                }
+              }
+
+              await supabase.from("projects").update({
+                settings: {
+                  ...settings,
+                  jobAssignments,
+                  linguistAssignments
+                }
+              }).eq("id", proj.id);
+            }
+          }
+        } catch (saveAssignErr) {
+          console.error("[BULK_SAVE_ASSIGNMENT_WARN]", saveAssignErr);
+        }
+      }
     }
 
     response.json({

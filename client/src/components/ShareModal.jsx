@@ -650,36 +650,48 @@ export function ShareModal({
                   </div>
                 )}
 
-                {accessList.map((item) => (
-                  <div key={item.shareId || item.accessId} className="flex items-center justify-between p-2 rounded-lg bg-[var(--bg-panel)] border border-[var(--border-subtle)]">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${getAvatarColor(item.email)}`}>
-                        {getAvatarInitials(item.email)}
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-[var(--text-primary)]">{item.email}</p>
-                        <p className="text-[10px] text-[var(--text-muted)]">
-                          {item.role ? `Role: ${item.role}` : "Collaborator"}
-                        </p>
-                      </div>
-                    </div>
+                {accessList.map((item) => {
+                  const userEmail = item.email || item.profiles?.email || "";
+                  const userRole = item.role || item.profiles?.role || "linguist";
+                  const assignedLanguage = item.targetLang || item.target_lang;
+                  const langName = assignedLanguage ? getLanguageName(assignedLanguage) : null;
 
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded uppercase border border-indigo-500/20">
-                        {item.permission || "write"}
-                      </span>
-                      {isOwner && (
-                        <button
-                          type="button"
-                          onClick={() => handleRevoke(item.userId || item.shareId)}
-                          className="text-xs font-bold text-rose-400 hover:text-red-300 cursor-pointer transition-colors"
-                        >
-                          Remove
-                        </button>
-                      )}
+                  return (
+                    <div key={item.shareId || item.accessId || item.id || userEmail} className="flex items-center justify-between p-2 rounded-lg bg-[var(--bg-panel)] border border-[var(--border-subtle)]">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${getAvatarColor(userEmail)}`}>
+                          {getAvatarInitials(userEmail)}
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-[var(--text-primary)]">{userEmail || "Registered User"}</p>
+                          <div className="flex items-center gap-1.5 text-[10px] text-[var(--text-muted)]">
+                            <span className="font-semibold">{userRole === "linguist" ? "Linguist" : (userRole === "verbolabs_staff" ? "Staff" : userRole)}</span>
+                            {assignedLanguage && (
+                              <span className="inline-flex items-center gap-1 font-bold text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded text-[9px] uppercase border border-indigo-500/20">
+                                {getLanguageFlag(assignedLanguage)} {langName || assignedLanguage.toUpperCase()}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded uppercase border border-indigo-500/20">
+                          {item.permission || item.accessLevel || "write"}
+                        </span>
+                        {isOwner && (
+                          <button
+                            type="button"
+                            onClick={() => handleRevoke(item.userId || item.shareId)}
+                            className="text-xs font-bold text-rose-400 hover:text-red-300 cursor-pointer transition-colors"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </>
             )}
           </div>

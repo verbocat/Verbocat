@@ -749,7 +749,7 @@ projectRouter.delete(["/projects/:id", "/api/projects/:id"], checkAuth, async (r
 projectRouter.get(["/projects/:projectId/shares", "/api/projects/:projectId/shares"], checkAuth, async (request, response) => {
   try {
     const { projectId } = request.params;
-    const { data: proj } = await supabase.from("projects").select("owner_id").eq("id", projectId).maybeSingle();
+    const { data: proj } = await supabase.from("projects").select("owner_id, settings").eq("id", projectId).maybeSingle();
     let owner = null;
     if (proj?.owner_id) {
       const { data: ownerProf } = await supabase.from("profiles").select("id, email, role").eq("id", proj.owner_id).maybeSingle();
@@ -758,29 +758,45 @@ projectRouter.get(["/projects/:projectId/shares", "/api/projects/:projectId/shar
 
     const { data: docs } = await supabase.from("documents").select("id").eq("project_id", projectId);
     const docIds = (docs || []).map(d => d.id);
+    const jobAssignments = proj?.settings?.jobAssignments || {};
 
     let collaborators = [];
     if (docIds.length > 0) {
       const { data: shares } = await supabase.from("document_access").select("*, profiles(id, email, role)").in("document_id", docIds);
       const uniqueUsers = new Map();
       (shares || []).forEach(s => {
+        const userEmail = s.profiles?.email || "";
+        let assignedTargetLang = null;
+        for (const [key, val] of Object.entries(jobAssignments)) {
+          if (val.userId === s.user_id || val.email?.toLowerCase() === userEmail.toLowerCase()) {
+            assignedTargetLang = val.targetLang;
+            break;
+          }
+        }
+
         if (!uniqueUsers.has(s.user_id)) {
           uniqueUsers.set(s.user_id, {
-            userId: s.user_id,
+            id: s.id,
+            accessId: s.id,
             shareId: s.id,
-            email: s.profiles?.email || "",
+            userId: s.user_id,
+            email: userEmail,
             fullName: s.profiles?.email || "User",
-            accessLevel: s.permission || "editor"
+            role: s.profiles?.role || "linguist",
+            permission: s.permission || "write",
+            accessLevel: s.permission || "editor",
+            targetLang: assignedTargetLang,
+            createdAt: s.created_at
           });
         }
       });
       collaborators = Array.from(uniqueUsers.values());
     }
 
-    response.json({ collaborators, owner });
+    response.json({ shares: collaborators, collaborators, owner });
   } catch (error) {
     console.error("Fetch Project Shares Error:", error);
-    response.json({ collaborators: [], owner: null });
+    response.json({ shares: [], collaborators: [], owner: null });
   }
 });
 
