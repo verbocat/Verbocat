@@ -185,7 +185,7 @@ export function ShareModal({
       loadAccessList();
       loadAvailableLinguists();
     }
-  }, [isOpen, documentId, projectId, activeMode]);
+  }, [isOpen, documentId, projectId, activeMode, targetLang]);
 
   // Click outside listener for suggestions dropdown
   useEffect(() => {
@@ -218,7 +218,7 @@ export function ShareModal({
         const pubData = await fetchProjectPublicAccess(projectId);
         setPublicAccess(pubData.publicAccess || "none");
       } else if (documentId) {
-        const data = await fetchDocumentAccess(documentId);
+        const data = await fetchDocumentAccess(documentId, targetLang || selectedTargetLang);
         setAccessList(data.access || []);
         setOwner(data.owner || null);
         const pubData = await fetchPublicAccess(documentId);
@@ -347,7 +347,7 @@ export function ShareModal({
       if (isProjectMode && projectId) {
         await revokeProjectShare(projectId, identifier);
       } else if (documentId) {
-        await revokeDocumentAccess(documentId, identifier);
+        await revokeDocumentAccess(documentId, identifier, targetLang || selectedTargetLang);
       }
       setSuccessMsg("Access revoked.");
       loadAccessList();
@@ -671,9 +671,39 @@ export function ShareModal({
 
         {/* Existing Access List Section */}
         <div className="space-y-2 border-t border-[var(--border-subtle)] pt-3">
-          <h4 className="text-xs font-bold text-[var(--text-secondary)]">People with Access</h4>
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-bold text-[var(--text-secondary)]">People with Access</h4>
+            {(targetLang || selectedTargetLang) && accessList.length > 0 && (
+              <div className="flex items-center gap-1 bg-[var(--bg-input)] p-0.5 rounded-md border border-[var(--border-subtle)] text-[10px]">
+                <button
+                  type="button"
+                  onClick={() => setAccessFilter("current")}
+                  className={`px-2 py-0.5 rounded font-bold transition-all cursor-pointer ${
+                    accessFilter === "current"
+                      ? "bg-indigo-600 text-white shadow"
+                      : "text-[var(--text-muted)] hover:text-white"
+                  }`}
+                >
+                  {(targetLang || selectedTargetLang).toUpperCase()} Only ({
+                    accessList.filter(i => i.isGlobalAccess || (i.targetLang && i.targetLang.toLowerCase() === (targetLang || selectedTargetLang).toLowerCase())).length
+                  })
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAccessFilter("all")}
+                  className={`px-2 py-0.5 rounded font-bold transition-all cursor-pointer ${
+                    accessFilter === "all"
+                      ? "bg-indigo-600 text-white shadow"
+                      : "text-[var(--text-muted)] hover:text-white"
+                  }`}
+                >
+                  All ({accessList.length})
+                </button>
+              </div>
+            )}
+          </div>
 
-          <div className="space-y-1.5 max-h-40 overflow-y-auto">
+          <div className="space-y-1.5 max-h-48 overflow-y-auto">
             {loading ? (
               <p className="text-xs text-[var(--text-muted)] italic animate-pulse">Loading access records...</p>
             ) : (
@@ -695,7 +725,10 @@ export function ShareModal({
                   </div>
                 )}
 
-                {accessList.map((item) => {
+                {((accessFilter === "current" && (targetLang || selectedTargetLang))
+                  ? accessList.filter(item => item.isGlobalAccess || (item.targetLang && item.targetLang.toLowerCase() === (targetLang || selectedTargetLang).toLowerCase()))
+                  : accessList
+                ).map((item) => {
                   const userEmail = item.email || item.profiles?.email || "";
                   const userRole = item.role || item.profiles?.role || "linguist";
                   const assignedLanguage = item.targetLang || item.target_lang;
@@ -714,6 +747,11 @@ export function ShareModal({
                             {assignedLanguage && (
                               <span className="inline-flex items-center gap-1 font-bold text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded text-[9px] uppercase border border-indigo-500/20">
                                 {getLanguageFlag(assignedLanguage)} {langName || assignedLanguage.toUpperCase()}
+                              </span>
+                            )}
+                            {item.isGlobalAccess && (
+                              <span className="text-[9px] text-amber-400 bg-amber-500/10 px-1 py-0.2 rounded border border-amber-500/20">
+                                Global
                               </span>
                             )}
                           </div>

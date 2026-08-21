@@ -737,7 +737,9 @@ documentRouter.post(["/documents/:id/segments/:segmentIndex/reject-change", "/ap
 documentRouter.get(["/documents/:id/access", "/api/documents/:id/access"], checkAuth, async (request, response) => {
   try {
     const { id } = request.params;
-    const { data: doc } = await supabase.from("documents").select("owner_id, project_id").eq("id", id).maybeSingle();
+    const reqTargetLang = (request.query.targetLang || request.query.target || "").toLowerCase();
+
+    const { data: doc } = await supabase.from("documents").select("owner_id, project_id, target_lang").eq("id", id).maybeSingle();
     let owner = null;
     if (doc?.owner_id) {
       const { data: ownerProf } = await supabase.from("profiles").select("id, email, role").eq("id", doc.owner_id).maybeSingle();
@@ -745,22 +747,44 @@ documentRouter.get(["/documents/:id/access", "/api/documents/:id/access"], check
     }
 
     let jobAssignments = {};
+    let linguistAssignments = {};
     if (doc?.project_id) {
       const { data: proj } = await supabase.from("projects").select("settings").eq("id", doc.project_id).maybeSingle();
       jobAssignments = proj?.settings?.jobAssignments || {};
+      linguistAssignments = proj?.settings?.linguistAssignments || {};
     }
 
     const { data: shares } = await supabase.from("document_access").select("*, profiles(id, email, role)").eq("document_id", id);
     
     const accessList = (shares || []).map(s => {
       const userEmail = s.profiles?.email || "";
+      const userRole = s.profiles?.role || "linguist";
       let assignedTargetLang = null;
+
+      // 1. Check jobAssignments
       for (const [key, val] of Object.entries(jobAssignments)) {
         if (key.startsWith(`${id}_`) && (val.userId === s.user_id || val.email?.toLowerCase() === userEmail.toLowerCase())) {
           assignedTargetLang = val.targetLang;
           break;
         }
       }
+
+      // 2. Check linguistAssignments fallback
+      if (!assignedTargetLang && linguistAssignments[s.user_id]) {
+        const userList = linguistAssignments[s.user_id];
+        const docAssign = Array.isArray(userList) ? userList.find(a => a.documentId === id) : null;
+        if (docAssign?.targetLang) {
+          assignedTargetLang = docAssign.targetLang;
+        }
+      }
+
+      // 3. Fallback for linguists if still null
+      if (!assignedTargetLang && userRole === "linguist") {
+        assignedTargetLang = doc?.target_lang || "hi";
+      }
+
+      const isStaffOrAdmin = ["super_admin", "admin", "project_manager", "verbolabs_staff", "vendor"].includes(userRole);
+      const isOwnerUser = owner && owner.id === s.user_id;
 
       return {
         id: s.id,
@@ -769,14 +793,20 @@ documentRouter.get(["/documents/:id/access", "/api/documents/:id/access"], check
         userId: s.user_id,
         email: userEmail,
         fullName: s.profiles?.email || "User",
-        role: s.profiles?.role || "linguist",
+        role: userRole,
         permission: s.permission || "write",
         targetLang: assignedTargetLang,
+        isGlobalAccess: isStaffOrAdmin || isOwnerUser,
         createdAt: s.created_at
       };
     });
 
-    response.json({ access: accessList, collaborators: accessList, owner });
+    response.json({ 
+      access: accessList, 
+      collaborators: accessList, 
+      owner,
+      currentLanguage: reqTargetLang || doc?.target_lang || "hi"
+    });
   } catch (error) {
     console.error("Fetch Document Access Error:", error);
     response.json({ access: [], collaborators: [], owner: null });
@@ -912,13 +942,64 @@ documentRouter.post(["/documents/:id/access", "/api/documents/:id/access"], chec
 documentRouter.delete(["/documents/:id/access/:userId", "/api/documents/:id/access/:userId"], checkAuth, async (request, response) => {
   try {
     const { id, userId } = request.params;
-    const { error } = await supabase
-      .from("document_access")
-      .delete()
-      .eq("document_id", id)
-      .eq("user_id", userId);
+    const targetLang = (request.query.targetLang || request.query.target || request.body?.targetLang || "").toLowerCase();
 
-    if (error) throw error;
+    // Check project settings
+    const { data: doc } = await supabase.from("documents").select("project_id").eq("id", id).maybeSingle();
+    let remainingAssignments = 0;
+
+    if (doc?.project_id) {
+      try {
+        const { data: proj } = await supabase.from("projects").select("id, settings").eq("id", doc.project_id).maybeSingle();
+        if (proj) {
+          const settings = proj.settings || {};
+          const jobAssignments = { ...(settings.jobAssignments || {}) };
+          const linguistAssignments = { ...(settings.linguistAssignments || {}) };
+
+          if (targetLang) {
+            delete jobAssignments[`${id}_${targetLang}`];
+            if (linguistAssignments[userId]) {
+              linguistAssignments[userId] = linguistAssignments[userId].filter(
+                a => !(a.documentId === id && a.targetLang?.toLowerCase() === targetLang)
+              );
+              remainingAssignments = linguistAssignments[userId].filter(a => a.documentId === id).length;
+            }
+          } else {
+            for (const key of Object.keys(jobAssignments)) {
+              if (key.startsWith(`${id}_`) && jobAssignments[key]?.userId === userId) {
+                delete jobAssignments[key];
+              }
+            }
+            if (linguistAssignments[userId]) {
+              linguistAssignments[userId] = linguistAssignments[userId].filter(a => a.documentId !== id);
+            }
+            remainingAssignments = 0;
+          }
+
+          await supabase.from("projects").update({
+            settings: {
+              ...settings,
+              jobAssignments,
+              linguistAssignments
+            }
+          }).eq("id", proj.id);
+        }
+      } catch (assignErr) {
+        console.error("[REVOKE_ASSIGNMENT_WARN]", assignErr);
+      }
+    }
+
+    // Only delete row from document_access if the linguist has no remaining language assignments for this document
+    if (remainingAssignments === 0) {
+      const { error } = await supabase
+        .from("document_access")
+        .delete()
+        .eq("document_id", id)
+        .eq("user_id", userId);
+
+      if (error) throw error;
+    }
+
     response.json({ success: true, message: "Access revoked successfully" });
   } catch (error) {
     console.error("Revoke Document Access Error:", error);

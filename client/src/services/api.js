@@ -286,21 +286,24 @@ export const updateSegmentsBulk = async (documentId, updates, autoPropagate = tr
   return response.data;
 };
 
-export const fetchDocumentAccess = async (documentId) => {
-  const response = await api.get(`/api/documents/${documentId}/access`);
+export const fetchDocumentAccess = async (documentId, targetLang = null) => {
+  const params = targetLang ? { targetLang } : {};
+  const response = await api.get(`/api/documents/${documentId}/access`, { params });
   return response.data;
 };
 
-export const grantDocumentAccess = async (documentId, email, permission) => {
+export const grantDocumentAccess = async (documentId, email, permission, targetLang = null) => {
   const response = await api.post(`/api/documents/${documentId}/access`, {
     email,
-    permission
+    permission,
+    targetLang
   });
   return response.data;
 };
 
-export const revokeDocumentAccess = async (documentId, userId) => {
-  const response = await api.delete(`/api/documents/${documentId}/access/${userId}`);
+export const revokeDocumentAccess = async (documentId, userId, targetLang = null) => {
+  const params = targetLang ? { targetLang } : {};
+  const response = await api.delete(`/api/documents/${documentId}/access/${userId}`, { params });
   return response.data;
 };
 
