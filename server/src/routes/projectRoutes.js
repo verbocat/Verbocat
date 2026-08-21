@@ -159,7 +159,6 @@ projectRouter.post(["/projects", "/api/projects"], checkAuth, upload.single("ref
       target_languages: tLangsArray,
       description: projDescription,
       settings: mergedSettings,
-      status: projStatus,
       organization_id: activeTenantId
     };
 
