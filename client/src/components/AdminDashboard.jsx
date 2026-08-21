@@ -825,11 +825,12 @@ export const AdminDashboard = ({ onClose, theme }) => {
                         {/* Role Badge */}
                         <td className="px-4 py-4">
                           <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${
-                             user.role === "admin" ? "bg-rose-500/10 border border-rose-500/20 text-rose-400" :
-                             user.role === "verbolabs_staff" ? "bg-sky-500/10 border border-sky-500/20 text-sky-400" :
-                             "bg-slate-500/15 border border-white/5 text-slate-400"
+                              user.role === "admin" ? "bg-rose-500/10 border border-rose-500/20 text-rose-400" :
+                              user.role === "verbolabs_staff" ? "bg-sky-500/10 border border-sky-500/20 text-sky-400" :
+                              user.role === "vendor" ? "bg-violet-500/10 border border-violet-500/20 text-violet-400" :
+                              "bg-slate-500/15 border border-white/5 text-slate-400"
                           }`}>
-                            {user.role.replace("_", " ")}
+                            {user.role ? user.role.replace("_", " ") : "linguist"}
                           </span>
                         </td>
 
@@ -1121,6 +1122,7 @@ export const AdminDashboard = ({ onClose, theme }) => {
                        {currentUser?.role === "super_admin" && <option value="super_admin">Super Admin</option>}
                        <option value="admin">Admin</option>
                        <option value="verbolabs_staff">Verbolabs Staff</option>
+                       <option value="vendor">Vendor Team</option>
                        <option value="linguist">Linguist</option>
                     </select>
                   );

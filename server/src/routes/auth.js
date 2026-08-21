@@ -157,6 +157,9 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
           }, { onConflict: "id" });
       }
 
+      const isExistingVerbo = cleanEmail.endsWith("@verbolabs.com");
+      const existingAssignedRole = isExistingVerbo ? "verbolabs_staff" : "linguist";
+
       if (tenantId) {
         try {
           await supabase
@@ -164,11 +167,37 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
             .upsert({
               user_id: existingUser.id,
               organization_id: tenantId,
-              role: "linguist",
+              role: existingAssignedRole,
               credits_allowed: 50000,
               status: "pending_verification"
             }, { onConflict: "user_id,organization_id" });
         } catch (_) {}
+      }
+
+      if (existingAssignedRole === "linguist") {
+        try {
+          const { data: lpData } = await supabase
+            .from("linguist_profiles")
+            .upsert({
+              user_id: existingUser.id,
+              full_name: cleanName,
+              email: cleanEmail,
+              status: "pending_review",
+              organization_id: tenantId || null
+            }, { onConflict: "email" })
+            .select()
+            .single();
+
+          if (lpData) {
+            await supabase.from("linguist_profile_history").insert({
+              linguist_profile_id: lpData.id,
+              action: "profile_submitted",
+              details: `Linguist re-registered/joined space on Centroid portal (${cleanEmail})`
+            });
+          }
+        } catch (lpErr) {
+          console.warn("[RegisterExisting] Failed to create linguist_profiles entry:", lpErr?.message);
+        }
       }
 
       let actionLink = null;
@@ -322,6 +351,11 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
     }
 
     if (user) {
+      // Determine role based on email domain:
+      // @verbolabs.com → verbolabs_staff, all others → linguist (pending vendor review)
+      const isVerboEmail = cleanEmail.endsWith("@verbolabs.com");
+      const assignedRole = isVerboEmail ? "verbolabs_staff" : "linguist";
+
       await supabase
         .from("profiles")
         .upsert({
@@ -329,7 +363,7 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
           email: user.email,
           name: cleanName,
           full_name: cleanName,
-          role: "linguist",
+          role: assignedRole,
           organization_id: tenantId || null,
           credits_allowed: 50000,
           status: "pending_verification",
@@ -343,11 +377,38 @@ authRouter.post("/register", authRateLimiter, async (request, response) => {
             .upsert({
               user_id: user.id,
               organization_id: tenantId,
-              role: "linguist",
+              role: assignedRole,
               credits_allowed: 50000,
               status: "pending_verification"
             }, { onConflict: "user_id,organization_id" });
         } catch (_) {}
+      }
+
+      // If registered account is a linguist, automatically record in linguist_profiles for Vendor Portal review
+      if (assignedRole === "linguist") {
+        try {
+          const { data: lpData } = await supabase
+            .from("linguist_profiles")
+            .upsert({
+              user_id: user.id,
+              full_name: cleanName,
+              email: cleanEmail,
+              status: "pending_review",
+              organization_id: tenantId || null
+            }, { onConflict: "email" })
+            .select()
+            .single();
+
+          if (lpData) {
+            await supabase.from("linguist_profile_history").insert({
+              linguist_profile_id: lpData.id,
+              action: "profile_submitted",
+              details: `Linguist registered on Centroid main portal (${cleanEmail})`
+            });
+          }
+        } catch (lpErr) {
+          console.warn("[Register] Failed to create linguist_profiles entry:", lpErr?.message);
+        }
       }
     }
 
@@ -1039,23 +1100,70 @@ authRouter.post("/join-space", checkAuth, async (request, response) => {
 // User Search Endpoint for Share Modals
 authRouter.get("/users/search", checkAuth, async (request, response) => {
   try {
-    const queryStr = String(request.query.query || "").trim().toLowerCase();
-    if (!queryStr || queryStr.length < 1) {
-      return response.json({ users: [] });
-    }
+    const queryStr = String(request.query.query || "").trim();
 
-    const { data: users, error } = await supabase
+    let profilesQuery = supabase
       .from("profiles")
-      .select("id, email, role")
-      .ilike("email", `%${queryStr}%`)
-      .limit(10);
+      .select("id, email, role, status")
+      .limit(20);
 
-    if (error) {
-      console.error("[USER_SEARCH_ERROR]", error);
-      return response.json({ users: [] });
+    if (queryStr) {
+      profilesQuery = profilesQuery.ilike("email", `%${queryStr}%`);
     }
 
-    response.json({ users: users || [] });
+    const { data: profUsers } = await profilesQuery;
+
+    let lingUsers = [];
+    if (queryStr) {
+      const { data: lings } = await supabase
+        .from("linguist_profiles")
+        .select("id, user_id, email, full_name, status")
+        .or(`email.ilike.%${queryStr}%,full_name.ilike.%${queryStr}%`)
+        .limit(20);
+      lingUsers = lings || [];
+    } else {
+      const { data: lings } = await supabase
+        .from("linguist_profiles")
+        .select("id, user_id, email, full_name, status")
+        .limit(20);
+      lingUsers = lings || [];
+    }
+
+    // Merge and deduplicate by email
+    const mergedMap = new Map();
+
+    (profUsers || []).forEach(p => {
+      if (p.email) {
+        mergedMap.set(p.email.toLowerCase(), {
+          id: p.id,
+          email: p.email,
+          role: p.role || "user",
+          name: p.email.split("@")[0],
+          status: p.status
+        });
+      }
+    });
+
+    (lingUsers || []).forEach(l => {
+      if (l.email) {
+        const existing = mergedMap.get(l.email.toLowerCase());
+        const resolvedName = (l.full_name && l.full_name !== l.email) ? l.full_name : (existing?.name || l.email.split("@")[0]);
+        if (existing) {
+          existing.name = resolvedName;
+        } else {
+          mergedMap.set(l.email.toLowerCase(), {
+            id: l.user_id || l.id,
+            email: l.email,
+            role: "linguist",
+            name: resolvedName,
+            status: l.status
+          });
+        }
+      }
+    });
+
+    const userList = Array.from(mergedMap.values()).slice(0, 15);
+    response.json({ users: userList });
   } catch (error) {
     console.error("User Search Error:", error);
     response.json({ users: [] });
@@ -1065,18 +1173,42 @@ authRouter.get("/users/search", checkAuth, async (request, response) => {
 // Linguist List Endpoint for Quick Assignment Suggestions
 authRouter.get("/users/linguists", checkAuth, async (request, response) => {
   try {
-    const { data: linguists, error } = await supabase
-      .from("profiles")
-      .select("id, email, role")
-      .in("role", ["linguist", "translator", "editor"])
+    const { data: linguists } = await supabase
+      .from("linguist_profiles")
+      .select("id, user_id, email, full_name, primary_language, status")
       .limit(30);
 
-    if (error) {
-      console.error("[LINGUIST_FETCH_ERROR]", error);
-      return response.json({ linguists: [] });
-    }
+    const { data: profLinguists } = await supabase
+      .from("profiles")
+      .select("id, email, role")
+      .in("role", ["linguist", "translator", "editor", "verbolabs_staff", "vendor"])
+      .limit(30);
 
-    response.json({ linguists: linguists || [] });
+    const mergedMap = new Map();
+    (linguists || []).forEach(l => {
+      if (l.email) {
+        mergedMap.set(l.email.toLowerCase(), {
+          id: l.user_id || l.id,
+          email: l.email,
+          full_name: (l.full_name && l.full_name !== l.email) ? l.full_name : l.email.split("@")[0],
+          primary_language: l.primary_language,
+          role: "linguist"
+        });
+      }
+    });
+
+    (profLinguists || []).forEach(p => {
+      if (p.email && !mergedMap.has(p.email.toLowerCase())) {
+        mergedMap.set(p.email.toLowerCase(), {
+          id: p.id,
+          email: p.email,
+          full_name: p.email.split("@")[0],
+          role: p.role
+        });
+      }
+    });
+
+    response.json({ linguists: Array.from(mergedMap.values()).slice(0, 30) });
   } catch (error) {
     console.error("Fetch Linguists Error:", error);
     response.json({ linguists: [] });

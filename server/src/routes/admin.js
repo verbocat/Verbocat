@@ -253,15 +253,19 @@ adminRouter.get("/users", async (request, response) => {
 // 2. Modify User Permissions & Credit Limits
 adminRouter.put("/users/:id", async (request, response) => {
   try {
+    const { id } = request.params;
+    const { role, credits_allowed, has_translate_access, status, email_confirmed, organization_id } = request.body;
+    const currentUserRole = request.profile?.role;
+    const activeTenantId = organization_id || request.tenant?.id;
     const activeSubdomain = request.tenant?.subdomain || "centroid";
     const isMainSpace = ["centroid", "verbolabs"].includes(activeSubdomain.toLowerCase());
 
     // Validate workspace-specific roles
     if (role !== undefined) {
       if (isMainSpace) {
-        const allowedRoles = ["super_admin", "admin", "verbolabs_staff", "linguist"];
+        const allowedRoles = ["super_admin", "admin", "verbolabs_staff", "vendor", "linguist"];
         if (!allowedRoles.includes(role)) {
-          return response.status(400).json({ error: `Invalid role '${role}' for Root Workspace. Allowed roles: Super Admin, Admin, Verbolabs Staff, Linguist.` });
+          return response.status(400).json({ error: `Invalid role '${role}' for Root Workspace. Allowed roles: Super Admin, Admin, Verbolabs Staff, Vendor, Linguist.` });
         }
       } else {
         const allowedRoles = ["admin", "in_region_reviewer", "linguist"];

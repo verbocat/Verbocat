@@ -191,7 +191,8 @@ export function ShareModal({
   const loadAvailableLinguists = async () => {
     try {
       const data = await fetchLinguists();
-      setAvailableLinguists(data.linguists || []);
+      const list = Array.isArray(data) ? data : (data?.linguists || []);
+      setAvailableLinguists(list);
     } catch (err) {
       console.error("Failed to load linguists:", err);
     }
@@ -223,17 +224,40 @@ export function ShareModal({
 
   const handleEmailInputChange = async (val) => {
     setEmailInput(val);
-    if (val.trim().length > 1) {
+    const query = val.trim();
+    if (query.length > 0) {
       try {
-        const res = await searchUsers(val.trim());
-        setEmailSuggestions(res.users || []);
-        setShowSuggestions(true);
+        const res = await searchUsers(query);
+        const list = Array.isArray(res) ? res : (res?.users || []);
+        setEmailSuggestions(list);
+        setShowSuggestions(list.length > 0);
       } catch (err) {
-        console.error(err);
+        console.error("User search failed:", err);
       }
     } else {
-      setEmailSuggestions([]);
-      setShowSuggestions(false);
+      if (availableLinguists.length > 0) {
+        setEmailSuggestions(availableLinguists.slice(0, 10));
+        setShowSuggestions(true);
+      } else {
+        setEmailSuggestions([]);
+        setShowSuggestions(false);
+      }
+    }
+  };
+
+  const handleInputFocus = async () => {
+    if (emailInput.trim().length > 0) {
+      handleEmailInputChange(emailInput);
+    } else if (availableLinguists.length > 0) {
+      setEmailSuggestions(availableLinguists.slice(0, 10));
+      setShowSuggestions(true);
+    } else {
+      try {
+        const res = await searchUsers("");
+        const list = Array.isArray(res) ? res : (res?.users || []);
+        setEmailSuggestions(list);
+        setShowSuggestions(list.length > 0);
+      } catch (_) {}
     }
   };
 
@@ -473,10 +497,11 @@ export function ShareModal({
               ))}
 
               <input
-                type="email"
-                placeholder={selectedEmails.length === 0 ? "Type email and press Enter or comma..." : "Add another email..."}
+                type="text"
+                placeholder={selectedEmails.length === 0 ? "Type name or email and press Enter..." : "Add another person..."}
                 value={emailInput}
                 onChange={(e) => handleEmailInputChange(e.target.value)}
+                onFocus={handleInputFocus}
                 onKeyDown={handleKeyDown}
                 className="flex-1 bg-transparent text-xs font-semibold text-[var(--text-primary)] outline-none min-w-[160px] placeholder-[var(--text-muted)]"
               />
@@ -484,18 +509,36 @@ export function ShareModal({
 
             {/* Auto-complete Dropdown */}
             {showSuggestions && emailSuggestions.length > 0 && (
-              <div className="absolute left-0 right-0 top-full mt-1 bg-[var(--bg-surface)] border border-[var(--border-medium)] rounded-lg shadow-2xl z-50 max-h-48 overflow-y-auto divide-y divide-[var(--border-subtle)]">
-                {emailSuggestions.map((u) => (
-                  <button
-                    key={u.id}
-                    type="button"
-                    onClick={() => addEmailTag(u.email)}
-                    className="w-full text-left px-3 py-2 text-xs font-semibold hover:bg-[var(--bg-hover)] transition-colors flex items-center justify-between cursor-pointer"
-                  >
-                    <span className="text-[var(--text-primary)] font-bold">{u.email}</span>
-                    <span className="text-[10px] text-indigo-400 uppercase font-mono bg-indigo-500/10 px-1.5 py-0.5 rounded">{u.role}</span>
-                  </button>
-                ))}
+              <div className="absolute left-0 right-0 top-full mt-1 bg-[var(--bg-surface)] border border-[var(--border-medium)] rounded-lg shadow-2xl z-50 max-h-56 overflow-y-auto divide-y divide-[var(--border-subtle)]">
+                {emailSuggestions.map((u) => {
+                  const displayName = u.full_name || u.name || (u.email ? u.email.split("@")[0] : "");
+                  const isSelected = selectedEmails.includes(u.email?.toLowerCase());
+                  return (
+                    <button
+                      key={u.id || u.email}
+                      type="button"
+                      onClick={() => addEmailTag(u.email)}
+                      className={`w-full text-left px-3 py-2 text-xs font-semibold hover:bg-[var(--bg-hover)] transition-colors flex items-center justify-between cursor-pointer ${
+                        isSelected ? "bg-indigo-600/10" : ""
+                      }`}
+                    >
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[var(--text-primary)] font-bold text-xs">{displayName}</span>
+                        <span className="text-[11px] text-[var(--text-secondary)] font-mono">{u.email}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {u.role && (
+                          <span className="text-[9px] text-indigo-400 uppercase font-mono bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded">
+                            {u.role}
+                          </span>
+                        )}
+                        {isSelected && (
+                          <span className="text-[10px] text-emerald-400 font-bold">✓ Added</span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>

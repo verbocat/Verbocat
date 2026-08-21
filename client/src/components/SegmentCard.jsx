@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { Copy, Check, ArrowRight, AlertTriangle, Lock, Sparkles, Award, UploadCloud, Trash2, Image, MessageSquare, X, Tag, Wand2, ChevronDown, Sliders, ShieldAlert } from "lucide-react";
 import { useChatStore } from "../services/chatStore";
 import { autoFixSegmentTags, validateSegmentTags } from "../utils/tagValidation.js";
+import { isRtlLanguage } from "../constants/languages.js";
 
 const removeTags = (text) => {
   if (typeof text !== "string") return text;
@@ -303,8 +304,17 @@ export const SegmentCard = ({
   onSaveContext, onTranslateWithContext, onTyping,
   isOwner, onAcceptChange, onRejectChange, autocompleteEnabled = true,
   isSelected, onToggleSelect, lengthRestrictionEnabled, onUpdateSegmentMaxWords,
-  forbiddenTerms = [], forbiddenTermsEnabled = true, onOpenForbiddenTerms, onOpenScreenshotContext
+  forbiddenTerms = [], forbiddenTermsEnabled = true, onOpenForbiddenTerms, onOpenScreenshotContext,
+  sourceLanguage = "en", targetLanguage = "hi"
 }) => {
+  const isTargetRtl = useMemo(() => {
+    return isRtlLanguage(targetLanguage) || /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(segment.target || "");
+  }, [targetLanguage, segment.target]);
+
+  const isSourceRtl = useMemo(() => {
+    return isRtlLanguage(sourceLanguage) || /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(segment.source || "");
+  }, [sourceLanguage, segment.source]);
+
   const editorRef = useRef(null);
   const lastSaved = useRef(segment.target || "");
   const prevOriginalTarget = useRef(segment.originalTargetText);
@@ -914,9 +924,16 @@ export const SegmentCard = ({
         </div>
 
         {/* Col 2: Source */}
-        <div className="seg-source">
-          <div className="seg-source-text">{renderSource(segment.source)}</div>
-          <button className="seg-src-copy" onClick={() => onCopy(segment.source)} title="Copy source">
+        <div className="seg-source" dir={isSourceRtl ? "rtl" : "ltr"}>
+          <div className={`seg-source-text ${isSourceRtl ? "rtl-text text-right" : ""}`} dir={isSourceRtl ? "rtl" : "ltr"}>
+            {renderSource(segment.source)}
+          </div>
+          <button
+            className="seg-src-copy"
+            onClick={() => onCopy(segment.source)}
+            title="Copy source"
+            style={isSourceRtl ? { right: "auto", left: "6px" } : {}}
+          >
             <Copy style={{ width: 9, height: 9 }} />
           </button>
         </div>
@@ -937,12 +954,13 @@ export const SegmentCard = ({
         </div>
 
         {/* Col 4: Target editor */}
-        <div className="seg-target">
+        <div className="seg-target" dir={isTargetRtl ? "rtl" : "ltr"}>
           <div className="relative">
             <div
               id={`target-${segment.id}`}
               ref={editorRef}
               data-segment-target="true"
+              dir={isTargetRtl ? "rtl" : "ltr"}
               contentEditable={!readOnly && !segment.verified && !lockInfo}
               suppressContentEditableWarning
               onFocus={handleFocus}
@@ -950,12 +968,15 @@ export const SegmentCard = ({
               onInput={handleInput}
               onKeyDown={handleKeyDown}
               onPaste={handleEditorPaste}
-              className="seg-editor"
+              className={`seg-editor ${isTargetRtl ? "rtl-text text-right" : ""}`}
               style={{
+                direction: isTargetRtl ? "rtl" : "ltr",
+                textAlign: isTargetRtl ? "right" : "left",
                 ...((readOnly || segment.verified || lockInfo)
                   ? { opacity: 0.55, cursor: lockInfo ? "not-allowed" : readOnly ? "default" : "text", pointerEvents: lockInfo ? "none" : "auto" }
                   : {}),
-                paddingRight: "36px"
+                paddingRight: isTargetRtl ? "10px" : "36px",
+                paddingLeft: isTargetRtl ? "36px" : "10px"
               }}
             />
 
@@ -966,7 +987,8 @@ export const SegmentCard = ({
               title="Copy translation"
               style={{
                 top: "7px",
-                right: "7px",
+                right: isTargetRtl ? "auto" : "7px",
+                left: isTargetRtl ? "7px" : "auto",
                 zIndex: 6
               }}
             >

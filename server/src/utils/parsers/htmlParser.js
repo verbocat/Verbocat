@@ -515,12 +515,148 @@ const escapeRawAmpersands = (str) => {
 
 /**
  * Export translated HTML.
- *
  * Detects the template version and dispatches:
- *  - Version 2: position-based replacement on the stored original HTML.
- *  - Legacy (v1 / unversioned): __SEG_N__ placeholder replacement.
+ *  - Version 2: position-based replacement on stored original HTML
+ *  - Legacy: __SEG_N__ placeholder replacement
  */
-const exportFile = async (templateBase64, segments) => {
+const isRtlLang = (targetLang) => {
+  if (!targetLang) return false;
+  const clean = String(targetLang).toLowerCase().split("-")[0];
+  return ["ar", "ur", "he", "fa", "ps", "sd", "ug", "yi"].includes(clean);
+};
+
+const applyRtlToHtml = (html, targetLang) => {
+  if (!isRtlLang(targetLang) || !html) return html;
+
+  let processed = html;
+
+  // 1. Ensure <html dir="rtl" lang="...">
+  if (processed.includes("<html")) {
+    processed = processed.replace(/<html([^>]*)>/i, (match, attrs) => {
+      let newAttrs = attrs;
+      if (!/dir\s*=/i.test(newAttrs)) {
+        newAttrs += ' dir="rtl"';
+      } else {
+        newAttrs = newAttrs.replace(/dir\s*=\s*["'][^"']*["']/i, 'dir="rtl"');
+      }
+      if (!/lang\s*=/i.test(newAttrs)) {
+        newAttrs += ` lang="${targetLang}"`;
+      }
+      return `<html${newAttrs}>`;
+    });
+  } else {
+    processed = `<html dir="rtl" lang="${targetLang}"><head><meta charset="utf-8"/></head><body dir="rtl">${processed}</body></html>`;
+  }
+
+  // 2. Ensure <body dir="rtl">
+  if (processed.includes("<body")) {
+    processed = processed.replace(/<body([^>]*)>/i, (match, attrs) => {
+      let newAttrs = attrs;
+      if (!/dir\s*=/i.test(newAttrs)) {
+        newAttrs += ' dir="rtl"';
+      } else {
+        newAttrs = newAttrs.replace(/dir\s*=\s*["'][^"']*["']/i, 'dir="rtl"');
+      }
+      return `<body${newAttrs}>`;
+    });
+  }
+
+  // 3. Inject Trados-compatible global RTL stylesheet with Center-Alignment Preservation
+  const rtlCssBlock = `
+<style type="text/css" id="centroid-rtl-override">
+  html, body {
+    direction: rtl;
+    text-align: right;
+    unicode-bidi: isolate;
+  }
+  /* Default text flow for RTL without overriding explicit center */
+  p, div, span, h1, h2, h3, h4, h5, h6, li, td, th, label, blockquote, dd, dt, article, section, header, footer, main {
+    direction: rtl;
+    unicode-bidi: isolate;
+  }
+  /* Right-align content that is not explicitly centered */
+  p:not([align="center"]):not(.text-center),
+  div:not([align="center"]):not(.text-center),
+  h1:not([align="center"]):not(.text-center),
+  h2:not([align="center"]):not(.text-center),
+  h3:not([align="center"]):not(.text-center),
+  h4:not([align="center"]):not(.text-center),
+  h5:not([align="center"]):not(.text-center),
+  h6:not([align="center"]):not(.text-center),
+  header:not([align="center"]):not(.text-center),
+  th:not([align="center"]):not(.text-center),
+  td:not([align="center"]):not(.text-center) {
+    text-align: right;
+  }
+
+  /* Strictly preserve and enforce Center Alignment (Address, Titles, Logos) */
+  center,
+  [align="center"],
+  .text-center,
+  .center,
+  *[style*="text-align: center"],
+  *[style*="text-align:center"],
+  *[style*="text-align: Center"],
+  *[style*="TEXT-ALIGN: CENTER"] {
+    text-align: center !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  /* Table positioning */
+  table {
+    direction: rtl !important;
+    border-collapse: collapse;
+  }
+  table[align="center"],
+  table[style*="margin: auto"],
+  table[style*="margin:auto"],
+  table[style*="margin: 0 auto"],
+  table[style*="margin:0 auto"] {
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+  table:not([align="center"]):not([style*="margin: auto"]):not([style*="margin:auto"]):not([style*="margin: 0 auto"]):not([style*="margin:0 auto"]) {
+    margin-right: 0;
+    margin-left: auto;
+  }
+</style>
+`;
+
+  if (processed.includes("</head>")) {
+    processed = processed.replace("</head>", `${rtlCssBlock}</head>`);
+  } else if (processed.includes("<head>")) {
+    processed = processed.replace("<head>", `<head>${rtlCssBlock}`);
+  } else if (processed.includes("<html")) {
+    processed = processed.replace(/<html([^>]*)>/i, `<html$1><head>${rtlCssBlock}</head>`);
+  } else {
+    processed = `${rtlCssBlock}${processed}`;
+  }
+
+  // 4. Overwrite inline styling: text-align: left -> text-align: right & direction: ltr -> direction: rtl
+  // Note: text-align: center is NEVER overwritten so centered headers/addresses stay in the center!
+  processed = processed.replace(/style\s*=\s*["']([^"']*)["']/gi, (match, styleContent) => {
+    let updatedStyle = styleContent
+      .replace(/text-align\s*:\s*left/gi, "text-align: right")
+      .replace(/direction\s*:\s*ltr/gi, "direction: rtl");
+    return `style="${updatedStyle}"`;
+  });
+
+  // 5. Transform align="left" attributes to align="right" (leaving align="center" untouched)
+  processed = processed.replace(/\balign\s*=\s*["']left["']/gi, 'align="right"');
+
+  // 6. Ensure <table> tags have dir="rtl"
+  processed = processed.replace(/<table\b([^>]*)>/gi, (match, attrs) => {
+    if (!/dir\s*=/i.test(attrs)) {
+      return `<table dir="rtl"${attrs}>`;
+    }
+    return match;
+  });
+
+  return processed;
+};
+
+const exportFile = async (templateBase64, segments, targetLang = "") => {
   let templateData;
 
   try {
@@ -530,17 +666,29 @@ const exportFile = async (templateBase64, segments) => {
       templateData = JSON.parse(unzipped);
     } catch (_parseErr) {
       // Not JSON — treat as raw HTML template
-      return Buffer.from(unzipped, "utf-8");
+      const processed = applyRtlToHtml(unzipped, targetLang);
+      return Buffer.from(processed, "utf-8");
     }
   } catch (_zipErr) {
     // Not gzipped — treat as plain text
-    return Buffer.from(templateBase64, "utf-8");
+    const processed = applyRtlToHtml(templateBase64, targetLang);
+    return Buffer.from(processed, "utf-8");
   }
 
+  let resultBuffer;
   if (templateData.version === 2 && templateData.originalHtml) {
-    return exportFileV2(templateData, segments);
+    resultBuffer = exportFileV2(templateData, segments);
+  } else {
+    resultBuffer = exportFileLegacy(templateData, segments);
   }
-  return exportFileLegacy(templateData, segments);
+
+  if (isRtlLang(targetLang)) {
+    const htmlStr = resultBuffer.toString("utf-8");
+    const rtlHtml = applyRtlToHtml(htmlStr, targetLang);
+    return Buffer.from(rtlHtml, "utf-8");
+  }
+
+  return resultBuffer;
 };
 
 // ─── V2 Export: position-based replacement ──────────────────────────────────────

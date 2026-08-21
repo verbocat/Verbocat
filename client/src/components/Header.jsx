@@ -36,6 +36,7 @@ export const Header = ({
   const [joining, setJoining] = useState(false);
 
   const isAdmin = userRole === "admin" || userRole === "super_admin";
+  const isVendorOrAdmin = ["vendor", "admin", "super_admin"].includes(userRole);
   const hasFile = segmentsCount > 0;
   const srcLang = LANGUAGES.find(l => l.code === sourceLanguage);
   const tgtLang = LANGUAGES.find(l => l.code === targetLanguage);
@@ -152,6 +153,14 @@ export const Header = ({
           <NavBtn onClick={onOpenAdmin} title="Admin Control Panel">
             <LayoutDashboard style={{ width: 13, height: 13 }} className="text-indigo-400" />
             <span className="text-indigo-300 font-bold">Admin Panel</span>
+          </NavBtn>
+        )}
+
+        {/* Vendor Portal Pill */}
+        {isVendorOrAdmin && (
+          <NavBtn onClick={() => window.location.href = "/vendor/dashboard"} title="Linguist & Vendor Management Portal">
+            <Users style={{ width: 13, height: 13 }} className="text-violet-400" />
+            <span className="text-violet-300 font-bold">Vendor Portal</span>
           </NavBtn>
         )}
 

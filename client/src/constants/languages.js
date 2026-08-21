@@ -1,5 +1,17 @@
+export const RTL_LANGUAGES = new Set(["ar", "ur", "he", "fa", "ps", "sd", "ug", "yi", "arc", "ckb"]);
+
+export const isRtlLanguage = (code) => {
+  if (!code) return false;
+  const clean = String(code).toLowerCase().split("-")[0];
+  return RTL_LANGUAGES.has(clean) || RTL_LANGUAGES.has(code.toLowerCase());
+};
+
+export const getTextDirection = (code) => {
+  return isRtlLanguage(code) ? "rtl" : "ltr";
+};
+
 export const LANGUAGES = [
-  { code: "ar", name: "Arabic", flag: "🇸🇦" },
+  { code: "ar", name: "Arabic", flag: "🇸🇦", rtl: true },
   { code: "as", name: "Assamese", flag: "🇮🇳" },
   { code: "bn", name: "Bengali", flag: "🇧🇩" },
   { code: "pt-BR", name: "Brazilian Portuguese", flag: "🇧🇷" },
@@ -12,6 +24,7 @@ export const LANGUAGES = [
   { code: "fr", name: "French", flag: "🇫🇷" },
   { code: "de", name: "German", flag: "🇩🇪" },
   { code: "gu", name: "Gujarati", flag: "🇮🇳" },
+  { code: "he", name: "Hebrew", flag: "🇮🇱", rtl: true },
   { code: "hi", name: "Hindi", flag: "🇮🇳" },
   { code: "id", name: "Indonesian", flag: "🇮🇩" },
   { code: "it", name: "Italian", flag: "🇮🇹" },
@@ -22,6 +35,7 @@ export const LANGUAGES = [
   { code: "mr", name: "Marathi", flag: "🇮🇳" },
   { code: "no", name: "Norwegian", flag: "🇳🇴" },
   { code: "or", name: "Odia", flag: "🇮🇳" },
+  { code: "fa", name: "Persian (Farsi)", flag: "🇮🇷", rtl: true },
   { code: "pl", name: "Polish", flag: "🇵🇱" },
   { code: "pa", name: "Punjabi", flag: "🇮🇳" },
   { code: "ru", name: "Russian", flag: "🇷🇺" },
@@ -31,6 +45,6 @@ export const LANGUAGES = [
   { code: "te", name: "Telugu", flag: "🇮🇳" },
   { code: "th", name: "Thai", flag: "🇹🇭" },
   { code: "tr", name: "Turkish", flag: "🇹🇷" },
-  { code: "ur", name: "Urdu", flag: "🇵🇰" },
+  { code: "ur", name: "Urdu", flag: "🇵🇰", rtl: true },
   { code: "vi", name: "Vietnamese", flag: "🇻🇳" }
 ];

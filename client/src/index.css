@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;1,14..32,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;1,14..32,400&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Naskh+Arabic:wght@400;500;600;700&family=Noto+Nastaliq+Urdu:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
 /* ================================================================
@@ -3541,6 +3541,54 @@ select option:active,
 select option:checked {
   background-color: #4f46e5 !important;
   color: #ffffff !important;
+}
+
+/* ================================================================
+   RTL (RIGHT-TO-LEFT) LANGUAGE SUPPORT (Arabic, Urdu, Hebrew, Farsi)
+   ================================================================ */
+
+[dir="rtl"],
+.rtl-text,
+.seg-editor[dir="rtl"],
+.seg-source[dir="rtl"] .seg-source-text,
+textarea[dir="rtl"],
+input[dir="rtl"] {
+  direction: rtl !important;
+  text-align: right !important;
+  unicode-bidi: isolate;
+  font-family: 'Noto Naskh Arabic', 'Noto Nastaliq Urdu', 'Segoe UI', Tahoma, Arial, sans-serif;
+}
+
+.seg-editor[dir="rtl"] {
+  padding-right: 10px !important;
+  padding-left: 36px !important;
+  line-height: 1.8;
+}
+
+.seg-source[dir="rtl"] {
+  text-align: right;
+  direction: rtl;
+}
+
+.seg-source[dir="rtl"] .seg-source-text {
+  padding-right: 6px !important;
+  padding-left: 32px !important;
+}
+
+.seg-source[dir="rtl"] .seg-src-copy {
+  right: auto !important;
+  left: 6px !important;
+}
+
+.seg-target[dir="rtl"] .seg-src-copy {
+  right: auto !important;
+  left: 7px !important;
+}
+
+.rtl-preview {
+  direction: rtl !important;
+  text-align: right !important;
+  unicode-bidi: isolate;
 }
 
 

@@ -48,6 +48,7 @@ projectRouter.get(["/projects", "/api/projects"], checkAuth, async (request, res
         : 0;
       return {
         ...p,
+        status: p.status || p.settings?.status || "active",
         totalWords,
         progress,
         documentsCount: docs.length
@@ -627,14 +628,12 @@ projectRouter.put(["/projects/:id", "/api/projects/:id"], checkAuth, async (requ
       }
       if (Array.isArray(parsedTargetLangs)) {
         updateData.target_languages = parsedTargetLangs;
-        updateData.target_lang = parsedTargetLangs[0] || "hi";
       }
     }
 
     const newSettings = { ...currSettings, ...(settings || {}) };
     if (status !== undefined) {
       newSettings.status = status;
-      updateData.status = status;
     }
     const finalDueDate = due_date || dueDate;
     if (finalDueDate !== undefined) newSettings.due_date = finalDueDate;

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { renderAsync } from "docx-preview";
 import { fetchDocumentPreview } from "../services/api";
+import { isRtlLanguage } from "../constants/languages.js";
 import { 
   FileText, Globe, RefreshCw, ZoomIn, ZoomOut, Download, AlertTriangle, X, CheckCircle2 
 } from "lucide-react";
@@ -98,6 +99,8 @@ export const LiveDocumentViewer = ({
     };
   }, [loadPreviewBuffer]);
 
+  const isRtl = isRtlLanguage(targetLang);
+
   // 2a. Render DOCX using docx-preview into unmanaged DOM container
   useEffect(() => {
     if (!previewBuffer || !containerRef.current || isHtmlMode) return;
@@ -130,6 +133,14 @@ export const LiveDocumentViewer = ({
           );
           renderedElements.forEach(el => {
             if (!el.style.color) el.style.color = "#0f172a";
+            if (isRtl) {
+              el.setAttribute("dir", "rtl");
+              if (["P", "SECTION", "TD", "TH", "H1", "H2", "H3", "H4", "H5", "H6"].includes(el.tagName)) {
+                el.style.direction = "rtl";
+                el.style.textAlign = "right";
+                el.style.fontFamily = "'Noto Naskh Arabic', 'Noto Nastaliq Urdu', 'Segoe UI', Tahoma, Arial, sans-serif";
+              }
+            }
           });
         }
       } catch (renderErr) {
@@ -140,7 +151,7 @@ export const LiveDocumentViewer = ({
 
     renderDocument();
     return () => { isCancelled = true; };
-  }, [previewBuffer, isHtmlMode]);
+  }, [previewBuffer, isHtmlMode, isRtl]);
 
   // 2b. Write HTML content into sandboxed iframe
   useEffect(() => {
@@ -149,13 +160,21 @@ export const LiveDocumentViewer = ({
       const iframeDoc = iframeRef.current.contentDocument || iframeRef.current.contentWindow?.document;
       if (iframeDoc) {
         iframeDoc.open();
-        iframeDoc.write(htmlContent);
+        let contentToWrite = htmlContent;
+        if (isRtl && !contentToWrite.includes('dir="rtl"') && !contentToWrite.includes("dir='rtl'")) {
+          if (contentToWrite.includes("<html")) {
+            contentToWrite = contentToWrite.replace(/<html/i, '<html dir="rtl"');
+          } else {
+            contentToWrite = `<div dir="rtl" style="direction:rtl;text-align:right;font-family:'Noto Naskh Arabic','Noto Nastaliq Urdu',sans-serif;">${contentToWrite}</div>`;
+          }
+        }
+        iframeDoc.write(contentToWrite);
         iframeDoc.close();
       }
     } catch (e) {
       console.error("HTML iframe write error:", e);
     }
-  }, [htmlContent]);
+  }, [htmlContent, isRtl]);
 
   const handleZoomIn = () => setZoom(prev => Math.min(prev + 15, 200));
   const handleZoomOut = () => setZoom(prev => Math.max(prev - 15, 50));

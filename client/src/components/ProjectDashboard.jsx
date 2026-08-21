@@ -301,6 +301,18 @@ export default function ProjectDashboard({
             <History size={15} />
           </button>
 
+          {/* Vendor Portal Button (Vendor, Admin, Super Admin) */}
+          {["vendor", "admin", "super_admin"].includes(userRole) && (
+            <button
+              onClick={() => window.location.href = "/vendor/dashboard"}
+              className="h-8 px-2.5 rounded-lg bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 hover:text-indigo-300 flex items-center gap-1.5 transition-colors cursor-pointer border border-indigo-500/20 text-xs font-semibold"
+              title="Open Vendor Management Portal"
+            >
+              <Users size={14} className="text-indigo-400" />
+              <span className="hidden sm:inline">Vendor Portal</span>
+            </button>
+          )}
+
           {/* Admin Panel Icon (if Admin) */}
           {(userRole === "admin" || userRole === "super_admin") && (
             <button
@@ -311,7 +323,6 @@ export default function ProjectDashboard({
               <LayoutDashboard size={15} />
             </button>
           )}
-
           {/* Settings Icon */}
           <button
             onClick={onOpenSettings}

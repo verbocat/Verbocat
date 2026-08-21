@@ -5,6 +5,7 @@ const { authRouter } = require("./routes/auth");
 const { adminRouter } = require("./routes/admin");
 const { apiRouter } = require("./routes/api");
 const { chatRouter } = require("./routes/chatRoutes");
+const { vendorRouter } = require("./routes/vendorRoutes");
 
 const { resolveTenant } = require("./utils/tenantMiddleware");
 
@@ -29,6 +30,9 @@ app.use("/admin", adminRouter);
 
 // Mount chat router
 app.use("/api/chat", chatRouter);
+
+// Mount vendor portal router
+app.use("/api/vendor", vendorRouter);
 
 // Mount API router under both `/api` and `/` (in that order) so requests starting
 // with `/api` have `/api` stripped properly before matching apiRouter.

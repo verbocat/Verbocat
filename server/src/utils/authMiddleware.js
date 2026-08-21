@@ -148,33 +148,31 @@ async function checkAuth(request, response, next) {
 async function checkTranslateAccess(request, response, next) {
   try {
     const profile = request.profile;
+    const isPrivilegedRole = ["super_admin", "admin", "verbolabs_staff", "vendor"].includes(profile.role);
     
-    if (!profile.has_translate_access) {
+    if (!profile.has_translate_access && !isPrivilegedRole) {
       return response.status(403).json({ error: "Your translation access has been disabled by the administrator." });
     }
 
     // Count words in translation batch request
     const wordCount = countWordsInSegments(request.body.segments);
 
-    // Bypass check for super_admin
-    if (profile.role !== "super_admin") {
-      // Check user individual credit limits for standard users
-      if (profile.role !== "admin") {
-        if (profile.credits_consumed + wordCount > profile.credits_allowed) {
-          return response.status(403).json({ 
-            error: `Credit limit exceeded. Reached ${profile.credits_consumed}/${profile.credits_allowed} words allowance. Contact space admin.` 
-          });
-        }
+    // Bypass individual user credit limits for privileged staff/vendor/admin roles
+    if (!isPrivilegedRole) {
+      if (profile.credits_consumed + wordCount > profile.credits_allowed) {
+        return response.status(403).json({ 
+          error: `Credit limit exceeded. Reached ${profile.credits_consumed}/${profile.credits_allowed} words allowance. Contact space admin.` 
+        });
       }
+    }
 
-      // Check overall organization credit limit
-      const org = request.organization || profile.organization;
-      if (org && org.credits_allowed > 0) {
-        if (org.credits_consumed + wordCount > org.credits_allowed) {
-          return response.status(403).json({
-            error: `Workspace credit limit exceeded for ${org.name}. Reached ${org.credits_consumed}/${org.credits_allowed} words allowance. Contact VerboLabs.`
-          });
-        }
+    // Check overall organization credit limit
+    const org = request.organization || profile.organization;
+    if (profile.role !== "super_admin" && org && org.credits_allowed > 0) {
+      if (org.credits_consumed + wordCount > org.credits_allowed) {
+        return response.status(403).json({
+          error: `Workspace credit limit exceeded for ${org.name}. Reached ${org.credits_consumed}/${org.credits_allowed} words allowance. Contact VerboLabs.`
+        });
       }
     }
 
@@ -229,8 +227,8 @@ async function getDocumentPermission(documentId, user, profile, tenantId = null)
     return { hasAccess: false, permission: null, document: doc };
   }
 
-  // 2. Super admin, Admin, Project Manager, or VerboLabs Staff on same workspace have full write access
-  const isStaffOrAdmin = ["super_admin", "admin", "project_manager", "verbolabs_staff"].includes(role);
+  // 2. Super admin, Admin, Project Manager, VerboLabs Staff, or Vendor on same workspace have full write access
+  const isStaffOrAdmin = ["super_admin", "admin", "project_manager", "verbolabs_staff", "vendor"].includes(role);
   if (isStaffOrAdmin) {
     return { hasAccess: true, permission: "write", document: doc };
   }

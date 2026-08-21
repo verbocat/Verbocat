@@ -334,9 +334,16 @@ const parseFile = async (filePath) => {
   return { segments, template };
 };
 
-const exportFile = async (templateBase64, segments) => {
+const isRtlLang = (lang) => {
+  if (!lang) return false;
+  const clean = String(lang).toLowerCase().split("-")[0];
+  return ["ar", "ur", "he", "fa", "ps", "sd", "ug", "yi"].includes(clean);
+};
+
+const exportFile = async (templateBase64, segments, targetLang = "") => {
   let zipBase64 = "";
   let paraMetaMap = {};
+  const isRtl = isRtlLang(targetLang);
 
   try {
     const rawBuffer = Buffer.from(templateBase64, 'base64');
@@ -392,7 +399,8 @@ const exportFile = async (templateBase64, segments) => {
       if (!paraMeta) {
         // Fallback for missing meta: plain text run
         const clean = stripTagMarkers(targetText);
-        return `<w:r><w:t xml:space="preserve">${escapeXml(clean)}</w:t></w:r>`;
+        const rtlPr = isRtl ? "<w:rPr><w:rtl/></w:rPr>" : "";
+        return `<w:r>${rtlPr}<w:t xml:space="preserve">${escapeXml(clean)}</w:t></w:r>`;
       }
 
       const { tagRPrMap = {}, defaultRPr = "", hasBrInSource = false } = paraMeta;
@@ -430,6 +438,14 @@ const exportFile = async (templateBase64, segments) => {
             rPrXml = tagRPrMap[activeTagId];
           }
 
+          if (isRtl) {
+            if (!rPrXml) {
+              rPrXml = `<w:rPr><w:rtl/></w:rPr>`;
+            } else if (!rPrXml.includes("<w:rtl")) {
+              rPrXml = rPrXml.replace("</w:rPr>", "<w:rtl/></w:rPr>");
+            }
+          }
+
           generatedRunsXml += `<w:r>${rPrXml}<w:t xml:space="preserve">${escapedPart}</w:t></w:r>`;
         }
       }
@@ -440,7 +456,8 @@ const exportFile = async (templateBase64, segments) => {
       }
 
       if (!generatedRunsXml) {
-        generatedRunsXml = `<w:r>${defaultRPr}<w:t xml:space="preserve"></w:t></w:r>`;
+        const baseRPr = isRtl ? (defaultRPr ? defaultRPr.replace("</w:rPr>", "<w:rtl/></w:rPr>") : "<w:rPr><w:rtl/></w:rPr>") : defaultRPr;
+        generatedRunsXml = `<w:r>${baseRPr}<w:t xml:space="preserve"></w:t></w:r>`;
       }
 
       return generatedRunsXml;
@@ -454,6 +471,22 @@ const exportFile = async (templateBase64, segments) => {
       }
       return "";
     });
+
+    if (isRtl) {
+      // Add <w:bidi/> to paragraphs with RTL runs
+      xmlContent = xmlContent.replace(/<w:p\b([^>]*)>([\s\S]*?)<\/w:p>/gi, (pMatch, pAttrs, pBody) => {
+        if (pBody.includes("<w:rtl")) {
+          if (pBody.includes("<w:pPr>")) {
+            if (!pBody.includes("<w:bidi")) {
+              return `<w:p${pAttrs}>${pBody.replace("<w:pPr>", "<w:pPr><w:bidi/><w:jc w:val=\"right\"/>")}</w:p>`;
+            }
+          } else {
+            return `<w:p${pAttrs}><w:pPr><w:bidi/><w:jc w:val="right"/></w:pPr>${pBody}</w:p>`;
+          }
+        }
+        return pMatch;
+      });
+    }
 
     zip.file(xmlFile, xmlContent);
   }

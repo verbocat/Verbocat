@@ -739,8 +739,6 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
               <span className="hidden sm:inline">Share</span>
             </button>
 
-            <div className="h-4 w-[1px] bg-[var(--border-subtle)] mx-1" />
-
             <button
               onClick={handleExportReports}
               className="topbar-icon-action h-8 w-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer shadow-xs"
@@ -765,6 +763,17 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
               <History size={15} />
             </button>
 
+            {["vendor", "admin", "super_admin"].includes(userRole) && (
+              <button
+                onClick={() => window.location.href = "/vendor/dashboard"}
+                className="topbar-icon-action h-8 px-2 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs text-xs font-semibold text-indigo-400 hover:text-indigo-300 bg-indigo-600/10 hover:bg-indigo-600/20 border border-indigo-500/20"
+                title="Open Vendor Management Portal"
+              >
+                <Users size={14} className="text-indigo-400" />
+                <span className="hidden sm:inline">Vendor Portal</span>
+              </button>
+            )}
+
             {(userRole === "admin" || userRole === "super_admin") && (
               <button
                 onClick={onOpenAdmin}
@@ -785,7 +794,6 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
             >
               <Settings size={15} />
             </button>
-
             {onLogout && (
               <button
                 onClick={onLogout}

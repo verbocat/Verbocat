@@ -65,6 +65,7 @@ import { Globe, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react";
 import ProjectDashboard from "./components/ProjectDashboard.jsx";
 import ProjectDetails from "./components/ProjectDetails.jsx";
 import { LinguistRestrictedScreen } from "./components/LinguistRestrictedScreen.jsx";
+import { VendorApp } from "./vendor/VendorApp.jsx";
 
 
 export default function App() {
@@ -176,6 +177,11 @@ export default function App() {
     const searchParams = new URLSearchParams(window.location.search);
     const docParam = searchParams.get("doc");
     const langParam = searchParams.get("lang");
+
+    // 0. Vendor Portal routes — delegate to VendorApp
+    if (path.startsWith("/vendor")) {
+      return { screen: "vendor" };
+    }
 
     // 1. /project/:projectId/file/:fileId/lang/:targetLang or /project/:projectId/file/:fileId
     const jobMatch = path.match(/^\/project\/([^\/]+)\/file\/([^\/]+)(?:\/lang\/([^\/]+))?/);
@@ -3171,6 +3177,11 @@ export default function App() {
     }, 30);
   };
 
+  // Vendor Portal — completely separate UI, owns its own auth flow
+  if (routeScreen === "vendor") {
+    return <VendorApp />;
+  }
+
   // Guard screens for authentication & password resets
   if (resetMode) {
     return (
@@ -3567,7 +3578,7 @@ export default function App() {
                 onTargetLanguageChange={handleTargetLanguageChange}
                 fileName={fileName}
                 theme={theme}
-                canTranslate={permission === "write" && user ? (user.hasTranslateAccess && user.status === "active") : false}
+                canTranslate={permission === "write" && user ? (["super_admin", "admin", "verbolabs_staff", "vendor"].includes(user.role) || (user.hasTranslateAccess && user.status === "active")) : false}
                 filterStatus={filterStatus}
                 setFilterStatus={setFilterStatus}
                 onUpload={handleUpload}
@@ -3669,6 +3680,8 @@ export default function App() {
                           setActiveSegmentForScreenshot(seg);
                           setShowScreenshotModal(true);
                         }}
+                        sourceLanguage={sourceLanguage}
+                        targetLanguage={targetLanguage}
                       />
                     )}
                   />
