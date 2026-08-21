@@ -1563,7 +1563,7 @@ export const SegmentCard = ({
                     Tracked edit by <strong style={{ color: "var(--text-primary)", fontWeight: 700 }}>{segment.trackedBy}</strong>
                   </span>
                 </div>
-                {(isOwner || onAcceptChange) && (
+                {isOwner && (
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <button
                       type="button"

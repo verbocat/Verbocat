@@ -177,16 +177,14 @@ async function runJob(job) {
 
     const { isLegitimatelyIdentical } = require("./translationProviders");
 
-    // Filter segments that still need translation (empty target OR target equals source text)
+    // Filter segments that strictly need translation (EMPTY target only — NEVER overwrite existing or human-translated segments)
     const pendingSegments = dbSegments.filter(s => {
       if (!isCountableSourceText(s.source_text)) return false;
-      const cleanSource = String(s.source_text || "").replace(/<[^>]+>/g, "").trim();
-      const cleanTarget = String(s.target_text || "").replace(/<[^>]+>/g, "").trim();
-      
-      const isEmpty = !cleanTarget;
-      const isIdenticalSource = cleanSource.toLowerCase() === cleanTarget.toLowerCase() && !isLegitimatelyIdentical(cleanSource);
-
-      return isEmpty || isIdenticalSource;
+      const cleanTarget = String(s.target_text || "").trim();
+      const isEmpty = cleanTarget.length === 0;
+      // Never overwrite human approved/verified/translated segments
+      const isUntranslated = s.status !== "approved" && s.status !== "verified" && isEmpty;
+      return isUntranslated;
     });
 
     // Group pending segments into chunks of 6 for execution
@@ -220,7 +218,8 @@ async function runJob(job) {
 
       const chunk = chunks[i];
       const segmentsToTranslate = chunk.map(s => ({
-        id: s.segment_index + 1, // 1-indexed for translation provider compatibility
+        id: s.segment_index, // Keep 1-indexed exact segment index
+        segment_index: s.segment_index,
         source: s.source_text,
         target: s.target_text
       }));
@@ -234,24 +233,27 @@ async function runJob(job) {
         doc.owner_id
       );
 
-      // Save translated results back to DB
+      // Save translated results back to DB without overwriting if human already translated in the meantime
       const updatePromises = results.map(async (item) => {
-        const segmentIndex = item.id - 1;
+        const segIndex = item.segment_index !== undefined ? Number(item.segment_index) : Number(item.id);
+        if (isNaN(segIndex) || !item.translated) return;
 
         const updateFields = {
-          target_text: item.translated || "",
-          status: item.translated ? "translated" : "draft",
+          target_text: item.translated,
+          status: "translated",
           mqm_accuracy_score: item.mqmAccuracyScore !== undefined ? item.mqmAccuracyScore : 100,
           mqm_report: item.mqmReport || null,
           updated_at: new Date().toISOString()
         };
 
+        // Only update if target is still empty or draft, never overwrite approved/verified work
         return supabase
           .from("document_segments")
           .update(updateFields)
           .eq("document_id", job.document_id)
           .eq("target_lang", job.target_lang)
-          .eq("segment_index", segmentIndex);
+          .eq("segment_index", segIndex)
+          .neq("status", "approved");
       });
 
       await Promise.all(updatePromises);

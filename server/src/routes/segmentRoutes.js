@@ -26,6 +26,43 @@ const { translateSrtSegments } = require("../srtEngine/srtTranslationService");
 const { getDocumentRoomId } = require("../services/socket");
 const { calculateProgress } = require("../utils/segmentProgress");
 
+const syncToTranslationMemory = async (sourceText, targetText, sourceLang, targetLang) => {
+  if (!sourceText || !targetText || !targetLang) return;
+  const cleanSrc = String(sourceText).replace(/<[^>]+>/g, "").trim();
+  const cleanTgt = String(targetText).replace(/<[^>]+>/g, "").trim();
+  if (!cleanSrc || !cleanTgt) return;
+
+  try {
+    const sLang = sourceLang || "en";
+    let query = supabase
+      .from("translation_memory")
+      .select("id")
+      .eq("source_text", cleanSrc)
+      .eq("source_lang", sLang)
+      .eq("target_lang", targetLang);
+
+    const { data: existing } = await query.limit(1);
+    if (existing && existing.length > 0) {
+      await supabase
+        .from("translation_memory")
+        .update({ target_text: cleanTgt, provider: "Linguist (ICE)" })
+        .eq("id", existing[0].id);
+    } else {
+      await supabase
+        .from("translation_memory")
+        .insert({
+          source_text: cleanSrc,
+          target_text: cleanTgt,
+          source_lang: sLang,
+          target_lang: targetLang,
+          provider: "Linguist (ICE)"
+        });
+    }
+  } catch (err) {
+    console.error("[TM_SYNC_WARN]", err.message);
+  }
+};
+
 const segmentRouter = express.Router();
 
 // 1. Batch AI Translate (Requires write access to document)
@@ -81,27 +118,16 @@ segmentRouter.post(["/translate-batch", "/api/translate-batch"], checkAuth, chec
         const segmentIndex = item.segment_index !== undefined ? Number(item.segment_index) : (item.id !== undefined ? Number(item.id) : 1);
         const sourceText = item.source || templateSourceMap.get(segmentIndex) || "";
 
-        const { isLegitimatelyIdentical } = require("../services/translationProviders");
-        const cleanSource = String(item.source || "").replace(/<[^>]+>/g, "").trim();
-        const cleanTranslated = String(item.translated || "").replace(/<[^>]+>/g, "").trim();
-
-        const isFallback = target !== source &&
-          item.translated &&
-          item.source &&
-          cleanTranslated.toLowerCase() === cleanSource.toLowerCase() &&
-          /\p{L}/u.test(cleanSource) &&
-          !isLegitimatelyIdentical(cleanSource);
+        // NEVER blank out target text with empty string. Keep translated text intact.
+        const translatedText = item.translated !== undefined && item.translated !== null ? item.translated : "";
 
         const updateFields = {
-          target_text: isFallback ? "" : item.translated,
-          status: isFallback ? "draft" : "translated",
+          target_text: translatedText,
+          status: translatedText ? "translated" : "draft",
+          mqm_accuracy_score: item.mqmAccuracyScore !== undefined ? item.mqmAccuracyScore : 100,
+          mqm_report: item.mqmReport || null,
           updated_at: new Date().toISOString()
         };
-
-        if (!isFallback) {
-          updateFields.mqm_accuracy_score = item.mqmAccuracyScore !== undefined ? item.mqmAccuracyScore : 100;
-          updateFields.mqm_report = item.mqmReport || null;
-        }
 
         // 1. Try updating existing row matching target_lang = target
         let { data, error: updateErr } = await supabase
@@ -311,6 +337,14 @@ segmentRouter.put([
       data = inserted;
     }
 
+    // Sync to Translation Memory (TM) in background
+    if (data && updateFields.target_text && updateFields.target_text.trim().length > 0) {
+      const { data: docInfo } = await supabase.from("documents").select("source_lang").eq("id", id).maybeSingle();
+      const sLang = docInfo?.source_lang || "en";
+      const sText = data.source_text || request.body.sourceText || request.body.source || "";
+      syncToTranslationMemory(sText, updateFields.target_text, sLang, targetLang);
+    }
+
     // Broadcast socket event
     const { getIo } = require("../services/socket");
     const io = getIo();
@@ -429,6 +463,12 @@ segmentRouter.post([
       if (data) {
         console.log(`[SEGMENT_SAVE_SUCCESS] Seg #${segIndex} (${targetLang}) -> target_text: "${updateFields.target_text.substring(0, 40)}"`);
         results.push(data);
+
+        // Sync to Translation Memory (TM) in background
+        if (updateFields.target_text && updateFields.target_text.trim().length > 0) {
+          const sText = data.source_text || item.source || item.sourceText || templateSourceMap.get(segIndex) || "";
+          syncToTranslationMemory(sText, updateFields.target_text, "en", targetLang);
+        }
       }
 
       // Broadcast socket event for real-time sync across all users
