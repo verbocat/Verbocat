@@ -27,6 +27,7 @@ export function ShareModal({
 }) {
   const [emailInput, setEmailInput] = useState("");
   const [selectedEmails, setSelectedEmails] = useState([]);
+  const [selectedTargetLang, setSelectedTargetLang] = useState(targetLang || (targetLanguages && targetLanguages.length > 0 ? targetLanguages[0] : ""));
   const [permission, setPermission] = useState("write");
   const [accessList, setAccessList] = useState([]);
   const [availableLinguists, setAvailableLinguists] = useState([]);
@@ -39,6 +40,15 @@ export function ShareModal({
   const [successMsg, setSuccessMsg] = useState("");
   
   const [publicAccess, setPublicAccess] = useState("none");
+
+  // Keep selectedTargetLang in sync when props change
+  useEffect(() => {
+    if (targetLang) {
+      setSelectedTargetLang(targetLang);
+    } else if (targetLanguages && targetLanguages.length > 0) {
+      setSelectedTargetLang(prev => prev || targetLanguages[0]);
+    }
+  }, [targetLang, targetLanguages]);
 
   // Suggestion states
   const [emailSuggestions, setEmailSuggestions] = useState([]);
@@ -306,16 +316,18 @@ export function ShareModal({
     setError("");
     setSuccessMsg("");
 
+    const effectiveTargetLang = targetLang || selectedTargetLang || null;
+
     try {
       if (isProjectMode && projectId) {
         await shareProject(projectId, emailsToProcess, permission);
         setSuccessMsg(`Project access granted to ${emailsToProcess.length} user(s)!`);
       } else if (activeMode === "bulk_files" || activeMode === "language" || selectedDocumentIds.length > 1) {
-        await bulkShareDocuments(selectedDocumentIds, emailsToProcess, permission, targetLang);
-        setSuccessMsg(`Access granted to ${emailsToProcess.length} user(s) for ${selectedDocumentIds.length} document(s)!`);
+        await bulkShareDocuments(selectedDocumentIds, emailsToProcess, permission, effectiveTargetLang);
+        setSuccessMsg(`Access granted to ${emailsToProcess.length} user(s) for ${selectedDocumentIds.length} document(s) [${effectiveTargetLang ? effectiveTargetLang.toUpperCase() : "all"} ]!`);
       } else if (documentId) {
-        await grantDocumentAccess(documentId, emailsToProcess, permission, targetLang);
-        setSuccessMsg(`Access granted to ${emailsToProcess.length} user(s)!`);
+        await grantDocumentAccess(documentId, emailsToProcess, permission, effectiveTargetLang);
+        setSuccessMsg(`Access granted to ${emailsToProcess.length} user(s) for ${effectiveTargetLang ? effectiveTargetLang.toUpperCase() : "all"}!`);
       }
 
       setSelectedEmails([]);
@@ -443,6 +455,39 @@ export function ShareModal({
         {/* Multi-Email Assignment Form */}
         <form onSubmit={handleGrantAccess} className="space-y-3">
           
+          {/* Target Language Selection if Multiple Target Languages Exist */}
+          {!isProjectMode && targetLanguages && targetLanguages.length > 1 && !targetLang && (
+            <div className="bg-[var(--bg-input)] border border-[var(--border-medium)] rounded-lg p-2 flex items-center justify-between gap-2">
+              <span className="text-[11px] font-bold text-[var(--text-secondary)] flex items-center gap-1.5 shrink-0">
+                <Globe size={13} className="text-indigo-400" />
+                <span>Assign Target Language Job:</span>
+              </span>
+              <select
+                value={selectedTargetLang}
+                onChange={(e) => setSelectedTargetLang(e.target.value)}
+                className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded px-2.5 py-1 text-xs font-bold text-indigo-400 outline-none cursor-pointer flex-1 max-w-[200px]"
+              >
+                {targetLanguages.map((tCode) => (
+                  <option key={tCode} value={tCode}>
+                    {getLanguageName(tCode)} ({tCode.toUpperCase()})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {targetLang && (
+            <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-lg px-3 py-1.5 flex items-center justify-between text-xs">
+              <span className="text-[11px] font-bold text-indigo-300 flex items-center gap-1.5">
+                <Globe size={13} className="text-indigo-400" />
+                <span>Assigning Job For:</span>
+              </span>
+              <span className="font-extrabold text-indigo-300 flex items-center gap-1">
+                {getLanguageFlag(targetLang)} {languageName || getLanguageName(targetLang)} ({targetLang.toUpperCase()})
+              </span>
+            </div>
+          )}
+
           <div className="space-y-1.5 relative" ref={dropdownRef}>
             <label className="text-xs font-bold text-[var(--text-secondary)] flex items-center justify-between">
               <span>Enter Email Addresses or Pick Linguist(s)</span>

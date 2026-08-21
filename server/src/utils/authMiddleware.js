@@ -200,7 +200,7 @@ function checkRole(allowedRoles) {
  * 4. Verifies if a user has access/permission to view or edit a document.
  * Returns { hasAccess: boolean, permission: "read" | "write" | null, document: object | null }
  */
-async function getDocumentPermission(documentId, user, profile, tenantId = null) {
+async function getDocumentPermission(documentId, user, profile, tenantId = null, targetLang = null) {
   if (!documentId || !user || !profile) {
     return { hasAccess: false, permission: null, document: null };
   }
@@ -243,7 +243,7 @@ async function getDocumentPermission(documentId, user, profile, tenantId = null)
     try {
       const { data: proj } = await supabase
         .from("projects")
-        .select("owner_id, organization_id")
+        .select("owner_id, organization_id, settings")
         .eq("id", doc.project_id)
         .single();
 
@@ -253,6 +253,30 @@ async function getDocumentPermission(documentId, user, profile, tenantId = null)
         }
         if (proj.owner_id === userId) {
           return { hasAccess: true, permission: "write", document: doc };
+        }
+
+        // STRICT JOB-LEVEL ACCESS CHECK FOR LINGUISTS:
+        if (role === "linguist") {
+          const linguistAssignments = proj.settings?.linguistAssignments || {};
+          const userAssignments = linguistAssignments[userId] || [];
+          const docAssignments = userAssignments.filter(a => a.documentId === documentId);
+
+          if (docAssignments.length > 0) {
+            const allowedLangs = docAssignments.map(a => String(a.targetLang || "").toLowerCase()).filter(Boolean);
+            if (targetLang) {
+              const reqLang = String(targetLang).toLowerCase();
+              if (!allowedLangs.includes(reqLang)) {
+                return {
+                  hasAccess: false,
+                  permission: null,
+                  document: doc,
+                  errorMessage: `Access Denied: You are assigned to the [${allowedLangs.join(", ").toUpperCase()}] job for this file, but not [${reqLang.toUpperCase()}].`
+                };
+              }
+            }
+            const perm = docAssignments[0].permission || "write";
+            return { hasAccess: true, permission: perm, document: doc, assignedLanguages: allowedLangs };
+          }
         }
       }
     } catch (_) {}
@@ -268,6 +292,26 @@ async function getDocumentPermission(documentId, user, profile, tenantId = null)
       .maybeSingle();
 
     if (accessRow) {
+      // If user is a linguist, verify they are not trying to access an unassigned language
+      if (role === "linguist" && doc.project_id && targetLang) {
+        const { data: proj } = await supabase.from("projects").select("settings").eq("id", doc.project_id).maybeSingle();
+        const linguistAssignments = proj?.settings?.linguistAssignments || {};
+        const userAssignments = linguistAssignments[userId] || [];
+        const docAssignments = userAssignments.filter(a => a.documentId === documentId);
+        if (docAssignments.length > 0) {
+          const allowedLangs = docAssignments.map(a => String(a.targetLang || "").toLowerCase()).filter(Boolean);
+          const reqLang = String(targetLang).toLowerCase();
+          if (!allowedLangs.includes(reqLang)) {
+            return {
+              hasAccess: false,
+              permission: null,
+              document: doc,
+              errorMessage: `Access Denied: You are assigned to [${allowedLangs.join(", ").toUpperCase()}] for this file, but not [${reqLang.toUpperCase()}].`
+            };
+          }
+        }
+      }
+
       const perm = accessRow.permission === "read" ? "read" : "write";
       return { hasAccess: true, permission: perm, document: doc };
     }
@@ -277,12 +321,23 @@ async function getDocumentPermission(documentId, user, profile, tenantId = null)
   try {
     const { data: jobAssignment } = await supabase
       .from("translation_jobs")
-      .select("id")
+      .select("id, target_lang")
       .eq("document_id", documentId)
-      .or(`translator_id.eq.${userId},assignee_id.eq.${userId}`)
-      .limit(1);
+      .or(`translator_id.eq.${userId},assignee_id.eq.${userId}`);
 
     if (jobAssignment && jobAssignment.length > 0) {
+      if (role === "linguist" && targetLang) {
+        const allowedLangs = jobAssignment.map(j => String(j.target_lang || "").toLowerCase()).filter(Boolean);
+        const reqLang = String(targetLang).toLowerCase();
+        if (!allowedLangs.includes(reqLang)) {
+          return {
+            hasAccess: false,
+            permission: null,
+            document: doc,
+            errorMessage: `Access Denied: You are assigned to [${allowedLangs.join(", ").toUpperCase()}] for this file, but not [${reqLang.toUpperCase()}].`
+          };
+        }
+      }
       return { hasAccess: true, permission: "write", document: doc };
     }
   } catch (_) {}
@@ -303,27 +358,28 @@ async function getDocumentPermission(documentId, user, profile, tenantId = null)
 }
 
 /**
- * Middleware wrapper that enforces document read/write access on Express routes
+ * Middleware wrapper that enforces document and job read/write access on Express routes
  */
 function checkDocumentAccess({ requiredPermission = "read" } = {}) {
   return async (request, response, next) => {
     try {
       const documentId = request.params.id || request.params.documentId || request.body.documentId || request.query.documentId;
+      const targetLang = request.params.lang || request.query.target || request.query.target_lang || request.body.targetLang || request.body.target || null;
       if (!documentId) {
         return next();
       }
 
       const activeTenantId = request.tenant?.id || request.profile?.organization_id;
-      const access = await getDocumentPermission(documentId, request.user, request.profile, activeTenantId);
+      const access = await getDocumentPermission(documentId, request.user, request.profile, activeTenantId, targetLang);
       if (!access.hasAccess) {
         return response.status(403).json({
-          error: "Access Denied: You do not have permission to access this document workspace. Please request access from the owner or administrator to participate."
+          error: access.errorMessage || "Access Denied: You do not have permission to access this document or language job. Please request access from the owner or administrator to participate."
         });
       }
 
       if (requiredPermission === "write" && access.permission !== "write") {
         return response.status(403).json({
-          error: "Access Denied: You have Read-Only access to this document and cannot modify its segments."
+          error: "Access Denied: You have Read-Only access to this job and cannot modify its segments."
         });
       }
 

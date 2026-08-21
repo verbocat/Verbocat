@@ -268,17 +268,18 @@ documentRouter.get(["/documents/assigned", "/api/documents/assigned"], checkAuth
 documentRouter.get(["/documents/:id", "/api/documents/:id"], checkAuth, async (request, response) => {
   try {
     const { id } = request.params;
+    const reqTarget = request.query.target || request.query.target_lang || null;
     
-    // Strict Access Verification
-    const access = await getDocumentPermission(id, request.user, request.profile);
+    // Strict Access Verification with Job-Level Language Authorization
+    const access = await getDocumentPermission(id, request.user, request.profile, null, reqTarget);
     if (!access.hasAccess) {
       return response.status(403).json({
-        error: "Access Denied: You do not have permission to access this document workspace. Please request access from the owner or administrator to participate."
+        error: access.errorMessage || "Access Denied: You do not have permission to access this document or language job. Please request access from the owner or administrator to participate."
       });
     }
 
     const doc = access.document;
-    const targetLang = request.query.target || doc.target_lang || "hi";
+    const targetLang = reqTarget || (access.assignedLanguages && access.assignedLanguages.length > 0 ? access.assignedLanguages[0] : (doc.target_lang || "hi"));
     const segments = await fetchAllSegments(id, "*", targetLang);
 
     const docName = doc.name || "Untitled Document";
