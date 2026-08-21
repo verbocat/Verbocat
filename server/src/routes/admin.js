@@ -231,10 +231,19 @@ adminRouter.get("/users", async (request, response) => {
 
     let users = Array.from(userMap.values()).map(p => {
       const authUser = authUsersMap.get(p.id);
+      const isEmailConfirmed = authUser ? !!(authUser.email_confirmed_at || authUser.confirmed_at) : true;
+      let effectiveStatus = p.status || "active";
+      if (isEmailConfirmed && effectiveStatus === "pending_verification") {
+        effectiveStatus = "active";
+        // Sync in background to db
+        supabase.from("profiles").update({ status: "active" }).eq("id", p.id).then(() => {});
+        supabase.from("user_tenant_memberships").update({ status: "active" }).eq("user_id", p.id).then(() => {});
+      }
       return {
         ...p,
+        status: effectiveStatus,
         email: p.email || authUser?.email || "User",
-        email_confirmed: authUser ? !!(authUser.email_confirmed_at || authUser.confirmed_at) : true
+        email_confirmed: isEmailConfirmed
       };
     });
 
@@ -288,6 +297,12 @@ adminRouter.put("/users/:id", async (request, response) => {
       .update(updateData)
       .eq("id", id);
 
+    // Also update all user_tenant_memberships for this user
+    await supabase
+      .from("user_tenant_memberships")
+      .update(updateData)
+      .eq("user_id", id);
+
     // Also upsert into user_tenant_memberships for active space
     if (activeTenantId) {
       await supabase
@@ -299,8 +314,8 @@ adminRouter.put("/users/:id", async (request, response) => {
         }, { onConflict: "user_id,organization_id" });
     }
 
-    // Manually verify user in Supabase Auth if requested
-    if (email_confirmed === true) {
+    // Manually verify user in Supabase Auth if requested or status set to active
+    if (email_confirmed === true || status === "active") {
       await supabaseAdmin.auth.admin.updateUserById(id, { email_confirm: true }).catch(() => {});
     }
 

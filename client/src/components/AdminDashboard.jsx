@@ -837,10 +837,12 @@ export const AdminDashboard = ({ onClose, theme }) => {
                         {/* Status */}
                         <td className="px-4 py-4">
                           <span className={`inline-flex items-center gap-1 text-[10px] font-bold ${
-                            user.status === "active" ? "text-emerald-400" : "text-rose-400"
+                            user.status === "active" ? "text-emerald-400" : user.status === "pending_verification" ? "text-amber-400" : "text-rose-400"
                           }`}>
-                            <span className={`h-1.5 w-1.5 rounded-full ${user.status === "active" ? "bg-emerald-400 animate-pulse" : "bg-rose-400"}`} />
-                            {user.status}
+                            <span className={`h-1.5 w-1.5 rounded-full ${
+                              user.status === "active" ? "bg-emerald-400 animate-pulse" : user.status === "pending_verification" ? "bg-amber-400" : "bg-rose-400"
+                            }`} />
+                            {user.status === "pending_verification" ? "Pending Verification" : user.status}
                           </span>
                         </td>
 
@@ -1141,6 +1143,7 @@ export const AdminDashboard = ({ onClose, theme }) => {
                   className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-slate-100 outline-none transition-all focus:border-indigo-500/50 disabled:opacity-50 text-sm cursor-pointer"
                 >
                   <option value="active">Active (Access Allowed)</option>
+                  <option value="pending_verification">Pending Verification</option>
                   <option value="suspended">Suspended (Blocked from App)</option>
                 </select>
               </div>
