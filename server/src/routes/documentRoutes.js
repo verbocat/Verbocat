@@ -257,6 +257,18 @@ documentRouter.get(["/documents/:id", "/api/documents/:id"], checkAuth, async (r
     const extIndex = docName.lastIndexOf(".");
     const computedExt = doc.file_extension || (extIndex !== -1 ? docName.substring(extIndex) : ".html");
 
+    let contextSettings = {};
+    if (doc.project_id) {
+      const { data: proj } = await supabase
+        .from("projects")
+        .select("settings")
+        .eq("id", doc.project_id)
+        .maybeSingle();
+      if (proj?.settings) {
+        contextSettings = proj.settings.contextSettings || proj.settings || {};
+      }
+    }
+
     response.json({
       id: doc.id,
       name: docName,
@@ -267,7 +279,7 @@ documentRouter.get(["/documents/:id", "/api/documents/:id"], checkAuth, async (r
       ownerId: doc.owner_id,
       permission: access.permission,
       trackChangesEnabled: doc.track_changes_enabled || false,
-      contextSettings: doc.context_settings || {},
+      contextSettings: contextSettings,
       segments: segments || []
     });
   } catch (error) {
@@ -285,7 +297,7 @@ documentRouter.post(
       const documentId = request.params.id;
       const { data: doc, error: docErr } = await supabase
         .from("documents")
-        .select("id, name, context_settings")
+        .select("id, name, project_id")
         .eq("id", documentId)
         .single();
 
@@ -293,28 +305,40 @@ documentRouter.post(
         return response.status(404).json({ error: "Document not found." });
       }
 
-      // Fetch segments to extract source text
+      // Fetch segments to extract source text sample
       const segments = await fetchAllSegments(documentId, "source_text", null);
-      const textSample = (segments || []).map(s => s.source_text || "").filter(Boolean).join("\n");
+      const textSample = (segments || []).map(s => s.source_text || "").filter(Boolean).slice(0, 40).join("\n");
 
       const { analyzeDocumentTextContext } = require("../utils/referenceSampler");
       const detectedContext = await analyzeDocumentTextContext(textSample, doc.name || "Document");
 
-      const currentSettings = doc.context_settings || {};
-      const mergedSettings = {
-        ...currentSettings,
-        ...detectedContext
-      };
+      // Merge and save to projects table if project_id exists
+      if (doc.project_id) {
+        const { data: proj } = await supabase
+          .from("projects")
+          .select("settings")
+          .eq("id", doc.project_id)
+          .maybeSingle();
+        
+        const currentSettings = proj?.settings || {};
+        const mergedSettings = {
+          ...currentSettings,
+          ...detectedContext,
+          contextSettings: {
+            ...(currentSettings.contextSettings || {}),
+            ...detectedContext
+          }
+        };
 
-      // Save back to documents table
-      await supabase
-        .from("documents")
-        .update({ context_settings: mergedSettings })
-        .eq("id", documentId);
+        await supabase
+          .from("projects")
+          .update({ settings: mergedSettings })
+          .eq("id", doc.project_id);
+      }
 
       response.json({
         success: true,
-        contextSettings: mergedSettings,
+        contextSettings: detectedContext,
         message: "Context detected and saved successfully."
       });
     } catch (error) {
