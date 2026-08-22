@@ -844,14 +844,23 @@ projectRouter.post(["/projects/:projectId/share", "/api/projects/:projectId/shar
         .maybeSingle();
 
       if (!targetUser) {
-        return response.status(404).json({ error: `User with email '${cleanEmail}' not found.` });
-      }
+        // Auto-create profile if giving access to a new user email
+        const { data: newProf, error: createErr } = await supabase
+          .from("profiles")
+          .insert({
+            email: cleanEmail,
+            role: "linguist",
+            status: "active",
+            organization_id: projectOrgId
+          })
+          .select("id, email, role, organization_id")
+          .single();
 
-      // RESTRICT LINGUISTS FROM WHOLE PROJECT ACCESS:
-      if (targetUser.role === "linguist") {
-        return response.status(400).json({
-          error: `User '${cleanEmail}' is registered as a Linguist. Entire project sharing is reserved for Project Coordinators and VerbiLabs Staff. To assign tasks to a linguist, please share specific files or target languages.`
-        });
+        if (!createErr && newProf) {
+          targetUser = newProf;
+        } else {
+          return response.status(404).json({ error: `User with email '${cleanEmail}' not found.` });
+        }
       }
 
       // STRICT WORKSPACE RESTRICTION:
@@ -870,7 +879,7 @@ projectRouter.post(["/projects/:projectId/share", "/api/projects/:projectId/shar
 
       if (!isSameWorkspace && !isSuperAdmin && projectOrgId) {
         return response.status(403).json({
-          error: `User '${cleanEmail}' does not belong to this workspace space. Projects can only be shared with members of the workspace where the project was created.`
+          error: `User '${cleanEmail}' does not belong to this workspace. Projects can only be shared with members of the workspace where the project was created.`
         });
       }
 

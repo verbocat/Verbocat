@@ -301,14 +301,18 @@ export function ShareModal({
     e.preventDefault();
     const emailsToProcess = [...selectedEmails];
     if (emailInput.trim()) {
-      const pendingEmail = emailInput.trim();
-      if (pendingEmail.includes("@") && !emailsToProcess.includes(pendingEmail.toLowerCase())) {
-        emailsToProcess.push(pendingEmail.toLowerCase());
+      const rawInput = emailInput.trim();
+      const splitInputs = rawInput.split(/[\s,]+/);
+      for (const item of splitInputs) {
+        const clean = item.trim().toLowerCase();
+        if (clean && !emailsToProcess.includes(clean)) {
+          emailsToProcess.push(clean);
+        }
       }
     }
 
     if (emailsToProcess.length === 0) {
-      setError("Please select or type at least one user email.");
+      setError("Please select or type at least one user email address.");
       return;
     }
 

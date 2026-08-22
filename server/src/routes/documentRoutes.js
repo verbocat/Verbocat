@@ -816,33 +816,54 @@ documentRouter.get(["/documents/:id/access", "/api/documents/:id/access"], check
 documentRouter.post(["/documents/:id/access", "/api/documents/:id/access"], checkAuth, async (request, response) => {
   try {
     const { id } = request.params;
-    const { email, permission = "write", targetLang } = request.body;
-    if (!email) return response.status(400).json({ error: "Email is required" });
+    const { email, emails, permission = "write", targetLang } = request.body;
+    
+    const rawEmails = emails || email;
+    if (!rawEmails) return response.status(400).json({ error: "At least one email address is required" });
 
-    const cleanEmail = String(email).trim().toLowerCase();
-    let { data: targetProfile } = await supabase
-      .from("profiles")
-      .select("id, email, role")
-      .ilike("email", cleanEmail)
-      .maybeSingle();
+    const emailList = (Array.isArray(rawEmails) ? rawEmails : [rawEmails])
+      .flatMap(e => String(e).split(","))
+      .map(e => e.trim().toLowerCase())
+      .filter(Boolean);
 
-    if (!targetProfile) {
-      // Auto-create profile if giving access to a new user email
-      const { data: newProf, error: createErr } = await supabase
+    if (emailList.length === 0) {
+      return response.status(400).json({ error: "At least one valid email address is required" });
+    }
+
+    const resolvedProfiles = [];
+    for (const cleanEmail of emailList) {
+      let { data: targetProfile } = await supabase
         .from("profiles")
-        .insert({
-          email: cleanEmail,
-          role: "linguist",
-          status: "active"
-        })
         .select("id, email, role")
-        .single();
+        .ilike("email", cleanEmail)
+        .maybeSingle();
 
-      if (!createErr && newProf) {
-        targetProfile = newProf;
-      } else {
-        return response.status(404).json({ error: `User with email '${cleanEmail}' not found.` });
+      if (!targetProfile) {
+        // Auto-create profile if giving access to a new user email
+        const { data: newProf, error: createErr } = await supabase
+          .from("profiles")
+          .insert({
+            email: cleanEmail,
+            role: "linguist",
+            status: "active"
+          })
+          .select("id, email, role")
+          .single();
+
+        if (!createErr && newProf) {
+          targetProfile = newProf;
+        } else {
+          console.error(`[CREATE_PROFILE_WARN] Could not find or create profile for ${cleanEmail}:`, createErr);
+        }
       }
+
+      if (targetProfile) {
+        resolvedProfiles.push(targetProfile);
+      }
+    }
+
+    if (resolvedProfiles.length === 0) {
+      return response.status(404).json({ error: "No valid user profiles could be found or created for the provided emails." });
     }
 
     // Fetch target document to check target_lang and file_id
@@ -867,11 +888,16 @@ documentRouter.post(["/documents/:id/access", "/api/documents/:id/access"], chec
       }
     }
 
-    const inserts = docIdsToShare.map(dId => ({
-      document_id: dId,
-      user_id: targetProfile.id,
-      permission: permission || "write"
-    }));
+    const inserts = [];
+    for (const dId of docIdsToShare) {
+      for (const prof of resolvedProfiles) {
+        inserts.push({
+          document_id: dId,
+          user_id: prof.id,
+          permission: permission || "write"
+        });
+      }
+    }
 
     const { data: shareRow, error: upsertErr } = await supabase
       .from("document_access")
@@ -890,21 +916,23 @@ documentRouter.post(["/documents/:id/access", "/api/documents/:id/access"], chec
           const linguistAssignments = { ...(settings.linguistAssignments || {}) };
 
           for (const dId of docIdsToShare) {
-            const assignKey = `${dId}_${langToUse}`;
-            jobAssignments[assignKey] = {
-              userId: targetProfile.id,
-              email: targetProfile.email,
-              targetLang: langToUse,
-              permission: permission || "write",
-              assignedAt: new Date().toISOString()
-            };
+            for (const prof of resolvedProfiles) {
+              const assignKey = `${dId}_${langToUse}`;
+              jobAssignments[assignKey] = {
+                userId: prof.id,
+                email: prof.email,
+                targetLang: langToUse,
+                permission: permission || "write",
+                assignedAt: new Date().toISOString()
+              };
 
-            const userList = [...(linguistAssignments[targetProfile.id] || [])];
-            const exists = userList.some(item => item.documentId === dId && item.targetLang === langToUse);
-            if (!exists) {
-              userList.push({ documentId: dId, targetLang: langToUse, permission: permission || "write" });
+              const userList = [...(linguistAssignments[prof.id] || [])];
+              const exists = userList.some(item => item.documentId === dId && item.targetLang === langToUse);
+              if (!exists) {
+                userList.push({ documentId: dId, targetLang: langToUse, permission: permission || "write" });
+              }
+              linguistAssignments[prof.id] = userList;
             }
-            linguistAssignments[targetProfile.id] = userList;
           }
 
           await supabase.from("projects").update({
@@ -920,18 +948,22 @@ documentRouter.post(["/documents/:id/access", "/api/documents/:id/access"], chec
       }
     }
 
+    const collaborators = resolvedProfiles.map(p => ({
+      userId: p.id,
+      email: p.email,
+      fullName: p.email,
+      role: p.role || "linguist",
+      permission: permission || "write",
+      targetLang: langToUse
+    }));
+
     response.json({
       success: true,
+      message: `Access granted to ${resolvedProfiles.length} user(s).`,
+      shares: shareRow || [],
       share: shareRow?.[0] || shareRow,
-      collaborator: {
-        userId: targetProfile.id,
-        shareId: shareRow?.[0]?.id || shareRow?.id,
-        email: targetProfile.email,
-        fullName: targetProfile.email,
-        role: targetProfile.role || "linguist",
-        permission: permission || "write",
-        targetLang: langToUse
-      }
+      collaborator: collaborators[0],
+      collaborators
     });
   } catch (error) {
     console.error("Grant Document Access Error:", error);
