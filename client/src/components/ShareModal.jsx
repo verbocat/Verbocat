@@ -40,11 +40,13 @@ export function ShareModal({
   const [successMsg, setSuccessMsg] = useState("");
   
   const [publicAccess, setPublicAccess] = useState("none");
+  const [accessFilter, setAccessFilter] = useState("all");
 
   // Keep selectedTargetLang in sync when props change
   useEffect(() => {
     if (targetLang) {
       setSelectedTargetLang(targetLang);
+      setAccessFilter("current");
     } else if (targetLanguages && targetLanguages.length > 0) {
       setSelectedTargetLang(prev => prev || targetLanguages[0]);
     }
