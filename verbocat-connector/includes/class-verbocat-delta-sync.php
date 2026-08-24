@@ -139,7 +139,9 @@ class Verbocat_Delta_Sync {
             $translated_excerpt = $has_existing ? get_post_field('post_excerpt', $existing_trans_id) : $post->post_excerpt;
 
             foreach ($payload_items as $p_idx => $p_item) {
-                $translated_str = $translated_items[$p_idx] ?? $p_item['source'];
+                $raw_trans = $translated_items[$p_idx] ?? $p_item['source'];
+                $translated_str = self::clean_entity_leaks($raw_trans);
+
                 if ($p_item['key'] === '__title__') {
                     $translated_title = $translated_str;
                 } else if ($p_item['key'] === '__excerpt__') {
@@ -150,7 +152,7 @@ class Verbocat_Delta_Sync {
             }
 
             // Re-assemble full translated content
-            $assembled_content = self::reassemble_content_blocks($source_segments, $final_block_translations);
+            $assembled_content = self::clean_entity_leaks(self::reassemble_content_blocks($source_segments, $final_block_translations));
 
             if ($has_existing) {
                 // Update existing post
@@ -256,5 +258,22 @@ class Verbocat_Delta_Sync {
             }
         }
         return $output;
+    }
+
+    /**
+     * Clean and normalize raw HTML/numeric entity leaks (e.g. &#8217; => ’, &#8220; => “, &#038; => &)
+     */
+    public static function clean_entity_leaks($str) {
+        if (empty($str) || !is_string($str)) return $str;
+        $decoded = html_entity_decode($str, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $decoded = wp_specialchars_decode($decoded, ENT_QUOTES);
+        $decoded = preg_replace('/&?#8217;?/', "’", $decoded);
+        $decoded = preg_replace('/&?#8216;?/', "‘", $decoded);
+        $decoded = preg_replace('/&?#8220;?/', "“", $decoded);
+        $decoded = preg_replace('/&?#8221;?/', "”", $decoded);
+        $decoded = preg_replace('/&?#8230;?/', "…", $decoded);
+        $decoded = preg_replace('/&?#038;?/', "&", $decoded);
+        $decoded = preg_replace('/&?#039;?/', "'", $decoded);
+        return $decoded;
     }
 }

@@ -79,12 +79,13 @@ class Verbocat_Editor_UI {
         }
 
         $translations = get_post_meta($post->ID, '_verbocat_translations', true) ?: [];
-        $opts = Verbocat_Settings::get_options();
-        $target_langs = array_filter(array_map('trim', explode(',', $opts['target_langs'])));
-        $completed_count = 0;
-        foreach ($target_langs as $tl) {
-            if (!empty($translations[$tl]) && get_post($translations[$tl])) $completed_count++;
+        $active_translations = [];
+        foreach ($translations as $t_lang => $t_id) {
+            if ($t_id && get_post($t_id) && get_post_status($t_id) !== 'trash') {
+                $active_translations[$t_lang] = $t_id;
+            }
         }
+        $completed_count = count($active_translations);
         ?>
         <div style="background: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 4px 0;">
             
@@ -106,7 +107,7 @@ class Verbocat_Editor_UI {
                             <?php _e('Continuous Localization', 'verbocat-connector'); ?>
                         </div>
                         <div style="font-size: 12px; color: #71717a; margin-top: 2px;">
-                            <?php echo sprintf(__('%d of %d language versions active', 'verbocat-connector'), $completed_count, count($target_langs)); ?>
+                            <?php echo sprintf(__('%d translated version(s) active', 'verbocat-connector'), $completed_count); ?>
                         </div>
                     </div>
                 </div>
@@ -120,50 +121,47 @@ class Verbocat_Editor_UI {
 
             <div class="verbocat-status-msg" style="margin: 8px 0; font-size: 13px;"></div>
 
-            <!-- Language Versions Modern Grid -->
+            <!-- Language Versions Modern Grid (Shows ONLY created translations) -->
             <div style="margin-top: 14px;">
-                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px;">
-                    <?php foreach ($target_langs as $t_lang): 
-                        $t_id = $translations[$t_lang] ?? null;
-                        $t_meta = Verbocat_Languages::get_language($t_lang);
-                        $has_trans = $t_id && get_post($t_id);
-                        $p_status = $has_trans ? get_post_status($t_id) : 'pending';
-                    ?>
-                        <div style="background: <?php echo $has_trans ? '#ffffff' : '#fafafa'; ?>; border: 1px solid <?php echo $has_trans ? '#e2e8f0' : '#f1f5f9'; ?>; border-radius: 8px; padding: 12px 14px; transition: all 0.15s ease; box-shadow: <?php echo $has_trans ? '0 1px 3px rgba(0,0,0,0.04)' : 'none'; ?>;" onmouseover="this.style.borderColor='#cbd5e1'" onmouseout="this.style.borderColor='<?php echo $has_trans ? '#e2e8f0' : '#f1f5f9'; ?>'">
-                            
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                                <span style="font-weight: 600; color: #0f172a; font-size: 13px;">
-                                    <?php echo esc_html($t_meta['name']); ?>
-                                </span>
-                                <?php if ($has_trans): ?>
+                <?php if (empty($active_translations)): ?>
+                    <div style="text-align: center; padding: 22px 14px; background: #fafafa; border: 1px dashed #e4e4e7; border-radius: 8px;">
+                        <div style="font-size: 13px; color: #52525b; margin-bottom: 8px;">
+                            <?php _e('No translated versions created for this page yet.', 'verbocat-connector'); ?>
+                        </div>
+                        <button type="button" class="button button-secondary verbocat-open-modal-btn" style="font-size: 12px; font-weight: 500; border-radius: 6px; height: 30px;">
+                            <?php _e('+ Create First Translation', 'verbocat-connector'); ?>
+                        </button>
+                    </div>
+                <?php else: ?>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px;">
+                        <?php foreach ($active_translations as $t_lang => $t_id): 
+                            $t_meta = Verbocat_Languages::get_language($t_lang);
+                            $p_status = get_post_status($t_id) ?: 'publish';
+                        ?>
+                            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; transition: all 0.15s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.04);" onmouseover="this.style.borderColor='#cbd5e1'" onmouseout="this.style.borderColor='#e2e8f0'">
+                                
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                                    <span style="font-weight: 600; color: #0f172a; font-size: 13px;">
+                                        <?php echo esc_html($t_meta['name']); ?>
+                                    </span>
                                     <span style="font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 50px; background: <?php echo $p_status === 'publish' ? '#ecfdf5' : '#fef3c7'; ?>; color: <?php echo $p_status === 'publish' ? '#059669' : '#b45309'; ?>;">
                                         <?php echo ucfirst($p_status); ?>
                                     </span>
-                                <?php else: ?>
-                                    <span style="font-size: 11px; font-weight: 500; padding: 1px 7px; border-radius: 50px; background: #f4f4f5; color: #71717a;">
-                                        <?php _e('Not Created', 'verbocat-connector'); ?>
-                                    </span>
-                                <?php endif; ?>
-                            </div>
+                                </div>
 
-                            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; padding-top: 6px; border-top: 1px solid #f8fafc;">
-                                <?php if ($has_trans): ?>
+                                <div style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; padding-top: 6px; border-top: 1px solid #f8fafc;">
                                     <a href="<?php echo get_edit_post_link($t_id); ?>" target="_blank" style="color: #2563eb; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;">
                                         <span><?php _e('Edit Translation', 'verbocat-connector'); ?></span> &rarr;
                                     </a>
                                     <a href="<?php echo get_permalink($t_id); ?>" target="_blank" style="color: #64748b; text-decoration: none; font-size: 11px;" title="<?php _e('View Live', 'verbocat-connector'); ?>">
                                         &#x2197;
                                     </a>
-                                <?php else: ?>
-                                    <a href="#" class="verbocat-open-modal-btn" style="color: #71717a; text-decoration: none; font-weight: 500;">
-                                        <?php _e('+ Translate', 'verbocat-connector'); ?>
-                                    </a>
-                                <?php endif; ?>
-                            </div>
+                                </div>
 
-                        </div>
-                    <?php endforeach; ?>
-                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
             </div>
 
         </div>
@@ -304,7 +302,7 @@ class Verbocat_Editor_UI {
 
                             <div id="vb-lang-list" class="vb-scroll-box">
                                 <?php foreach ($all_languages as $code => $info): 
-                                    $is_checked = in_array($code, $configured_targets);
+                                    $is_checked = false; // Start blank by default as requested
                                 ?>
                                     <label class="vb-lang-tile" data-search="<?php echo esc_attr(strtolower($info['name'] . ' ' . $info['native'])); ?>">
                                         <span style="font-size: 13px; color: #27272a; font-weight: 500;">
