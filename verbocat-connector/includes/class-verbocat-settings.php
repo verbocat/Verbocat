@@ -19,6 +19,7 @@ class Verbocat_Settings {
     public static function init() {
         add_action('admin_menu', [__CLASS__, 'add_admin_menu']);
         add_action('admin_init', [__CLASS__, 'register_settings']);
+        add_action('wp_ajax_verbocat_test_connection', [__CLASS__, 'ajax_test_connection']);
     }
 
     /**
@@ -26,7 +27,7 @@ class Verbocat_Settings {
      */
     public static function get_options() {
         $defaults = [
-            'api_url'            => 'http://localhost:5000/api/v1',
+            'api_url'            => 'https://centroid.verbolabs.com/api/v1',
             'api_key'            => '',
             'source_lang'        => 'en',
             'target_langs'       => 'es, hi, fr',
@@ -79,18 +80,55 @@ class Verbocat_Settings {
     }
 
     /**
+     * AJAX handler for testing API connection and retrieving remaining credits
+     */
+    public static function ajax_test_connection() {
+        check_ajax_referer('verbocat_test_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Permission denied.', 'verbocat-connector')]);
+        }
+
+        $api_url = sanitize_text_field($_POST['api_url'] ?? '');
+        $api_key = sanitize_text_field($_POST['api_key'] ?? '');
+
+        if (empty($api_key)) {
+            wp_send_json_error(['message' => __('Please enter an API Key first.', 'verbocat-connector')]);
+        }
+
+        $res = Verbocat_Api_Client::check_account($api_url, $api_key);
+
+        if (is_wp_error($res)) {
+            wp_send_json_error(['message' => $res->get_error_message()]);
+        }
+
+        $org = $res['organization'] ?? 'Workspace';
+        $allowed = number_format($res['credits_allowed'] ?? 0);
+        $consumed = number_format($res['credits_consumed'] ?? 0);
+        $remaining = number_format($res['credits_remaining'] ?? 0);
+
+        wp_send_json_success([
+            'message'   => sprintf(__('✓ Connected to %s (%s remaining / %s allowed words)', 'verbocat-connector'), $org, $remaining, $allowed),
+            'org'       => $org,
+            'remaining' => $remaining,
+            'allowed'   => $allowed
+        ]);
+    }
+
+    /**
      * Render the admin settings screen
      */
     public static function render_settings_page() {
         $opts = self::get_options();
         $webhook_url = rest_url('verbocat/v1/sync');
+        $test_nonce = wp_create_nonce('verbocat_test_nonce');
         ?>
         <div class="wrap">
             <h1 style="display: flex; align-items: center; gap: 10px;">
                 <span class="dashicons dashicons-translation" style="font-size: 32px; width: 32px; height: 32px; color: #2563eb;"></span>
-                <?php _e('Verbocat Continuous Localization Settings', 'verbocat-connector'); ?>
+                <?php _e('Verbocat Localization Settings', 'verbocat-connector'); ?>
             </h1>
-            <p style="color: #64748b; font-size: 14px;"><?php _e('Manage API credentials, default languages, Smart Delta Sync, and Frontend Language Switcher options.', 'verbocat-connector'); ?></p>
+            <p style="color: #64748b; font-size: 14px;"><?php _e('Configure API credentials, language pairs, and continuous localization workflow.', 'verbocat-connector'); ?></p>
             
             <form method="post" action="options.php" style="max-width: 760px; background: #fff; padding: 24px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-top: 20px;">
                 <?php settings_fields(self::$option_name); ?>
@@ -98,15 +136,21 @@ class Verbocat_Settings {
                     <tr>
                         <th scope="row"><label for="verbocat_api_url"><?php _e('Verbocat API URL', 'verbocat-connector'); ?></label></th>
                         <td>
-                            <input name="<?php echo self::$option_name; ?>[api_url]" type="url" id="verbocat_api_url" value="<?php echo esc_attr($opts['api_url']); ?>" class="regular-text" placeholder="http://localhost:5000/api/v1" required />
-                            <p class="description"><?php _e('Base URL of your Verbocat server (e.g. http://localhost:5000/api/v1 or https://api.yourdomain.com/api/v1).', 'verbocat-connector'); ?></p>
+                            <input name="<?php echo self::$option_name; ?>[api_url]" type="url" id="verbocat_api_url" value="<?php echo esc_attr($opts['api_url']); ?>" class="regular-text" placeholder="https://centroid.verbolabs.com/api/v1" required />
+                            <p class="description"><?php _e('Base URL of your Verbocat server (e.g. https://centroid.verbolabs.com/api/v1).', 'verbocat-connector'); ?></p>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row"><label for="verbocat_api_key"><?php _e('API Key', 'verbocat-connector'); ?></label></th>
                         <td>
                             <input name="<?php echo self::$option_name; ?>[api_key]" type="text" id="verbocat_api_key" value="<?php echo esc_attr($opts['api_key']); ?>" class="regular-text" placeholder="vb_live_..." required />
-                            <p class="description"><?php _e('Your live Verbocat API key (e.g. vb_live_my_super_secret_api_key_123).', 'verbocat-connector'); ?></p>
+                            <p class="description"><?php _e('Your unique client API key (e.g. vb_live_...).', 'verbocat-connector'); ?></p>
+                            <div style="margin-top: 8px;">
+                                <button type="button" id="verbocat_test_conn_btn" class="button button-secondary" style="font-weight: 500;">
+                                    <?php _e('Test Connection & Check Quota', 'verbocat-connector'); ?>
+                                </button>
+                                <span id="verbocat_test_status" style="margin-left: 10px; font-size: 13px; vertical-align: middle;"></span>
+                            </div>
                         </td>
                     </tr>
                     <tr>
@@ -180,6 +224,43 @@ class Verbocat_Settings {
                 <?php submit_button(__('Save Settings', 'verbocat-connector')); ?>
             </form>
         </div>
+
+        <script>
+        jQuery(document).ready(function($) {
+            $('#verbocat_test_conn_btn').on('click', function(e) {
+                e.preventDefault();
+                var $btn = $(this);
+                var $status = $('#verbocat_test_status');
+                var apiUrl = $('#verbocat_api_url').val();
+                var apiKey = $('#verbocat_api_key').val();
+
+                if (!apiKey) {
+                    $status.html('<span style="color: #b91c1c;">Please enter an API Key first.</span>');
+                    return;
+                }
+
+                $btn.prop('disabled', true).text('Testing...');
+                $status.html('<span style="color: #2563eb;">Connecting to Verbocat...</span>');
+
+                $.post(ajaxurl, {
+                    action: 'verbocat_test_connection',
+                    api_url: apiUrl,
+                    api_key: apiKey,
+                    nonce: '<?php echo $test_nonce; ?>'
+                }, function(res) {
+                    $btn.prop('disabled', false).text('<?php _e('Test Connection & Check Quota', 'verbocat-connector'); ?>');
+                    if (res.success) {
+                        $status.html('<span style="color: #16a34a; font-weight: 600;">' + res.data.message + '</span>');
+                    } else {
+                        $status.html('<span style="color: #b91c1c; font-weight: 500;">✕ ' + (res.data ? res.data.message : 'Connection failed') + '</span>');
+                    }
+                }).fail(function() {
+                    $btn.prop('disabled', false).text('<?php _e('Test Connection & Check Quota', 'verbocat-connector'); ?>');
+                    $status.html('<span style="color: #b91c1c;">✕ Network error or invalid API URL.</span>');
+                });
+            });
+        });
+        </script>
         <?php
     }
 }

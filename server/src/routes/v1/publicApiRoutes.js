@@ -36,6 +36,29 @@ publicApiRouter.get("/health", (req, res) => {
 publicApiRouter.use(apiKeyAuth);
 
 /**
+ * Account & Quota Status
+ * GET /api/v1/account
+ * Returns client organization name, allowed credits, consumed credits, and remaining balance.
+ */
+publicApiRouter.get("/account", (req, res) => {
+  const allowed = req.profile?.credits_allowed ?? (req.organization?.credits_allowed ?? 100000);
+  const consumed = req.profile?.credits_consumed ?? (req.organization?.credits_consumed ?? 0);
+  const remaining = Math.max(0, allowed - consumed);
+
+  return res.json({
+    success: true,
+    user_id: req.user?.id,
+    email: req.user?.email,
+    organization: req.organization?.name || req.profile?.organization_name || "Default Workspace",
+    organization_id: req.organization?.id || req.profile?.organization_id || null,
+    status: req.profile?.status || "active",
+    credits_allowed: allowed,
+    credits_consumed: consumed,
+    credits_remaining: remaining
+  });
+});
+
+/**
  * 2. Upload Document
  * POST /api/v1/documents/upload
  * Headers: x-api-key
@@ -401,6 +424,19 @@ publicApiRouter.post("/translate", async (req, res) => {
       segmentsToTranslate = items.map((item, idx) => ({ id: idx + 1, source: String(item || "") }));
     } else {
       segmentsToTranslate = [{ id: 1, source: String(text || "") }];
+    }
+
+    // Strict Quota & Credit Limit Enforcement
+    if (req.profile && req.profile.role !== "super_admin") {
+      const allowed = req.profile.credits_allowed ?? (req.organization?.credits_allowed ?? 0);
+      const consumed = req.profile.credits_consumed ?? (req.organization?.credits_consumed ?? 0);
+      if (allowed > 0 && consumed >= allowed) {
+        return res.status(403).json({
+          error: "Credit limit exceeded. Your word translation quota has been reached. Please upgrade your plan or contact support to purchase more translation credits.",
+          credits_allowed: allowed,
+          credits_consumed: consumed
+        });
+      }
     }
 
     const userId = req.user?.id || "00000000-0000-0000-0000-000000000000";
