@@ -1,6 +1,6 @@
 <?php
 /**
- * Verbocat Editor UI - Clean, Minimal & Professional Translation Studio
+ * Verbocat Editor UI - Minimal, Clean & Smoothly Animated Translation Studio
  *
  * @package Verbocat_Connector
  */
@@ -57,11 +57,10 @@ class Verbocat_Editor_UI {
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <span style="font-size: 18px;"><?php echo esc_html($lang_meta['flag']); ?></span>
                         <strong style="font-size: 14px; color: #18181b;"><?php echo esc_html($lang_meta['name']); ?></strong>
-                        <span style="color: #71717a; font-size: 12px;">(<?php echo esc_html($lang); ?>)</span>
                     </div>
                     <div style="display: flex; gap: 8px;">
                         <a href="<?php echo get_edit_post_link($source_id); ?>" class="button button-secondary" target="_blank" style="font-size: 12px;">
-                            <?php _e('Original Post #', 'verbocat-connector'); ?><?php echo esc_html($source_id); ?> &rarr;
+                            <?php _e('Original Post', 'verbocat-connector'); ?> &rarr;
                         </a>
                         <a href="<?php echo get_permalink($post->ID); ?>" class="button button-secondary" target="_blank" style="font-size: 12px;">
                             <?php _e('View Live', 'verbocat-connector'); ?> &#x2197;
@@ -81,10 +80,9 @@ class Verbocat_Editor_UI {
             <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
                 <div>
                     <span style="font-weight: 600; font-size: 14px; color: #18181b;"><?php _e('Continuous Localization', 'verbocat-connector'); ?></span>
-                    <span style="color: #71717a; margin-left: 6px; font-size: 12px;">(<?php echo esc_html($opts['target_langs']); ?>)</span>
                 </div>
                 <div style="display: flex; gap: 8px;">
-                    <button type="button" class="button button-primary verbocat-open-modal-btn" style="background: #18181b; border-color: #18181b; font-weight: 500; border-radius: 6px; padding: 0 14px; height: 32px;">
+                    <button type="button" class="button button-primary verbocat-open-modal-btn" style="background: #18181b; border-color: #18181b; font-weight: 500; border-radius: 6px; padding: 0 14px; height: 32px; transition: all 0.2s ease;">
                         <?php _e('Translate Page', 'verbocat-connector'); ?>
                     </button>
                     <button type="button" class="button button-secondary verbocat-sync-tm-btn" style="font-weight: 500; border-radius: 6px; height: 32px;">
@@ -97,7 +95,7 @@ class Verbocat_Editor_UI {
 
             <!-- Existing Language Versions Grid -->
             <div style="margin-top: 12px; border-top: 1px solid #f4f4f5; padding-top: 12px;">
-                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;">
                     <?php foreach ($target_langs as $t_lang): 
                         $t_id = $translations[$t_lang] ?? null;
                         $t_meta = Verbocat_Languages::get_language($t_lang);
@@ -124,7 +122,7 @@ class Verbocat_Editor_UI {
     }
 
     /**
-     * Render Gutenberg Top Bar button & Clean Minimal Modal
+     * Render Gutenberg Top Bar button & Clean Minimal Animated Modal
      */
     public static function render_editor_scripts_and_modal() {
         $screen = get_current_screen();
@@ -197,32 +195,35 @@ class Verbocat_Editor_UI {
         }
         ?>
 
-        <!-- Clean Minimal Translation Studio Modal -->
-        <div id="verbocat-lang-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(4px); z-index: 999999; justify-content: center; align-items: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; box-sizing: border-box;">
+        <!-- Clean Minimal Animated Translation Modal -->
+        <div id="verbocat-lang-modal" class="vb-modal-overlay" style="display: none;">
             
-            <div style="background: #ffffff; width: 92%; max-width: 880px; height: 82vh; max-height: 680px; border-radius: 12px; border: 1px solid #e4e4e7; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12); display: flex; flex-direction: column; overflow: hidden; animation: vbModalFadeIn 0.15s ease;">
+            <div class="vb-modal-card">
                 
+                <!-- Progress Line Animation (Active during translation) -->
+                <div id="vb-top-progress" class="vb-progress-bar" style="display: none;"></div>
+
                 <!-- Header -->
-                <div style="padding: 16px 24px; border-bottom: 1px solid #f4f4f5; display: flex; align-items: center; justify-content: space-between; background: #ffffff;">
+                <div class="vb-modal-header">
                     <div>
                         <h2 style="margin: 0; font-size: 16px; font-weight: 600; color: #18181b; line-height: 1.3;"><?php _e('Translate Content', 'verbocat-connector'); ?></h2>
                         <p style="margin: 2px 0 0 0; color: #71717a; font-size: 13px;"><?php _e('Choose target languages and select components to translate.', 'verbocat-connector'); ?></p>
                     </div>
-                    <button type="button" id="verbocat-modal-close" style="background: transparent; border: none; font-size: 20px; color: #a1a1aa; cursor: pointer; border-radius: 6px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; transition: all 0.15s ease;" onmouseover="this.style.background='#f4f4f5'; this.style.color='#18181b';" onmouseout="this.style.background='transparent'; this.style.color='#a1a1aa';">&times;</button>
+                    <button type="button" id="verbocat-modal-close" class="vb-close-btn">&times;</button>
                 </div>
 
                 <!-- 2-Column Body -->
-                <div style="display: flex; flex: 1; overflow: hidden; background: #ffffff;">
+                <div class="vb-modal-body">
                     
                     <!-- Left Column: Languages (35% width) -->
-                    <div style="width: 35%; border-right: 1px solid #f4f4f5; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; background: #fafafa;">
+                    <div class="vb-left-col">
                         
                         <!-- Source Language -->
                         <div>
-                            <label for="vb_modal_source_lang" style="display: block; font-weight: 600; font-size: 12px; color: #71717a; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">
+                            <label for="vb_modal_source_lang" class="vb-col-label">
                                 <?php _e('Source Language', 'verbocat-connector'); ?>
                             </label>
-                            <select id="vb_modal_source_lang" style="width: 100%; height: 38px; border-radius: 6px; border: 1px solid #e4e4e7; font-size: 13px; padding: 0 10px; background: #ffffff; color: #18181b;">
+                            <select id="vb_modal_source_lang" class="vb-select">
                                 <?php foreach ($all_languages as $code => $info): ?>
                                     <option value="<?php echo esc_attr($code); ?>" <?php selected($code, $default_src); ?>>
                                         <?php echo esc_html($info['flag'] . ' ' . $info['name']); ?>
@@ -234,23 +235,23 @@ class Verbocat_Editor_UI {
                         <!-- Target Languages -->
                         <div style="flex: 1; display: flex; flex-direction: column; min-height: 220px;">
                             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-                                <label style="font-weight: 600; font-size: 12px; color: #71717a; text-transform: uppercase; letter-spacing: 0.5px;">
+                                <label class="vb-col-label">
                                     <?php _e('Target Languages', 'verbocat-connector'); ?>
                                 </label>
                                 <div style="font-size: 11px;">
-                                    <a href="#" id="vb-select-all" style="color: #18181b; text-decoration: underline; margin-right: 4px;"><?php _e('All', 'verbocat-connector'); ?></a> •
-                                    <a href="#" id="vb-clear-all" style="color: #71717a; text-decoration: none; margin-left: 4px;"><?php _e('Clear', 'verbocat-connector'); ?></a>
+                                    <a href="#" id="vb-select-all" class="vb-text-btn"><?php _e('All', 'verbocat-connector'); ?></a> •
+                                    <a href="#" id="vb-clear-all" class="vb-text-btn-muted"><?php _e('Clear', 'verbocat-connector'); ?></a>
                                 </div>
                             </div>
 
-                            <input type="text" id="vb-lang-search" placeholder="<?php _e('Search languages...', 'verbocat-connector'); ?>" style="width: 100%; height: 34px; border-radius: 6px; border: 1px solid #e4e4e7; font-size: 12px; padding: 0 10px; margin-bottom: 8px; background: #ffffff; color: #18181b;" />
+                            <input type="text" id="vb-lang-search" placeholder="<?php _e('Search languages...', 'verbocat-connector'); ?>" class="vb-input-search" />
 
-                            <div id="vb-lang-list" style="flex: 1; max-height: 240px; overflow-y: auto; border: 1px solid #e4e4e7; border-radius: 6px; padding: 4px; background: #ffffff; display: flex; flex-direction: column; gap: 2px;">
+                            <div id="vb-lang-list" class="vb-scroll-box">
                                 <?php foreach ($all_languages as $code => $info): 
                                     $is_checked = in_array($code, $configured_targets);
                                 ?>
-                                    <label class="vb-lang-tile" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-radius: 4px; cursor: pointer; transition: background 0.15s ease;" data-search="<?php echo esc_attr(strtolower($info['name'] . ' ' . $info['native'] . ' ' . $code)); ?>">
-                                        <span style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #27272a;">
+                                    <label class="vb-lang-tile" data-search="<?php echo esc_attr(strtolower($info['name'] . ' ' . $info['native'])); ?>">
+                                        <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #27272a;">
                                             <span><?php echo esc_html($info['flag']); ?></span>
                                             <span><?php echo esc_html($info['name']); ?></span>
                                         </span>
@@ -263,11 +264,11 @@ class Verbocat_Editor_UI {
                     </div>
 
                     <!-- Right Column: Components List (65% width) -->
-                    <div style="width: 65%; padding: 20px 24px; overflow-y: auto; display: flex; flex-direction: column; background: #ffffff;">
+                    <div class="vb-right-col">
                         
                         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #f4f4f5;">
                             <div>
-                                <span style="font-weight: 600; font-size: 13px; color: #18181b; text-transform: uppercase; letter-spacing: 0.5px;">
+                                <span class="vb-col-label" style="color: #18181b;">
                                     <?php _e('Components', 'verbocat-connector'); ?>
                                 </span>
                                 <span id="vb-comp-count" style="color: #71717a; font-size: 12px; margin-left: 6px;">
@@ -275,31 +276,31 @@ class Verbocat_Editor_UI {
                                 </span>
                             </div>
                             <div style="font-size: 12px;">
-                                <a href="#" id="vb-comp-select-all" style="color: #18181b; text-decoration: underline; margin-right: 6px;"><?php _e('Select all', 'verbocat-connector'); ?></a> •
-                                <a href="#" id="vb-comp-clear-all" style="color: #71717a; text-decoration: none; margin-left: 6px;"><?php _e('Clear', 'verbocat-connector'); ?></a>
+                                <a href="#" id="vb-comp-select-all" class="vb-text-btn"><?php _e('Select all', 'verbocat-connector'); ?></a> •
+                                <a href="#" id="vb-comp-clear-all" class="vb-text-btn-muted"><?php _e('Clear', 'verbocat-connector'); ?></a>
                             </div>
                         </div>
 
-                        <!-- Clean Components List -->
-                        <div id="vb-components-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+                        <!-- Clean Animated Components List -->
+                        <div id="vb-components-list" class="vb-components-scroll">
                             <?php if (empty($components)): ?>
                                 <div style="text-align: center; padding: 40px 20px; color: #71717a; font-size: 13px;">
                                     <?php _e('No text content found on this page.', 'verbocat-connector'); ?>
                                 </div>
                             <?php else: ?>
                                 <?php foreach ($components as $index => $comp): ?>
-                                    <div class="vb-comp-card" style="border: 1px solid #e4e4e7; border-radius: 6px; padding: 10px 12px; cursor: pointer; transition: all 0.15s ease; display: flex; align-items: flex-start; gap: 10px; background: #ffffff;">
+                                    <div class="vb-comp-card active" style="animation-delay: <?php echo ($index * 0.04); ?>s;">
                                         
                                         <input type="checkbox" class="vb-component-cb" value="<?php echo esc_attr($comp['key']); ?>" checked style="accent-color: #18181b; width: 16px; height: 16px; margin-top: 2px; cursor: pointer;" />
                                         
                                         <div style="flex: 1; min-width: 0;">
                                             <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
-                                                <span style="background: #f4f4f5; color: #52525b; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 3px;">
+                                                <span class="vb-badge">
                                                     <?php echo esc_html($comp['badge']); ?>
                                                 </span>
                                             </div>
-                                            <div style="font-size: 13px; color: #27272a; line-height: 1.4; word-break: break-word;">
-                                                <?php echo esc_html(wp_trim_words($comp['text'], 20, '...')); ?>
+                                            <div class="vb-comp-text">
+                                                <?php echo esc_html(wp_trim_words($comp['text'], 22, '...')); ?>
                                             </div>
                                         </div>
 
@@ -313,14 +314,14 @@ class Verbocat_Editor_UI {
                 </div>
 
                 <!-- Footer -->
-                <div style="padding: 14px 24px; border-top: 1px solid #f4f4f5; background: #ffffff; display: flex; align-items: center; justify-content: space-between;">
+                <div class="vb-modal-footer">
                     
-                    <div id="vb-modal-status" style="font-size: 13px; color: #71717a;"></div>
+                    <div id="vb-modal-status" class="vb-status-area"></div>
 
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <button type="button" id="vb-modal-cancel-btn" class="button" style="height: 36px; padding: 0 14px; font-size: 13px; border-radius: 6px; color: #52525b;"><?php _e('Cancel', 'verbocat-connector'); ?></button>
-                        <button type="button" id="vb-modal-start-btn" class="button button-primary" style="background: #18181b; border-color: #18181b; height: 36px; padding: 0 18px; font-size: 13px; font-weight: 500; border-radius: 6px;">
-                            <?php _e('Translate Content', 'verbocat-connector'); ?>
+                        <button type="button" id="vb-modal-cancel-btn" class="vb-btn-secondary"><?php _e('Cancel', 'verbocat-connector'); ?></button>
+                        <button type="button" id="vb-modal-start-btn" class="vb-btn-primary">
+                            <span class="vb-btn-text"><?php _e('Translate Content', 'verbocat-connector'); ?></span>
                         </button>
                     </div>
 
@@ -330,9 +331,329 @@ class Verbocat_Editor_UI {
         </div>
 
         <style>
-        @keyframes vbModalFadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
-        .vb-comp-card:hover { border-color: #a1a1aa !important; }
-        .vb-lang-tile:hover { background: #f4f4f5 !important; }
+        /* Smooth Modern Modal Animations */
+        .vb-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.45);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            z-index: 999999;
+            justify-content: center;
+            align-items: center;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            box-sizing: border-box;
+            opacity: 0;
+            transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .vb-modal-overlay.vb-visible {
+            opacity: 1;
+        }
+
+        .vb-modal-card {
+            background: #ffffff;
+            width: 92%;
+            max-width: 860px;
+            height: 82vh;
+            max-height: 680px;
+            border-radius: 12px;
+            border: 1px solid #e4e4e7;
+            box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.15);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transform: translateY(12px) scale(0.98);
+            transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+        }
+        .vb-modal-overlay.vb-visible .vb-modal-card {
+            transform: translateY(0) scale(1);
+        }
+
+        /* Top Shimmering Progress Bar */
+        .vb-progress-bar {
+            height: 2.5px;
+            width: 100%;
+            background: linear-gradient(90deg, #2563eb, #38bdf8, #2563eb);
+            background-size: 200% 100%;
+            animation: vbGradientMove 1.4s infinite linear;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 10;
+        }
+        @keyframes vbGradientMove {
+            0% { background-position: 100% 0; }
+            100% { background-position: -100% 0; }
+        }
+
+        .vb-modal-header {
+            padding: 16px 24px;
+            border-bottom: 1px solid #f4f4f5;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #ffffff;
+        }
+
+        .vb-close-btn {
+            background: transparent;
+            border: none;
+            font-size: 20px;
+            color: #a1a1aa;
+            cursor: pointer;
+            border-radius: 6px;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s ease;
+        }
+        .vb-close-btn:hover {
+            background: #f4f4f5;
+            color: #18181b;
+        }
+
+        .vb-modal-body {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            background: #ffffff;
+        }
+
+        .vb-left-col {
+            width: 35%;
+            border-right: 1px solid #f4f4f5;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            background: #fafafa;
+        }
+
+        .vb-right-col {
+            width: 65%;
+            padding: 20px 24px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            background: #ffffff;
+        }
+
+        .vb-col-label {
+            display: block;
+            font-weight: 600;
+            font-size: 11px;
+            color: #71717a;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .vb-select {
+            width: 100%;
+            height: 38px;
+            border-radius: 6px;
+            border: 1px solid #e4e4e7;
+            font-size: 13px;
+            padding: 0 10px;
+            background: #ffffff;
+            color: #18181b;
+            outline: none;
+            transition: border-color 0.15s ease;
+        }
+        .vb-select:focus {
+            border-color: #18181b;
+        }
+
+        .vb-input-search {
+            width: 100%;
+            height: 34px;
+            border-radius: 6px;
+            border: 1px solid #e4e4e7;
+            font-size: 12px;
+            padding: 0 10px;
+            margin-bottom: 8px;
+            background: #ffffff;
+            color: #18181b;
+            outline: none;
+            transition: border-color 0.15s ease;
+        }
+        .vb-input-search:focus {
+            border-color: #18181b;
+        }
+
+        .vb-scroll-box {
+            flex: 1;
+            max-height: 240px;
+            overflow-y: auto;
+            border: 1px solid #e4e4e7;
+            border-radius: 6px;
+            padding: 4px;
+            background: #ffffff;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .vb-lang-tile {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 7px 9px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+        .vb-lang-tile:hover {
+            background: #f4f4f5;
+        }
+
+        .vb-components-scroll {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        /* Smooth Animated Component Card */
+        .vb-comp-card {
+            border: 1px solid #e4e4e7;
+            border-radius: 6px;
+            padding: 10px 12px;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            background: #ffffff;
+            animation: vbCardFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+        }
+        .vb-comp-card:hover {
+            border-color: #a1a1aa;
+            transform: translateY(-1px);
+        }
+        .vb-comp-card.vb-translating {
+            border-color: #3b82f6;
+            background: #fafcff;
+            box-shadow: 0 0 0 1px #3b82f6;
+        }
+
+        @keyframes vbCardFadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .vb-badge {
+            background: #f4f4f5;
+            color: #52525b;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 1px 6px;
+            border-radius: 3px;
+        }
+
+        .vb-comp-text {
+            font-size: 13px;
+            color: #27272a;
+            line-height: 1.4;
+            word-break: break-word;
+        }
+
+        .vb-text-btn {
+            color: #18181b;
+            text-decoration: underline;
+            font-weight: 500;
+        }
+        .vb-text-btn-muted {
+            color: #71717a;
+            text-decoration: none;
+        }
+
+        .vb-modal-footer {
+            padding: 14px 24px;
+            border-top: 1px solid #f4f4f5;
+            background: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .vb-status-area {
+            font-size: 13px;
+            color: #71717a;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .vb-btn-secondary {
+            height: 36px;
+            padding: 0 14px;
+            font-size: 13px;
+            border-radius: 6px;
+            color: #52525b;
+            background: #ffffff;
+            border: 1px solid #e4e4e7;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.15s ease;
+        }
+        .vb-btn-secondary:hover {
+            background: #f4f4f5;
+            color: #18181b;
+        }
+
+        .vb-btn-primary {
+            background: #18181b;
+            color: #ffffff;
+            border: 1px solid #18181b;
+            height: 36px;
+            padding: 0 18px;
+            font-size: 13px;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .vb-btn-primary:hover {
+            background: #27272a;
+            border-color: #27272a;
+            transform: translateY(-1px);
+        }
+        .vb-btn-primary:active {
+            transform: translateY(0);
+        }
+        .vb-btn-primary:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Minimal Pulsing Ring */
+        .vb-pulse-dot {
+            width: 8px;
+            height: 8px;
+            background: #2563eb;
+            border-radius: 50%;
+            animation: vbPulse 1.2s infinite ease-in-out;
+            display: inline-block;
+        }
+        @keyframes vbPulse {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            50% { transform: scale(1.3); opacity: 1; }
+            100% { transform: scale(0.8); opacity: 0.5; }
+        }
         </style>
 
         <script>
@@ -341,23 +662,30 @@ class Verbocat_Editor_UI {
             function injectGutenbergButton() {
                 var $header = $('.edit-post-header__settings, .editor-header__settings');
                 if ($header.length && !$('#verbocat-gutenberg-header-btn').length) {
-                    var $topBtn = $('<button type="button" id="verbocat-gutenberg-header-btn" class="components-button is-primary verbocat-open-modal-btn" style="background: #18181b; margin-right: 8px; font-weight: 500; border-radius: 4px; font-size: 13px; height: 32px;"><?php _e('Translate Page', 'verbocat-connector'); ?></button>');
+                    var $topBtn = $('<button type="button" id="verbocat-gutenberg-header-btn" class="components-button is-primary verbocat-open-modal-btn" style="background: #18181b; margin-right: 8px; font-weight: 500; border-radius: 4px; font-size: 13px; height: 32px; transition: all 0.2s ease;"><?php _e('Translate Page', 'verbocat-connector'); ?></button>');
                     $header.prepend($topBtn);
                 }
             }
             setInterval(injectGutenbergButton, 1000);
 
-            // 2. Open Modal Dialog
+            // 2. Open Modal Dialog with smooth animation
             $(document).on('click', '.verbocat-open-modal-btn', function(e) {
                 e.preventDefault();
                 $('#vb-modal-status').empty();
+                $('#vb-top-progress').hide();
                 $('#verbocat-lang-modal').css('display', 'flex');
+                setTimeout(function() {
+                    $('#verbocat-lang-modal').addClass('vb-visible');
+                }, 10);
                 updateComponentCounter();
             });
 
-            // 3. Close Modal
+            // 3. Close Modal with smooth animation
             $('#verbocat-modal-close, #vb-modal-cancel-btn').on('click', function() {
-                $('#verbocat-lang-modal').hide();
+                $('#verbocat-lang-modal').removeClass('vb-visible');
+                setTimeout(function() {
+                    $('#verbocat-lang-modal').hide();
+                }, 200);
             });
 
             // 4. Search Filter for Languages
@@ -416,11 +744,12 @@ class Verbocat_Editor_UI {
                 $('.vb-component-cb').prop('checked', false).trigger('change');
             });
 
-            // 7. Start Translation Execution (Always uses delta_sync = 1 automatically)
+            // 7. Start Translation Execution with Smooth Neural Animation
             $('#vb-modal-start-btn').on('click', function(e) {
                 e.preventDefault();
                 var $btn = $(this);
                 var $status = $('#vb-modal-status');
+                var $progress = $('#vb-top-progress');
 
                 var selectedTargets = [];
                 $('.vb-target-lang-cb:checked').each(function() {
@@ -444,8 +773,13 @@ class Verbocat_Editor_UI {
 
                 var sourceLang = $('#vb_modal_source_lang').val();
 
-                $btn.prop('disabled', true).text('<?php _e('Translating...', 'verbocat-connector'); ?>');
-                $status.html('<span style="color: #2563eb; font-size: 12px;"><span class="spinner is-active" style="float:none; margin:0 4px 0 0;"></span><?php _e('Translating content...', 'verbocat-connector'); ?></span>');
+                // Activate smooth translation animation
+                $btn.prop('disabled', true);
+                $btn.find('.vb-btn-text').text('<?php _e('Translating...', 'verbocat-connector'); ?>');
+                $progress.show();
+                $('.vb-comp-card').addClass('vb-translating');
+
+                $status.html('<span style="color: #2563eb; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px;"><span class="vb-pulse-dot"></span><?php _e('Translating selected content...', 'verbocat-connector'); ?></span>');
 
                 $.post(ajaxurl, {
                     action: 'verbocat_manual_translate',
@@ -453,18 +787,25 @@ class Verbocat_Editor_UI {
                     source_lang: sourceLang,
                     target_langs: selectedTargets,
                     selected_components: selectedComponents,
-                    delta_sync: 1, // Always enabled in background
+                    delta_sync: 1, // Always automated
                     nonce: '<?php echo wp_create_nonce('verbocat_translate_' . $post->ID); ?>'
                 }, function(res) {
-                    $btn.prop('disabled', false).text('<?php _e('Translate Content', 'verbocat-connector'); ?>');
+                    $progress.hide();
+                    $('.vb-comp-card').removeClass('vb-translating');
+                    $btn.prop('disabled', false);
+                    $btn.find('.vb-btn-text').text('<?php _e('Translate Content', 'verbocat-connector'); ?>');
+
                     if (res.success) {
-                        $status.html('<span style="color: #15803d; font-size: 12px;">' + res.data.message + '</span>');
-                        setTimeout(function() { window.location.reload(); }, 1000);
+                        $status.html('<span style="color: #16a34a; font-size: 13px; font-weight: 500;">✓ ' + res.data.message + '</span>');
+                        setTimeout(function() { window.location.reload(); }, 900);
                     } else {
                         $status.html('<span style="color: #b91c1c; font-size: 12px;">' + (res.data ? res.data.message : 'Translation failed') + '</span>');
                     }
                 }).fail(function() {
-                    $btn.prop('disabled', false).text('<?php _e('Translate Content', 'verbocat-connector'); ?>');
+                    $progress.hide();
+                    $('.vb-comp-card').removeClass('vb-translating');
+                    $btn.prop('disabled', false);
+                    $btn.find('.vb-btn-text').text('<?php _e('Translate Content', 'verbocat-connector'); ?>');
                     $status.html('<span style="color: #b91c1c; font-size: 12px;"><?php _e('Network error. Check your API settings.', 'verbocat-connector'); ?></span>');
                 });
             });
@@ -476,7 +817,7 @@ class Verbocat_Editor_UI {
                 var $msg = $('.verbocat-status-msg');
 
                 $btn.prop('disabled', true).text('<?php _e('Syncing...', 'verbocat-connector'); ?>');
-                $msg.html('<span style="color: #2563eb; font-size: 12px;"><span class="spinner is-active" style="float: none; margin: 0 4px 0 0;"></span><?php _e('Fetching TM records...', 'verbocat-connector'); ?></span>');
+                $msg.html('<span style="color: #2563eb; font-size: 12px; display: flex; align-items: center; gap: 6px;"><span class="vb-pulse-dot"></span><?php _e('Fetching TM records...', 'verbocat-connector'); ?></span>');
 
                 $.post(ajaxurl, {
                     action: 'verbocat_sync_from_tm',
@@ -485,8 +826,8 @@ class Verbocat_Editor_UI {
                 }, function(res) {
                     $btn.prop('disabled', false).text('<?php _e('Sync TM', 'verbocat-connector'); ?>');
                     if (res.success) {
-                        $msg.html('<span style="color: #15803d; font-size: 12px;">' + res.data.message + '</span>');
-                        setTimeout(function() { window.location.reload(); }, 1000);
+                        $msg.html('<span style="color: #16a34a; font-size: 12px;">✓ ' + res.data.message + '</span>');
+                        setTimeout(function() { window.location.reload(); }, 900);
                     } else {
                         $msg.html('<span style="color: #b91c1c; font-size: 12px;">' + (res.data ? res.data.message : 'Sync failed') + '</span>');
                     }
@@ -529,7 +870,7 @@ class Verbocat_Editor_UI {
         $target_langs = is_array($raw_targets) ? array_map('sanitize_text_field', $raw_targets) : [];
         $raw_components = $_POST['selected_components'] ?? null;
         $selected_components = is_array($raw_components) ? array_map('sanitize_text_field', $raw_components) : null;
-        $use_delta = true; // Always enabled for speed, cost savings, and TM preservation
+        $use_delta = true; // Always automated
 
         $result = Verbocat_Delta_Sync::sync_post($post, $target_langs, $source_lang, $use_delta, $selected_components);
 
