@@ -115,9 +115,6 @@ class Verbocat_Editor_UI {
                     <button type="button" class="button button-primary verbocat-open-modal-btn" style="background: #0f172a; border-color: #0f172a; color: #ffffff; font-weight: 500; border-radius: 6px; padding: 0 16px; height: 34px; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease;">
                         <span><?php _e('Translate Page', 'verbocat-connector'); ?></span>
                     </button>
-                    <button type="button" class="button button-secondary verbocat-sync-tm-btn" style="font-weight: 500; border-radius: 6px; height: 34px; padding: 0 14px; color: #334155;">
-                        <?php _e('Sync TM', 'verbocat-connector'); ?>
-                    </button>
                 </div>
             </div>
 
