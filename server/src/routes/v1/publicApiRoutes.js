@@ -348,7 +348,233 @@ publicApiRouter.get("/documents/:id/export", async (req, res) => {
 });
 
 /**
- * 7. Generate API Key
+ * 7. Instant Text & HTML Translation (No document upload required)
+ * POST /api/v1/translate
+ * Headers: x-api-key or Authorization: Bearer <API_KEY>
+ * Body: 
+ *   - Simple text: { text: "Hello", source_lang?: "en", target_lang: "es" }
+ *   - Multi-language text: { text: "Hello", source_lang?: "en", target_langs: ["es", "hi", "fr"] }
+ *   - Structured post/article: { title: "Title", content: "<p>HTML</p>", excerpt?: "...", source_lang?: "en", target_langs: ["es", "hi"] }
+ *   - Batch strings: { items: ["String 1", "String 2"], target_lang: "es" }
+ */
+publicApiRouter.post("/translate", async (req, res) => {
+  try {
+    const { text, title, content, excerpt, items, source, source_lang } = req.body;
+    const srcLang = source_lang || source || "en";
+
+    // Normalize target languages (accepts string "es", comma string "es,hi", or array ["es", "hi"])
+    let targetLangs = [];
+    if (req.body.target_langs && Array.isArray(req.body.target_langs)) {
+      targetLangs = req.body.target_langs;
+    } else if (req.body.target_lang || req.body.target) {
+      const raw = req.body.target_lang || req.body.target;
+      targetLangs = typeof raw === "string" ? raw.split(",").map(s => s.trim()).filter(Boolean) : [raw];
+    } else if (req.body.targets && Array.isArray(req.body.targets)) {
+      targetLangs = req.body.targets;
+    }
+
+    if (targetLangs.length === 0) {
+      return res.status(400).json({
+        error: "Missing target language. Please provide 'target_lang' (e.g. 'es') or 'target_langs' (e.g. ['es', 'hi'])."
+      });
+    }
+
+    // Determine payload structure
+    const isStructured = title !== undefined || content !== undefined;
+    const isBatch = Array.isArray(items) && items.length > 0;
+    const isSimpleText = text !== undefined;
+
+    if (!isStructured && !isBatch && !isSimpleText) {
+      return res.status(400).json({
+        error: "No translatable content provided. Please send 'text', 'items', or 'title'/'content'."
+      });
+    }
+
+    // Prepare segments array for translation
+    let segmentsToTranslate = [];
+    if (isStructured) {
+      let idx = 1;
+      if (title) segmentsToTranslate.push({ id: idx++, key: "title", source: String(title) });
+      if (content) segmentsToTranslate.push({ id: idx++, key: "content", source: String(content) });
+      if (excerpt) segmentsToTranslate.push({ id: idx++, key: "excerpt", source: String(excerpt) });
+    } else if (isBatch) {
+      segmentsToTranslate = items.map((item, idx) => ({ id: idx + 1, source: String(item || "") }));
+    } else {
+      segmentsToTranslate = [{ id: 1, source: String(text || "") }];
+    }
+
+    const userId = req.user?.id || "00000000-0000-0000-0000-000000000000";
+    const orgId = req.organization?.id || req.profile?.organization_id || null;
+
+    let totalWords = 0;
+    const translationsByLang = {};
+
+    // Execute translation for each target language
+    for (const tgtLang of targetLangs) {
+      const docRes = await translateSegments(
+        segmentsToTranslate,
+        tgtLang,
+        srcLang,
+        { fileExtension: ".html", isInstant: true },
+        userId,
+        orgId
+      );
+
+      const langResults = docRes.results || [];
+      totalWords += (docRes.wordCount || 0);
+
+      if (isStructured) {
+        const langObj = {};
+        for (const seg of segmentsToTranslate) {
+          const match = langResults.find(r => r.id === seg.id);
+          langObj[seg.key] = match ? match.translated : seg.source;
+        }
+        translationsByLang[tgtLang] = langObj;
+      } else if (isBatch) {
+        translationsByLang[tgtLang] = segmentsToTranslate.map(seg => {
+          const match = langResults.find(r => r.id === seg.id);
+          return match ? match.translated : seg.source;
+        });
+      } else {
+        const match = langResults.find(r => r.id === 1);
+        translationsByLang[tgtLang] = match ? match.translated : text;
+      }
+    }
+
+    // Log credit consumption
+    if (totalWords > 0 && req.profile?.id) {
+      try {
+        await supabase.from("credit_logs").insert({
+          user_id: req.profile.id,
+          email: req.profile.email || req.user?.email || "api-service",
+          action: "api-instant-translate",
+          word_count: totalWords,
+          file_name: isStructured && title ? `post: ${String(title).substring(0, 30)}` : "api-instant",
+          organization_id: orgId
+        });
+
+        const newConsumed = (req.profile.credits_consumed || 0) + totalWords;
+        await supabase.from("profiles").update({ credits_consumed: newConsumed }).eq("id", req.profile.id);
+      } catch (logErr) {
+        console.error("[PUBLIC_API_CREDIT_LOG_WARN]", logErr.message);
+      }
+    }
+
+    // If single target language requested, return convenient direct response properties as well
+    const isSingleLang = targetLangs.length === 1;
+    const singleTarget = targetLangs[0];
+
+    const responsePayload = {
+      success: true,
+      source_lang: srcLang,
+      target_langs: targetLangs,
+      words_translated: totalWords,
+      translations: translationsByLang
+    };
+
+    if (isSingleLang) {
+      if (isStructured) {
+        responsePayload.translated_title = translationsByLang[singleTarget].title || "";
+        responsePayload.translated_content = translationsByLang[singleTarget].content || "";
+        if (excerpt) responsePayload.translated_excerpt = translationsByLang[singleTarget].excerpt || "";
+      } else if (isBatch) {
+        responsePayload.translated_items = translationsByLang[singleTarget];
+      } else {
+        responsePayload.translated_text = translationsByLang[singleTarget];
+      }
+    }
+
+    return res.json(responsePayload);
+  } catch (err) {
+    console.error("[PUBLIC_API_INSTANT_TRANSLATE_ERROR]", err);
+    return res.status(500).json({ error: err.message || "Failed to execute instant translation." });
+  }
+});
+
+/**
+ * 8. Update Single Segment (Human-in-the-loop / Post-editing)
+ * PUT /api/v1/documents/:id/segments/:index
+ * Body: { target_text: "...", status?: "translated" | "reviewed", target_lang?: "hi" }
+ */
+publicApiRouter.put("/documents/:id/segments/:index", async (req, res) => {
+  try {
+    const documentId = req.params.id;
+    const segmentIndex = Number(req.params.index);
+    const { target_text, targetText, status, target_lang, targetLang } = req.body;
+    const cleanTarget = target_text !== undefined ? target_text : (targetText !== undefined ? targetText : "");
+    const tgtLang = target_lang || targetLang || "hi";
+
+    if (isNaN(segmentIndex) || segmentIndex < 1) {
+      return res.status(400).json({ error: "Invalid segment index. Must be a 1-based positive integer." });
+    }
+
+    // 1. Try updating existing row
+    let { data: updated, error: updateErr } = await supabase
+      .from("document_segments")
+      .update({
+        target_text: cleanTarget,
+        status: status || (cleanTarget ? "translated" : "draft"),
+        updated_at: new Date().toISOString()
+      })
+      .eq("document_id", documentId)
+      .eq("segment_index", segmentIndex)
+      .eq("target_lang", tgtLang)
+      .select()
+      .maybeSingle();
+
+    if (updateErr) {
+      console.error("[PUBLIC_API_UPDATE_SEG_ERR]", updateErr);
+      throw updateErr;
+    }
+
+    // 2. If row didn't exist for target language, retrieve source_text from template and upsert
+    if (!updated) {
+      const { data: tmpl } = await supabase
+        .from("document_segments")
+        .select("source_text")
+        .eq("document_id", documentId)
+        .eq("segment_index", segmentIndex)
+        .is("target_lang", null)
+        .maybeSingle();
+
+      const sourceText = tmpl?.source_text || "";
+
+      const { data: inserted, error: insErr } = await supabase
+        .from("document_segments")
+        .upsert(
+          {
+            document_id: documentId,
+            segment_index: segmentIndex,
+            target_lang: tgtLang,
+            source_text: sourceText, // MANDATORY not null constraint
+            target_text: cleanTarget,
+            status: status || (cleanTarget ? "translated" : "draft"),
+            updated_at: new Date().toISOString()
+          },
+          { onConflict: "document_id,segment_index,target_lang" }
+        )
+        .select()
+        .single();
+
+      if (insErr) throw insErr;
+      updated = inserted;
+    }
+
+    return res.json({
+      success: true,
+      document_id: documentId,
+      segment_index: segmentIndex,
+      target_lang: tgtLang,
+      segment: updated
+    });
+  } catch (err) {
+    console.error("[PUBLIC_API_UPDATE_SEGMENT_ERROR]", err);
+    return res.status(500).json({ error: err.message || "Failed to update segment." });
+  }
+});
+
+/**
+ * 9. Generate API Key
  * POST /api/v1/keys/generate
  * Body: { name?: "My Web App Key" }
  */
@@ -405,3 +631,4 @@ publicApiRouter.post("/keys/generate", async (req, res) => {
 });
 
 module.exports = publicApiRouter;
+

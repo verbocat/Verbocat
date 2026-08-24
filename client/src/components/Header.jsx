@@ -28,7 +28,7 @@ export const Header = ({
   targetLanguage, onTargetLanguageChange, stats, onDeleteProject, onSaveProject,
   onRelinkHtml, onImportXliff, onOpenContext, onOpenSettings,
   userRole, onOpenAdmin, creditsAllowed, creditsConsumed, onLogout, onUpload,
-  collaborators, onOpenShare, onTeleport, dbSaveStatus = "saved"
+  collaborators, onOpenShare, onTeleport, onExport, dbSaveStatus = "saved"
 }) => {
   const [showSpaceMenu, setShowSpaceMenu] = useState(false);
   const [joinedSpaces, setJoinedSpaces] = useState([]);
@@ -124,6 +124,14 @@ export const Header = ({
           <NavBtn onClick={onOpenShare} title="Share Workspace">
             <Users style={{ width: 13, height: 13 }} />
             <span>Share</span>
+          </NavBtn>
+        )}
+
+        {/* Export Button */}
+        {hasFile && onExport && (
+          <NavBtn onClick={onExport} title="Export Translated Document">
+            <Download style={{ width: 13, height: 13 }} />
+            <span>Export</span>
           </NavBtn>
         )}
 

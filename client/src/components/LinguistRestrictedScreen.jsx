@@ -2,9 +2,12 @@ import React, { useState, useEffect } from "react";
 import { 
   ShieldCheck, LogOut, FileText, Lock, CheckCircle2, 
   Sparkles, RefreshCw, Mail, ArrowRight, User, Clock, 
-  ExternalLink, Layers, Headphones, Cpu, BookOpen, Key, Globe, Folder, Play
+  ExternalLink, Layers, Headphones, Cpu, BookOpen, Key, Globe, Folder, Play,
+  Download, AlertCircle, X
 } from "lucide-react";
-import { fetchAssignedDocuments } from "../services/api.js";
+import { fetchAssignedDocuments, fetchDocument, exportFile, exportGlobalTm } from "../services/api.js";
+import { ExportModal } from "./ExportModal.jsx";
+import { exportLinguistReviewTableDocx } from "../utils/exportReviewTable.js";
 
 const LANGUAGE_NAMES = {
   ar: "Arabic (ar)",
@@ -33,6 +36,17 @@ export function LinguistRestrictedScreen({ user, onLogout }) {
   const [lastRefreshed, setLastRefreshed] = useState("Just now");
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Export Modal State
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportModalData, setExportModalData] = useState(null);
+  const [exportingDocId, setExportingDocId] = useState(null);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
 
   // Derive User Name and Email
   const userName = user?.name || user?.full_name || user?.user_metadata?.name || user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Linguist";
@@ -79,6 +93,156 @@ export function LinguistRestrictedScreen({ user, onLogout }) {
       return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
     } catch (_) {
       return "Just now";
+    }
+  };
+
+  const getExtensionFromName = (name) => {
+    if (!name) return ".html";
+    const lastDot = name.lastIndexOf(".");
+    return lastDot !== -1 ? name.slice(lastDot).toLowerCase() : ".html";
+  };
+
+  const handleOpenExport = async (item) => {
+    const docKey = item.id || item.documentId;
+    setExportingDocId(docKey);
+    try {
+      const docData = await fetchDocument(item.documentId, item.targetLang);
+      const segs = docData?.segments || [];
+      const ext = getExtensionFromName(item.documentName);
+      
+      setExportModalData({
+        item,
+        segments: segs,
+        fileName: item.documentName?.replace(/\.[^/.]+$/, "") || "document",
+        fileExtension: ext,
+        sourceLanguage: item.sourceLang || docData?.document?.source_lang || "en",
+        targetLanguage: item.targetLang || "hi"
+      });
+      setShowExportModal(true);
+    } catch (err) {
+      console.error("Failed to load document for export:", err);
+      showToast(`Export preparation failed: ${err.message || "Could not fetch document"}`, "error");
+    } finally {
+      setExportingDocId(null);
+    }
+  };
+
+  const handleExportDocument = async (overrideExt) => {
+    if (!exportModalData) return;
+    try {
+      const { item, segments, fileName, fileExtension, sourceLanguage, targetLanguage } = exportModalData;
+      const ext = overrideExt || fileExtension;
+      const targetId = item.fileId || item.documentId;
+      const blob = await exportFile(targetId, segments, ext, sourceLanguage, targetLanguage, fileName);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `${fileName}_${targetLanguage}${ext}`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      showToast("Document exported successfully!");
+    } catch (error) {
+      console.error(error);
+      showToast(`Export failed: ${error.message}`, "error");
+    }
+  };
+
+  const handleExportSourceDocument = async (overrideExt) => {
+    if (!exportModalData) return;
+    try {
+      const { item, segments, fileName, fileExtension, sourceLanguage, targetLanguage } = exportModalData;
+      const ext = overrideExt || fileExtension;
+      const targetId = item.fileId || item.documentId;
+      const blob = await exportFile(targetId, segments, ext, sourceLanguage, targetLanguage, fileName, true);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `${fileName}_source${ext}`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      showToast("Source document exported successfully!");
+    } catch (error) {
+      console.error(error);
+      showToast(`Export failed: ${error.message}`, "error");
+    }
+  };
+
+  const handleExportXliff = async (isSourceOnly = false) => {
+    if (!exportModalData) return;
+    try {
+      const { item, segments, fileName, sourceLanguage, targetLanguage } = exportModalData;
+      const targetId = item.fileId || item.documentId;
+      const blob = await exportFile(targetId, segments, ".xlf", sourceLanguage, targetLanguage, fileName, isSourceOnly);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `${fileName}_${isSourceOnly ? "source" : targetLanguage}.xlf`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      showToast("XLIFF exported successfully!");
+    } catch (error) {
+      console.error(error);
+      showToast(`XLIFF export failed: ${error.message}`, "error");
+    }
+  };
+
+  const handleExportTmx = async () => {
+    if (!exportModalData) return;
+    try {
+      const { item, segments, fileName, sourceLanguage, targetLanguage } = exportModalData;
+      const targetId = item.fileId || item.documentId;
+      const blob = await exportFile(targetId, segments, ".tmx", sourceLanguage, targetLanguage, fileName);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `${fileName}_${targetLanguage}.tmx`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      showToast("TMX memory exported successfully!");
+    } catch (error) {
+      console.error(error);
+      showToast(`TMX export failed: ${error.message}`, "error");
+    }
+  };
+
+  const handleExportGlobalTmx = async () => {
+    if (!exportModalData) return;
+    try {
+      const { sourceLanguage, targetLanguage } = exportModalData;
+      const blob = await exportGlobalTm(sourceLanguage, targetLanguage);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `global_tm_${sourceLanguage}_${targetLanguage}.tmx`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      showToast("Global database TM exported successfully!");
+    } catch (error) {
+      console.error(error);
+      showToast(`Global TM export failed: ${error.message}`, "error");
+    }
+  };
+
+  const handleExportLinguistTable = async () => {
+    if (!exportModalData) return;
+    try {
+      showToast("Generating Linguist Review Table...");
+      const { segments, fileName, sourceLanguage, targetLanguage } = exportModalData;
+      await exportLinguistReviewTableDocx(segments, fileName, sourceLanguage, targetLanguage);
+      showToast("Linguist review table exported successfully!");
+    } catch (error) {
+      console.error(error);
+      showToast(`Review table export failed: ${error.message}`, "error");
     }
   };
 
@@ -304,15 +468,31 @@ export function LinguistRestrictedScreen({ user, onLogout }) {
                           </div>
                         </div>
 
-                        {/* Direct Editor Action Button */}
-                        <button
-                          onClick={() => openEditor(item)}
-                          className="w-full sm:w-auto shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm hover:shadow-md"
-                        >
-                          <Play className="w-3.5 h-3.5 fill-current" />
-                          <span>Open CAT Editor</span>
-                          <ExternalLink className="w-3.5 h-3.5 ml-0.5" />
-                        </button>
+                        {/* Action Buttons: Export & CAT Editor */}
+                        <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                          <button
+                            onClick={() => handleOpenExport(item)}
+                            disabled={exportingDocId === (item.id || item.documentId)}
+                            className="w-full sm:w-auto shrink-0 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs px-4 py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer border border-slate-300/80 shadow-xs hover:shadow-sm active:scale-[0.98]"
+                            title="Export translated document, XLIFF, TMX or Review Table"
+                          >
+                            {exportingDocId === (item.id || item.documentId) ? (
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+                            ) : (
+                              <Download className="w-3.5 h-3.5 text-indigo-600" />
+                            )}
+                            <span>Export</span>
+                          </button>
+
+                          <button
+                            onClick={() => openEditor(item)}
+                            className="w-full sm:w-auto shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm hover:shadow-md active:scale-[0.98]"
+                          >
+                            <Play className="w-3.5 h-3.5 fill-current" />
+                            <span>Open CAT Editor</span>
+                            <ExternalLink className="w-3.5 h-3.5 ml-0.5" />
+                          </button>
+                        </div>
                       </div>
 
                       {/* BADGES & DETAILS ROW */}
@@ -377,6 +557,44 @@ export function LinguistRestrictedScreen({ user, onLogout }) {
         </div>
 
       </main>
+
+      {/* Export Modal */}
+      {showExportModal && exportModalData && (
+        <ExportModal
+          show={showExportModal}
+          onClose={() => {
+            setShowExportModal(false);
+            setExportModalData(null);
+          }}
+          onExportDocument={handleExportDocument}
+          onExportSourceDocument={handleExportSourceDocument}
+          onExportXliff={handleExportXliff}
+          onExportTmx={handleExportTmx}
+          onExportGlobalTmx={handleExportGlobalTmx}
+          onExportLinguistTable={handleExportLinguistTable}
+          fileExtension={exportModalData.fileExtension}
+          sourceLanguage={exportModalData.sourceLanguage}
+          targetLanguage={exportModalData.targetLanguage}
+        />
+      )}
+
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border animate-in slide-in-from-bottom-3 duration-200 backdrop-blur-md bg-white/95 border-slate-200/90 text-slate-900">
+          {toast.type === "error" ? (
+            <AlertCircle className="w-5 h-5 text-rose-500 shrink-0" />
+          ) : (
+            <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+          )}
+          <span className="text-xs font-semibold">{toast.message}</span>
+          <button 
+            onClick={() => setToast(null)}
+            className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* FOOTER - FULL WIDTH */}
       <footer className="w-full max-w-[1400px] shrink-0 pt-6 pb-2 text-center text-xs text-slate-400 border-t border-slate-200/60 z-20 flex flex-col sm:flex-row items-center justify-between gap-2 font-medium">
