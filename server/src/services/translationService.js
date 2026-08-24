@@ -491,7 +491,8 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
           target_text: translatedText,
           source_lang: actualSourceLang,
           target_lang: target,
-          provider: translated.provider
+          provider: translated.provider,
+          organization_id: organizationId || null
         });
       }
     });
@@ -557,7 +558,8 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
                 target_text: translatedText,
                 source_lang: actualSourceLang,
                 target_lang: target,
-                provider: retried.provider + " (Final Retry)"
+                provider: retried.provider + " (Final Retry)",
+                organization_id: organizationId || null
               }]);
             }
           } else {
@@ -584,6 +586,17 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
                   const sRetried = sentenceResult[0];
                   const sProcessed = postProcessTranslation(sentence, sRetried.translated, target);
                   const sCleaned = ensureEnglishNumerals(sProcessed);
+                  
+                  if (sCleaned && sCleaned !== sentence) {
+                    await upsertTranslationMemoryBatch([{
+                      source_text: sentence,
+                      target_text: sCleaned,
+                      source_lang: actualSourceLang,
+                      target_lang: target,
+                      provider: "OpenAI (Sentence-Split Fallback)",
+                      organization_id: organizationId || null
+                    }]);
+                  }
                   translatedSentences.push(sCleaned);
                 } else {
                   translatedSentences.push(sentence);
@@ -603,7 +616,8 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
                   target_text: joinedTranslation,
                   source_lang: actualSourceLang,
                   target_lang: target,
-                  provider: "OpenAI (Sentence-Split Fallback)"
+                  provider: "OpenAI (Sentence-Split Fallback)",
+                  organization_id: organizationId || null
                 }]);
                 console.log(`[Sentence Split Fallback] Successfully translated split segment!`);
               }
