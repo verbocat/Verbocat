@@ -329,117 +329,101 @@ class Verbocat_Editor_UI {
 
         <style>
         /* ============================================================
-           PREMIUM LIGHT-MODE ANIMATED CONIC AURORA BUTTON
+           PREMIUM LUXURY LIGHT-MODE TRANSLATION ACTION BUTTON
            ============================================================ */
         .vb-header-glow-btn {
             position: relative;
             display: inline-flex !important;
             align-items: center;
-            justify-content: center;
-            padding: 1.5px !important;
-            height: 35px !important;
-            border-radius: 8px !important;
+            gap: 7px;
+            padding: 0 14px !important;
+            height: 34px !important;
+            border-radius: 7px !important;
             background: #ffffff !important;
-            border: none !important;
+            border: 1px solid #e2e8f0 !important;
+            color: #0f172a !important;
+            font-size: 13px !important;
+            font-weight: 600 !important;
             cursor: pointer;
             text-decoration: none !important;
             overflow: hidden;
-            margin-right: 10px;
-            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
-            box-shadow: 0 2px 10px rgba(99, 102, 241, 0.22), 0 1px 3px rgba(0, 0, 0, 0.05);
+            margin-right: 8px;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 2px 8px rgba(37, 99, 235, 0.06);
             user-select: none;
         }
 
-        /* Continuous Rotating Ethereal Aurora Conic Border */
+        /* Subtle Satin Sheen Sweep across the button */
         .vb-header-glow-btn::before {
             content: '';
             position: absolute;
-            top: -100%;
-            left: -100%;
-            width: 300%;
-            height: 300%;
-            background: conic-gradient(
-                from 0deg,
-                #6366f1,
-                #06b6d4,
-                #3b82f6,
-                #a855f7,
-                #6366f1
-            );
-            animation: vbRotateAurora 3.5s linear infinite;
-            z-index: 1;
-        }
-
-        /* Crisp Light-Mode Inner Container */
-        .vb-header-inner {
-            position: relative;
-            display: flex;
-            align-items: center;
-            gap: 7px;
-            width: 100%;
-            height: 100%;
-            padding: 0 13px;
-            background: #ffffff;
-            border-radius: 6.5px;
-            font-size: 13px;
-            font-weight: 600;
-            color: #0f172a;
-            z-index: 2;
-            transition: all 0.2s ease;
-            overflow: hidden;
-        }
-
-        /* Subtle Light Reflection sweep */
-        .vb-header-inner::after {
-            content: '';
-            position: absolute;
             top: 0;
-            left: -150%;
+            left: -130%;
             width: 100%;
             height: 100%;
             background: linear-gradient(
                 90deg,
                 transparent,
-                rgba(99, 102, 241, 0.15),
+                rgba(37, 99, 235, 0.08),
+                rgba(255, 255, 255, 0.8),
                 transparent
             );
-            animation: vbInnerShine 3s infinite cubic-bezier(0.4, 0, 0.2, 1);
+            animation: vbSheenSweep 4s infinite cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1;
         }
 
-        /* Pulsing Orbital Sparkle Icon */
-        .vb-sparkle-icon {
+        /* Subtle Breathing Blue Indicator Accent */
+        .vb-header-glow-btn::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 20%;
+            right: 20%;
+            height: 1.5px;
+            background: linear-gradient(90deg, transparent, #2563eb, transparent);
+            opacity: 0.6;
+            transition: opacity 0.2s ease, left 0.2s ease, right 0.2s ease;
+        }
+
+        /* Translation Glyph SVG Icon */
+        .vb-translate-icon {
+            color: #2563eb;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            color: #4f46e5;
-            font-size: 13px;
-            animation: vbPulseSparkle 2.5s ease-in-out infinite;
+            transition: transform 0.25s ease, color 0.2s ease;
+            z-index: 2;
         }
 
-        @keyframes vbRotateAurora {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        .vb-header-text {
+            position: relative;
+            z-index: 2;
+            color: #0f172a;
+            letter-spacing: -0.1px;
         }
 
-        @keyframes vbPulseSparkle {
-            0%, 100% { transform: scale(1) rotate(0deg); color: #4f46e5; }
-            50% { transform: scale(1.25) rotate(180deg); color: #06b6d4; }
-        }
-
-        @keyframes vbInnerShine {
-            0% { left: -150%; }
-            35% { left: 150%; }
-            100% { left: 150%; }
+        @keyframes vbSheenSweep {
+            0% { left: -130%; }
+            30% { left: 130%; }
+            100% { left: 130%; }
         }
 
         .vb-header-glow-btn:hover {
-            transform: translateY(-1.5px) scale(1.02) !important;
-            box-shadow: 0 4px 18px rgba(99, 102, 241, 0.38), 0 2px 6px rgba(0, 0, 0, 0.08) !important;
+            border-color: #cbd5e1 !important;
+            background: #f8fafc !important;
+            transform: translateY(-1px) !important;
+            box-shadow: 0 3px 12px rgba(37, 99, 235, 0.14), 0 1px 3px rgba(0, 0, 0, 0.05) !important;
         }
 
-        .vb-header-glow-btn:hover .vb-header-inner {
-            background: #fafcff;
-            color: #4338ca;
+        .vb-header-glow-btn:hover::after {
+            opacity: 1;
+            left: 10%;
+            right: 10%;
+        }
+
+        .vb-header-glow-btn:hover .vb-translate-icon {
+            transform: scale(1.1);
+            color: #1d4ed8;
         }
 
         .vb-header-glow-btn:active {
@@ -775,11 +759,23 @@ class Verbocat_Editor_UI {
 
         <script>
         jQuery(document).ready(function($) {
-            // 1. Inject premium Light-Mode Aurora animated button into Gutenberg Top Toolbar
+            // 1. Inject luxury Light-Mode Translation action button into Gutenberg Top Toolbar
             function injectGutenbergButton() {
                 var $header = $('.edit-post-header__settings, .editor-header__settings');
                 if ($header.length && !$('#verbocat-gutenberg-header-btn').length) {
-                    var $topBtn = $('<div id="verbocat-gutenberg-header-btn" class="vb-header-glow-btn verbocat-open-modal-btn" role="button" tabindex="0"><div class="vb-header-inner"><span class="vb-sparkle-icon">✦</span><span><?php _e('Translate Page', 'verbocat-connector'); ?></span></div></div>');
+                    var $topBtn = $(`
+                        <button type="button" id="verbocat-gutenberg-header-btn" class="components-button vb-header-glow-btn verbocat-open-modal-btn">
+                            <svg class="vb-translate-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="m5 8 6 6"></path>
+                                <path d="m4 14 6-6 2-3"></path>
+                                <path d="M2 5h12"></path>
+                                <path d="M7 2h1"></path>
+                                <path d="m22 22-5-10-5 10"></path>
+                                <path d="M14 18h6"></path>
+                            </svg>
+                            <span class="vb-header-text"><?php _e('Translate Page', 'verbocat-connector'); ?></span>
+                        </button>
+                    `);
                     $header.prepend($topBtn);
                 }
             }
