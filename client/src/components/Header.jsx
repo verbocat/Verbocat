@@ -7,7 +7,7 @@ import {
   BookOpen, Users, Settings as SettingsIcon,
   Plus, LockKeyhole, Sliders, ChevronDown, Check,
   ChevronRight, FileText, LayoutDashboard, Sparkles, LogOut,
-  RefreshCw, CheckCircle2, AlertCircle
+  RefreshCw, CheckCircle2, AlertCircle, Download
 } from "lucide-react";
 
 const NavBtn = ({ children, onClick, disabled = false, title = "", iconOnly = false, active = false }) => (
