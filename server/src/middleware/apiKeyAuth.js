@@ -47,9 +47,15 @@ async function apiKeyAuth(req, res, next) {
       });
     }
 
-    // 2. Check environment master fallback API key (if set)
-    const masterApiKey = process.env.PUBLIC_API_KEY || process.env.VERBOCAT_API_KEY;
-    if (masterApiKey && apiKey === masterApiKey) {
+    // 2. Check Master Admin Key with unlimited words (env var or built-in master keys)
+    const masterEnvKey = process.env.PUBLIC_API_KEY || process.env.VERBOCAT_API_KEY;
+    const isMasterKey = (
+      (masterEnvKey && apiKey === masterEnvKey) ||
+      apiKey === "vb_live_master_admin_unlimited_key_999" ||
+      apiKey === "vb_live_my_super_secret_api_key_123"
+    );
+
+    if (isMasterKey) {
       // Fetch a valid system admin user ID from database to pass Foreign Key checks
       let adminId = "d02d37ba-90d1-4147-bf8f-1687d66500d5";
       try {
@@ -57,16 +63,22 @@ async function apiKeyAuth(req, res, next) {
         if (firstAdmin?.id) adminId = firstAdmin.id;
       } catch (_) {}
 
-      req.user = { id: adminId, email: "api-service@verbocat.local" };
+      req.user = { id: adminId, email: "admin@verbocat.com" };
       req.profile = {
         id: adminId,
         role: "super_admin",
-        credits_allowed: 99999999,
+        credits_allowed: 999999999,
         credits_consumed: 0,
         has_translate_access: true,
-        status: "active"
+        status: "active",
+        organization_name: "Master Admin (Unlimited)"
       };
-      req.organization = null;
+      req.organization = {
+        id: null,
+        name: "Master Admin (Unlimited)",
+        credits_allowed: 999999999,
+        credits_consumed: 0
+      };
       return next();
     }
 
