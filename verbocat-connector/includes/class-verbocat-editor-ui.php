@@ -51,18 +51,25 @@ class Verbocat_Editor_UI {
 
         if ($is_translation) {
             $lang_meta = Verbocat_Languages::get_language($lang);
+            $source_post = get_post($source_id);
+            $src_title = $source_post ? $source_post->post_title : __('Original Post', 'verbocat-connector');
             ?>
-            <div style="padding: 14px 16px; background: #fafafa; border: 1px solid #e4e4e7; border-radius: 8px; font-size: 13px; color: #27272a;">
-                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <strong style="font-size: 14px; color: #18181b;"><?php echo esc_html($lang_meta['name']); ?></strong>
+            <div style="background: #ffffff; border: 1px solid #e4e4e7; border-radius: 10px; padding: 18px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="background: #eff6ff; color: #2563eb; font-weight: 700; font-size: 11px; padding: 3px 8px; border-radius: 50px; text-transform: uppercase; letter-spacing: 0.5px;">
+                            <?php echo esc_html($lang_meta['name']); ?>
+                        </span>
+                        <span style="font-size: 13px; color: #71717a;">
+                            <?php _e('Linked Source:', 'verbocat-connector'); ?> <strong style="color: #0f172a;"><?php echo esc_html(wp_trim_words($src_title, 8, '...')); ?></strong>
+                        </span>
                     </div>
                     <div style="display: flex; gap: 8px;">
-                        <a href="<?php echo get_edit_post_link($source_id); ?>" class="button button-secondary" target="_blank" style="font-size: 12px;">
-                            <?php _e('Original Post', 'verbocat-connector'); ?> &rarr;
+                        <a href="<?php echo get_edit_post_link($source_id); ?>" class="button button-secondary" style="font-size: 12px; font-weight: 500; border-radius: 6px; height: 32px; display: inline-flex; align-items: center; gap: 4px;">
+                            <span><?php _e('Edit Original Source', 'verbocat-connector'); ?></span> &rarr;
                         </a>
-                        <a href="<?php echo get_permalink($post->ID); ?>" class="button button-secondary" target="_blank" style="font-size: 12px;">
-                            <?php _e('View Live', 'verbocat-connector'); ?> &#x2197;
+                        <a href="<?php echo get_permalink($post->ID); ?>" class="button button-secondary" target="_blank" style="font-size: 12px; font-weight: 500; border-radius: 6px; height: 32px; display: inline-flex; align-items: center; gap: 4px;">
+                            <span><?php _e('View Live', 'verbocat-connector'); ?></span> &#x2197;
                         </a>
                     </div>
                 </div>
@@ -74,17 +81,41 @@ class Verbocat_Editor_UI {
         $translations = get_post_meta($post->ID, '_verbocat_translations', true) ?: [];
         $opts = Verbocat_Settings::get_options();
         $target_langs = array_filter(array_map('trim', explode(',', $opts['target_langs'])));
+        $completed_count = 0;
+        foreach ($target_langs as $tl) {
+            if (!empty($translations[$tl]) && get_post($translations[$tl])) $completed_count++;
+        }
         ?>
-        <div style="font-size: 13px; color: #27272a; padding: 4px 0;">
-            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
-                <div>
-                    <span style="font-weight: 600; font-size: 14px; color: #18181b;"><?php _e('Continuous Localization', 'verbocat-connector'); ?></span>
+        <div style="background: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 4px 0;">
+            
+            <!-- Top Control Bar -->
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid #f4f4f5;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 32px; height: 32px; border-radius: 8px; background: #eff6ff; display: flex; align-items: center; justify-content: center; color: #2563eb;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="m5 8 6 6"></path>
+                            <path d="m4 14 6-6 2-3"></path>
+                            <path d="M2 5h12"></path>
+                            <path d="M7 2h1"></path>
+                            <path d="m22 22-5-10-5 10"></path>
+                            <path d="M14 18h6"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <div style="font-weight: 600; font-size: 14px; color: #0f172a; line-height: 1.2;">
+                            <?php _e('Continuous Localization', 'verbocat-connector'); ?>
+                        </div>
+                        <div style="font-size: 12px; color: #71717a; margin-top: 2px;">
+                            <?php echo sprintf(__('%d of %d language versions active', 'verbocat-connector'), $completed_count, count($target_langs)); ?>
+                        </div>
+                    </div>
                 </div>
-                <div style="display: flex; gap: 8px;">
-                    <button type="button" class="button button-primary verbocat-open-modal-btn" style="background: #18181b; border-color: #18181b; font-weight: 500; border-radius: 6px; padding: 0 14px; height: 32px; transition: all 0.2s ease;">
-                        <?php _e('Translate Page', 'verbocat-connector'); ?>
+
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <button type="button" class="button button-primary verbocat-open-modal-btn" style="background: #0f172a; border-color: #0f172a; color: #ffffff; font-weight: 500; border-radius: 6px; padding: 0 16px; height: 34px; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease;">
+                        <span><?php _e('Translate Page', 'verbocat-connector'); ?></span>
                     </button>
-                    <button type="button" class="button button-secondary verbocat-sync-tm-btn" style="font-weight: 500; border-radius: 6px; height: 32px;">
+                    <button type="button" class="button button-secondary verbocat-sync-tm-btn" style="font-weight: 500; border-radius: 6px; height: 34px; padding: 0 14px; color: #334155;">
                         <?php _e('Sync TM', 'verbocat-connector'); ?>
                     </button>
                 </div>
@@ -92,29 +123,52 @@ class Verbocat_Editor_UI {
 
             <div class="verbocat-status-msg" style="margin: 8px 0; font-size: 13px;"></div>
 
-            <!-- Existing Language Versions Grid -->
-            <div style="margin-top: 12px; border-top: 1px solid #f4f4f5; padding-top: 12px;">
-                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;">
+            <!-- Language Versions Modern Grid -->
+            <div style="margin-top: 14px;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px;">
                     <?php foreach ($target_langs as $t_lang): 
                         $t_id = $translations[$t_lang] ?? null;
                         $t_meta = Verbocat_Languages::get_language($t_lang);
                         $has_trans = $t_id && get_post($t_id);
+                        $p_status = $has_trans ? get_post_status($t_id) : 'pending';
                     ?>
-                        <div style="background: <?php echo $has_trans ? '#fafafa' : '#ffffff'; ?>; border: 1px solid <?php echo $has_trans ? '#e4e4e7' : '#f4f4f5'; ?>; border-radius: 6px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between;">
-                            <div style="display: flex; align-items: center; gap: 6px; font-size: 13px;">
-                                <span style="font-weight: 500; color: #18181b;"><?php echo esc_html($t_meta['name']); ?></span>
+                        <div style="background: <?php echo $has_trans ? '#ffffff' : '#fafafa'; ?>; border: 1px solid <?php echo $has_trans ? '#e2e8f0' : '#f1f5f9'; ?>; border-radius: 8px; padding: 12px 14px; transition: all 0.15s ease; box-shadow: <?php echo $has_trans ? '0 1px 3px rgba(0,0,0,0.04)' : 'none'; ?>;" onmouseover="this.style.borderColor='#cbd5e1'" onmouseout="this.style.borderColor='<?php echo $has_trans ? '#e2e8f0' : '#f1f5f9'; ?>'">
+                            
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                                <span style="font-weight: 600; color: #0f172a; font-size: 13px;">
+                                    <?php echo esc_html($t_meta['name']); ?>
+                                </span>
+                                <?php if ($has_trans): ?>
+                                    <span style="font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 50px; background: <?php echo $p_status === 'publish' ? '#ecfdf5' : '#fef3c7'; ?>; color: <?php echo $p_status === 'publish' ? '#059669' : '#b45309'; ?>;">
+                                        <?php echo ucfirst($p_status); ?>
+                                    </span>
+                                <?php else: ?>
+                                    <span style="font-size: 11px; font-weight: 500; padding: 1px 7px; border-radius: 50px; background: #f4f4f5; color: #71717a;">
+                                        <?php _e('Not Created', 'verbocat-connector'); ?>
+                                    </span>
+                                <?php endif; ?>
                             </div>
-                            <?php if ($has_trans): ?>
-                                <a href="<?php echo get_edit_post_link($t_id); ?>" target="_blank" style="font-size: 12px; color: #2563eb; text-decoration: none; font-weight: 500;">
-                                    <?php _e('Edit', 'verbocat-connector'); ?> &rarr;
-                                </a>
-                            <?php else: ?>
-                                <span style="font-size: 11px; color: #a1a1aa;"><?php _e('Pending', 'verbocat-connector'); ?></span>
-                            <?php endif; ?>
+
+                            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; padding-top: 6px; border-top: 1px solid #f8fafc;">
+                                <?php if ($has_trans): ?>
+                                    <a href="<?php echo get_edit_post_link($t_id); ?>" target="_blank" style="color: #2563eb; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;">
+                                        <span><?php _e('Edit Translation', 'verbocat-connector'); ?></span> &rarr;
+                                    </a>
+                                    <a href="<?php echo get_permalink($t_id); ?>" target="_blank" style="color: #64748b; text-decoration: none; font-size: 11px;" title="<?php _e('View Live', 'verbocat-connector'); ?>">
+                                        &#x2197;
+                                    </a>
+                                <?php else: ?>
+                                    <a href="#" class="verbocat-open-modal-btn" style="color: #71717a; text-decoration: none; font-weight: 500;">
+                                        <?php _e('+ Translate', 'verbocat-connector'); ?>
+                                    </a>
+                                <?php endif; ?>
+                            </div>
+
                         </div>
                     <?php endforeach; ?>
                 </div>
             </div>
+
         </div>
         <?php
     }
