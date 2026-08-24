@@ -201,13 +201,20 @@ class Verbocat_Editor_UI {
                 <!-- Progress Line Animation (Active during translation) -->
                 <div id="vb-top-progress" class="vb-progress-bar" style="display: none;"></div>
 
-                <!-- Header -->
+                <!-- Header with Minimize & Close Controls -->
                 <div class="vb-modal-header">
                     <div>
                         <h2 style="margin: 0; font-size: 16px; font-weight: 600; color: #18181b; line-height: 1.3;"><?php _e('Translate Content', 'verbocat-connector'); ?></h2>
                         <p style="margin: 2px 0 0 0; color: #71717a; font-size: 13px;"><?php _e('Choose target languages and select components to translate.', 'verbocat-connector'); ?></p>
                     </div>
-                    <button type="button" id="verbocat-modal-close" class="vb-close-btn">&times;</button>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <button type="button" id="verbocat-modal-minimize" class="vb-control-btn" title="<?php _e('Minimize to background', 'verbocat-connector'); ?>">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                        </button>
+                        <button type="button" id="verbocat-modal-close" class="vb-control-btn" title="<?php _e('Close', 'verbocat-connector'); ?>">&times;</button>
+                    </div>
                 </div>
 
                 <!-- 2-Column Body -->
@@ -316,6 +323,7 @@ class Verbocat_Editor_UI {
                     <div id="vb-modal-status" class="vb-status-area"></div>
 
                     <div style="display: flex; gap: 8px; align-items: center;">
+                        <button type="button" id="vb-modal-minimize-action" class="vb-btn-secondary" style="display: none;"><?php _e('Minimize', 'verbocat-connector'); ?></button>
                         <button type="button" id="vb-modal-cancel-btn" class="vb-btn-secondary"><?php _e('Cancel', 'verbocat-connector'); ?></button>
                         <button type="button" id="vb-modal-start-btn" class="vb-btn-primary">
                             <span class="vb-btn-text"><?php _e('Translate Content', 'verbocat-connector'); ?></span>
@@ -327,18 +335,38 @@ class Verbocat_Editor_UI {
             </div>
         </div>
 
+        <!-- Floating Minimized Live Translation Pill (Bottom Right) -->
+        <div id="vb-minimized-pill" class="vb-floating-pill" style="display: none;">
+            <div class="vb-pill-content">
+                <span class="vb-pulse-dot"></span>
+                <span id="vb-pill-text" style="font-weight: 600; font-size: 13px; color: #0f172a;">Translating... 0%</span>
+            </div>
+            <button type="button" id="vb-pill-expand-btn" class="vb-pill-btn" title="Expand Studio">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 3 21 3 21 9"></polyline>
+                    <polyline points="9 21 3 21 3 15"></polyline>
+                    <line x1="21" y1="3" x2="14" y2="10"></line>
+                    <line x1="3" y1="21" x2="10" y2="14"></line>
+                </svg>
+            </button>
+        </div>
+
         <style>
         /* ============================================================
-           PREMIUM LUXURY LIGHT-MODE TRANSLATION ACTION BUTTON
+           PREMIUM LIGHT-MODE BUTTON WITH CONIC PERIMETER PROGRESS BAR
            ============================================================ */
+        :root {
+            --vb-progress: 0%;
+        }
+
         .vb-header-glow-btn {
             position: relative;
             display: inline-flex !important;
             align-items: center;
-            gap: 7px;
-            padding: 0 14px !important;
-            height: 34px !important;
-            border-radius: 7px !important;
+            justify-content: center;
+            padding: 1.5px !important;
+            height: 35px !important;
+            border-radius: 8px !important;
             background: #ffffff !important;
             border: 1px solid #e2e8f0 !important;
             color: #0f172a !important;
@@ -348,86 +376,57 @@ class Verbocat_Editor_UI {
             text-decoration: none !important;
             overflow: hidden;
             margin-right: 8px;
-            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 2px 8px rgba(37, 99, 235, 0.06);
             user-select: none;
+            box-sizing: border-box !important;
         }
 
-        /* Subtle Satin Sheen Sweep across the button */
-        .vb-header-glow-btn::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -130%;
+        /* Continuous Dynamic Progress Bar Outline when active */
+        .vb-header-glow-btn.vb-in-progress {
+            background: conic-gradient(#2563eb var(--vb-progress, 0%), #e2e8f0 0%) !important;
+            padding: 2px !important;
+            border: none !important;
+            box-shadow: 0 0 14px rgba(37, 99, 235, 0.3) !important;
+        }
+
+        .vb-header-inner {
+            display: flex;
+            align-items: center;
+            gap: 7px;
             width: 100%;
             height: 100%;
-            background: linear-gradient(
-                90deg,
-                transparent,
-                rgba(37, 99, 235, 0.08),
-                rgba(255, 255, 255, 0.8),
-                transparent
-            );
-            animation: vbSheenSweep 4s infinite cubic-bezier(0.4, 0, 0.2, 1);
-            z-index: 1;
+            padding: 0 12px;
+            background: #ffffff;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #0f172a;
+            transition: background 0.2s ease;
         }
 
-        /* Subtle Breathing Blue Indicator Accent */
-        .vb-header-glow-btn::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 20%;
-            right: 20%;
-            height: 1.5px;
-            background: linear-gradient(90deg, transparent, #2563eb, transparent);
-            opacity: 0.6;
-            transition: opacity 0.2s ease, left 0.2s ease, right 0.2s ease;
-        }
-
-        /* Translation Glyph SVG Icon */
         .vb-translate-icon {
             color: #2563eb;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            transition: transform 0.25s ease, color 0.2s ease;
-            z-index: 2;
+            transition: transform 0.2s ease, color 0.2s ease;
         }
 
-        .vb-header-text {
-            position: relative;
-            z-index: 2;
-            color: #0f172a;
-            letter-spacing: -0.1px;
-        }
-
-        @keyframes vbSheenSweep {
-            0% { left: -130%; }
-            30% { left: 130%; }
-            100% { left: 130%; }
+        .vb-header-pct {
+            font-weight: 700;
+            color: #2563eb;
+            font-size: 12px;
+            letter-spacing: -0.2px;
         }
 
         .vb-header-glow-btn:hover {
             border-color: #cbd5e1 !important;
-            background: #f8fafc !important;
             transform: translateY(-1px) !important;
-            box-shadow: 0 3px 12px rgba(37, 99, 235, 0.14), 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+            box-shadow: 0 3px 12px rgba(37, 99, 235, 0.16) !important;
         }
-
-        .vb-header-glow-btn:hover::after {
-            opacity: 1;
-            left: 10%;
-            right: 10%;
-        }
-
-        .vb-header-glow-btn:hover .vb-translate-icon {
-            transform: scale(1.1);
-            color: #1d4ed8;
-        }
-
-        .vb-header-glow-btn:active {
-            transform: translateY(0) scale(0.98) !important;
+        .vb-header-glow-btn:hover .vb-header-inner {
+            background: #fafcff;
         }
 
         /* ============================================================
@@ -474,9 +473,9 @@ class Verbocat_Editor_UI {
             transform: translateY(0) scale(1);
         }
 
-        /* Top Shimmering Progress Bar */
+        /* Top Progress Line inside modal */
         .vb-progress-bar {
-            height: 2.5px;
+            height: 3px;
             width: 100%;
             background: linear-gradient(90deg, #2563eb, #38bdf8, #2563eb);
             background-size: 200% 100%;
@@ -500,21 +499,21 @@ class Verbocat_Editor_UI {
             background: #ffffff;
         }
 
-        .vb-close-btn {
+        .vb-control-btn {
             background: transparent;
             border: none;
-            font-size: 20px;
-            color: #a1a1aa;
+            font-size: 18px;
+            color: #71717a;
             cursor: pointer;
             border-radius: 6px;
-            width: 32px;
-            height: 32px;
+            width: 30px;
+            height: 30px;
             display: flex;
             align-items: center;
             justify-content: center;
             transition: all 0.15s ease;
         }
-        .vb-close-btn:hover {
+        .vb-control-btn:hover {
             background: #f4f4f5;
             color: #18181b;
         }
@@ -566,7 +565,6 @@ class Verbocat_Editor_UI {
             background: #ffffff;
             color: #18181b;
             outline: none;
-            transition: border-color 0.15s ease;
         }
         .vb-select:focus {
             border-color: #18181b;
@@ -583,7 +581,6 @@ class Verbocat_Editor_UI {
             background: #ffffff;
             color: #18181b;
             outline: none;
-            transition: border-color 0.15s ease;
         }
         .vb-input-search:focus {
             border-color: #18181b;
@@ -623,7 +620,6 @@ class Verbocat_Editor_UI {
             gap: 8px;
         }
 
-        /* Smooth Animated Component Card */
         .vb-comp-card {
             border: 1px solid #e4e4e7;
             border-radius: 6px;
@@ -692,7 +688,6 @@ class Verbocat_Editor_UI {
             display: flex;
             align-items: center;
             gap: 6px;
-            transition: all 0.2s ease;
         }
 
         .vb-btn-secondary {
@@ -732,16 +727,12 @@ class Verbocat_Editor_UI {
             border-color: #27272a;
             transform: translateY(-1px);
         }
-        .vb-btn-primary:active {
-            transform: translateY(0);
-        }
         .vb-btn-primary:disabled {
             opacity: 0.7;
             cursor: not-allowed;
             transform: none;
         }
 
-        /* Minimal Pulsing Ring */
         .vb-pulse-dot {
             width: 8px;
             height: 8px;
@@ -755,53 +746,164 @@ class Verbocat_Editor_UI {
             50% { transform: scale(1.3); opacity: 1; }
             100% { transform: scale(0.8); opacity: 0.5; }
         }
+
+        /* Floating Minimized Live Translation Pill */
+        .vb-floating-pill {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 999999;
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(8px);
+            border: 1px solid #e2e8f0;
+            border-radius: 50px;
+            padding: 8px 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(37, 99, 235, 0.15);
+            animation: vbPillSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            cursor: pointer;
+        }
+        @keyframes vbPillSlideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .vb-pill-content {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .vb-pill-btn {
+            background: #f1f5f9;
+            border: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: #475569;
+            transition: all 0.15s ease;
+        }
+        .vb-pill-btn:hover {
+            background: #2563eb;
+            color: #ffffff;
+        }
         </style>
 
         <script>
         jQuery(document).ready(function($) {
+            var isTranslating = false;
+            var currentPercent = 0;
+            var progressTimer = null;
+
             // 1. Inject luxury Light-Mode Translation action button into Gutenberg Top Toolbar
             function injectGutenbergButton() {
                 var $header = $('.edit-post-header__settings, .editor-header__settings');
                 if ($header.length && !$('#verbocat-gutenberg-header-btn').length) {
                     var $topBtn = $(`
-                        <button type="button" id="verbocat-gutenberg-header-btn" class="components-button vb-header-glow-btn verbocat-open-modal-btn">
-                            <svg class="vb-translate-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="m5 8 6 6"></path>
-                                <path d="m4 14 6-6 2-3"></path>
-                                <path d="M2 5h12"></path>
-                                <path d="M7 2h1"></path>
-                                <path d="m22 22-5-10-5 10"></path>
-                                <path d="M14 18h6"></path>
-                            </svg>
-                            <span class="vb-header-text"><?php _e('Translate Page', 'verbocat-connector'); ?></span>
-                        </button>
+                        <div id="verbocat-gutenberg-header-btn" class="components-button vb-header-glow-btn verbocat-open-modal-btn" role="button" tabindex="0">
+                            <div class="vb-header-inner">
+                                <svg class="vb-translate-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="m5 8 6 6"></path>
+                                    <path d="m4 14 6-6 2-3"></path>
+                                    <path d="M2 5h12"></path>
+                                    <path d="M7 2h1"></path>
+                                    <path d="m22 22-5-10-5 10"></path>
+                                    <path d="M14 18h6"></path>
+                                </svg>
+                                <span class="vb-header-text"><?php _e('Translate Page', 'verbocat-connector'); ?></span>
+                                <span class="vb-header-pct" style="display: none;">0%</span>
+                            </div>
+                        </div>
                     `);
                     $header.prepend($topBtn);
                 }
             }
             setInterval(injectGutenbergButton, 1000);
 
-            // 2. Open Modal Dialog with smooth animation
-            $(document).on('click', '.verbocat-open-modal-btn', function(e) {
-                e.preventDefault();
-                $('#vb-modal-status').empty();
-                $('#vb-top-progress').hide();
+            // Update Progress in UI and Header Button perimeter
+            function setProgress(pct, statusText) {
+                currentPercent = Math.min(100, Math.max(0, pct));
+                var headerBtn = document.getElementById('verbocat-gutenberg-header-btn');
+                if (headerBtn) {
+                    headerBtn.style.setProperty('--vb-progress', currentPercent + '%');
+                    if (isTranslating) {
+                        $('#verbocat-gutenberg-header-btn').addClass('vb-in-progress');
+                        $('.vb-header-pct').text(currentPercent + '%').show();
+                        $('.vb-header-text').text('<?php _e('Translating', 'verbocat-connector'); ?>');
+                    } else if (currentPercent >= 100) {
+                        $('#verbocat-gutenberg-header-btn').removeClass('vb-in-progress');
+                        $('.vb-header-pct').hide();
+                        $('.vb-header-text').text('<?php _e('✓ Translated', 'verbocat-connector'); ?>');
+                    } else {
+                        $('#verbocat-gutenberg-header-btn').removeClass('vb-in-progress');
+                        $('.vb-header-pct').hide();
+                        $('.vb-header-text').text('<?php _e('Translate Page', 'verbocat-connector'); ?>');
+                    }
+                }
+
+                if (statusText) {
+                    $('#vb-modal-status').html('<span style="color: #2563eb; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px;"><span class="vb-pulse-dot"></span>' + statusText + ' (' + currentPercent + '%)</span>');
+                    $('#vb-pill-text').text(statusText + ' ' + currentPercent + '%');
+                }
+            }
+
+            // 2. Open / Restore Modal Dialog
+            function openModal() {
                 $('#verbocat-lang-modal').css('display', 'flex');
                 setTimeout(function() {
                     $('#verbocat-lang-modal').addClass('vb-visible');
                 }, 10);
+                $('#vb-minimized-pill').hide();
                 updateComponentCounter();
-            });
+            }
 
-            // 3. Close Modal with smooth animation
-            $('#verbocat-modal-close, #vb-modal-cancel-btn').on('click', function() {
+            // 3. Minimize Modal Dialog
+            function minimizeModal() {
                 $('#verbocat-lang-modal').removeClass('vb-visible');
                 setTimeout(function() {
                     $('#verbocat-lang-modal').hide();
                 }, 200);
+
+                if (isTranslating) {
+                    $('#vb-minimized-pill').fadeIn(150);
+                }
+            }
+
+            // 4. Close Modal Dialog
+            function closeModal() {
+                if (isTranslating) {
+                    minimizeModal();
+                    return;
+                }
+                $('#verbocat-lang-modal').removeClass('vb-visible');
+                setTimeout(function() {
+                    $('#verbocat-lang-modal').hide();
+                }, 200);
+                $('#vb-minimized-pill').hide();
+            }
+
+            $(document).on('click', '.verbocat-open-modal-btn, #vb-minimized-pill, #vb-pill-expand-btn', function(e) {
+                e.preventDefault();
+                openModal();
             });
 
-            // 4. Search Filter for Languages
+            $('#verbocat-modal-minimize, #vb-modal-minimize-action').on('click', function(e) {
+                e.preventDefault();
+                minimizeModal();
+            });
+
+            $('#verbocat-modal-close, #vb-modal-cancel-btn').on('click', function(e) {
+                e.preventDefault();
+                closeModal();
+            });
+
+            // 5. Search Filter for Languages
             $('#vb-lang-search').on('keyup', function() {
                 var q = $(this).val().toLowerCase().trim();
                 $('.vb-lang-tile').each(function() {
@@ -814,7 +916,7 @@ class Verbocat_Editor_UI {
                 });
             });
 
-            // 5. Languages Select / Clear All
+            // 6. Languages Select / Clear All
             $('#vb-select-all').on('click', function(e) {
                 e.preventDefault();
                 $('.vb-target-lang-cb').prop('checked', true);
@@ -824,7 +926,7 @@ class Verbocat_Editor_UI {
                 $('.vb-target-lang-cb').prop('checked', false);
             });
 
-            // 6. Components Card Click to Toggle
+            // 7. Components Card Click to Toggle
             $(document).on('click', '.vb-comp-card', function(e) {
                 if (!$(e.target).is('input[type="checkbox"]')) {
                     var $cb = $(this).find('.vb-component-cb');
@@ -857,9 +959,11 @@ class Verbocat_Editor_UI {
                 $('.vb-component-cb').prop('checked', false).trigger('change');
             });
 
-            // 7. Start Translation Execution with Smooth Neural Animation
+            // 8. Start Translation Execution with Smooth Live Multi-Language Progress
             $('#vb-modal-start-btn').on('click', function(e) {
                 e.preventDefault();
+                if (isTranslating) return;
+
                 var $btn = $(this);
                 var $status = $('#vb-modal-status');
                 var $progress = $('#vb-top-progress');
@@ -886,13 +990,23 @@ class Verbocat_Editor_UI {
 
                 var sourceLang = $('#vb_modal_source_lang').val();
 
-                // Activate smooth translation animation
+                // Activate translation & show minimize option
+                isTranslating = true;
                 $btn.prop('disabled', true);
                 $btn.find('.vb-btn-text').text('<?php _e('Translating...', 'verbocat-connector'); ?>');
+                $('#vb-modal-minimize-action').show();
                 $progress.show();
                 $('.vb-comp-card').addClass('vb-translating');
 
-                $status.html('<span style="color: #2563eb; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px;"><span class="vb-pulse-dot"></span><?php _e('Translating selected content...', 'verbocat-connector'); ?></span>');
+                // Smooth live progress simulation ticker
+                setProgress(10, '<?php _e('Parsing content...', 'verbocat-connector'); ?>');
+                var cur = 10;
+                progressTimer = setInterval(function() {
+                    if (cur < 85) {
+                        cur += Math.floor(Math.random() * 8) + 4;
+                        setProgress(cur, '<?php _e('Translating selected content...', 'verbocat-connector'); ?>');
+                    }
+                }, 400);
 
                 $.post(ajaxurl, {
                     action: 'verbocat_manual_translate',
@@ -903,27 +1017,38 @@ class Verbocat_Editor_UI {
                     delta_sync: 1, // Always automated
                     nonce: '<?php echo wp_create_nonce('verbocat_translate_' . $post->ID); ?>'
                 }, function(res) {
+                    clearInterval(progressTimer);
                     $progress.hide();
                     $('.vb-comp-card').removeClass('vb-translating');
                     $btn.prop('disabled', false);
                     $btn.find('.vb-btn-text').text('<?php _e('Translate Content', 'verbocat-connector'); ?>');
+                    $('#vb-modal-minimize-action').hide();
+                    isTranslating = false;
 
                     if (res.success) {
+                        setProgress(100, '<?php _e('Completed', 'verbocat-connector'); ?>');
                         $status.html('<span style="color: #16a34a; font-size: 13px; font-weight: 500;">✓ ' + res.data.message + '</span>');
-                        setTimeout(function() { window.location.reload(); }, 900);
+                        $('#vb-pill-text').text('✓ Translations updated (100%)');
+                        setTimeout(function() { window.location.reload(); }, 1200);
                     } else {
+                        setProgress(0, '');
                         $status.html('<span style="color: #b91c1c; font-size: 12px;">' + (res.data ? res.data.message : 'Translation failed') + '</span>');
+                        $('#vb-pill-text').text('Translation failed');
                     }
                 }).fail(function() {
+                    clearInterval(progressTimer);
                     $progress.hide();
                     $('.vb-comp-card').removeClass('vb-translating');
                     $btn.prop('disabled', false);
                     $btn.find('.vb-btn-text').text('<?php _e('Translate Content', 'verbocat-connector'); ?>');
+                    $('#vb-modal-minimize-action').hide();
+                    isTranslating = false;
+                    setProgress(0, '');
                     $status.html('<span style="color: #b91c1c; font-size: 12px;"><?php _e('Network error. Check your API settings.', 'verbocat-connector'); ?></span>');
                 });
             });
 
-            // 8. Sync from TM Button
+            // 9. Sync from TM Button
             $(document).on('click', '.verbocat-sync-tm-btn', function(e) {
                 e.preventDefault();
                 var $btn = $(this);
