@@ -2726,7 +2726,7 @@ export default function App() {
   // Guard screens for authentication & password resets
   if (resetMode) {
     return (
-      <div className={`h-screen w-screen flex items-center justify-center ${theme.bg} overflow-hidden`}>
+      <div className="h-dvh w-full overflow-hidden relative">
         <Toast toast={toast} />
         <LoginScreen key="reset" mode="reset" onResetSuccess={() => setResetMode(false)} />
       </div>
@@ -2740,7 +2740,7 @@ export default function App() {
         return null;
       }
       return (
-        <div className={`h-screen w-screen flex flex-col items-center justify-center ${theme.bg} p-6 overflow-hidden`}>
+        <div className={`h-dvh w-full flex flex-col items-center justify-center ${theme.bg} p-6 overflow-hidden`}>
           <Toast toast={toast} />
           <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl text-center space-y-4">
             <div className="w-12 h-12 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto text-xl font-bold">
@@ -2768,7 +2768,7 @@ export default function App() {
     }
 
     return (
-      <div className={`h-screen w-screen flex flex-col items-center justify-center ${theme.bg} overflow-hidden gap-4`}>
+      <div className={`h-dvh w-full flex flex-col items-center justify-center ${theme.bg} overflow-hidden gap-4`}>
         <LoadingOverlay message="Verifying secure session..." />
       </div>
     );
@@ -2776,7 +2776,7 @@ export default function App() {
 
   if (!isAuth) {
     return (
-      <div className={`h-screen w-screen flex items-center justify-center ${theme.bg} overflow-hidden`}>
+      <div className="h-dvh w-full overflow-hidden relative">
         <Toast toast={toast} />
         <LoginScreen key="login" mode="login" />
       </div>

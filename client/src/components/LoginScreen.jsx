@@ -408,7 +408,7 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
   const currentTranslation = translations[rotatorIndex];
 
   return (
-    <div className="min-h-dvh h-auto w-full skeuo-matte-bg text-slate-900 flex flex-col justify-between items-center p-3 sm:p-6 lg:p-8 overflow-y-auto overflow-x-hidden font-sans selection:bg-indigo-500/20 selection:text-indigo-900 relative">
+    <div className="h-full w-full max-h-dvh skeuo-matte-bg text-slate-900 flex flex-col justify-between items-center px-3 py-2 sm:px-6 sm:py-3 lg:px-8 lg:py-4 overflow-y-auto overflow-x-hidden font-sans selection:bg-indigo-500/20 selection:text-indigo-900 relative">
       
       {/* Soft Ambient Light Aura */}
       <div 
@@ -419,19 +419,19 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
       />
 
       {/* TOP HEADER */}
-      <header className="w-full max-w-6xl shrink-0 flex items-center justify-between py-2 sm:py-3 z-20">
+      <header className="w-full max-w-5xl xl:max-w-6xl shrink-0 flex items-center justify-between py-1 sm:py-1.5 z-20">
         {/* Brand Header for Mobile View (< lg) */}
         <div className="flex items-center gap-2.5 lg:hidden">
           <img 
             src="/centroid_final_LOGO_light.png" 
             alt="Centroid Logo" 
-            className="h-8 sm:h-9 w-auto object-contain drop-shadow-xs"
+            className="h-7 sm:h-8 w-auto object-contain drop-shadow-xs"
           />
         </div>
 
         {/* Tenant Space Badge */}
         {spaceName && (
-          <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full skeuo-metal-panel text-[11px] sm:text-xs font-semibold text-indigo-700 ml-auto">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full skeuo-metal-panel text-[11px] sm:text-xs font-semibold text-indigo-700 ml-auto">
             <span className="h-2 w-2 rounded-full bg-indigo-600 animate-ping" />
             <span>Workspace: <strong className="text-slate-900 uppercase tracking-wider">{spaceName}</strong></span>
           </div>
@@ -439,25 +439,25 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
       </header>
 
       {/* MAIN FLEXIBLE CONTAINER */}
-      <main className="w-full max-w-6xl my-auto py-4 sm:py-6 flex-1 flex items-center justify-center z-20">
-        <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 items-center">
+      <main className="w-full max-w-5xl xl:max-w-6xl my-auto py-1 sm:py-2 flex-1 flex items-center justify-center z-20">
+        <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-8 items-center">
           
           {/* LEFT SIDE: HERO HEADLINE WITH BACKDROP GLOW + PRISTINE LOGO IMAGE (6 Cols Desktop) */}
-          <div className="lg:col-span-6 hidden lg:flex flex-col justify-center space-y-6 pr-2">
+          <div className="lg:col-span-6 hidden lg:flex flex-col justify-center space-y-3 xl:space-y-5 pr-2">
             
             {/* Top AI Badge */}
-            <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-2xl skeuo-metal-panel text-xs font-semibold text-indigo-700 w-fit">
-              <Sparkles className="h-4 w-4 text-indigo-600 shrink-0" />
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl skeuo-metal-panel text-[11px] sm:text-xs font-semibold text-indigo-700 w-fit">
+              <Sparkles className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
               <span>Next-Generation Enterprise Localization Stack</span>
             </div>
 
             {/* 3-BLOCK VERTICAL HEADLINE ARCHITECTURE */}
-            <div className="flex flex-col justify-center space-y-1.5 w-full min-h-[170px]">
+            <div className="flex flex-col justify-center space-y-0.5 sm:space-y-1 w-full min-h-[120px] sm:min-h-[140px] xl:min-h-[155px]">
               
               {/* BLOCK ONE (TOP): Translation BEFORE Centroid */}
-              <div className="min-h-[44px] flex items-center justify-start overflow-hidden py-1">
+              <div className="min-h-[34px] sm:min-h-[38px] flex items-center justify-start overflow-hidden py-0.5">
                 <div 
-                  className={`text-2xl sm:text-3xl font-normal text-slate-600 tracking-tight transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[transform,opacity,filter] ${
+                  className={`text-xl sm:text-2xl xl:text-3xl font-normal text-slate-600 tracking-tight transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[transform,opacity,filter] ${
                     isTransitioning || !currentTranslation.prefix 
                       ? "opacity-0 -translate-y-2 blur-[3px] pointer-events-none" 
                       : "opacity-100 translate-y-0 blur-0"
@@ -468,27 +468,27 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
               </div>
 
               {/* BLOCK TWO (CENTER): PRISTINE ORIGINAL LOGO IMAGE WITH COLOR-SYNCED BACKDROP HALO GLOW */}
-              <div className="relative min-h-[64px] flex items-center justify-start py-1 w-fit">
+              <div className="relative min-h-[50px] sm:min-h-[58px] xl:min-h-[64px] flex items-center justify-start py-0.5 w-fit">
                 {/* Dynamic Ambient Halo Glow BEHIND Pristine Logo */}
                 <div 
-                  className="absolute -inset-4 rounded-3xl blur-2xl transition-all duration-1000 ease-in-out pointer-events-none opacity-60"
+                  className="absolute -inset-3 rounded-2xl blur-xl transition-all duration-1000 ease-in-out pointer-events-none opacity-60"
                   style={{
                     background: currentTranslation.glowColor
                   }}
                 />
 
-                {/* Pristine Logo Image (100% Unaltered 'O' Texture) */}
+                {/* Pristine Logo Image */}
                 <img 
                   src="/centroid_final_LOGO_light.png" 
                   alt="Centroid Logo" 
-                  className="relative z-10 h-12 sm:h-14 xl:h-16 w-auto object-contain drop-shadow-xs"
+                  className="relative z-10 h-10 sm:h-12 xl:h-14 w-auto object-contain drop-shadow-xs"
                 />
               </div>
 
               {/* BLOCK THREE (BOTTOM): Translation AFTER Centroid */}
-              <div className="min-h-[44px] flex items-center justify-start overflow-hidden py-1">
+              <div className="min-h-[34px] sm:min-h-[38px] flex items-center justify-start overflow-hidden py-0.5">
                 <div 
-                  className={`text-2xl sm:text-3xl font-normal text-slate-600 tracking-tight transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[transform,opacity,filter] ${
+                  className={`text-xl sm:text-2xl xl:text-3xl font-normal text-slate-600 tracking-tight transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[transform,opacity,filter] ${
                     isTransitioning || !currentTranslation.suffix 
                       ? "opacity-0 translate-y-2 blur-[3px] pointer-events-none" 
                       : "opacity-100 translate-y-0 blur-0"
@@ -497,7 +497,6 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
                   {currentTranslation.suffix || "\u00A0"}
                 </div>
               </div>
-
 
             </div>
 
@@ -508,7 +507,7 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
               accentColor={currentTranslation.accentColor}
             />
 
-            <p className="text-sm sm:text-base text-slate-600 max-w-lg leading-relaxed font-medium pt-1">
+            <p className="text-xs sm:text-sm text-slate-600 max-w-md leading-relaxed font-medium">
               The unified translation memory & glossaries workspace engineered for high-precision enterprise localization.
             </p>
 
@@ -516,24 +515,24 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
 
           {/* RIGHT SIDE: SOFT-TOUCH MATTE SKEUOMORPHIC CONSOLE CARD */}
           <div className="lg:col-span-6 w-full max-w-md mx-auto">
-            <div className="skeuo-metal-panel rounded-[32px] sm:rounded-[36px] p-6 sm:p-9 relative overflow-hidden">
+            <div className="skeuo-metal-panel rounded-2xl sm:rounded-3xl p-4 sm:p-6 xl:p-7 relative overflow-hidden shadow-lg">
               
               {/* Console Header */}
-              <div className="mb-6 space-y-1.5">
+              <div className="mb-3 sm:mb-4 space-y-1">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
+                  <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">
                     {mode === "login" && "Welcome back"}
                     {mode === "register" && "Create account"}
                     {mode === "forgot" && "Account recovery"}
                     {mode === "reset" && "Update password"}
                   </h2>
 
-                  <div className="p-2.5 rounded-2xl skeuo-recessed-slot text-indigo-600 flex items-center justify-center">
-                    <Fingerprint className="h-4.5 sm:h-5 w-4.5 sm:w-5 text-indigo-700" />
+                  <div className="p-2 rounded-xl skeuo-recessed-slot text-indigo-600 flex items-center justify-center">
+                    <Fingerprint className="h-4 sm:h-4.5 w-4 sm:w-4.5 text-indigo-700" />
                   </div>
                 </div>
 
-                <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                <p className="text-[11px] sm:text-xs text-slate-500 font-medium leading-normal">
                   {mode === "login" && "Sign in to access your translation workspace."}
                   {mode === "register" && "Initialize your translation workspace profile."}
                   {mode === "forgot" && "Enter your registered email to receive recovery instructions."}
@@ -542,23 +541,23 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
               </div>
 
               {/* AUTH FORM */}
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-2.5 sm:space-y-3">
                 
                 {/* Full Name Input Field (Required for Registration) */}
                 {mode === "register" && (
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-700 ml-1 block">
+                  <div className="space-y-1">
+                    <label className="text-[11px] sm:text-xs font-semibold text-slate-700 ml-1 block">
                       Full Name
                     </label>
-                    <div className="relative flex items-center skeuo-recessed-slot rounded-2xl">
-                      <User className="absolute left-4 h-4 w-4 text-slate-400 pointer-events-none" />
+                    <div className="relative flex items-center skeuo-recessed-slot rounded-xl sm:rounded-2xl">
+                      <User className="absolute left-3.5 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
                       <input
                         type="text"
                         required
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         placeholder="John Doe"
-                        className="w-full bg-transparent pl-11 pr-4 py-3.5 text-xs sm:text-sm font-semibold text-slate-900 placeholder-slate-400 outline-none"
+                        className="w-full bg-transparent pl-10 pr-3.5 py-2.5 text-xs sm:text-sm font-semibold text-slate-900 placeholder-slate-400 outline-none"
                       />
                     </div>
                   </div>
@@ -566,30 +565,29 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
 
                 {/* Email Input Field */}
                 {mode !== "reset" && (
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-700 ml-1 block">
+                  <div className="space-y-1">
+                    <label className="text-[11px] sm:text-xs font-semibold text-slate-700 ml-1 block">
                       Email
                     </label>
-                    <div className="relative flex items-center skeuo-recessed-slot rounded-2xl">
-                      <Mail className="absolute left-4 h-4 w-4 text-slate-400 pointer-events-none" />
+                    <div className="relative flex items-center skeuo-recessed-slot rounded-xl sm:rounded-2xl">
+                      <Mail className="absolute left-3.5 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
                       <input
                         type="email"
                         required
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="name@company.com"
-                        className="w-full bg-transparent pl-11 pr-4 py-3.5 text-xs sm:text-sm font-semibold text-slate-900 placeholder-slate-400 outline-none"
+                        className="w-full bg-transparent pl-10 pr-3.5 py-2.5 text-xs sm:text-sm font-semibold text-slate-900 placeholder-slate-400 outline-none"
                       />
                     </div>
                   </div>
                 )}
 
-
                 {/* Password Input Field */}
                 {mode !== "forgot" && (
-                  <div className="space-y-1.5">
+                  <div className="space-y-1">
                     <div className="flex items-center justify-between ml-1">
-                      <label className="text-xs font-semibold text-slate-700">
+                      <label className="text-[11px] sm:text-xs font-semibold text-slate-700">
                         {mode === "reset" ? "New Password" : "Password"}
                       </label>
                       {mode === "login" && (
@@ -600,39 +598,39 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
                             setSuccessMsg("");
                             setMode("forgot");
                           }}
-                          className="text-xs font-semibold text-indigo-700 hover:text-indigo-900 transition-colors cursor-pointer"
+                          className="text-[11px] sm:text-xs font-semibold text-indigo-700 hover:text-indigo-900 transition-colors cursor-pointer"
                         >
                           Forgot password?
                         </button>
                       )}
                     </div>
-                    <div className="relative flex items-center skeuo-recessed-slot rounded-2xl">
-                      <Lock className="absolute left-4 h-4 w-4 text-slate-400 pointer-events-none" />
+                    <div className="relative flex items-center skeuo-recessed-slot rounded-xl sm:rounded-2xl">
+                      <Lock className="absolute left-3.5 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
                       <input
                         type={showPassword ? "text" : "password"}
                         required
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="••••••••••••"
-                        className="w-full bg-transparent pl-11 pr-11 py-3.5 text-xs sm:text-sm font-semibold text-slate-900 placeholder-slate-400 outline-none"
+                        className="w-full bg-transparent pl-10 pr-10 py-2.5 text-xs sm:text-sm font-semibold text-slate-900 placeholder-slate-400 outline-none"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3.5 p-1 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                        className="absolute right-3 p-1 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
                       >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                       </button>
                     </div>
 
                     {/* Password Strength Indicator */}
                     {mode === "register" && password.length > 0 && (
-                      <div className="space-y-1 pt-1">
-                        <div className="flex justify-between items-center text-[10px] font-mono">
+                      <div className="space-y-0.5 pt-0.5">
+                        <div className="flex justify-between items-center text-[9px] sm:text-[10px] font-mono">
                           <span className="text-slate-500">Strength:</span>
                           <span className="font-semibold text-slate-800">{passStrength.label}</span>
                         </div>
-                        <div className="w-full bg-slate-300 h-1.5 rounded-full overflow-hidden shadow-inner">
+                        <div className="w-full bg-slate-300 h-1 rounded-full overflow-hidden shadow-inner">
                           <div 
                             className={`h-full ${passStrength.color} transition-all duration-300`}
                             style={{ width: `${passStrength.score}%` }}
@@ -645,26 +643,26 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
 
                 {/* Confirm Password Field */}
                 {(mode === "register" || mode === "reset") && (
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-700 ml-1 block">
+                  <div className="space-y-1">
+                    <label className="text-[11px] sm:text-xs font-semibold text-slate-700 ml-1 block">
                       Confirm Password
                     </label>
-                    <div className="relative flex items-center skeuo-recessed-slot rounded-2xl">
-                      <KeyRound className="absolute left-4 h-4 w-4 text-slate-400 pointer-events-none" />
+                    <div className="relative flex items-center skeuo-recessed-slot rounded-xl sm:rounded-2xl">
+                      <KeyRound className="absolute left-3.5 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
                       <input
                         type={showConfirmPassword ? "text" : "password"}
                         required
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         placeholder="••••••••••••"
-                        className="w-full bg-transparent pl-11 pr-11 py-3.5 text-xs sm:text-sm font-semibold text-slate-900 placeholder-slate-400 outline-none"
+                        className="w-full bg-transparent pl-10 pr-10 py-2.5 text-xs sm:text-sm font-semibold text-slate-900 placeholder-slate-400 outline-none"
                       />
                       <button
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute right-3.5 p-1 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                        className="absolute right-3 p-1 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
                       >
-                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        {showConfirmPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                       </button>
                     </div>
                   </div>
@@ -672,14 +670,14 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
 
                 {/* Error Banner */}
                 {error && (
-                  <div className="rounded-2xl bg-rose-50 border border-rose-200 p-4 space-y-3 text-xs text-rose-700 font-medium shadow-xs">
-                    <div className="flex items-start gap-2.5">
-                      <AlertCircle className="h-4.5 w-4.5 text-rose-600 shrink-0 mt-0.5" />
-                      <span className="leading-relaxed font-medium">{error}</span>
+                  <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 space-y-2 text-xs text-rose-700 font-medium shadow-xs">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+                      <span className="leading-tight font-medium">{error}</span>
                     </div>
 
                     {/verification|confirm/i.test(error) && email && (
-                      <div className="pt-2 border-t border-rose-200/80 flex flex-col gap-2">
+                      <div className="pt-1.5 border-t border-rose-200/80 flex flex-col gap-1.5">
                         <button
                           type="button"
                           onClick={async () => {
@@ -694,7 +692,7 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
                               setLoading(false);
                             }
                           }}
-                          className="w-full py-2.5 px-3.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
+                          className="w-full py-2 px-3 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
                         >
                           <Mail className="h-3.5 w-3.5" />
                           <span>Resend Verification Email to {email}</span>
@@ -714,7 +712,7 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
                               setLoading(false);
                             }
                           }}
-                          className="w-full py-2.5 px-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
+                          className="w-full py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
                         >
                           <CheckCircle2 className="h-3.5 w-3.5" />
                           <span>Verify Account Manually Now</span>
@@ -724,28 +722,24 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
                   </div>
                 )}
 
-
                 {/* Success Banner */}
                 {successMsg && (
-                  <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 space-y-3 text-xs text-emerald-800 font-medium shadow-xs">
-                    <div className="flex items-start gap-2.5">
-                      <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 shrink-0 mt-0.5" />
-                      <span className="leading-relaxed font-semibold">{successMsg}</span>
+                  <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 space-y-2 text-xs text-emerald-800 font-medium shadow-xs">
+                    <div className="flex items-start gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                      <span className="leading-tight font-semibold">{successMsg}</span>
                     </div>
-
-
                   </div>
                 )}
-
 
                 {/* Primary Action Button */}
                 <button
                   type="submit"
                   disabled={loading}
-                  className="group w-full skeuo-push-btn text-white font-bold rounded-2xl py-3.5 px-6 flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50 disabled:pointer-events-none mt-5 text-xs sm:text-sm"
+                  className="group w-full skeuo-push-btn text-white font-bold rounded-xl sm:rounded-2xl py-2.5 sm:py-3 px-5 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:pointer-events-none mt-3 sm:mt-4 text-xs sm:text-sm shadow-sm active:scale-[0.99] transition-transform"
                 >
                   {loading ? (
-                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <svg className="animate-spin h-4.5 w-4.5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
@@ -757,15 +751,15 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
                         {mode === "forgot" && "Send recovery link"}
                         {mode === "reset" && "Update password"}
                       </span>
-                      <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform duration-300 ease-out" />
+                      <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition-transform duration-300 ease-out" />
                     </>
                   )}
                 </button>
 
                 {/* Secondary UX Links */}
                 {mode === "login" && (
-                  <div className="text-center pt-2">
-                    <p className="text-xs text-slate-500 font-medium">
+                  <div className="text-center pt-1">
+                    <p className="text-[11px] sm:text-xs text-slate-500 font-medium">
                       New to Centroid?{" "}
                       <button
                         type="button"
@@ -783,8 +777,8 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
                 )}
 
                 {mode === "register" && (
-                  <div className="text-center pt-2">
-                    <p className="text-xs text-slate-500 font-medium">
+                  <div className="text-center pt-1">
+                    <p className="text-[11px] sm:text-xs text-slate-500 font-medium">
                       Already have an account?{" "}
                       <button
                         type="button"
@@ -802,7 +796,7 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
                 )}
 
                 {(mode === "forgot" || mode === "reset") && (
-                  <div className="text-center pt-2">
+                  <div className="text-center pt-1">
                     <button
                       type="button"
                       onClick={() => {
@@ -810,7 +804,7 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
                         setSuccessMsg("");
                         setMode("login");
                       }}
-                      className="text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors duration-300 cursor-pointer inline-flex items-center gap-1.5"
+                      className="text-[11px] sm:text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors duration-300 cursor-pointer inline-flex items-center gap-1"
                     >
                       <span>← Back to Sign in</span>
                     </button>
