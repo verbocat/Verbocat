@@ -329,72 +329,117 @@ class Verbocat_Editor_UI {
 
         <style>
         /* ============================================================
-           ANIMATED RADIANT NEURAL TRANSLATE BUTTON IN GUTENBERG HEADER
+           PREMIUM LIGHT-MODE ANIMATED CONIC AURORA BUTTON
            ============================================================ */
         .vb-header-glow-btn {
             position: relative;
             display: inline-flex !important;
             align-items: center;
-            gap: 7px;
-            padding: 0 16px !important;
-            height: 36px !important;
+            justify-content: center;
+            padding: 1.5px !important;
+            height: 35px !important;
             border-radius: 8px !important;
-            font-size: 13px !important;
-            font-weight: 600 !important;
-            color: #ffffff !important;
-            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%) !important;
-            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            background: #ffffff !important;
+            border: none !important;
             cursor: pointer;
+            text-decoration: none !important;
             overflow: hidden;
-            box-shadow: 0 0 16px rgba(99, 102, 241, 0.35), 0 2px 4px rgba(0, 0, 0, 0.15);
+            margin-right: 10px;
             transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
-            margin-right: 8px;
-            z-index: 1;
+            box-shadow: 0 2px 10px rgba(99, 102, 241, 0.22), 0 1px 3px rgba(0, 0, 0, 0.05);
+            user-select: none;
         }
 
-        /* Moving Light Beam Reflection */
+        /* Continuous Rotating Ethereal Aurora Conic Border */
         .vb-header-glow-btn::before {
             content: '';
             position: absolute;
+            top: -100%;
+            left: -100%;
+            width: 300%;
+            height: 300%;
+            background: conic-gradient(
+                from 0deg,
+                #6366f1,
+                #06b6d4,
+                #3b82f6,
+                #a855f7,
+                #6366f1
+            );
+            animation: vbRotateAurora 3.5s linear infinite;
+            z-index: 1;
+        }
+
+        /* Crisp Light-Mode Inner Container */
+        .vb-header-inner {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            width: 100%;
+            height: 100%;
+            padding: 0 13px;
+            background: #ffffff;
+            border-radius: 6.5px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #0f172a;
+            z-index: 2;
+            transition: all 0.2s ease;
+            overflow: hidden;
+        }
+
+        /* Subtle Light Reflection sweep */
+        .vb-header-inner::after {
+            content: '';
+            position: absolute;
             top: 0;
-            left: -120%;
+            left: -150%;
             width: 100%;
             height: 100%;
             background: linear-gradient(
                 90deg,
                 transparent,
-                rgba(255, 255, 255, 0.35),
+                rgba(99, 102, 241, 0.15),
                 transparent
             );
-            animation: vbShineSweep 3.2s infinite cubic-bezier(0.4, 0, 0.2, 1);
-            z-index: 2;
+            animation: vbInnerShine 3s infinite cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        /* Rotating Neural Icon */
-        .vb-header-icon {
+        /* Pulsing Orbital Sparkle Icon */
+        .vb-sparkle-icon {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            animation: vbIconSpin 10s linear infinite;
-            font-size: 15px;
-            line-height: 1;
+            color: #4f46e5;
+            font-size: 13px;
+            animation: vbPulseSparkle 2.5s ease-in-out infinite;
         }
 
-        @keyframes vbShineSweep {
-            0% { left: -120%; }
-            25% { left: 120%; }
-            100% { left: 120%; }
-        }
-
-        @keyframes vbIconSpin {
+        @keyframes vbRotateAurora {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
 
+        @keyframes vbPulseSparkle {
+            0%, 100% { transform: scale(1) rotate(0deg); color: #4f46e5; }
+            50% { transform: scale(1.25) rotate(180deg); color: #06b6d4; }
+        }
+
+        @keyframes vbInnerShine {
+            0% { left: -150%; }
+            35% { left: 150%; }
+            100% { left: 150%; }
+        }
+
         .vb-header-glow-btn:hover {
             transform: translateY(-1.5px) scale(1.02) !important;
-            box-shadow: 0 0 24px rgba(129, 140, 248, 0.65), 0 4px 12px rgba(0, 0, 0, 0.2) !important;
-            background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%) !important;
+            box-shadow: 0 4px 18px rgba(99, 102, 241, 0.38), 0 2px 6px rgba(0, 0, 0, 0.08) !important;
+        }
+
+        .vb-header-glow-btn:hover .vb-header-inner {
+            background: #fafcff;
+            color: #4338ca;
         }
 
         .vb-header-glow-btn:active {
@@ -730,11 +775,11 @@ class Verbocat_Editor_UI {
 
         <script>
         jQuery(document).ready(function($) {
-            // 1. Inject radiant animated neural button into Gutenberg Top Toolbar
+            // 1. Inject premium Light-Mode Aurora animated button into Gutenberg Top Toolbar
             function injectGutenbergButton() {
                 var $header = $('.edit-post-header__settings, .editor-header__settings');
                 if ($header.length && !$('#verbocat-gutenberg-header-btn').length) {
-                    var $topBtn = $('<button type="button" id="verbocat-gutenberg-header-btn" class="components-button vb-header-glow-btn verbocat-open-modal-btn"><span class="vb-header-icon">✦</span><span><?php _e('Translate Page', 'verbocat-connector'); ?></span></button>');
+                    var $topBtn = $('<div id="verbocat-gutenberg-header-btn" class="vb-header-glow-btn verbocat-open-modal-btn" role="button" tabindex="0"><div class="vb-header-inner"><span class="vb-sparkle-icon">✦</span><span><?php _e('Translate Page', 'verbocat-connector'); ?></span></div></div>');
                     $header.prepend($topBtn);
                 }
             }
