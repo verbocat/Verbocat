@@ -10,22 +10,22 @@ const {
 
 const aiProjectRouter = express.Router();
 
-// Require authentication for all AI Project endpoints
-aiProjectRouter.use(checkAuth);
-
-// Linguist role check middleware
-aiProjectRouter.use((req, res, next) => {
-  if (req.profile?.role === "linguist") {
-    return res.status(403).json({ error: "Access denied. Linguist accounts cannot execute AI project orchestration commands." });
+// Middleware specifically for AI Project orchestration commands
+const requireOrchestrationAccess = [
+  checkAuth,
+  (req, res, next) => {
+    if (req.profile?.role === "linguist") {
+      return res.status(403).json({ error: "Access denied. Linguist accounts cannot execute AI project orchestration commands." });
+    }
+    next();
   }
-  next();
-});
+];
 
 /**
  * 1. Process Natural Language AI Command for Projects
  * Request body: { prompt: string, fileIds?: string[], projectId?: string }
  */
-aiProjectRouter.post(["/projects/ai-command", "/api/projects/ai-command"], aiRateLimiter, async (req, res) => {
+aiProjectRouter.post(["/projects/ai-command", "/api/projects/ai-command"], requireOrchestrationAccess, aiRateLimiter, async (req, res) => {
   try {
     const { prompt, fileIds, projectId } = req.body;
     const userId = req.user.id;
@@ -54,7 +54,7 @@ aiProjectRouter.post(["/projects/ai-command", "/api/projects/ai-command"], aiRat
  * 2. Interactive / Programmatic Project Duplication Endpoint
  * Request body: { scope: "source_only" | "full_with_translations", newName?: string, addTargetLangs?: string[] }
  */
-aiProjectRouter.post(["/projects/:id/duplicate", "/api/projects/:id/duplicate"], async (req, res) => {
+aiProjectRouter.post(["/projects/:id/duplicate", "/api/projects/:id/duplicate"], requireOrchestrationAccess, async (req, res) => {
   try {
     const projectId = req.params.id;
     const { scope, newName, addTargetLangs } = req.body;
@@ -88,6 +88,7 @@ aiProjectRouter.post(
     "/projects/:id/languages",
     "/api/projects/:id/languages"
   ],
+  requireOrchestrationAccess,
   async (req, res) => {
     try {
       const projectId = req.params.id;
@@ -117,7 +118,7 @@ aiProjectRouter.post(
  * 4. Set Project Context Notes Endpoint
  * Request body: { contextNotes: string }
  */
-aiProjectRouter.post(["/projects/:id/context", "/api/projects/:id/context"], async (req, res) => {
+aiProjectRouter.post(["/projects/:id/context", "/api/projects/:id/context"], requireOrchestrationAccess, async (req, res) => {
   try {
     const projectId = req.params.id;
     const { contextNotes } = req.body;
@@ -139,7 +140,7 @@ aiProjectRouter.post(["/projects/:id/context", "/api/projects/:id/context"], asy
 /**
  * 5. Delete Project Endpoint
  */
-aiProjectRouter.post(["/projects/:id/ai-delete", "/api/projects/:id/ai-delete"], async (req, res) => {
+aiProjectRouter.post(["/projects/:id/ai-delete", "/api/projects/:id/ai-delete"], requireOrchestrationAccess, async (req, res) => {
   try {
     const projectId = req.params.id;
     const userId = req.user.id;
