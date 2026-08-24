@@ -131,16 +131,14 @@ class Verbocat_Frontend {
         ?>
         <div class="verbocat-lang-switcher <?php echo esc_attr($mode); ?>" style="<?php echo $is_floating ? 'position: fixed; z-index: 999999; font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif;' : 'display: inline-block; font-family: sans-serif;'; ?>">
             <div class="verbocat-pill" id="verbocat-pill-btn" style="background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(8px); border: 1px solid #e2e8f0; border-radius: 50px; padding: 8px 16px; box-shadow: 0 4px 14px rgba(0,0,0,0.12); display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: 600; color: #1e293b; user-select: none; transition: all 0.2s ease;">
-                <span style="font-size: 18px;"><?php echo esc_html($curr_meta['flag']); ?></span>
                 <span><?php echo esc_html($curr_meta['native']); ?></span>
                 <span style="font-size: 10px; color: #64748b; margin-left: 2px;">&#9660;</span>
             </div>
 
-            <div class="verbocat-dropdown" id="verbocat-dropdown-menu" style="display: none; position: absolute; <?php echo str_contains($mode, 'bottom') ? 'bottom: 48px;' : 'top: 48px;'; ?> <?php echo str_contains($mode, 'right') ? 'right: 0;' : 'left: 0;'; ?> background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.15); min-width: 170px; overflow: hidden; padding: 6px 0;">
+            <div class="verbocat-dropdown" id="verbocat-dropdown-menu" style="display: none; position: absolute; <?php echo str_contains($mode, 'bottom') ? 'bottom: 48px;' : 'top: 48px;'; ?> <?php echo str_contains($mode, 'right') ? 'right: 0;' : 'left: 0;'; ?> background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.15); min-width: 150px; overflow: hidden; padding: 6px 0;">
                 <?php foreach ($all_langs as $code => $item): ?>
                     <a href="<?php echo esc_url($item['url']); ?>" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; color: <?php echo $item['active'] ? '#2563eb' : '#334155'; ?>; text-decoration: none; font-size: 13px; font-weight: <?php echo $item['active'] ? '700' : '500'; ?>; background: <?php echo $item['active'] ? '#eff6ff' : 'transparent'; ?>; transition: background 0.15s ease;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='<?php echo $item['active'] ? '#eff6ff' : 'transparent'; ?>'">
                         <span style="display: flex; align-items: center; gap: 8px;">
-                            <span style="font-size: 16px;"><?php echo esc_html($item['meta']['flag']); ?></span>
                             <span><?php echo esc_html($item['meta']['native']); ?></span>
                         </span>
                         <?php if ($item['active']): ?>

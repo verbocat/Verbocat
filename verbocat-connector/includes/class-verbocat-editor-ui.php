@@ -55,7 +55,6 @@ class Verbocat_Editor_UI {
             <div style="padding: 14px 16px; background: #fafafa; border: 1px solid #e4e4e7; border-radius: 8px; font-size: 13px; color: #27272a;">
                 <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <span style="font-size: 18px;"><?php echo esc_html($lang_meta['flag']); ?></span>
                         <strong style="font-size: 14px; color: #18181b;"><?php echo esc_html($lang_meta['name']); ?></strong>
                     </div>
                     <div style="display: flex; gap: 8px;">
@@ -103,7 +102,6 @@ class Verbocat_Editor_UI {
                     ?>
                         <div style="background: <?php echo $has_trans ? '#fafafa' : '#ffffff'; ?>; border: 1px solid <?php echo $has_trans ? '#e4e4e7' : '#f4f4f5'; ?>; border-radius: 6px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between;">
                             <div style="display: flex; align-items: center; gap: 6px; font-size: 13px;">
-                                <span><?php echo esc_html($t_meta['flag']); ?></span>
                                 <span style="font-weight: 500; color: #18181b;"><?php echo esc_html($t_meta['name']); ?></span>
                             </div>
                             <?php if ($has_trans): ?>
@@ -122,7 +120,7 @@ class Verbocat_Editor_UI {
     }
 
     /**
-     * Render Gutenberg Top Bar button & Clean Minimal Animated Modal
+     * Render Gutenberg Top Bar Animated Button & Clean Minimal Modal
      */
     public static function render_editor_scripts_and_modal() {
         $screen = get_current_screen();
@@ -226,7 +224,7 @@ class Verbocat_Editor_UI {
                             <select id="vb_modal_source_lang" class="vb-select">
                                 <?php foreach ($all_languages as $code => $info): ?>
                                     <option value="<?php echo esc_attr($code); ?>" <?php selected($code, $default_src); ?>>
-                                        <?php echo esc_html($info['flag'] . ' ' . $info['name']); ?>
+                                        <?php echo esc_html($info['name']); ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
@@ -251,9 +249,8 @@ class Verbocat_Editor_UI {
                                     $is_checked = in_array($code, $configured_targets);
                                 ?>
                                     <label class="vb-lang-tile" data-search="<?php echo esc_attr(strtolower($info['name'] . ' ' . $info['native'])); ?>">
-                                        <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #27272a;">
-                                            <span><?php echo esc_html($info['flag']); ?></span>
-                                            <span><?php echo esc_html($info['name']); ?></span>
+                                        <span style="font-size: 13px; color: #27272a; font-weight: 500;">
+                                            <?php echo esc_html($info['name']); ?>
                                         </span>
                                         <input type="checkbox" class="vb-target-lang-cb" value="<?php echo esc_attr($code); ?>" <?php checked($is_checked); ?> style="accent-color: #18181b; width: 15px; height: 15px;" />
                                     </label>
@@ -331,7 +328,82 @@ class Verbocat_Editor_UI {
         </div>
 
         <style>
-        /* Smooth Modern Modal Animations */
+        /* ============================================================
+           ANIMATED RADIANT NEURAL TRANSLATE BUTTON IN GUTENBERG HEADER
+           ============================================================ */
+        .vb-header-glow-btn {
+            position: relative;
+            display: inline-flex !important;
+            align-items: center;
+            gap: 7px;
+            padding: 0 16px !important;
+            height: 36px !important;
+            border-radius: 8px !important;
+            font-size: 13px !important;
+            font-weight: 600 !important;
+            color: #ffffff !important;
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%) !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            cursor: pointer;
+            overflow: hidden;
+            box-shadow: 0 0 16px rgba(99, 102, 241, 0.35), 0 2px 4px rgba(0, 0, 0, 0.15);
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            margin-right: 8px;
+            z-index: 1;
+        }
+
+        /* Moving Light Beam Reflection */
+        .vb-header-glow-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -120%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                90deg,
+                transparent,
+                rgba(255, 255, 255, 0.35),
+                transparent
+            );
+            animation: vbShineSweep 3.2s infinite cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 2;
+        }
+
+        /* Rotating Neural Icon */
+        .vb-header-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            animation: vbIconSpin 10s linear infinite;
+            font-size: 15px;
+            line-height: 1;
+        }
+
+        @keyframes vbShineSweep {
+            0% { left: -120%; }
+            25% { left: 120%; }
+            100% { left: 120%; }
+        }
+
+        @keyframes vbIconSpin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .vb-header-glow-btn:hover {
+            transform: translateY(-1.5px) scale(1.02) !important;
+            box-shadow: 0 0 24px rgba(129, 140, 248, 0.65), 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+            background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%) !important;
+        }
+
+        .vb-header-glow-btn:active {
+            transform: translateY(0) scale(0.98) !important;
+        }
+
+        /* ============================================================
+           MODAL SMOOTH ANIMATIONS & STYLING
+           ============================================================ */
         .vb-modal-overlay {
             position: fixed;
             top: 0;
@@ -658,11 +730,11 @@ class Verbocat_Editor_UI {
 
         <script>
         jQuery(document).ready(function($) {
-            // 1. Inject minimal button into Gutenberg Top Toolbar
+            // 1. Inject radiant animated neural button into Gutenberg Top Toolbar
             function injectGutenbergButton() {
                 var $header = $('.edit-post-header__settings, .editor-header__settings');
                 if ($header.length && !$('#verbocat-gutenberg-header-btn').length) {
-                    var $topBtn = $('<button type="button" id="verbocat-gutenberg-header-btn" class="components-button is-primary verbocat-open-modal-btn" style="background: #18181b; margin-right: 8px; font-weight: 500; border-radius: 4px; font-size: 13px; height: 32px; transition: all 0.2s ease;"><?php _e('Translate Page', 'verbocat-connector'); ?></button>');
+                    var $topBtn = $('<button type="button" id="verbocat-gutenberg-header-btn" class="components-button vb-header-glow-btn verbocat-open-modal-btn"><span class="vb-header-icon">✦</span><span><?php _e('Translate Page', 'verbocat-connector'); ?></span></button>');
                     $header.prepend($topBtn);
                 }
             }
