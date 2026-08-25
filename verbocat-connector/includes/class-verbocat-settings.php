@@ -27,7 +27,7 @@ class Verbocat_Settings {
      */
     public static function get_options() {
         $defaults = [
-            'api_url'            => 'https://centroid.verbolabs.com/api/v1',
+            'api_url'            => 'https://verbocat-myhh.onrender.com/api/v1',
             'api_key'            => '',
             'source_lang'        => 'en',
             'target_langs'       => 'es, hi, fr',
