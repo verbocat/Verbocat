@@ -431,6 +431,26 @@ class Verbocat_Editor_UI {
             box-sizing: border-box !important;
         }
 
+        /* Ambient Satin Sheen Light-Sweep */
+        .vb-header-glow-btn::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -120%;
+            width: 60%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(37, 99, 235, 0.12), rgba(255, 255, 255, 0.4), transparent);
+            transform: skewX(-20deg);
+            animation: vbSheenSweep 3.6s infinite ease-in-out;
+            pointer-events: none;
+        }
+
+        @keyframes vbSheenSweep {
+            0% { left: -120%; }
+            35% { left: 160%; }
+            100% { left: 160%; }
+        }
+
         /* Continuous Dynamic Progress Bar Outline when active */
         .vb-header-glow-btn.vb-in-progress {
             background: conic-gradient(#2563eb var(--vb-progress, 0%), #e2e8f0 0%) !important;
@@ -452,6 +472,8 @@ class Verbocat_Editor_UI {
             font-weight: 600;
             color: #0f172a;
             transition: background 0.2s ease;
+            position: relative;
+            z-index: 1;
         }
 
         .vb-translate-icon {
@@ -687,8 +709,27 @@ class Verbocat_Editor_UI {
         }
         .vb-comp-card.vb-translating {
             border-color: #3b82f6;
-            background: #fafcff;
-            box-shadow: 0 0 0 1px #3b82f6;
+            background: #f0f7ff;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.25);
+            animation: vbPulseGlow 1.6s infinite ease-in-out;
+        }
+        @keyframes vbPulseGlow {
+            0% { border-color: #93c5fd; box-shadow: 0 0 4px rgba(59, 130, 246, 0.15); }
+            50% { border-color: #2563eb; box-shadow: 0 0 12px rgba(37, 99, 235, 0.35); }
+            100% { border-color: #93c5fd; box-shadow: 0 0 4px rgba(59, 130, 246, 0.15); }
+        }
+
+        .vb-btn-spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.35);
+            border-top-color: #ffffff;
+            border-radius: 50%;
+            animation: vbSpin 0.7s infinite linear;
+            display: inline-block;
+        }
+        @keyframes vbSpin {
+            to { transform: rotate(360deg); }
         }
 
         @keyframes vbCardFadeIn {
@@ -1042,7 +1083,7 @@ class Verbocat_Editor_UI {
                 // Activate translation & show minimize option
                 isTranslating = true;
                 $btn.prop('disabled', true);
-                $btn.find('.vb-btn-text').text('<?php _e('Translating...', 'verbocat-connector'); ?>');
+                $btn.find('.vb-btn-text').html('<span class="vb-btn-spinner" style="margin-right: 6px;"></span><?php _e('Translating...', 'verbocat-connector'); ?>');
                 $('#vb-modal-minimize-action').show();
                 $progress.show();
                 $('.vb-comp-card').addClass('vb-translating');
@@ -1071,7 +1112,7 @@ class Verbocat_Editor_UI {
                     $progress.hide();
                     $('.vb-comp-card').removeClass('vb-translating');
                     $btn.prop('disabled', false);
-                    $btn.find('.vb-btn-text').text('<?php _e('Translate Content', 'verbocat-connector'); ?>');
+                    $btn.find('.vb-btn-text').html('<?php _e('Translate Content', 'verbocat-connector'); ?>');
                     $('#vb-modal-minimize-action').hide();
                     isTranslating = false;
 
