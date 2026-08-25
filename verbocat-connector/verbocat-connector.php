@@ -61,6 +61,7 @@ class Verbocat_Connector {
         if (wp_is_post_revision($post_id)) return;
 
         // Avoid infinite recursion
+        if (Verbocat_Delta_Sync::$is_syncing) return;
         if (get_post_meta($post_id, '_verbocat_is_translation', true)) return;
 
         $opts = Verbocat_Settings::get_options();

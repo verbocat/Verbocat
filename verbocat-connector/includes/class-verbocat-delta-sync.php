@@ -11,6 +11,8 @@ if (!defined('ABSPATH')) {
 
 class Verbocat_Delta_Sync {
 
+    public static $is_syncing = false;
+
     /**
      * Translate and synchronize a WordPress post or page with optional Component/Block Selection
      *
@@ -22,6 +24,22 @@ class Verbocat_Delta_Sync {
      * @return array|string|WP_Error
      */
     public static function sync_post($post, $target_langs = null, $source_lang = null, $enable_delta_sync = true, $selected_components = null) {
+        if (self::$is_syncing) {
+            return __('Translation already in progress.', 'verbocat-connector');
+        }
+        self::$is_syncing = true;
+
+        try {
+            return self::execute_sync_post($post, $target_langs, $source_lang, $enable_delta_sync, $selected_components);
+        } finally {
+            self::$is_syncing = false;
+        }
+    }
+
+    /**
+     * Internal execution of post translation and sync
+     */
+    private static function execute_sync_post($post, $target_langs = null, $source_lang = null, $enable_delta_sync = true, $selected_components = null) {
         $opts = Verbocat_Settings::get_options();
 
         if (empty($target_langs)) {
@@ -165,14 +183,19 @@ class Verbocat_Delta_Sync {
                 ]);
                 $target_post_id = $existing_trans_id;
             } else {
-                // Create new post
+                // Create new post with immediate translation meta
                 $new_id = wp_insert_post([
                     'post_title'   => $translated_title,
                     'post_content' => $assembled_content,
                     'post_excerpt' => $translated_excerpt,
                     'post_status'  => $opts['post_status'] ?: 'publish',
                     'post_type'    => $post->post_type,
-                    'post_author'  => $post->post_author
+                    'post_author'  => $post->post_author,
+                    'meta_input'   => [
+                        '_verbocat_is_translation' => '1',
+                        '_verbocat_source_post_id' => $post->ID,
+                        '_verbocat_lang'           => $tgt_lang
+                    ]
                 ]);
 
                 if (!is_wp_error($new_id)) {
