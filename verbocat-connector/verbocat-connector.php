@@ -77,5 +77,18 @@ class Verbocat_Connector {
     }
 }
 
+// Activation Hook
+register_activation_hook(__FILE__, function() {
+    Verbocat_Settings::get_options();
+});
+
+// Settings action link on Plugins admin page
+add_filter('plugin_action_links_' . plugin_basename(__FILE__), function($links) {
+    $settings_link = '<a href="' . esc_url(admin_url('options-general.php?page=verbocat-settings')) . '">' . __('Settings', 'verbocat-connector') . '</a>';
+    array_unshift($links, $settings_link);
+    return $links;
+});
+
 // Initialize the plugin on WordPress load
 add_action('plugins_loaded', ['Verbocat_Connector', 'get_instance']);
+
