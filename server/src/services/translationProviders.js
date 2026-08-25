@@ -360,10 +360,10 @@ CRITICAL STYLE DIRECTIVES:
 - IGNORE the original text's tone/formality if it is formal. YOU MUST OVERRIDE the style to perfectly match the requested Tone (${tone}) and Formality (${formality}).
 ${styleInstructions}
 
-- ABBREVIATIONS & ACRONYMS: Abbreviations, acronyms, and shortforms (e.g., 'SMA/NPA', 'SMA-1', 'SMA-2', 'SMA-0', 'PDC', 'RBI', 'KYC', 'CIBIL', 'OTP', 'PAN', 'GST') MUST always be kept as abbreviations/shortforms in the target translation. Under no circumstances should they be expanded to their full forms (e.g., do NOT expand 'SMA' to 'Special Mention Account' or 'विशेष उल्लेख खाता', and do NOT expand 'SMA-1' to 'विशेष उल्लेख खाता-1'). All shortform abbreviations and acronyms (like 'SMA-1', 'SMA-2', 'SMA-0', 'GST', 'KYC', 'RBI', 'PAN', 'CIBIL', etc.) MUST be kept EXACTLY as they are in the source (i.e. in Latin script, capitalized, and abbreviated) in ALL target languages (e.g., in Hindi, write 'SMA-1', 'GST', 'KYC', 'RBI', NOT 'एसएमए-1', 'जीएसटी', 'केवाईसी', 'आरबीआई'). Standard abbreviations (like 'Sr. No.', 'No.', 'Ltd.', 'Pvt.', 'Co.', 'Ref.', 'Cl.', 'Qty.', 'Amt.') must be translated to their corresponding standard abbreviations in the target language, or kept in English if commonly used.
+- ABBREVIATIONS, ACRONYMS & DESIGNATIONS (SUPER STRICT): All uppercase acronyms, professional designations, government/social categories, and corporate abbreviations (e.g., 'CA', 'CS', 'SC', 'ST', 'OBC', 'EWS', 'MNC', 'PIO/CIO', 'PIO', 'CIO', 'LLP', 'PSU', 'SME', 'MSME', 'GST', 'RBI', 'KYC', 'CIBIL', 'OTP', 'PAN', 'PDC', 'MD', 'CEO', 'CFO', 'CTO', 'COO', 'HR', 'IT', 'SMA/NPA', 'SMA-1', 'SMA-2', 'SMA-0') MUST be preserved EXACTLY as they are in the source text (i.e. in Latin script, capitalized, and abbreviated) in ALL target languages (e.g. in Hindi/Urdu, write 'CA', 'CS', 'SC', 'ST', 'OBC', 'MNC', 'PIO/CIO', 'GST', 'RBI', NOT 'چارٹرڈ اکاؤنٹنٹ', 'کمپنی سیکرٹری', 'ایس سی', 'سی ایس', 'سی اے', 'एसएमए-1', 'जीएसटी'). Under NO circumstances should you expand them into full-form descriptive words or transliterate them into target script characters.
+- ALL-CAPS WORDS & PROPER NAMES (e.g., 'DIVYANSHU', 'AGREEMENT', 'NOTICE', 'EMPLOYEE', 'DEFINITIONS'): Full words, nouns, headings, or person names that happen to be written in capital letters must ALWAYS be translated or transliterated into the target language script (e.g., transliterate 'DIVYANSHU' into 'दिव्यांशु' / 'دیویانشو', translate 'AGREEMENT' into 'समझौता' / 'معاہدہ', translate 'DEFINITIONS' into 'परिभाषाएं' / 'تعریفات'). ONLY preserve shortform abbreviations/acronyms (like CA, CS, SC, ST, OBC, MNC, GST, RBI).
 - SECTION IDENTIFIERS & LETTERS: Always preserve Latin/English letters (A, B, C, D, I, II) representing document sections, annexures, parts, schedules, or lists (e.g., 'Annex A', 'Annex B', 'Part C', 'Clause 4(a)'). Do NOT translate or transliterate these identifier letters into the target script (e.g. do NOT write 'অ্যানেক্স বি' or 'पार्ट बी' or 'अनुभाग ए'). Keep them in Latin characters, e.g. write 'Annex B' or keep the B as English 'B' like 'অ্যানেক্স B' or 'Annex B'.
-- ARABIC NUMERALS (0-9): Do NOT translate, convert, or localize standard English/Arabic numbers (e.g. '3', '15', '30', '160017') into native script digits (such as Bengali ৩ or Devanagari ३). All numerical digits MUST remain as standard ASCII English digits (0-9) in the target translation.
-- DO NOT translate, transliterate, or localize list indices, alphabetic bullet points, numbering, section numbers, or clause labels (e.g. 'h.', 'j.', 'k.', 'l.', 'm.', 'b)', 'd)', 'a)', 's)', 'c)', 'r).', '1.', '2)', '5.', '16(a)'). They must be preserved EXACTLY as they appear in the original source text (keeping the same English alphabet/numbers and punctuation, e.g. keeping 'h.' as 'h.', 'b)' as 'b)', etc.).
+- ROMAN NUMERALS, LIST BULLETS & NUMBERING (SUPER STRICT): Do NOT translate, transliterate, or convert Roman numerals (e.g. 'i.', 'ii.', 'iii.', 'iv.', 'v.', 'vi.', 'vii.', 'viii.', 'ix.', 'x.', 'xi.', 'xii.', or '(i)', '(ii)', '(iii)', '(iv)', '(v)', '(vi)', '(vii)', '(viii)', 'I.', 'II.', 'III.', 'IV.', 'V.', 'VI.', 'VII.', 'VIII.') or letter bullets (e.g. 'A.', 'B.', 'C.', 'D.', 'a.', 'b.', 'c.', 'd)', 'e)', '(a)', '(b)') or clause labels (e.g. '1.', '2)', '5.', '16(a)', '7(a).') into target script numbers, characters, or words (e.g., do NOT translate 'vi.' as 'چھ.' or 'سات.', do NOT translate 'A.' as 'الف.' or 'क.'). They must be preserved EXACTLY as they appear in the original source text (keeping the same Latin alphabet letters/Roman numerals/numbers and punctuation, e.g. keeping 'vi.' as 'vi.', 'vii.' as 'vii.', 'A.' as 'A.', 'B.' as 'B.', '7(a).' as '7(a).').
 - STRICT COMPLETENESS & BOILERPLATE PRESERVATION: You MUST translate every single phrase, word, definition, and clause of the source text. Under no circumstances should you omit, summarize, truncate, or leave out any boilerplate legal details (such as lists of heirs, legal executors, administrators, covenants, or conditions). Every single legal term and detail in the source must have a direct, fully translated equivalent in the target translation.
 - YOU MUST TRANSLATE EVERY SINGLE TEXT SEGMENT FULLY. Under no circumstances should you leave any segment untranslated, copy the English source verbatim, or return empty values for long or complex legal segments. Every segment MUST be translated into the target language.
 - Do NOT translate or transliterate contact prefixes or abbreviation labels like 'T', 'F', 'M', 'Tel', 'Mob', 'Fax', 'Email', 'Email ID'. Keep them exactly as they are in the original English text.
@@ -410,7 +410,7 @@ const translateWithOpenAI = async (protectedTexts, target, source = DEFAULT_SOUR
 
   const baseSystemPrompt = buildTranslationSystemPrompt(target, source, contextSettings);
   
-  const jsonFormattingInstructions = `\n\nCRITICAL OUTPUT FORMATTING: You are a pure translation engine. You MUST ONLY output valid JSON. Your response must be a JSON object containing a 'translations' array of strings. The translated strings MUST be in the exact same order as the input 'texts' array. Translate each string into ${targetName}. Do NOT act as a conversational AI. Preserve all inline tag placeholders (<1>...</1>, <br/>, __TAG_n__) in their natural positions around translated words without deleting or omitting them.`;
+  const jsonFormattingInstructions = `\n\nCRITICAL OUTPUT FORMATTING: You are a pure translation engine. You MUST ONLY output valid JSON. Your response must be a JSON object containing a 'translations' array of strings. The translated strings MUST be in the exact same order as the input 'texts' array. Translate each string into ${targetName}. Do NOT act as a conversational AI. Preserve all uppercase acronyms/designations (CA, CS, SC, ST, OBC, MNC, PIO/CIO, GST, RBI) and all Roman numerals / list bullets (vi., vii., viii., A., B., 1., 7(a).) exactly in Latin script without translating, transliterating, expanding, or omitting them. Preserve all inline tag placeholders (<1>...</1>, <br/>, __TAG_n__) in their natural positions around translated words without deleting or omitting them.`;
 
   const systemPrompt = baseSystemPrompt + jsonFormattingInstructions;
 
@@ -495,6 +495,17 @@ const isLegitimatelyIdentical = (source) => {
     .trim();
   if (!clean) return true;
 
+  // Standalone list pointers/bullets like "A.", "B.", "e)", "vi.", "vii.", "7(a).", "(viii)", "(1)"
+  const STANDALONE_BULLET_REGEX = /^(?:\([a-zA-Z]\)|\([ivxlcdm]+\)|\(\d+([a-zA-Z]|\([a-zA-Z0-9]+\))*\)|[a-zA-Z][\.\)]?|(?:[ivxlcdm]+|[IVXLCDM]+)[\.\)]?|\d+([a-zA-Z]|\([a-zA-Z0-9]+\))*[\.\)]?)$/i;
+  if (STANDALONE_BULLET_REGEX.test(clean)) {
+    return true;
+  }
+
+  // Standalone uppercase acronyms / slash-separated codes (e.g. "CA", "CS", "SC", "ST", "OBC", "MNC", "PIO/CIO")
+  if (/^[A-Z0-9]{1,6}(?:\/[A-Z0-9]{1,6})*$/.test(clean)) {
+    return true;
+  }
+
   // No letters at all (just numbers, punctuation, symbols)
   if (!/\p{L}/u.test(clean)) return true;
 
@@ -512,10 +523,13 @@ const isLegitimatelyIdentical = (source) => {
     if (/^www\.[^\s]+$/i.test(token)) return true;
     if (/\.[a-z]{2,4}$/i.test(token)) return true; // domain suffix
 
-    // 3. Single list pointer like "1." or "a)"
-    if (/^\(?[a-zA-Z0-9]\)[\.\)]?$/.test(token)) return true;
+    // 3. Roman numerals
+    if (/^[ivxlcdm]+$/i.test(token)) return true;
 
-    // 4. Uppercase acronyms / codes (length >= 2, all uppercase/digits)
+    // 4. Single list pointer or character token like "1", "a", "A", "7"
+    if (/^[a-zA-Z0-9]{1,4}$/.test(token)) return true;
+
+    // 5. Uppercase acronyms / codes (length >= 2, all uppercase/digits)
     if (token.length >= 2 && /^[A-Z0-9_-]+$/.test(token)) return true;
 
     return false;

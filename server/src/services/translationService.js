@@ -62,22 +62,30 @@ const ensureEnglishNumerals = (text) => {
   });
 };
 
+// Structured list bullet and numbering regex (supports single letters A-Z/a-z, Roman numerals i-xx/I-XX, digits & compound clauses like 7(a)., (viii))
+const LIST_BULLET_PREFIX_REGEX = /^(?:\([a-zA-Z]\)|\([ivxlcdm]+\)|\(\d+([a-zA-Z]|\([a-zA-Z0-9]+\))*\)|[a-zA-Z][\.\)]|(?:[ivxlcdm]+|[IVXLCDM]+)[\.\)]|\d+([a-zA-Z]|\([a-zA-Z0-9]+\))*[\.\)])[\.\:]?\s*/i;
+const STANDALONE_BULLET_REGEX = /^(?:\([a-zA-Z]\)|\([ivxlcdm]+\)|\(\d+([a-zA-Z]|\([a-zA-Z0-9]+\))*\)|[a-zA-Z][\.\)]?|(?:[ivxlcdm]+|[IVXLCDM]+)[\.\)]?|\d+([a-zA-Z]|\([a-zA-Z0-9]+\))*[\.\)]?)$/i;
+
 const postProcessTranslation = (source, target, targetLang) => {
   let output = String(target || "").trim();
+  const trimmedSource = String(source || "").trim();
 
-  // 1. List prefix protection: h. / b) / a) / r).
-  // Match prefix like 'h. ', 'b) ', 'a) ', '1. ', 'r). ', '(a) '
-  const prefixRegex = /^(\(?[a-zA-Z0-9]{1,4}\)[\.\)]?\s*|^[a-zA-Z0-9]{1,4}\.\s*)/;
-  const sourceMatch = source.match(prefixRegex);
+  // If source is purely a standalone bullet/pointer/label (e.g. "A.", "B.", "e)", "vi.", "vii.", "7(a).", "(viii)", "(1)"),
+  // it must remain exactly identical to the source.
+  if (STANDALONE_BULLET_REGEX.test(trimmedSource)) {
+    return trimmedSource;
+  }
+
+  // 1. List prefix protection: A. / B. / vi. / vii. / (viii) / 1. / 7(a).
+  const sourceMatch = source.match(LIST_BULLET_PREFIX_REGEX);
   if (sourceMatch) {
-    const sourcePrefix = sourceMatch[1];
+    const sourcePrefix = sourceMatch[0];
     if (!output.startsWith(sourcePrefix)) {
-      // Only match short label prefix in target (up to 4 chars), not full translated words
-      const targetPrefixRegex = /^(\(?[a-zA-Z0-9\u0A00-\u0A7F\u0900-\u097F]{1,4}\)[\.\)]?\s*|^[a-zA-Z0-9\u0A00-\u0A7F\u0900-\u097F]{1,4}\.\s*)/;
+      // Match any translated bullet/prefix in any Unicode script (Urdu/Arabic چھ/سات/الف, Devanagari क/सात, Bengali, etc.)
+      const targetPrefixRegex = /^(\(?[\p{L}\p{N}]{1,8}\)[.:]?\s*|^[\p{L}\p{N}]{1,8}[.:]\s*)/u;
       const targetMatch = output.match(targetPrefixRegex);
       if (targetMatch) {
-        const targetPrefix = targetMatch[1];
-        output = sourcePrefix + output.slice(targetPrefix.length);
+        output = sourcePrefix + output.slice(targetMatch[0].length);
       } else {
         output = sourcePrefix + output;
       }
@@ -85,9 +93,12 @@ const postProcessTranslation = (source, target, targetLang) => {
   }
 
   // 2. Language-independent acronym restoration
-  // Detect abbreviations in the source and ensure they are preserved as-is in the output.
-  // Extract all uppercase abbreviations from source (e.g. RBI, KYC, SMA-1, GST, PDC)
-  const sourceAbbreviations = source.match(/\b[A-Z][A-Z0-9]{1,}(?:[-\/][A-Z0-9]+)*\b/g) || [];
+  // Detect shortform abbreviations/acronyms in the source (e.g. RBI, KYC, SMA-1, GST, PDC, CA, CS, SC, ST, OBC, MNC, PIO/CIO)
+  // Excludes long all-caps words and proper names (e.g. DIVYANSHU, AGREEMENT) so they can be translated/transliterated normally.
+  const sourceAbbreviations = (source.match(/\b[A-Z0-9]{2,5}(?:[-\/][A-Z0-9]+)*\b/g) || []).filter(abbr => {
+    // Only protect shortforms <= 5 chars or structured codes with hyphens/slashes/numbers
+    return abbr.length <= 5 || /[-\/\d]/.test(abbr);
+  });
   sourceAbbreviations.forEach(abbr => {
     // If the abbreviation is missing from output, it may have been transliterated.
     // We can't reverse-map every script, but we ensure the original is present.
