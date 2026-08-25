@@ -36,7 +36,7 @@ const parseFile = async (filePath) => {
       if (!rawText) return;
 
       const placeholderStr = extractPlaceholders(element, $, tagMapGlobal, tagCounter);
-      const subSegments = splitByPunctuation(placeholderStr);
+      const subSegments = splitByPunctuation(placeholderStr, tagMapGlobal);
 
       $(element).empty();
 

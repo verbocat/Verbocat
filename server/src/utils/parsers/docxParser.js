@@ -1,5 +1,6 @@
 const fs = require('fs');
 const JSZip = require('jszip');
+const { segmentParagraph } = require('./segmentationUtils');
 
 // Helper to escape XML special characters
 const escapeXml = (text) => {
@@ -276,30 +277,37 @@ const parseFile = async (filePath) => {
           }
         }
 
-        const currentSegId = segmentId++;
-        segments.push({
-          id: currentSegId,
-          source: segmentSource.trim(),
-          target: "",
-          leading: "",
-          trailing: ""
-        });
+        const trimmedSource = segmentSource.trim();
+        const subSegments = segmentParagraph(trimmedSource, null, { maxWords: 150 });
+        let placeholderXml = "";
 
-        paraMetaMap[currentSegId] = {
-          id: currentSegId,
-          pPrXml,
-          defaultRPr,
-          tagRPrMap,
-          needsRunTagging,
-          hasBrInSource
-        };
+        for (const subSeg of subSegments) {
+          const currentSegId = segmentId++;
+          segments.push({
+            id: currentSegId,
+            source: subSeg,
+            target: "",
+            leading: "",
+            trailing: ""
+          });
+
+          paraMetaMap[currentSegId] = {
+            id: currentSegId,
+            pPrXml,
+            defaultRPr,
+            tagRPrMap,
+            needsRunTagging,
+            hasBrInSource
+          };
+
+          placeholderXml += `<w:r><w:t xml:space="preserve">__PARA_SEG_${currentSegId}__</w:t></w:r>`;
+        }
 
         const spanStart = span[0].startIndex;
         const spanEnd = span[span.length - 1].endIndex;
 
         const beforeSpan = modifiedInnerXml.substring(0, spanStart);
         const afterSpan = modifiedInnerXml.substring(spanEnd);
-        const placeholderXml = `<w:r><w:t xml:space="preserve">__PARA_SEG_${currentSegId}__</w:t></w:r>`;
 
         modifiedInnerXml = beforeSpan + placeholderXml + afterSpan;
       }

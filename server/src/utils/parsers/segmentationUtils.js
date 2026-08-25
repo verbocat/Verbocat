@@ -162,29 +162,54 @@ const getActiveTagDepth = (str, tagMap) => {
   return depth;
 };
 
-// Splits a placeholder string into natural sentence segments.
-// Uses Intl.Segmenter for language-aware, regex-free sentence detection.
-// Works correctly for all languages and all file types without hanging.
-const splitByPunctuation = (str, tagMap) => {
+/**
+ * Calculates the word count of natural text inside a placeholder string,
+ * ignoring numbered tag placeholders (<N>, </N>) and XML/HTML tags.
+ */
+const getCleanWordCount = (str) => {
+  if (!str) return 0;
+  const clean = str
+    .replace(/<\/?[a-zA-Z0-9_\-:]+[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!clean) return 0;
+  return clean.split(/\s+/).filter(Boolean).length;
+};
+
+/**
+ * Intelligent Paragraph-First Segmentation Engine.
+ * 
+ * Rules:
+ * 1. Multi-line paragraphs and blocks stay intact as a single contextual segment
+ *    if the clean word count is within maxWords (default: 150 words).
+ * 2. If word count > maxWords, splits along valid sentence boundaries (. / ? / ! / ।)
+ *    using Intl.Segmenter (ignoring abbreviations, decimals, and tags),
+ *    and groups consecutive sentences together up to maxWords per segment.
+ * 3. Never splits in the middle of tags (<1>...</1>) or unclosed tag regions.
+ * 4. Automatically balances tags across any resulting sub-segments.
+ */
+const segmentParagraph = (str, tagMap, options = {}) => {
   if (!str || !str.trim()) return [];
 
-  // Fast path: no sentence-boundary characters present
+  const maxWords = options.maxWords || 150;
+  const wordCount = getCleanWordCount(str);
+
+  // Fast path 1: Paragraph is within maxWords limit -> return intact paragraph as 1 balanced segment!
+  if (wordCount <= maxWords) {
+    return [balanceSegmentTags(str, tagMap)];
+  }
+
+  // Fast path 2: No sentence boundary punctuation present -> keep intact
   if (!/[.!?।॥]/.test(str)) {
     return [balanceSegmentTags(str, tagMap)];
   }
 
-  // Fast path for short text nodes (under 150 chars with 0 or 1 tag): avoid expensive character index mapping
-  if (str.length < 150 && (!str.includes('<') || (str.match(/</g) || []).length <= 2)) {
-    return [balanceSegmentTags(str, tagMap)];
-  }
-
-  // Build a mapping from clean-text positions back to original string positions.
-  // We strip placeholder tags (e.g. <1>, </2>) so the segmenter sees plain text.
-  const cleanToOrig = []; // cleanToOrig[cleanIdx] = origIdx in str
+  // Build a mapping from clean-text positions back to original string positions,
+  // skipping placeholder tags (<N>, </N>).
+  const cleanToOrig = [];
   let cleanText = '';
 
   for (let i = 0; i < str.length; i++) {
-    // Detect placeholder tag pattern <N> or </N>
     if (str[i] === '<') {
       let j = i + 1;
       if (j < str.length && str[j] === '/') j++;
@@ -193,7 +218,7 @@ const splitByPunctuation = (str, tagMap) => {
         numStr += str[j++];
       }
       if (numStr.length > 0 && j < str.length && str[j] === '>') {
-        i = j; // skip the entire placeholder tag
+        i = j; // skip placeholder tag
         continue;
       }
     }
@@ -201,23 +226,19 @@ const splitByPunctuation = (str, tagMap) => {
     cleanText += str[i];
   }
 
-  // Use Intl.Segmenter for robust, language-aware sentence splitting.
-  // It correctly handles abbreviations (No., Dr., Rs.), decimal numbers (3.14),
-  // and works for all languages including Hindi, English, etc.
   let rawSegments;
   try {
     const segmenter = new Intl.Segmenter(undefined, { granularity: 'sentence' });
     rawSegments = [...segmenter.segment(cleanText)];
   } catch (_) {
-    // If Intl.Segmenter is unavailable, treat entire block as one segment
     return [balanceSegmentTags(str, tagMap)];
   }
 
+  // Extract individual valid sentence slices
   const sentences = [];
   for (const { index, segment } of rawSegments) {
     if (!segment.trim()) continue;
 
-    // Map clean-text boundaries back to original string positions
     const startOrig = cleanToOrig[index] ?? 0;
     const endCleanIdx = index + segment.length;
     const endOrig = endCleanIdx < cleanToOrig.length
@@ -225,13 +246,49 @@ const splitByPunctuation = (str, tagMap) => {
       : str.length;
 
     const origSlice = str.slice(startOrig, endOrig);
-    const balanced = balanceSegmentTags(origSlice, tagMap);
-    if (balanced && balanced.replace(/<\/?[\d]+>/g, '').trim().length > 0) {
-      sentences.push(balanced);
+    const words = getCleanWordCount(origSlice);
+    sentences.push({ slice: origSlice, words });
+  }
+
+  if (sentences.length <= 1) {
+    return [balanceSegmentTags(str, tagMap)];
+  }
+
+  // Group consecutive sentences into segments up to maxWords
+  const resultSegments = [];
+  let currentGroupSlices = [];
+  let currentGroupWords = 0;
+
+  for (const s of sentences) {
+    if (currentGroupSlices.length > 0 && currentGroupWords + s.words > maxWords) {
+      // Commit current group
+      const groupedText = currentGroupSlices.join("");
+      const balanced = balanceSegmentTags(groupedText, tagMap);
+      if (balanced && balanced.replace(/<\/?[\d]+>/g, '').trim().length > 0) {
+        resultSegments.push(balanced);
+      }
+      currentGroupSlices = [s.slice];
+      currentGroupWords = s.words;
+    } else {
+      currentGroupSlices.push(s.slice);
+      currentGroupWords += s.words;
     }
   }
 
-  return sentences.length ? sentences : [balanceSegmentTags(str, tagMap)];
+  if (currentGroupSlices.length > 0) {
+    const groupedText = currentGroupSlices.join("");
+    const balanced = balanceSegmentTags(groupedText, tagMap);
+    if (balanced && balanced.replace(/<\/?[\d]+>/g, '').trim().length > 0) {
+      resultSegments.push(balanced);
+    }
+  }
+
+  return resultSegments.length ? resultSegments : [balanceSegmentTags(str, tagMap)];
+};
+
+// Splits a placeholder string into natural sentence segments using paragraph-first logic
+const splitByPunctuation = (str, tagMap, options = {}) => {
+  return segmentParagraph(str, tagMap, options);
 };
 
 // Replaces placeholders back with original HTML tags (handles both <N> and entity-encoded &lt;N&gt;)
@@ -315,6 +372,8 @@ const extractSegmentTags = (str) => {
 };
 
 module.exports = {
+  getCleanWordCount,
+  segmentParagraph,
   extractPlaceholders,
   splitByPunctuation,
   splitByTags,

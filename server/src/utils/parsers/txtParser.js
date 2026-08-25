@@ -1,28 +1,46 @@
 const fs = require('fs');
 const zlib = require('zlib');
-
-const normalizeSegmentText = (text) => (text || "").replace(/\u00a0/g, " ").replace(/[ \t\r\f\v]+/g, " ").replace(/\n\s*/g, "\n").trim();
+const { segmentParagraph } = require('./segmentationUtils');
 
 const parseFile = async (filePath) => {
-  const text = fs.readFileSync(filePath, "utf-8");
-  const paragraphs = text.split(/\r?\n/);
+  const rawText = fs.readFileSync(filePath, "utf-8");
+  const normalized = rawText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   
+  // Split by 2+ consecutive newlines (paragraphs separated by blank lines)
+  const blocks = normalized.split(/(\n\s*\n+)/);
+
   const segments = [];
   let segmentIndex = 1; // STRICT 1-BASED INDEXING (__SEG_1__, __SEG_2__, ...)
-  
-  const templateLines = paragraphs.map(p => {
-    const source = normalizeSegmentText(p);
-    if (!source) return p;
-    
-    const leading = p.match(/^\s*/)?.[0] || "";
-    const trailing = p.match(/\s*$/)?.[0] || "";
-    const segmentId = segmentIndex++;
-    
-    segments.push({ id: segmentId, source, target: "", leading, trailing });
-    return `${leading}__SEG_${segmentId}__${trailing}`;
+
+  const templateBlocks = blocks.map((block, idx) => {
+    // If it's a delimiter block or whitespace-only, preserve as-is in template
+    if (idx % 2 === 1 || !block.trim()) {
+      return block;
+    }
+
+    const leading = block.match(/^\s*/)?.[0] || "";
+    const trailing = block.match(/\s*$/)?.[0] || "";
+    const trimmed = block.trim();
+
+    const subSegments = segmentParagraph(trimmed, null, { maxWords: 150 });
+    const segPlaceholders = [];
+
+    for (const subSeg of subSegments) {
+      const segmentId = segmentIndex++;
+      segments.push({
+        id: segmentId,
+        source: subSeg,
+        target: "",
+        leading: "",
+        trailing: ""
+      });
+      segPlaceholders.push(`__SEG_${segmentId}__`);
+    }
+
+    return `${leading}${segPlaceholders.join(" ")}${trailing}`;
   });
 
-  const templateStr = templateLines.join('\n');
+  const templateStr = templateBlocks.join('');
   const template = zlib.gzipSync(Buffer.from(templateStr, "utf-8")).toString("base64");
   return { segments, template };
 };

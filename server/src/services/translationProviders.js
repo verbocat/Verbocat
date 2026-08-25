@@ -369,6 +369,7 @@ ${styleInstructions}
 - Do NOT translate or transliterate contact prefixes or abbreviation labels like 'T', 'F', 'M', 'Tel', 'Mob', 'Fax', 'Email', 'Email ID'. Keep them exactly as they are in the original English text.
 - Avoid literal/duplicate translations of doublets (e.g. translate 'Safety & Security' as 'सुरक्षा और संरक्षा' rather than repeating 'सुरक्षा').
 - Translate common business/banking terms professionally (e.g. translate 'Earn ... interest' as 'ब्याज प्राप्त करें' in formal Hindi, or 'ब्याज मिलेगा' in informal Hindi).
+- TAG & FORMATTING PLACEHOLDER PRESERVATION (CRITICAL): Segments may contain numbered formatting tag placeholders (e.g., '<1>', '</1>', '<2>', '</2>', '<br/>', '<pagebreak/>', '__TAG_n__'). You MUST strictly preserve all tag placeholders in the output translation, correctly enclosing the corresponding translated words. Never delete, omit, invent, or renumber tag placeholders.
 - Maintain consistent terminology for recurring terms.`;
 
   let purposeInstructions = "";
@@ -409,7 +410,7 @@ const translateWithOpenAI = async (protectedTexts, target, source = DEFAULT_SOUR
 
   const baseSystemPrompt = buildTranslationSystemPrompt(target, source, contextSettings);
   
-  const jsonFormattingInstructions = `\n\nCRITICAL OUTPUT FORMATTING: You are a pure translation engine. You MUST ONLY output valid JSON. Your response must be a JSON object containing a 'translations' array of strings. The translated strings MUST be in the exact same order as the input 'texts' array. Translate each string into ${targetName}. Do NOT act as a conversational AI. If a text is just a fragment like "To,", translate that exact fragment contextually. Preserve any __TAG_n__ tokens.`;
+  const jsonFormattingInstructions = `\n\nCRITICAL OUTPUT FORMATTING: You are a pure translation engine. You MUST ONLY output valid JSON. Your response must be a JSON object containing a 'translations' array of strings. The translated strings MUST be in the exact same order as the input 'texts' array. Translate each string into ${targetName}. Do NOT act as a conversational AI. Preserve all inline tag placeholders (<1>...</1>, <br/>, __TAG_n__) in their natural positions around translated words without deleting or omitting them.`;
 
   const systemPrompt = baseSystemPrompt + jsonFormattingInstructions;
 
