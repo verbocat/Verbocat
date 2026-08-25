@@ -31,9 +31,9 @@ class Verbocat_Settings {
             'api_key'            => '',
             'source_lang'        => 'en',
             'target_langs'       => 'es, hi, fr',
-            'auto_translate'     => '1',
+            'auto_translate'     => '0',
             'delta_sync'         => '1',
-            'post_status'        => 'publish', // 'draft' or 'publish'
+            'post_status'        => 'draft', // Always default to draft
             'show_switcher'      => '1',
             'switcher_position'  => 'bottom-right',
             'post_types'         => ['post', 'page']
@@ -190,8 +190,8 @@ class Verbocat_Settings {
                         <th scope="row"><label for="verbocat_post_status"><?php _e('Translation Post Status', 'verbocat-connector'); ?></label></th>
                         <td>
                             <select name="<?php echo self::$option_name; ?>[post_status]" id="verbocat_post_status">
+                                <option value="draft" <?php selected($opts['post_status'], 'draft'); ?>><?php _e('Draft (Save as draft - Review before publishing)', 'verbocat-connector'); ?></option>
                                 <option value="publish" <?php selected($opts['post_status'], 'publish'); ?>><?php _e('Publish (Instantly live on site)', 'verbocat-connector'); ?></option>
-                                <option value="draft" <?php selected($opts['post_status'], 'draft'); ?>><?php _e('Draft (Review before publishing)', 'verbocat-connector'); ?></option>
                             </select>
                             <p class="description"><?php _e('Status assigned to newly generated translated posts and pages.', 'verbocat-connector'); ?></p>
                         </td>

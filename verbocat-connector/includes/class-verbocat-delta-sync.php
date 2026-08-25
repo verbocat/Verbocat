@@ -173,22 +173,24 @@ class Verbocat_Delta_Sync {
             $assembled_content = self::clean_entity_leaks(self::reassemble_content_blocks($source_segments, $final_block_translations));
 
             if ($has_existing) {
-                // Update existing post
+                // Update existing post - preserve existing post status (e.g. keep draft as draft)
+                $existing_status = get_post_status($existing_trans_id) ?: 'draft';
                 wp_update_post([
                     'ID'           => $existing_trans_id,
                     'post_title'   => $translated_title,
                     'post_content' => $assembled_content,
                     'post_excerpt' => $translated_excerpt,
-                    'post_status'  => $opts['post_status'] ?: 'publish'
+                    'post_status'  => $existing_status
                 ]);
                 $target_post_id = $existing_trans_id;
             } else {
-                // Create new post with immediate translation meta
+                // Create new post as Draft by default
+                $desired_status = !empty($opts['post_status']) ? $opts['post_status'] : 'draft';
                 $new_id = wp_insert_post([
                     'post_title'   => $translated_title,
                     'post_content' => $assembled_content,
                     'post_excerpt' => $translated_excerpt,
-                    'post_status'  => $opts['post_status'] ?: 'publish',
+                    'post_status'  => $desired_status,
                     'post_type'    => $post->post_type,
                     'post_author'  => $post->post_author,
                     'meta_input'   => [
