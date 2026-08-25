@@ -3,7 +3,7 @@
  * Plugin Name: Verbocat Continuous Localization
  * Plugin URI: https://verbocat.com
  * Description: True Continuous Multilingual Localization Connector for WordPress powered by Verbocat AI & Translation Memory engine. Features Smart Delta Sync, Two-Way Webhook Sync, Language Selection Modal, Multilingual SEO (hreflang), and a Modern Frontend Language Switcher.
- * Version: 2.1.0
+ * Version: 2.2.0
  * Author: Verbocat
  * Author URI: https://verbocat.com
  * License: GPLv2 or later
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('VERBOCAT_VERSION', '2.1.0');
+define('VERBOCAT_VERSION', '2.2.0');
 define('VERBOCAT_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('VERBOCAT_PLUGIN_URL', plugin_dir_url(__FILE__));
 
