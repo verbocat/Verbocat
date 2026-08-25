@@ -445,8 +445,8 @@ publicApiRouter.post("/translate", async (req, res) => {
     let totalWords = 0;
     const translationsByLang = {};
 
-    // Execute translation for each target language
-    for (const tgtLang of targetLangs) {
+    // Execute translation for all target languages in parallel for maximum speed
+    await Promise.all(targetLangs.map(async (tgtLang) => {
       const docRes = await translateSegments(
         segmentsToTranslate,
         tgtLang,
@@ -475,7 +475,7 @@ publicApiRouter.post("/translate", async (req, res) => {
         const match = langResults.find(r => r.id === 1);
         translationsByLang[tgtLang] = match ? match.translated : text;
       }
-    }
+    }));
 
     // Log credit consumption
     if (totalWords > 0 && req.profile?.id) {

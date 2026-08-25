@@ -43,6 +43,7 @@ class Verbocat_Api_Client {
         ]);
 
         if (is_wp_error($response)) {
+            error_log('[Verbocat Error] wp_remote_post failed: ' . $response->get_error_message());
             return $response;
         }
 
@@ -51,7 +52,8 @@ class Verbocat_Api_Client {
         $json = json_decode($body, true);
 
         if ($code !== 200 || empty($json['success'])) {
-            $msg = $json['error'] ?? sprintf(__('Verbocat API returned HTTP %d error.', 'verbocat-connector'), $code);
+            $msg = $json['error'] ?? sprintf(__('Verbocat API returned HTTP %d error: %s', 'verbocat-connector'), $code, esc_html(substr(strip_tags($body), 0, 140)));
+            error_log('[Verbocat API Error] ' . $msg);
             return new WP_Error('api_error', $msg);
         }
 
