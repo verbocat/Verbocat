@@ -1047,13 +1047,14 @@ class Verbocat_Editor_UI {
                 $progress.show();
                 $('.vb-comp-card').addClass('vb-translating');
 
-                // Smooth live progress simulation ticker
-                setProgress(10, '<?php _e('Parsing content...', 'verbocat-connector'); ?>');
-                var cur = 10;
+                var elapsed = 0;
                 progressTimer = setInterval(function() {
+                    elapsed += 400;
                     if (cur < 85) {
-                        cur += Math.floor(Math.random() * 8) + 4;
+                        cur += Math.floor(Math.random() * 6) + 3;
                         setProgress(cur, '<?php _e('Translating selected content...', 'verbocat-connector'); ?>');
+                    } else if (elapsed > 12000) {
+                        setProgress(85, '<?php _e('Waiting for AI engine response...', 'verbocat-connector'); ?>');
                     }
                 }, 400);
 
@@ -1080,11 +1081,13 @@ class Verbocat_Editor_UI {
                         $('#vb-pill-text').text('✓ Translations updated (100%)');
                         setTimeout(function() { window.location.reload(); }, 1200);
                     } else {
+                        var errText = (res.data && res.data.message) ? res.data.message : 'Translation failed';
+                        console.error('Verbocat Translation Failed:', res);
                         setProgress(0, '');
-                        $status.html('<span style="color: #b91c1c; font-size: 12px;">' + (res.data ? res.data.message : 'Translation failed') + '</span>');
+                        $status.html('<div style="background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 8px 12px; border-radius: 6px; font-size: 13px; font-weight: 500;">❌ ' + errText + '</div>');
                         $('#vb-pill-text').text('Translation failed');
                     }
-                }).fail(function() {
+                }).fail(function(xhr, status, error) {
                     clearInterval(progressTimer);
                     $progress.hide();
                     $('.vb-comp-card').removeClass('vb-translating');
@@ -1093,7 +1096,18 @@ class Verbocat_Editor_UI {
                     $('#vb-modal-minimize-action').hide();
                     isTranslating = false;
                     setProgress(0, '');
-                    $status.html('<span style="color: #b91c1c; font-size: 12px;"><?php _e('Network error. Check your API settings.', 'verbocat-connector'); ?></span>');
+
+                    console.error('Verbocat Translation Network Error:', status, error, xhr.responseText);
+                    var detailMsg = 'Server / Network Error (HTTP ' + (xhr.status || 'timeout') + ')';
+                    try {
+                        var parsed = JSON.parse(xhr.responseText);
+                        if (parsed && parsed.data && parsed.data.message) {
+                            detailMsg = parsed.data.message;
+                        }
+                    } catch(e) {}
+
+                    $status.html('<div style="background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 8px 12px; border-radius: 6px; font-size: 13px; font-weight: 500;">❌ ' + detailMsg + '<div style="font-size: 11px; margin-top: 4px; color: #b91c1c;">Please verify your API key in Settings > Verbocat Localization.</div></div>');
+                    $('#vb-pill-text').text('Translation failed');
                 });
             });
 
