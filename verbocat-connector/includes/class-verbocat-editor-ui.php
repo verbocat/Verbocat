@@ -19,10 +19,30 @@ class Verbocat_Editor_UI {
         add_action('admin_footer', [__CLASS__, 'render_editor_scripts_and_modal']);
         add_filter('post_row_actions', [__CLASS__, 'add_row_action'], 10, 2);
         add_filter('page_row_actions', [__CLASS__, 'add_row_action'], 10, 2);
+        add_action('save_post', [__CLASS__, 'save_meta_box_data'], 10, 2);
 
         // AJAX handlers
         add_action('wp_ajax_verbocat_manual_translate', [__CLASS__, 'ajax_manual_translate']);
         add_action('wp_ajax_verbocat_sync_from_tm', [__CLASS__, 'ajax_sync_from_tm']);
+    }
+
+    /**
+     * Save Meta Box data
+     */
+    public static function save_meta_box_data($post_id, $post) {
+        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
+        if (!isset($_POST['_verbocat_metabox_nonce']) || !wp_verify_nonce($_POST['_verbocat_metabox_nonce'], 'verbocat_save_metabox')) {
+            return;
+        }
+        if (!current_user_can('edit_post', $post_id)) return;
+
+        $auto_enabled = !empty($_POST['_verbocat_auto_sync_enabled']) ? '1' : '0';
+        $target_langs = !empty($_POST['_verbocat_auto_target_langs']) && is_array($_POST['_verbocat_auto_target_langs']) 
+            ? array_map('sanitize_text_field', $_POST['_verbocat_auto_target_langs']) 
+            : [];
+
+        update_post_meta($post_id, '_verbocat_auto_sync_enabled', $auto_enabled);
+        update_post_meta($post_id, '_verbocat_auto_target_langs', $target_langs);
     }
 
     /**
@@ -54,9 +74,10 @@ class Verbocat_Editor_UI {
             $source_post = get_post($source_id);
             $src_title = $source_post ? $source_post->post_title : __('Original Post', 'verbocat-connector');
             ?>
-            <div style="background: #ffffff; border: 1px solid #e4e4e7; border-radius: 10px; padding: 18px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
-                    <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="padding: 12px 14px; background: #f8fafc; border-radius: 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; border: 1px solid #e2e8f0;">
+                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 18px;"><?php echo $lang_meta['flag']; ?></span>
                         <span style="background: #eff6ff; color: #2563eb; font-weight: 700; font-size: 11px; padding: 3px 8px; border-radius: 50px; text-transform: uppercase; letter-spacing: 0.5px;">
                             <?php echo esc_html($lang_meta['name']); ?>
                         </span>
@@ -86,8 +107,20 @@ class Verbocat_Editor_UI {
             }
         }
         $completed_count = count($active_translations);
+
+        $opts = Verbocat_Settings::get_options();
+        $all_languages = Verbocat_Languages::get_all_languages();
+        $global_targets = array_map('trim', explode(',', $opts['target_langs']));
+
+        // Page specific automation options
+        $saved_auto_sync = get_post_meta($post->ID, '_verbocat_auto_sync_enabled', true);
+        $is_auto_sync_enabled = ($saved_auto_sync === '1') || ($saved_auto_sync === '' && $opts['continuous_sync_trigger'] === 'publish_update');
+
+        $saved_page_langs = get_post_meta($post->ID, '_verbocat_auto_target_langs', true);
+        $page_auto_langs = is_array($saved_page_langs) ? $saved_page_langs : $global_targets;
         ?>
         <div style="background: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 4px 0;">
+            <?php wp_nonce_field('verbocat_save_metabox', '_verbocat_metabox_nonce'); ?>
             
             <!-- Top Control Bar -->
             <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid #f4f4f5;">
@@ -162,6 +195,37 @@ class Verbocat_Editor_UI {
                         <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
+            </div>
+
+            <!-- Page Automation Settings Bar -->
+            <div style="margin-top: 18px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+                    <label style="font-weight: 700; font-size: 13px; color: #0f172a; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
+                        <input type="checkbox" name="_verbocat_auto_sync_enabled" value="1" <?php checked($is_auto_sync_enabled); ?> style="accent-color: #2563eb; width: 16px; height: 16px;" />
+                        <span>🤖 <?php _e('Enable Continuous Sync for this Page', 'verbocat-connector'); ?></span>
+                    </label>
+                    <span style="font-size: 11px; color: #64748b; font-weight: 500;">
+                        <?php _e('Syncs automatically when this page is published or updated', 'verbocat-connector'); ?>
+                    </span>
+                </div>
+                
+                <div style="font-size: 12px; color: #475569; margin-bottom: 6px; font-weight: 600;">
+                    <?php _e('Automated Target Languages for this page:', 'verbocat-connector'); ?>
+                </div>
+                
+                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                    <?php 
+                    $pool = !empty($global_targets) ? $global_targets : ['es', 'hi', 'fr', 'de'];
+                    foreach ($pool as $l_code): 
+                        $l_meta = $all_languages[$l_code] ?? ['name' => strtoupper($l_code), 'flag' => '🌐'];
+                        $is_active = in_array($l_code, $page_auto_langs);
+                    ?>
+                        <label style="background: <?php echo $is_active ? '#eff6ff' : '#ffffff'; ?>; border: 1px solid <?php echo $is_active ? '#93c5fd' : '#cbd5e1'; ?>; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; color: <?php echo $is_active ? '#1e40af' : '#475569'; ?>; display: inline-flex; align-items: center; gap: 5px; cursor: pointer;">
+                            <input type="checkbox" name="_verbocat_auto_target_langs[]" value="<?php echo esc_attr($l_code); ?>" <?php checked($is_active); ?> style="accent-color: #2563eb; width: 13px; height: 13px;" />
+                            <span><?php echo $l_meta['flag']; ?> <?php echo esc_html($l_meta['name']); ?></span>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
             </div>
 
         </div>

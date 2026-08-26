@@ -78,12 +78,26 @@ class Verbocat_Connector {
 
         // CASE 2: Source Post is published/updated ➔ Continuous Delta Sync
         $opts = Verbocat_Settings::get_options();
-        $is_continuous = ($opts['continuous_sync_trigger'] === 'publish_update') || ($opts['auto_translate'] === '1');
-        if (!$is_continuous) return;
+        $is_continuous_global = ($opts['continuous_sync_trigger'] === 'publish_update') || ($opts['auto_translate'] === '1');
+
+        // Check page-specific automation overrides
+        $page_auto_enabled = get_post_meta($post_id, '_verbocat_auto_sync_enabled', true);
+        
+        // If explicitly disabled for this page, abort
+        if ($page_auto_enabled === '0') return;
+
+        // If not globally continuous and not explicitly enabled for this page, abort
+        if (!$is_continuous_global && $page_auto_enabled !== '1') return;
         if ($post->post_status !== 'publish') return;
 
-        // Execute Smart Continuous Delta Sync
-        Verbocat_Delta_Sync::sync_post($post, null, null, true);
+        // Get page-specific target languages or fallback to global pool
+        $page_target_langs = get_post_meta($post_id, '_verbocat_auto_target_langs', true);
+        if (!is_array($page_target_langs) || empty($page_target_langs)) {
+            $page_target_langs = array_map('trim', explode(',', $opts['target_langs']));
+        }
+
+        // Execute Smart Continuous Delta Sync for only the assigned languages
+        Verbocat_Delta_Sync::sync_post($post, $page_target_langs, null, true);
     }
 
     /**
