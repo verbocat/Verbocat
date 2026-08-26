@@ -1368,29 +1368,6 @@ class Verbocat_Editor_UI {
                     }
                 });
             });
-
-            // 10. Gutenberg Post Save Listener for Continuous Sync Notification
-            if (window.wp && wp.data && wp.data.subscribe) {
-                var wasSaving = false;
-                wp.data.subscribe(function() {
-                    var editor = wp.data.select('core/editor');
-                    if (!editor) return;
-                    
-                    var isSaving = editor.isSavingPost() && !editor.isAutosavingPost();
-                    if (wasSaving && !isSaving) {
-                        // Post save completed!
-                        var noticeDispatch = wp.data.dispatch('core/notices');
-                        if (noticeDispatch && noticeDispatch.createNotice) {
-                            noticeDispatch.createNotice(
-                                'info',
-                                '⚡ Verbocat: Background translation active for configured languages. Check "Pages" or the Meta Box below for translated drafts.',
-                                { isDismissible: true, type: 'snackbar' }
-                            );
-                        }
-                    }
-                    wasSaving = isSaving;
-                });
-            }
         });
         </script>
         <?php
