@@ -444,6 +444,8 @@ publicApiRouter.post("/translate", async (req, res) => {
 
     let totalWords = 0;
     const translationsByLang = {};
+    const iceMatchesByLang = {};
+    const matchDetailsByLang = {};
 
     // Execute translation for all target languages in parallel for maximum speed
     await Promise.all(targetLangs.map(async (tgtLang) => {
@@ -458,6 +460,16 @@ publicApiRouter.post("/translate", async (req, res) => {
 
       const langResults = docRes.results || [];
       totalWords += (docRes.wordCount || 0);
+
+      // Check if all segments were 100% ICE matches (In-Context Exact from approved TM)
+      const isAllIce = langResults.length > 0 && langResults.every(r => (r.match_percentage === 100) || (r.provider && r.provider.includes("ICE")));
+      iceMatchesByLang[tgtLang] = isAllIce;
+      matchDetailsByLang[tgtLang] = langResults.map(r => ({
+        id: r.id,
+        match_percentage: r.match_percentage || 0,
+        is_ice: (r.match_percentage === 100) || (Boolean(r.provider && r.provider.includes("ICE"))),
+        provider: r.provider || "AI"
+      }));
 
       if (isStructured) {
         const langObj = {};
@@ -505,10 +517,13 @@ publicApiRouter.post("/translate", async (req, res) => {
       source_lang: srcLang,
       target_langs: targetLangs,
       words_translated: totalWords,
-      translations: translationsByLang
+      translations: translationsByLang,
+      ice_matches: iceMatchesByLang,
+      match_details: matchDetailsByLang
     };
 
     if (isSingleLang) {
+      responsePayload.is_ice_matched = iceMatchesByLang[singleTarget] || false;
       if (isStructured) {
         responsePayload.translated_title = translationsByLang[singleTarget].title || "";
         responsePayload.translated_content = translationsByLang[singleTarget].content || "";
@@ -524,6 +539,80 @@ publicApiRouter.post("/translate", async (req, res) => {
   } catch (err) {
     console.error("[PUBLIC_API_INSTANT_TRANSLATE_ERROR]", err);
     return res.status(500).json({ error: err.message || "Failed to execute instant translation." });
+  }
+});
+
+/**
+ * 8. Push Verified TM Segments (ICE Promotion on Publish)
+ * POST /api/v1/tm/push
+ * Body: { source_lang: "en", target_lang: "hi", segments: [ { source: "...", target: "..." } ] }
+ */
+publicApiRouter.post("/tm/push", async (req, res) => {
+  try {
+    const { source_lang, target_lang, segments } = req.body;
+    const srcLang = source_lang || "en";
+    const tgtLang = target_lang;
+
+    if (!tgtLang) {
+      return res.status(400).json({ error: "Missing required field: target_lang." });
+    }
+    if (!Array.isArray(segments) || segments.length === 0) {
+      return res.status(400).json({ error: "Missing or empty 'segments' array." });
+    }
+
+    const orgId = req.organization?.id || req.profile?.organization_id || null;
+    const dbClient = supabaseAdmin || supabase;
+
+    const rowsToUpsert = [];
+    for (const seg of segments) {
+      const sourceText = String(seg.source || seg.source_text || "").trim();
+      const targetText = String(seg.target || seg.target_text || "").trim();
+      if (!sourceText || !targetText) continue;
+
+      rowsToUpsert.push({
+        source_text: sourceText,
+        target_text: targetText,
+        target_lang: tgtLang,
+        source_lang: srcLang,
+        provider: "Linguist (ICE) - WordPress Verified",
+        status: "approved",
+        organization_id: orgId,
+        updated_at: new Date().toISOString()
+      });
+    }
+
+    if (rowsToUpsert.length === 0) {
+      return res.status(400).json({ error: "No valid segment pairs found in payload." });
+    }
+
+    // Upsert segments into translation_memory table in chunks of 50
+    let insertedCount = 0;
+    for (let i = 0; i < rowsToUpsert.length; i += 50) {
+      const chunk = rowsToUpsert.slice(i, i + 50);
+      try {
+        const { error } = await dbClient
+          .from("translation_memory")
+          .upsert(chunk, { onConflict: "source_text,target_lang" });
+
+        if (error) {
+          // Fallback insert
+          await dbClient.from("translation_memory").insert(chunk);
+        }
+      } catch (upsertErr) {
+        await dbClient.from("translation_memory").insert(chunk);
+      }
+      insertedCount += chunk.length;
+    }
+
+    return res.json({
+      success: true,
+      pushed_count: insertedCount,
+      target_lang: tgtLang,
+      message: `Successfully registered ${insertedCount} verified ICE segments in Translation Memory.`
+    });
+  } catch (err) {
+    console.error("[TM_PUSH_ERROR]", err);
+    return res.status(500).json({ error: err.message || "Failed to push TM segments." });
   }
 });
 

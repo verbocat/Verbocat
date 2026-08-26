@@ -59,22 +59,86 @@ class Verbocat_Connector {
     public function handle_auto_save_post($post_id, $post) {
         if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
         if (wp_is_post_revision($post_id)) return;
+        if (!in_array($post->post_type, ['post', 'page'])) return;
 
         // Avoid infinite recursion
         if (Verbocat_Delta_Sync::$is_syncing) return;
-        if (get_post_meta($post_id, '_verbocat_is_translation', true)) return;
-
-        $opts = Verbocat_Settings::get_options();
-        if ($opts['auto_translate'] !== '1') return;
-        if (!in_array($post->post_type, ['post', 'page'])) return;
-        if ($post->post_status !== 'publish') return;
 
         static $processed = [];
         if (isset($processed[$post_id])) return;
         $processed[$post_id] = true;
 
-        // Execute Smart Delta Sync
+        // CASE 1: Translated Post is published ➔ Automatically promote to ICE in Translation Memory
+        if (get_post_meta($post_id, '_verbocat_is_translation', true)) {
+            if ($post->post_status === 'publish') {
+                $this->handle_published_translation_promotion($post_id, $post);
+            }
+            return;
+        }
+
+        // CASE 2: Source Post is published/updated ➔ Continuous Delta Sync
+        $opts = Verbocat_Settings::get_options();
+        $is_continuous = ($opts['continuous_sync_trigger'] === 'publish_update') || ($opts['auto_translate'] === '1');
+        if (!$is_continuous) return;
+        if ($post->post_status !== 'publish') return;
+
+        // Execute Smart Continuous Delta Sync
         Verbocat_Delta_Sync::sync_post($post, null, null, true);
+    }
+
+    /**
+     * Promote published translation segments to verified ICE in central Translation Memory
+     */
+    private function handle_published_translation_promotion($post_id, $post) {
+        $source_id = get_post_meta($post_id, '_verbocat_source_post_id', true);
+        $tgt_lang = get_post_meta($post_id, '_verbocat_lang', true);
+
+        if (!$source_id || !$tgt_lang) return;
+        $source_post = get_post($source_id);
+        if (!$source_post) return;
+
+        $opts = Verbocat_Settings::get_options();
+        $src_lang = $opts['source_lang'] ?: 'en';
+
+        $source_blocks = Verbocat_Delta_Sync::extract_content_blocks($source_post->post_content);
+        $trans_blocks = Verbocat_Delta_Sync::extract_content_blocks($post->post_content);
+
+        $pairs = [];
+
+        // Title
+        if (!empty($source_post->post_title) && !empty($post->post_title)) {
+            $pairs[] = [
+                'source' => $source_post->post_title,
+                'target' => $post->post_title
+            ];
+        }
+
+        // Excerpt
+        if (!empty($source_post->post_excerpt) && !empty($post->post_excerpt)) {
+            $pairs[] = [
+                'source' => $source_post->post_excerpt,
+                'target' => $post->post_excerpt
+            ];
+        }
+
+        // Content blocks
+        $max_blocks = min(count($source_blocks), count($trans_blocks));
+        for ($i = 0; $i < $max_blocks; $i++) {
+            $src_txt = $source_blocks[$i]['raw_html'] ?? '';
+            $tgt_txt = $trans_blocks[$i]['raw_html'] ?? '';
+            if (!empty($src_txt) && !empty($tgt_txt)) {
+                $pairs[] = [
+                    'source' => $src_txt,
+                    'target' => $tgt_txt
+                ];
+            }
+        }
+
+        if (!empty($pairs)) {
+            update_post_meta($post_id, '_verbocat_is_ice_matched', '1');
+            update_post_meta($post_id, '_verbocat_ice_promoted_at', current_time('mysql'));
+            Verbocat_Api_Client::push_tm_segments($pairs, $src_lang, $tgt_lang);
+        }
     }
 }
 

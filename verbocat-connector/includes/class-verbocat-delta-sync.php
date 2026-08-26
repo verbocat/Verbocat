@@ -172,31 +172,47 @@ class Verbocat_Delta_Sync {
             // Re-assemble full translated content
             $assembled_content = self::clean_entity_leaks(self::reassemble_content_blocks($source_segments, $final_block_translations));
 
+            // Check ICE matching status from API response
+            $is_ice_matched = !empty($api_res['ice_matches'][$tgt_lang]) || !empty($api_res['is_ice_matched']);
+            $push_policy = $opts['auto_push_policy'] ?? 'ice_only';
+
+            // Determine target post status according to Continuous Localization policy
+            if ($push_policy === 'always_publish') {
+                $target_status = 'publish';
+            } elseif ($push_policy === 'always_draft') {
+                $target_status = 'draft';
+            } else {
+                // 'ice_only' policy: Auto-Publish only if 100% ICE matched, otherwise Draft for review
+                $target_status = $is_ice_matched ? 'publish' : 'draft';
+            }
+
             if ($has_existing) {
-                // Update existing post - preserve existing post status (e.g. keep draft as draft)
-                $existing_status = get_post_status($existing_trans_id) ?: 'draft';
+                // Update existing post
+                $current_status = get_post_status($existing_trans_id) ?: 'draft';
+                $final_status = ($target_status === 'publish') ? 'publish' : $current_status;
+
                 wp_update_post([
                     'ID'           => $existing_trans_id,
                     'post_title'   => $translated_title,
                     'post_content' => $assembled_content,
                     'post_excerpt' => $translated_excerpt,
-                    'post_status'  => $existing_status
+                    'post_status'  => $final_status
                 ]);
                 $target_post_id = $existing_trans_id;
             } else {
-                // Create new post as Draft by default
-                $desired_status = !empty($opts['post_status']) ? $opts['post_status'] : 'draft';
+                // Create new post with computed workflow status
                 $new_id = wp_insert_post([
                     'post_title'   => $translated_title,
                     'post_content' => $assembled_content,
                     'post_excerpt' => $translated_excerpt,
-                    'post_status'  => $desired_status,
+                    'post_status'  => $target_status,
                     'post_type'    => $post->post_type,
                     'post_author'  => $post->post_author,
                     'meta_input'   => [
                         '_verbocat_is_translation' => '1',
                         '_verbocat_source_post_id' => $post->ID,
-                        '_verbocat_lang'           => $tgt_lang
+                        '_verbocat_lang'           => $tgt_lang,
+                        '_verbocat_is_ice_matched' => $is_ice_matched ? '1' : '0'
                     ]
                 ]);
 
@@ -204,12 +220,15 @@ class Verbocat_Delta_Sync {
                     update_post_meta($new_id, '_verbocat_is_translation', '1');
                     update_post_meta($new_id, '_verbocat_source_post_id', $post->ID);
                     update_post_meta($new_id, '_verbocat_lang', $tgt_lang);
+                    update_post_meta($new_id, '_verbocat_is_ice_matched', $is_ice_matched ? '1' : '0');
                     $translations_map[$tgt_lang] = $new_id;
                     $target_post_id = $new_id;
                 }
             }
 
             if (!empty($target_post_id)) {
+                update_post_meta($target_post_id, '_verbocat_is_ice_matched', $is_ice_matched ? '1' : '0');
+                update_post_meta($target_post_id, '_verbocat_last_sync_time', current_time('mysql'));
                 update_post_meta($target_post_id, '_verbocat_block_hashes', $new_hashes);
                 update_post_meta($target_post_id, '_verbocat_block_translations', $final_block_translations);
                 if ($title_selected) {
