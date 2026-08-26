@@ -27,6 +27,7 @@ require_once VERBOCAT_PLUGIN_DIR . 'includes/class-verbocat-delta-sync.php';
 require_once VERBOCAT_PLUGIN_DIR . 'includes/class-verbocat-tm-sync.php';
 require_once VERBOCAT_PLUGIN_DIR . 'includes/class-verbocat-editor-ui.php';
 require_once VERBOCAT_PLUGIN_DIR . 'includes/class-verbocat-frontend.php';
+require_once VERBOCAT_PLUGIN_DIR . 'includes/class-verbocat-updater.php';
 
 /**
  * Main Plugin Orchestrator Class
@@ -48,9 +49,11 @@ class Verbocat_Connector {
         Verbocat_Tm_Sync::init();
         Verbocat_Editor_UI::init();
         Verbocat_Frontend::init();
+        Verbocat_Updater::init();
 
         // Automated Hook on post publish / update
         add_action('save_post', [$this, 'handle_auto_save_post'], 20, 2);
+        add_action('verbocat_async_sync_event', [$this, 'execute_async_sync'], 10, 2);
     }
 
     /**
@@ -106,7 +109,19 @@ class Verbocat_Connector {
 
         if (empty($page_target_langs)) return;
 
-        // Execute Smart Continuous Delta Sync for only the assigned languages
+        // Non-blocking Asynchronous Background Execution (Saves instantly in 0.1s!)
+        if (!wp_next_scheduled('verbocat_async_sync_event', [$post_id, $page_target_langs])) {
+            wp_schedule_single_event(time(), 'verbocat_async_sync_event', [$post_id, $page_target_langs]);
+            spawn_cron();
+        }
+    }
+
+    /**
+     * Async background runner for continuous localization
+     */
+    public function execute_async_sync($post_id, $page_target_langs) {
+        $post = get_post($post_id);
+        if (!$post || $post->post_status !== 'publish') return;
         Verbocat_Delta_Sync::sync_post($post, $page_target_langs, null, true);
     }
 
