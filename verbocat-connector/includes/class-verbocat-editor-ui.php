@@ -213,20 +213,78 @@ class Verbocat_Editor_UI {
                     <?php _e('Automated Target Languages for this page:', 'verbocat-connector'); ?>
                 </div>
                 
-                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                <div class="vb-metabox-langs-container" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px;">
                     <?php 
-                    $pool = !empty($global_targets) ? $global_targets : ['es', 'hi', 'fr', 'de'];
-                    foreach ($pool as $l_code): 
+                    $metabox_pool = array_unique(array_filter(array_merge($global_targets, $page_auto_langs)));
+                    if (empty($metabox_pool)): ?>
+                        <span class="vb-no-langs-notice" style="color: #94a3b8; font-size: 12px; font-style: italic;">
+                            <?php _e('No languages assigned yet. Use the dropdown to add languages for this page:', 'verbocat-connector'); ?>
+                        </span>
+                    <?php endif; ?>
+
+                    <?php foreach ($metabox_pool as $l_code): 
+                        if (empty($l_code) || $l_code === 'en') continue;
                         $l_meta = $all_languages[$l_code] ?? ['name' => strtoupper($l_code), 'flag' => '🌐'];
                         $is_active = in_array($l_code, $page_auto_langs);
                     ?>
-                        <label style="background: <?php echo $is_active ? '#eff6ff' : '#ffffff'; ?>; border: 1px solid <?php echo $is_active ? '#93c5fd' : '#cbd5e1'; ?>; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; color: <?php echo $is_active ? '#1e40af' : '#475569'; ?>; display: inline-flex; align-items: center; gap: 5px; cursor: pointer;">
-                            <input type="checkbox" name="_verbocat_auto_target_langs[]" value="<?php echo esc_attr($l_code); ?>" <?php checked($is_active); ?> style="accent-color: #2563eb; width: 13px; height: 13px;" />
+                        <label class="vb-metabox-lang-pill" style="background: <?php echo $is_active ? '#eff6ff' : '#ffffff'; ?>; border: 1px solid <?php echo $is_active ? '#93c5fd' : '#cbd5e1'; ?>; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; color: <?php echo $is_active ? '#1e40af' : '#475569'; ?>; display: inline-flex; align-items: center; gap: 5px; cursor: pointer;">
+                            <input type="checkbox" name="_verbocat_auto_target_langs[]" value="<?php echo esc_attr($l_code); ?>" <?php checked($is_active); ?> class="vb-mb-lang-cb" style="accent-color: #2563eb; width: 13px; height: 13px;" />
                             <span><?php echo $l_meta['flag']; ?> <?php echo esc_html($l_meta['name']); ?></span>
                         </label>
                     <?php endforeach; ?>
+
+                    <!-- Add Single Page Custom Language Dropdown in Meta Box -->
+                    <div style="display: inline-flex; align-items: center; margin-left: 4px;">
+                        <select id="vb_metabox_add_lang_select" style="font-size: 11px; height: 28px; border-radius: 14px; padding: 0 8px; border: 1px dashed #94a3b8; background: #ffffff; color: #1e293b;">
+                            <option value="">+ <?php _e('Add Language to this Page...', 'verbocat-connector'); ?></option>
+                            <?php foreach ($all_languages as $c_code => $c_meta): 
+                                if ($c_code === 'en') continue;
+                            ?>
+                                <option value="<?php echo esc_attr($c_code); ?>" data-flag="<?php echo esc_attr($c_meta['flag']); ?>" data-name="<?php echo esc_attr($c_meta['name']); ?>">
+                                    <?php echo $c_meta['flag']; ?> <?php echo esc_html($c_meta['name']); ?> (<?php echo strtoupper($c_code); ?>)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                 </div>
             </div>
+
+            <script>
+            jQuery(document).ready(function($) {
+                $(document).on('change', '.vb-mb-lang-cb', function() {
+                    var isChecked = $(this).is(':checked');
+                    var $pill = $(this).closest('.vb-metabox-lang-pill');
+                    $pill.css({
+                        'background': isChecked ? '#eff6ff' : '#ffffff',
+                        'border-color': isChecked ? '#93c5fd' : '#cbd5e1',
+                        'color': isChecked ? '#1e40af' : '#475569'
+                    });
+                });
+
+                $('#vb_metabox_add_lang_select').on('change', function() {
+                    var langCode = $(this).val();
+                    if (!langCode) return;
+                    var $option = $(this).find('option:selected');
+                    var flag = $option.data('flag') || '🌐';
+                    var name = $option.data('name') || langCode;
+                    var $container = $('.vb-metabox-langs-container');
+
+                    $('.vb-no-langs-notice').hide();
+
+                    var $existing = $container.find('input[value="' + langCode + '"]');
+                    if ($existing.length > 0) {
+                        $existing.prop('checked', true).trigger('change');
+                    } else {
+                        var newPill = '<label class="vb-metabox-lang-pill" style="background: #eff6ff; border: 1px solid #93c5fd; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; color: #1e40af; display: inline-flex; align-items: center; gap: 5px; cursor: pointer;">' +
+                            '<input type="checkbox" name="_verbocat_auto_target_langs[]" value="' + langCode + '" checked class="vb-mb-lang-cb" style="accent-color: #2563eb; width: 13px; height: 13px;" />' +
+                            '<span>' + flag + ' ' + name + '</span>' +
+                            '</label>';
+                        $(newPill).insertBefore($(this).parent());
+                    }
+                    $(this).val('');
+                });
+            });
+            </script>
 
         </div>
         <?php
