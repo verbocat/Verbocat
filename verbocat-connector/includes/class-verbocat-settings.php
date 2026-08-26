@@ -333,72 +333,76 @@ class Verbocat_Settings {
                 </div>
 
                 <!-- SECTION 3: GLOBAL TARGET LANGUAGES POOL -->
-                <div style="margin-bottom: 28px;">
-                    <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; margin-bottom: 16px;">
-                        <h2 style="font-size: 16px; font-weight: 700; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 8px;">
-                            <span style="background: #f1f5f9; color: #475569; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;">3</span>
-                            <?php _e('Global Target Languages Pool', 'verbocat-connector'); ?>
-                            <span id="vb_global_lang_counter" style="font-size: 12px; font-weight: 600; background: #eff6ff; color: #2563eb; padding: 2px 8px; border-radius: 12px;">
-                                <?php echo sprintf(__('%d selected', 'verbocat-connector'), count($selected_target_langs)); ?>
-                            </span>
-                        </h2>
-                        <div style="display: flex; gap: 8px;">
-                            <button type="button" id="vb_select_all_langs" class="button button-small" style="font-size: 11px;"><?php _e('Select All', 'verbocat-connector'); ?></button>
-                            <button type="button" id="vb_clear_all_langs" class="button button-small" style="font-size: 11px;"><?php _e('Clear All (0 Default)', 'verbocat-connector'); ?></button>
+                <div style="margin-bottom: 28px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px 24px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #f1f5f9; padding-bottom: 12px; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+                        <div>
+                            <h2 style="font-size: 15px; font-weight: 700; color: #0f172a; margin: 0; display: flex; align-items: center; gap: 8px;">
+                                <span style="background: #2563eb; color: #fff; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;">3</span>
+                                <?php _e('Global Target Languages Pool', 'verbocat-connector'); ?>
+                                <span id="vb_global_lang_counter" style="font-size: 11px; font-weight: 700; background: #eff6ff; color: #2563eb; padding: 2px 10px; border-radius: 20px; border: 1px solid #bfdbfe;">
+                                    <?php echo sprintf(__('%d selected', 'verbocat-connector'), count($selected_target_langs)); ?>
+                                </span>
+                            </h2>
+                            <p style="color: #64748b; font-size: 12px; margin: 4px 0 0 0;">
+                                <?php _e('Select target languages to make them available across your site. Unselected languages are hidden from page tables to keep your UI clean.', 'verbocat-connector'); ?>
+                            </p>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <input type="text" id="vb_global_lang_search" placeholder="<?php esc_attr_e('Filter languages...', 'verbocat-connector'); ?>" style="padding: 4px 10px; font-size: 12px; border-radius: 6px; border: 1px solid #cbd5e1; width: 140px; height: 28px;" />
+                            <button type="button" id="vb_select_all_langs" class="button button-secondary" style="font-size: 11px; height: 28px; padding: 0 10px;"><?php _e('Select All', 'verbocat-connector'); ?></button>
+                            <button type="button" id="vb_clear_all_langs" class="button button-secondary" style="font-size: 11px; height: 28px; padding: 0 10px;"><?php _e('Clear All (0)', 'verbocat-connector'); ?></button>
                         </div>
                     </div>
-                    
-                    <p style="color: #64748b; font-size: 13px; margin-bottom: 12px;">
-                        <?php _e('Select the languages you want active across your site. Once selected and saved, these languages become available for all pages in the Automation Hub below and in the Page Editor.', 'verbocat-connector'); ?>
-                    </p>
 
-                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; background: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid #e2e8f0; max-height: 260px; overflow-y: auto;">
+                    <div id="vb_global_langs_grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; max-height: 220px; overflow-y: auto; padding: 4px;">
                         <?php 
                         foreach ($all_languages as $code => $meta): 
                             if ($code === 'en') continue;
                             $is_checked = in_array($code, $selected_target_langs);
                         ?>
-                            <label class="vb-global-lang-card" style="display: flex; align-items: center; gap: 8px; background: <?php echo $is_checked ? '#eff6ff' : '#ffffff'; ?>; border: 1px solid <?php echo $is_checked ? '#93c5fd' : '#e2e8f0'; ?>; padding: 7px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.15s ease;">
-                                <input type="checkbox" name="<?php echo self::$option_name; ?>[target_langs][]" value="<?php echo esc_attr($code); ?>" <?php checked($is_checked); ?> class="vb-global-lang-cb" style="accent-color: #2563eb;" />
-                                <span><?php echo $meta['flag']; ?> <?php echo esc_html($meta['name']); ?></span>
+                            <label class="vb-global-lang-card" data-name="<?php echo esc_attr(strtolower($meta['name'])); ?>" data-code="<?php echo esc_attr($code); ?>" style="display: flex; align-items: center; gap: 7px; background: <?php echo $is_checked ? '#eff6ff' : '#ffffff'; ?>; border: 1px solid <?php echo $is_checked ? '#93c5fd' : '#e2e8f0'; ?>; padding: 6px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.15s ease;">
+                                <input type="checkbox" name="<?php echo self::$option_name; ?>[target_langs][]" value="<?php echo esc_attr($code); ?>" <?php checked($is_checked); ?> class="vb-global-lang-cb" style="accent-color: #2563eb; width: 14px; height: 14px;" />
+                                <span style="font-size: 14px;"><?php echo $meta['flag']; ?></span>
+                                <span style="color: #1e293b; font-weight: 500;"><?php echo esc_html($meta['name']); ?></span>
                             </label>
                         <?php endforeach; ?>
                     </div>
                 </div>
 
                 <!-- SECTION 4: PAGE & POST AUTOMATION HUB -->
-                <div style="margin-bottom: 28px;">
-                    <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; margin-bottom: 12px;">
-                        <h2 style="font-size: 16px; font-weight: 700; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 8px;">
-                            <span style="background: #2563eb; color: #fff; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;">4</span>
-                            <?php _e('Content Automation Hub (Select Pages & Target Languages)', 'verbocat-connector'); ?>
-                        </h2>
-                        <input type="text" id="vb_page_filter_input" placeholder="<?php esc_attr_e('Search pages & posts...', 'verbocat-connector'); ?>" style="padding: 4px 10px; font-size: 12px; border-radius: 6px; border: 1px solid #cbd5e1; width: 200px;" />
+                <div style="margin-bottom: 28px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px 24px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #f1f5f9; padding-bottom: 12px; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+                        <div>
+                            <h2 style="font-size: 15px; font-weight: 700; color: #0f172a; margin: 0; display: flex; align-items: center; gap: 8px;">
+                                <span style="background: #2563eb; color: #fff; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;">4</span>
+                                <?php _e('Content Automation Hub (Pages & Target Languages)', 'verbocat-connector'); ?>
+                            </h2>
+                            <p style="color: #64748b; font-size: 12px; margin: 4px 0 0 0;">
+                                <?php _e('Manage automation and target languages per page. Only active languages are shown.', 'verbocat-connector'); ?>
+                            </p>
+                        </div>
+                        <input type="text" id="vb_page_filter_input" placeholder="<?php esc_attr_e('Search pages & posts...', 'verbocat-connector'); ?>" style="padding: 4px 10px; font-size: 12px; border-radius: 6px; border: 1px solid #cbd5e1; width: 220px; height: 28px;" />
                     </div>
 
-                    <p style="color: #64748b; font-size: 13px; margin-bottom: 12px;">
-                        <?php _e('Assign target languages to specific pages or use the Bulk Options bar to configure multiple pages at once. You can also add custom languages to any individual page.', 'verbocat-connector'); ?>
-                    </p>
-
-                    <!-- BULK ACTION CONTROLS -->
-                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; background: #f1f5f9; padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; border: 1px solid #e2e8f0;">
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <label style="font-size: 12px; font-weight: 600; color: #334155; display: inline-flex; align-items: center; gap: 5px; cursor: pointer;">
+                    <!-- MODERN BULK ACTION TOOLBAR -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; background: #f8fafc; padding: 8px 12px; border-radius: 8px; margin-bottom: 14px; border: 1px solid #e2e8f0;">
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <label style="font-size: 12px; font-weight: 600; color: #334155; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; background: #ffffff; padding: 3px 8px; border-radius: 4px; border: 1px solid #cbd5e1;">
                                 <input type="checkbox" id="vb_select_all_pages_cb" style="accent-color: #2563eb;" />
-                                <?php _e('Select All Pages', 'verbocat-connector'); ?>
+                                <?php _e('Select All', 'verbocat-connector'); ?>
                             </label>
-                            <span style="color: #cbd5e1;">|</span>
-                            <select id="vb_bulk_action_select" style="font-size: 12px; font-weight: 500; height: 30px; border-radius: 4px;">
-                                <option value=""><?php _e('Bulk Actions...', 'verbocat-connector'); ?></option>
+                            
+                            <select id="vb_bulk_action_select" style="font-size: 12px; font-weight: 500; height: 28px; border-radius: 4px; border: 1px solid #cbd5e1; background: #fff;">
+                                <option value=""><?php _e('Choose Bulk Action...', 'verbocat-connector'); ?></option>
                                 <option value="enable_auto"><?php _e('⚡ Enable Auto-Sync for Selected', 'verbocat-connector'); ?></option>
                                 <option value="pause_auto"><?php _e('⏸ Pause Auto-Sync for Selected', 'verbocat-connector'); ?></option>
-                                <option value="apply_global"><?php _e('🌐 Apply Global Target Languages to Selected', 'verbocat-connector'); ?></option>
-                                <option value="add_lang"><?php _e('➕ Add Language to Selected...', 'verbocat-connector'); ?></option>
+                                <option value="apply_global"><?php _e('🌐 Apply Global Pool to Selected', 'verbocat-connector'); ?></option>
+                                <option value="add_lang"><?php _e('➕ Add Specific Language to Selected...', 'verbocat-connector'); ?></option>
                                 <option value="clear_langs"><?php _e('🗑️ Clear All Languages from Selected', 'verbocat-connector'); ?></option>
                             </select>
 
-                            <select id="vb_bulk_lang_picker" style="display: none; font-size: 12px; height: 30px; border-radius: 4px;">
-                                <option value=""><?php _e('Choose Language...', 'verbocat-connector'); ?></option>
+                            <select id="vb_bulk_lang_picker" style="display: none; font-size: 12px; height: 28px; border-radius: 4px; border: 1px solid #cbd5e1; background: #fff;">
+                                <option value=""><?php _e('Select Language...', 'verbocat-connector'); ?></option>
                                 <?php foreach ($all_languages as $code => $meta): 
                                     if ($code === 'en') continue;
                                 ?>
@@ -406,32 +410,34 @@ class Verbocat_Settings {
                                 <?php endforeach; ?>
                             </select>
 
-                            <button type="button" id="vb_apply_bulk_btn" class="button button-secondary" style="font-size: 12px; font-weight: 600; height: 30px;">
-                                <?php _e('Apply to Selected', 'verbocat-connector'); ?>
+                            <button type="button" id="vb_apply_bulk_btn" class="button button-primary" style="font-size: 12px; font-weight: 600; height: 28px; line-height: 26px; padding: 0 12px; border-radius: 4px;">
+                                <?php _e('Apply', 'verbocat-connector'); ?>
                             </button>
                         </div>
-                        <span id="vb_selected_count_badge" style="font-size: 12px; color: #64748b; font-weight: 500;">
+                        
+                        <span id="vb_selected_count_badge" style="font-size: 12px; color: #475569; font-weight: 600; background: #ffffff; padding: 3px 8px; border-radius: 4px; border: 1px solid #e2e8f0;">
                             0 <?php _e('pages selected', 'verbocat-connector'); ?>
                         </span>
                     </div>
 
-                    <div style="border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+                    <!-- ULTRA-CLEAN TABLE -->
+                    <div style="border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; background: #ffffff;">
                         <table class="widefat fixed striped" id="vb_pages_automation_table" style="border: none; margin: 0;">
                             <thead>
-                                <tr style="background: #f8fafc;">
-                                    <th style="width: 38px; text-align: center; padding: 10px 6px;">
+                                <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+                                    <th style="width: 36px; text-align: center; padding: 8px 6px;">
                                         <input type="checkbox" id="vb_th_select_all" style="accent-color: #2563eb;" />
                                     </th>
-                                    <th style="width: 220px; font-weight: 700; color: #334155; padding: 10px 10px;"><?php _e('Page / Post Title', 'verbocat-connector'); ?></th>
-                                    <th style="width: 130px; font-weight: 700; color: #334155; padding: 10px 10px;"><?php _e('Continuous Sync', 'verbocat-connector'); ?></th>
-                                    <th style="font-weight: 700; color: #334155; padding: 10px 10px;"><?php _e('Assigned Target Languages', 'verbocat-connector'); ?></th>
-                                    <th style="width: 120px; font-weight: 700; color: #334155; padding: 10px 10px;"><?php _e('Translations', 'verbocat-connector'); ?></th>
+                                    <th style="width: 240px; font-weight: 700; color: #475569; font-size: 11px; text-transform: uppercase; padding: 8px 10px;"><?php _e('Page / Post Title', 'verbocat-connector'); ?></th>
+                                    <th style="width: 120px; font-weight: 700; color: #475569; font-size: 11px; text-transform: uppercase; padding: 8px 10px;"><?php _e('Auto-Sync', 'verbocat-connector'); ?></th>
+                                    <th style="font-weight: 700; color: #475569; font-size: 11px; text-transform: uppercase; padding: 8px 10px;"><?php _e('Active Target Languages', 'verbocat-connector'); ?></th>
+                                    <th style="width: 110px; font-weight: 700; color: #475569; font-size: 11px; text-transform: uppercase; padding: 8px 10px; text-align: right;"><?php _e('Translations', 'verbocat-connector'); ?></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php if (empty($source_pages)): ?>
                                     <tr>
-                                        <td colspan="5" style="text-align: center; padding: 24px; color: #94a3b8;">
+                                        <td colspan="5" style="text-align: center; padding: 24px; color: #94a3b8; font-size: 13px;">
                                             <?php _e('No published pages or posts found.', 'verbocat-connector'); ?>
                                         </td>
                                     </tr>
@@ -443,74 +449,79 @@ class Verbocat_Settings {
                                         $is_sp_auto = ($sp_auto === '1') || ($sp_auto === '' && $opts['continuous_sync_trigger'] === 'publish_update');
                                         
                                         $sp_saved_langs = get_post_meta($sp_id, '_verbocat_auto_target_langs', true);
-                                        // Fallback to global target langs if nothing explicitly configured
-                                        $sp_langs = is_array($sp_saved_langs) ? $sp_saved_langs : $selected_target_langs;
+                                        
+                                        // Determine strictly active languages for this page
+                                        if (is_array($sp_saved_langs)) {
+                                            $sp_active_langs = array_values(array_unique(array_filter($sp_saved_langs)));
+                                        } else {
+                                            $sp_active_langs = $selected_target_langs;
+                                        }
 
                                         $translations = get_post_meta($sp_id, '_verbocat_translations', true) ?: [];
                                         $trans_count = count($translations);
                                     ?>
                                         <tr class="vb-page-row" data-pid="<?php echo $sp_id; ?>" data-title="<?php echo esc_attr(strtolower($sp->post_title)); ?>">
-                                            <td style="text-align: center; padding: 10px 6px; vertical-align: middle;">
+                                            <td style="text-align: center; padding: 8px 6px; vertical-align: middle;">
                                                 <input type="checkbox" class="vb-row-select-cb" data-pid="<?php echo $sp_id; ?>" style="accent-color: #2563eb;" />
                                             </td>
-                                            <td style="padding: 10px 10px; vertical-align: middle;">
-                                                <div style="font-weight: 600; color: #0f172a; font-size: 13px;">
+                                            
+                                            <td style="padding: 8px 10px; vertical-align: middle;">
+                                                <div style="font-weight: 600; color: #0f172a; font-size: 13px; line-height: 1.3;">
                                                     <?php echo esc_html($sp->post_title ?: __('(No Title)', 'verbocat-connector')); ?>
                                                 </div>
                                                 <div style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">
-                                                    <span style="font-size: 10px; background: #f1f5f9; color: #475569; padding: 1px 5px; border-radius: 4px; text-transform: uppercase;">
+                                                    <span style="font-size: 10px; background: #f1f5f9; color: #64748b; padding: 1px 5px; border-radius: 4px; text-transform: uppercase; font-weight: 600;">
                                                         <?php echo esc_html($sp->post_type); ?>
                                                     </span>
-                                                    <a href="<?php echo get_edit_post_link($sp_id); ?>" target="_blank" style="font-size: 11px; color: #2563eb; text-decoration: none;">
+                                                    <a href="<?php echo get_edit_post_link($sp_id); ?>" target="_blank" style="font-size: 11px; color: #2563eb; text-decoration: none; font-weight: 500;">
                                                         <?php _e('Edit', 'verbocat-connector'); ?> &rarr;
                                                     </a>
                                                 </div>
                                             </td>
-                                            <td style="padding: 10px 10px; vertical-align: middle;">
-                                                <label style="display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 12px; cursor: pointer; color: <?php echo $is_sp_auto ? '#16a34a' : '#64748b'; ?>;">
-                                                    <input type="checkbox" name="page_automation[<?php echo $sp_id; ?>][enabled]" value="1" <?php checked($is_sp_auto); ?> class="vb-page-auto-toggle" data-pid="<?php echo $sp_id; ?>" style="accent-color: #16a34a; width: 15px; height: 15px;" />
-                                                    <span><?php echo $is_sp_auto ? __('⚡ Active', 'verbocat-connector') : __('⏸ Paused', 'verbocat-connector'); ?></span>
-                                                </label>
+                                            
+                                            <td style="padding: 8px 10px; vertical-align: middle;">
+                                                <input type="checkbox" name="page_automation[<?php echo $sp_id; ?>][enabled]" value="1" <?php checked($is_sp_auto); ?> class="vb-page-auto-toggle-hidden" data-pid="<?php echo $sp_id; ?>" style="display: none;" />
+                                                <button type="button" class="vb-page-auto-toggle-btn" data-pid="<?php echo $sp_id; ?>" style="display: inline-flex; align-items: center; gap: 4px; font-weight: 600; font-size: 11px; padding: 3px 8px; border-radius: 20px; border: 1px solid <?php echo $is_sp_auto ? '#a7f3d0' : '#e2e8f0'; ?>; background: <?php echo $is_sp_auto ? '#ecfdf5' : '#f8fafc'; ?>; color: <?php echo $is_sp_auto ? '#059669' : '#64748b'; ?>; cursor: pointer; transition: all 0.15s ease;">
+                                                    <span><?php echo $is_sp_auto ? '⚡ Active' : '⏸ Paused'; ?></span>
+                                                </button>
                                             </td>
-                                            <td style="padding: 10px 10px; vertical-align: middle;">
-                                                <div class="vb-page-langs-container" data-pid="<?php echo $sp_id; ?>" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px;">
-                                                    <!-- Render active language badges -->
-                                                    <?php 
-                                                    // Merge global targets and custom assigned page targets
-                                                    $display_langs = array_unique(array_merge($selected_target_langs, $sp_langs));
-                                                    foreach ($display_langs as $t_code): 
-                                                        if (empty($t_code)) continue;
+                                            
+                                            <td style="padding: 8px 10px; vertical-align: middle;">
+                                                <div class="vb-page-langs-container" data-pid="<?php echo $sp_id; ?>" style="display: flex; flex-wrap: wrap; align-items: center; gap: 5px;">
+                                                    
+                                                    <!-- Render ONLY strictly active languages -->
+                                                    <?php foreach ($sp_active_langs as $t_code): 
+                                                        if (empty($t_code) || $t_code === 'en') continue;
                                                         $t_meta = $all_languages[$t_code] ?? ['name' => strtoupper($t_code), 'flag' => '🌐'];
-                                                        $is_t_active = in_array($t_code, $sp_langs);
                                                     ?>
-                                                        <label class="vb-lang-badge-pill" style="background: <?php echo $is_t_active ? '#eff6ff' : '#f8fafc'; ?>; border: 1px solid <?php echo $is_t_active ? '#93c5fd' : '#cbd5e1'; ?>; padding: 2px 8px; border-radius: 16px; font-size: 11px; font-weight: 600; color: <?php echo $is_t_active ? '#1e40af' : '#64748b'; ?>; display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">
-                                                            <input type="checkbox" name="page_automation[<?php echo $sp_id; ?>][langs][]" value="<?php echo esc_attr($t_code); ?>" <?php checked($is_t_active); ?> class="vb-page-lang-checkbox" data-pid="<?php echo $sp_id; ?>" style="accent-color: #2563eb; width: 13px; height: 13px;" />
-                                                            <?php echo $t_meta['flag']; ?> <?php echo strtoupper($t_code); ?>
-                                                        </label>
+                                                        <span class="vb-lang-active-chip" data-code="<?php echo esc_attr($t_code); ?>" style="background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; padding: 2px 7px; border-radius: 14px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
+                                                            <input type="hidden" name="page_automation[<?php echo $sp_id; ?>][langs][]" value="<?php echo esc_attr($t_code); ?>" class="vb-hidden-lang-input" />
+                                                            <span><?php echo $t_meta['flag']; ?> <?php echo strtoupper($t_code); ?></span>
+                                                            <button type="button" class="vb-remove-lang-chip-btn" title="<?php esc_attr_e('Remove Language', 'verbocat-connector'); ?>" style="background: none; border: none; padding: 0; margin-left: 2px; color: #93c5fd; cursor: pointer; font-size: 12px; line-height: 1; font-weight: 700;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#93c5fd'">&times;</button>
+                                                        </span>
                                                     <?php endforeach; ?>
 
-                                                    <!-- Add Single Page Custom Language Dropdown -->
-                                                    <div style="display: inline-flex; align-items: center; margin-left: 4px;">
-                                                        <select class="vb-add-custom-lang-select" data-pid="<?php echo $sp_id; ?>" style="font-size: 11px; height: 26px; border-radius: 14px; padding: 0 6px; border: 1px dashed #94a3b8; background: #ffffff; color: #334155;">
-                                                            <option value="">+ <?php _e('Add Language...', 'verbocat-connector'); ?></option>
-                                                            <?php foreach ($all_languages as $c_code => $c_meta): 
-                                                                if ($c_code === 'en') continue;
-                                                            ?>
-                                                                <option value="<?php echo esc_attr($c_code); ?>" data-flag="<?php echo esc_attr($c_meta['flag']); ?>" data-name="<?php echo esc_attr($c_meta['name']); ?>">
-                                                                    <?php echo $c_meta['flag']; ?> <?php echo esc_html($c_meta['name']); ?> (<?php echo strtoupper($c_code); ?>)
-                                                                </option>
-                                                            <?php endforeach; ?>
-                                                        </select>
-                                                    </div>
+                                                    <!-- Add Language Dropdown -->
+                                                    <select class="vb-add-custom-lang-select" data-pid="<?php echo $sp_id; ?>" style="font-size: 11px; height: 24px; border-radius: 12px; padding: 0 6px; border: 1px dashed #cbd5e1; background: #ffffff; color: #475569; cursor: pointer;">
+                                                        <option value="">+ <?php _e('Add', 'verbocat-connector'); ?></option>
+                                                        <?php foreach ($all_languages as $c_code => $c_meta): 
+                                                            if ($c_code === 'en') continue;
+                                                        ?>
+                                                            <option value="<?php echo esc_attr($c_code); ?>" data-flag="<?php echo esc_attr($c_meta['flag']); ?>" data-name="<?php echo esc_attr($c_meta['name']); ?>">
+                                                                <?php echo $c_meta['flag']; ?> <?php echo esc_html($c_meta['name']); ?> (<?php echo strtoupper($c_code); ?>)
+                                                            </option>
+                                                        <?php endforeach; ?>
+                                                    </select>
                                                 </div>
                                             </td>
-                                            <td style="padding: 10px 10px; vertical-align: middle;">
+                                            
+                                            <td style="padding: 8px 10px; vertical-align: middle; text-align: right;">
                                                 <?php if ($trans_count > 0): ?>
-                                                    <span style="background: #ecfdf5; color: #059669; font-weight: 600; font-size: 11px; padding: 2px 7px; border-radius: 20px;">
-                                                        ✓ <?php echo sprintf(_n('%d Language', '%d Languages', $trans_count, 'verbocat-connector'), $trans_count); ?>
+                                                    <span style="background: #ecfdf5; color: #059669; font-weight: 600; font-size: 11px; padding: 2px 7px; border-radius: 12px; border: 1px solid #a7f3d0;">
+                                                        ✓ <?php echo sprintf(_n('%d Live', '%d Live', $trans_count, 'verbocat-connector'), $trans_count); ?>
                                                     </span>
                                                 <?php else: ?>
-                                                    <span style="color: #94a3b8; font-size: 11px;">
+                                                    <span style="color: #94a3b8; font-size: 11px; font-weight: 500;">
                                                         <?php _e('0 Live', 'verbocat-connector'); ?>
                                                     </span>
                                                 <?php endif; ?>
@@ -626,6 +637,16 @@ class Verbocat_Settings {
                 $('.vb-global-lang-cb').prop('checked', false).trigger('change');
             });
 
+            // Filter Global Languages by typing
+            $('#vb_global_lang_search').on('keyup', function() {
+                var query = $(this).val().toLowerCase();
+                $('#vb_global_langs_grid .vb-global-lang-card').each(function() {
+                    var name = $(this).data('name') || '';
+                    var code = $(this).data('code') || '';
+                    $(this).toggle(name.indexOf(query) > -1 || code.indexOf(query) > -1);
+                });
+            });
+
             // Live Search Filter for Pages Table
             $('#vb_page_filter_input').on('keyup', function() {
                 var query = $(this).val().toLowerCase();
@@ -635,46 +656,48 @@ class Verbocat_Settings {
                 });
             });
 
-            // Interactive Auto-Sync Toggle Text Update
-            $('.vb-page-auto-toggle').on('change', function() {
-                var isChecked = $(this).is(':checked');
-                var $label = $(this).closest('label');
-                $label.find('span').text(isChecked ? '⚡ Active' : '⏸ Paused');
-                $label.css('color', isChecked ? '#16a34a' : '#64748b');
-            });
+            // Clickable Auto-Sync Toggle Button
+            $(document).on('click', '.vb-page-auto-toggle-btn', function(e) {
+                e.preventDefault();
+                var pid = $(this).data('pid');
+                var $hiddenInput = $('input.vb-page-auto-toggle-hidden[data-pid="' + pid + '"]');
+                var isChecked = $hiddenInput.is(':checked');
+                
+                $hiddenInput.prop('checked', !isChecked);
+                var newState = !isChecked;
 
-            // Dynamic Language Badge Styling on Check/Uncheck
-            $(document).on('change', '.vb-page-lang-checkbox', function() {
-                var isChecked = $(this).is(':checked');
-                var $pill = $(this).closest('.vb-lang-badge-pill');
-                $pill.css({
-                    'background': isChecked ? '#eff6ff' : '#f8fafc',
-                    'border-color': isChecked ? '#93c5fd' : '#cbd5e1',
-                    'color': isChecked ? '#1e40af' : '#64748b'
+                $(this).find('span').text(newState ? '⚡ Active' : '⏸ Paused');
+                $(this).css({
+                    'background': newState ? '#ecfdf5' : '#f8fafc',
+                    'border-color': newState ? '#a7f3d0' : '#e2e8f0',
+                    'color': newState ? '#059669' : '#64748b'
                 });
             });
 
+            // Remove Language Chip on Click (x)
+            $(document).on('click', '.vb-remove-lang-chip-btn', function(e) {
+                e.preventDefault();
+                $(this).closest('.vb-lang-active-chip').remove();
+            });
+
             // Add Custom Language to a Single Page Row
-            $('.vb-add-custom-lang-select').on('change', function() {
+            $(document).on('change', '.vb-add-custom-lang-select', function() {
                 var langCode = $(this).val();
                 if (!langCode) return;
                 var $option = $(this).find('option:selected');
                 var flag = $option.data('flag') || '🌐';
-                var name = $option.data('name') || langCode;
                 var pid = $(this).data('pid');
                 var $container = $(this).closest('.vb-page-langs-container');
 
-                // Check if pill already exists
+                // Check if chip already exists
                 var $existing = $container.find('input[value="' + langCode + '"]');
-                if ($existing.length > 0) {
-                    $existing.prop('checked', true).trigger('change');
-                } else {
-                    // Create new checked pill HTML
-                    var newPill = '<label class="vb-lang-badge-pill" style="background: #eff6ff; border: 1px solid #93c5fd; padding: 2px 8px; border-radius: 16px; font-size: 11px; font-weight: 600; color: #1e40af; display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">' +
-                        '<input type="checkbox" name="page_automation[' + pid + '][langs][]" value="' + langCode + '" checked class="vb-page-lang-checkbox" data-pid="' + pid + '" style="accent-color: #2563eb; width: 13px; height: 13px;" />' +
-                        flag + ' ' + langCode.toUpperCase() +
-                        '</label>';
-                    $(newPill).insertBefore($(this).parent());
+                if ($existing.length === 0) {
+                    var newChip = '<span class="vb-lang-active-chip" data-code="' + langCode + '" style="background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; padding: 2px 7px; border-radius: 14px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">' +
+                        '<input type="hidden" name="page_automation[' + pid + '][langs][]" value="' + langCode + '" class="vb-hidden-lang-input" />' +
+                        '<span>' + flag + ' ' + langCode.toUpperCase() + '</span>' +
+                        '<button type="button" class="vb-remove-lang-chip-btn" style="background: none; border: none; padding: 0; margin-left: 2px; color: #93c5fd; cursor: pointer; font-size: 12px; line-height: 1; font-weight: 700;">&times;</button>' +
+                        '</span>';
+                    $(newChip).insertBefore($(this));
                 }
 
                 $(this).val(''); // Reset select
@@ -716,44 +739,56 @@ class Verbocat_Settings {
 
                 var $selectedRows = $('.vb-row-select-cb:checked').closest('tr.vb-page-row');
                 if ($selectedRows.length === 0) {
-                    alert('<?php _e('Please select at least one page.', 'verbocat-connector'); ?>');
+                    alert('<?php _e('Please select at least one page from the checkboxes.', 'verbocat-connector'); ?>');
                     return;
                 }
 
                 if (action === 'enable_auto') {
-                    $selectedRows.find('.vb-page-auto-toggle').prop('checked', true).trigger('change');
+                    $selectedRows.each(function() {
+                        var pid = $(this).data('pid');
+                        $('input.vb-page-auto-toggle-hidden[data-pid="' + pid + '"]').prop('checked', true);
+                        var $btn = $(this).find('.vb-page-auto-toggle-btn');
+                        $btn.find('span').text('⚡ Active');
+                        $btn.css({'background': '#ecfdf5', 'border-color': '#a7f3d0', 'color': '#059669'});
+                    });
                 } else if (action === 'pause_auto') {
-                    $selectedRows.find('.vb-page-auto-toggle').prop('checked', false).trigger('change');
+                    $selectedRows.each(function() {
+                        var pid = $(this).data('pid');
+                        $('input.vb-page-auto-toggle-hidden[data-pid="' + pid + '"]').prop('checked', false);
+                        var $btn = $(this).find('.vb-page-auto-toggle-btn');
+                        $btn.find('span').text('⏸ Paused');
+                        $btn.css({'background': '#f8fafc', 'border-color': '#e2e8f0', 'color': '#64748b'});
+                    });
                 } else if (action === 'clear_langs') {
-                    $selectedRows.find('.vb-page-lang-checkbox').prop('checked', false).trigger('change');
+                    $selectedRows.find('.vb-lang-active-chip').remove();
                 } else if (action === 'apply_global') {
-                    // Check global selected languages on selected rows
+                    // Collect active global languages
                     var globalLangs = [];
                     $('.vb-global-lang-cb:checked').each(function() {
                         globalLangs.push($(this).val());
                     });
+
                     $selectedRows.each(function() {
                         var $row = $(this);
                         var pid = $row.data('pid');
                         var $container = $row.find('.vb-page-langs-container');
-                        $row.find('.vb-page-lang-checkbox').prop('checked', false).trigger('change');
+                        $container.find('.vb-lang-active-chip').remove();
+
                         globalLangs.forEach(function(lCode) {
-                            var $cb = $container.find('input[value="' + lCode + '"]');
-                            if ($cb.length > 0) {
-                                $cb.prop('checked', true).trigger('change');
-                            } else {
-                                var newPill = '<label class="vb-lang-badge-pill" style="background: #eff6ff; border: 1px solid #93c5fd; padding: 2px 8px; border-radius: 16px; font-size: 11px; font-weight: 600; color: #1e40af; display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">' +
-                                    '<input type="checkbox" name="page_automation[' + pid + '][langs][]" value="' + lCode + '" checked class="vb-page-lang-checkbox" data-pid="' + pid + '" style="accent-color: #2563eb; width: 13px; height: 13px;" />' +
-                                    lCode.toUpperCase() +
-                                    '</label>';
-                                $(newPill).insertBefore($container.find('.vb-add-custom-lang-select').parent());
-                            }
+                            var $opt = $('.vb-add-custom-lang-select option[value="' + lCode + '"]').first();
+                            var flag = $opt.data('flag') || '🌐';
+                            var newChip = '<span class="vb-lang-active-chip" data-code="' + lCode + '" style="background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; padding: 2px 7px; border-radius: 14px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">' +
+                                '<input type="hidden" name="page_automation[' + pid + '][langs][]" value="' + lCode + '" class="vb-hidden-lang-input" />' +
+                                '<span>' + flag + ' ' + lCode.toUpperCase() + '</span>' +
+                                '<button type="button" class="vb-remove-lang-chip-btn" style="background: none; border: none; padding: 0; margin-left: 2px; color: #93c5fd; cursor: pointer; font-size: 12px; line-height: 1; font-weight: 700;">&times;</button>' +
+                                '</span>';
+                            $(newChip).insertBefore($container.find('.vb-add-custom-lang-select'));
                         });
                     });
                 } else if (action === 'add_lang') {
                     var lCode = $('#vb_bulk_lang_picker').val();
                     if (!lCode) {
-                        alert('<?php _e('Please select a language from the dropdown.', 'verbocat-connector'); ?>');
+                        alert('<?php _e('Please choose a language from the dropdown.', 'verbocat-connector'); ?>');
                         return;
                     }
                     var $opt = $('#vb_bulk_lang_picker').find('option:selected');
@@ -763,15 +798,14 @@ class Verbocat_Settings {
                         var $row = $(this);
                         var pid = $row.data('pid');
                         var $container = $row.find('.vb-page-langs-container');
-                        var $cb = $container.find('input[value="' + lCode + '"]');
-                        if ($cb.length > 0) {
-                            $cb.prop('checked', true).trigger('change');
-                        } else {
-                            var newPill = '<label class="vb-lang-badge-pill" style="background: #eff6ff; border: 1px solid #93c5fd; padding: 2px 8px; border-radius: 16px; font-size: 11px; font-weight: 600; color: #1e40af; display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">' +
-                                '<input type="checkbox" name="page_automation[' + pid + '][langs][]" value="' + lCode + '" checked class="vb-page-lang-checkbox" data-pid="' + pid + '" style="accent-color: #2563eb; width: 13px; height: 13px;" />' +
-                                flag + ' ' + lCode.toUpperCase() +
-                                '</label>';
-                            $(newPill).insertBefore($container.find('.vb-add-custom-lang-select').parent());
+                        var $existing = $container.find('input[value="' + lCode + '"]');
+                        if ($existing.length === 0) {
+                            var newChip = '<span class="vb-lang-active-chip" data-code="' + lCode + '" style="background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; padding: 2px 7px; border-radius: 14px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">' +
+                                '<input type="hidden" name="page_automation[' + pid + '][langs][]" value="' + lCode + '" class="vb-hidden-lang-input" />' +
+                                '<span>' + flag + ' ' + lCode.toUpperCase() + '</span>' +
+                                '<button type="button" class="vb-remove-lang-chip-btn" style="background: none; border: none; padding: 0; margin-left: 2px; color: #93c5fd; cursor: pointer; font-size: 12px; line-height: 1; font-weight: 700;">&times;</button>' +
+                                '</span>';
+                            $(newChip).insertBefore($container.find('.vb-add-custom-lang-select'));
                         }
                     });
                 }
