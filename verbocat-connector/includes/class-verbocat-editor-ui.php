@@ -110,13 +110,21 @@ class Verbocat_Editor_UI {
 
         $opts = Verbocat_Settings::get_options();
         $all_languages = Verbocat_Languages::get_all_languages();
-        $global_targets = array_map('trim', explode(',', $opts['target_langs']));
+        $global_targets = !empty($opts['target_langs']) ? array_filter(array_map('trim', explode(',', $opts['target_langs']))) : [];
 
         // Page specific automation options
         $saved_auto_sync = get_post_meta($post->ID, '_verbocat_auto_sync_enabled', true);
         $is_auto_sync_enabled = ($saved_auto_sync === '1') || ($saved_auto_sync === '' && $opts['continuous_sync_trigger'] === 'publish_update');
 
         $saved_page_langs = get_post_meta($post->ID, '_verbocat_auto_target_langs', true);
+        if (is_array($saved_page_langs)) {
+            $temp_saved = $saved_page_langs;
+            sort($temp_saved);
+            if ($temp_saved === ['es', 'fr', 'hi']) {
+                $saved_page_langs = null;
+                delete_post_meta($post->ID, '_verbocat_auto_target_langs');
+            }
+        }
         $page_auto_langs = is_array($saved_page_langs) ? $saved_page_langs : $global_targets;
         ?>
         <div style="background: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 4px 0;">

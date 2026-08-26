@@ -42,7 +42,15 @@ class Verbocat_Settings {
             'switcher_position'       => 'bottom-right',
             'post_types'              => ['post', 'page']
         ];
-        return wp_parse_args(get_option(self::$option_name, []), $defaults);
+
+        $saved = get_option(self::$option_name, []);
+        // Purge legacy hardcoded defaults ('es, hi, fr' or similar) from database root if found
+        if (isset($saved['target_langs']) && (trim($saved['target_langs']) === 'es, hi, fr' || trim($saved['target_langs']) === 'es,hi,fr')) {
+            $saved['target_langs'] = '';
+            update_option(self::$option_name, $saved);
+        }
+
+        return wp_parse_args($saved, $defaults);
     }
 
     /**
@@ -450,6 +458,16 @@ class Verbocat_Settings {
                                         
                                         $sp_saved_langs = get_post_meta($sp_id, '_verbocat_auto_target_langs', true);
                                         
+                                        // Clean legacy default ['es', 'hi', 'fr'] if present
+                                        if (is_array($sp_saved_langs)) {
+                                            $temp_saved = $sp_saved_langs;
+                                            sort($temp_saved);
+                                            if ($temp_saved === ['es', 'fr', 'hi']) {
+                                                $sp_saved_langs = null;
+                                                delete_post_meta($sp_id, '_verbocat_auto_target_langs');
+                                            }
+                                        }
+
                                         // Determine strictly active languages for this page
                                         if (is_array($sp_saved_langs)) {
                                             $sp_active_langs = array_values(array_unique(array_filter($sp_saved_langs)));

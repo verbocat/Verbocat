@@ -92,9 +92,19 @@ class Verbocat_Connector {
 
         // Get page-specific target languages or fallback to global pool
         $page_target_langs = get_post_meta($post_id, '_verbocat_auto_target_langs', true);
-        if (!is_array($page_target_langs) || empty($page_target_langs)) {
-            $page_target_langs = array_map('trim', explode(',', $opts['target_langs']));
+        if (is_array($page_target_langs)) {
+            $temp_saved = $page_target_langs;
+            sort($temp_saved);
+            if ($temp_saved === ['es', 'fr', 'hi']) {
+                $page_target_langs = null;
+            }
         }
+
+        if (!is_array($page_target_langs) || empty($page_target_langs)) {
+            $page_target_langs = !empty($opts['target_langs']) ? array_filter(array_map('trim', explode(',', $opts['target_langs']))) : [];
+        }
+
+        if (empty($page_target_langs)) return;
 
         // Execute Smart Continuous Delta Sync for only the assigned languages
         Verbocat_Delta_Sync::sync_post($post, $page_target_langs, null, true);
