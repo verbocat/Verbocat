@@ -3,11 +3,25 @@ import React from "react";
 export function CollaboratorsList({ collaborators, onTeleport }) {
   if (!collaborators || collaborators.length === 0) return null;
 
+  // Defensively deduplicate collaborators by unique email/userId
+  const uniqueCollaborators = [];
+  const seenUsers = new Set();
+  for (const user of collaborators) {
+    const key = (user.email || user.userId || user.socketId || "").toLowerCase().trim();
+    if (!seenUsers.has(key)) {
+      seenUsers.add(key);
+      uniqueCollaborators.push(user);
+    }
+  }
+
+  if (uniqueCollaborators.length === 0) return null;
+
   // Generate a soft background/border color based on email string to keep colors consistent
   const getColorHash = (str) => {
     let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    const safeStr = str || "user";
+    for (let i = 0; i < safeStr.length; i++) {
+      hash = safeStr.charCodeAt(i) + ((hash << 5) - hash);
     }
     const colors = [
       { bg: "bg-rose-500/10 text-rose-400 border-rose-500/30", dot: "bg-rose-400" },
@@ -24,7 +38,7 @@ export function CollaboratorsList({ collaborators, onTeleport }) {
     <div className="flex items-center gap-1.5 pl-3 border-l border-zinc-800">
       <span className="text-xs text-zinc-500 mr-1 hidden sm:inline">Active:</span>
       <div className="flex -space-x-2">
-        {collaborators.map((user) => {
+        {uniqueCollaborators.map((user) => {
           const initials = (user.name || user.email || "?")
             .split(" ")[0]
             .substring(0, 2)

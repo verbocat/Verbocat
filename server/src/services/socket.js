@@ -21,6 +21,29 @@ setInterval(() => {
 
 const getDocumentRoomId = (documentId, targetLang = null) => `${documentId}:${targetLang || "default"}`;
 
+/**
+ * Deduplicate active users by userId / email so multiple tabs / reconnections
+ * are represented as 1 single unique collaborator in the room.
+ */
+function getUniqueRoomUsers(roomUsers) {
+  if (!roomUsers) return [];
+  const uniqueMap = new Map();
+  for (const u of roomUsers.values()) {
+    const key = u.userId || u.email || u.socketId;
+    if (!uniqueMap.has(key)) {
+      uniqueMap.set(key, { ...u, tabCount: 1 });
+    } else {
+      const existing = uniqueMap.get(key);
+      existing.tabCount += 1;
+      // Preserve active segment focus if any socket has one
+      if (u.activeSegmentIndex !== null && u.activeSegmentIndex !== undefined) {
+        existing.activeSegmentIndex = u.activeSegmentIndex;
+      }
+    }
+  }
+  return Array.from(uniqueMap.values());
+}
+
 function initSocket(server) {
   io = new Server(server, {
     cors: {
@@ -185,12 +208,12 @@ function initSocket(server) {
 
         // Send current room state (users and locks) to the newly joined client
         socket.emit("room-state", {
-          users: Array.from(roomUsers.values()),
+          users: getUniqueRoomUsers(roomUsers),
           locks: Array.from(roomLocks.entries())
         });
 
         // Broadcast presence sync to all others in the room
-        socket.to(roomId).emit("presence-update", Array.from(roomUsers.values()));
+        socket.to(roomId).emit("presence-update", getUniqueRoomUsers(roomUsers));
       } catch (err) {
         console.error("Socket join-document error:", err);
         socket.emit("error", { message: "Failed to load document room" });
@@ -230,7 +253,7 @@ function initSocket(server) {
       const roomUsers = activeUsers.get(roomId);
       if (roomUsers && roomUsers.has(socket.id)) {
         roomUsers.get(socket.id).activeSegmentIndex = segmentIndex;
-        io.to(roomId).emit("presence-update", Array.from(roomUsers.values()));
+        io.to(roomId).emit("presence-update", getUniqueRoomUsers(roomUsers));
       }
 
       // Broadcast cell lock update
@@ -255,7 +278,7 @@ function initSocket(server) {
       const roomUsers = activeUsers.get(roomId);
       if (roomUsers && roomUsers.has(socket.id)) {
         roomUsers.get(socket.id).activeSegmentIndex = null;
-        io.to(roomId).emit("presence-update", Array.from(roomUsers.values()));
+        io.to(roomId).emit("presence-update", getUniqueRoomUsers(roomUsers));
       }
     });
 
@@ -269,7 +292,8 @@ function initSocket(server) {
         originalTargetText,
         trackedBy,
         targetLang: socket.currentTargetLang,
-        socketId: socket.id
+        socketId: socket.id,
+        userId: socket.user?.id
       });
     });
 
@@ -304,7 +328,7 @@ function initSocket(server) {
         if (roomUsers.size === 0) {
           activeUsers.delete(roomId);
         } else {
-          io.to(roomId).emit("presence-update", Array.from(roomUsers.values()));
+          io.to(roomId).emit("presence-update", getUniqueRoomUsers(roomUsers));
         }
       }
 

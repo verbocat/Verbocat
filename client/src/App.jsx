@@ -21,6 +21,7 @@ import { SettingsModal } from "./components/SettingsModal.jsx";
 import { LiveDocumentViewer } from "./components/LiveDocumentViewer.jsx";
 import { ScreenshotContextModal } from "./components/ScreenshotContextModal.jsx";
 import { LANGUAGES } from "./constants/languages.js";
+import { LanguageFlag } from "./components/LanguageFlag.jsx";
 import { getSocketUrl } from "./utils/socketUrl.js";
 import { useGlossaryManager } from "./hooks/useGlossaryManager.js";
 import { useUserStore } from "./services/userStore.js";
@@ -605,7 +606,10 @@ export default function App() {
       );
     });
 
-    socket.on("typing-update", ({ segmentIndex, targetText, originalTargetText, trackedBy, targetLang }) => {
+    socket.on("typing-update", ({ segmentIndex, targetText, originalTargetText, trackedBy, targetLang, socketId }) => {
+      if (socketId && socketRef.current && socketId === socketRef.current.id) {
+        return;
+      }
       if (targetLang && currentRoute.screen === "editor" && currentRoute.targetLang && targetLang !== currentRoute.targetLang) {
         return;
       }
@@ -640,20 +644,40 @@ export default function App() {
     });
 
     socket.on("access-request-received", (data) => {
-      if (document.hidden) {
-        if (Notification.permission === "granted") {
-          new Notification("Access Request Received", {
-            body: `${data.userName} (${data.userEmail}) is requesting Edit Access to ${data.docName}.`
-          });
-        }
+      // Only the file owner or admin staff should receive/process access requests
+      const isOwnerOrStaff = (ownerId && ownerId === userRef.current?.id) || ["admin", "super_admin", "verbolabs_staff"].includes(userRef.current?.role);
+      if (!isOwnerOrStaff) return;
+
+      // Targeted Language Filtering:
+      // If the linguist requested access for a specific language (e.g. Hindi),
+      // the popup in the editor should ONLY appear if this editor is open in that target language!
+      const currentEditorLang = currentRouteRef.current?.targetLang || activeTargetLanguage;
+      if (data.targetLang && currentEditorLang && data.targetLang.toLowerCase() !== currentEditorLang.toLowerCase()) {
+        return;
       }
+
+      // If on an editor screen, only show if document matches
+      if (currentRouteRef.current?.screen === "editor" && data.documentId && currentRouteRef.current.fileId !== data.documentId) {
+        return;
+      }
+
+      if (document.hidden && Notification.permission === "granted") {
+        const langText = data.targetLang ? ` (${data.targetLang.toUpperCase()})` : "";
+        new Notification("Access Request Received", {
+          body: `${data.userName || data.userEmail} is requesting Edit Access${langText} to ${data.docName}.`
+        });
+      }
+
       setPendingAccessRequests((prev) => {
         if (prev.some((r) => r.id === data.id)) return prev;
         return [...prev, {
           id: data.id,
           document_id: data.documentId,
           user_id: data.userId,
-          profiles: { email: data.userEmail }
+          docName: data.docName,
+          targetLang: data.targetLang,
+          permission: data.permission || "write",
+          profiles: { email: data.userEmail, full_name: data.userName }
         }];
       });
     });
@@ -719,7 +743,8 @@ export default function App() {
 
   const handleRequestEditAccess = async () => {
     try {
-      await requestAccess(documentId);
+      const langToRequest = currentRoute?.targetLang || activeTargetLanguage || targetLanguage || null;
+      await requestAccess(documentId, "write", langToRequest);
       setHasPendingAccessRequest(true);
       setAccessRequestMessage("Access request submitted successfully!");
       showToast("Access request submitted successfully!");
@@ -729,9 +754,9 @@ export default function App() {
     }
   };
 
-  const handleRespondToAccessRequest = async (requestId, action) => {
+  const handleRespondToAccessRequest = async (requestId, action, reqPermission = "write", reqTargetLang = null) => {
     try {
-      await respondToAccessRequest(documentId, requestId, action);
+      await respondToAccessRequest(documentId, requestId, action, reqPermission, reqTargetLang);
       setPendingAccessRequests(prev => prev.filter(r => r.id !== requestId));
       showToast(`Access request ${action === "approve" ? "approved" : "declined"}.`);
     } catch (err) {
@@ -2150,18 +2175,80 @@ export default function App() {
       return str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
     };
 
+    const projectTagsOntoTarget = (sourceText, targetText) => {
+      if (!sourceText) return targetText || "";
+      const sourceTags = sourceText.match(/<\/?\d+>/g);
+      if (!sourceTags || sourceTags.length === 0) {
+        return (targetText || "").replace(/<[^>]+>/g, "").trim();
+      }
+      const cleanTarget = (targetText || "").replace(/<[^>]+>/g, "").trim();
+      if (!cleanTarget) return sourceText;
+
+      const pureSource = sourceText.replace(/<[^>]+>/g, "");
+      const pureSourceLen = Math.max(1, pureSource.length);
+
+      const tagSpecs = [];
+      const tagRegex = /<\/?\d+>/g;
+      let match;
+      let pureOffset = 0;
+      let lastRawIdx = 0;
+
+      let tagIndex = 0;
+      while ((match = tagRegex.exec(sourceText)) !== null) {
+        const rawIdx = match.index;
+        const textBefore = sourceText.slice(lastRawIdx, rawIdx).replace(/<\/?\d+>/g, "");
+        pureOffset += textBefore.length;
+        lastRawIdx = rawIdx + match[0].length;
+
+        tagSpecs.push({
+          tag: match[0],
+          ratio: pureOffset / pureSourceLen,
+          order: tagIndex++
+        });
+      }
+
+      const targetLen = cleanTarget.length;
+      const isInsideWord = (str, idx) => {
+        if (idx <= 0 || idx >= str.length) return false;
+        const prevChar = str[idx - 1];
+        const nextChar = str[idx];
+        return !/\s/.test(prevChar) && !/\s/.test(nextChar);
+      };
+
+      const targetTagPositions = tagSpecs.map((spec) => {
+        let pIdx = Math.round(targetLen * spec.ratio);
+        pIdx = Math.max(0, Math.min(targetLen, pIdx));
+
+        if (isInsideWord(cleanTarget, pIdx)) {
+          const nextSpace = cleanTarget.indexOf(" ", pIdx);
+          const prevSpace = cleanTarget.lastIndexOf(" ", pIdx);
+          if (nextSpace !== -1 && (prevSpace === -1 || (nextSpace - pIdx) <= (pIdx - prevSpace))) {
+            pIdx = nextSpace;
+          } else if (prevSpace !== -1) {
+            pIdx = prevSpace + 1;
+          }
+        }
+
+        return {
+          tag: spec.tag,
+          pos: pIdx,
+          order: spec.order
+        };
+      });
+
+      targetTagPositions.sort((a, b) => (b.pos - a.pos) || (b.order - a.order));
+
+      let resultTarget = cleanTarget;
+      targetTagPositions.forEach((item) => {
+        resultTarget = resultTarget.slice(0, item.pos) + item.tag + resultTarget.slice(item.pos);
+      });
+
+      return resultTarget;
+    };
+
     const propagateTranslation = (targetA, sourceB) => {
       if (!targetA) return "";
-      const tagsInSourceB = sourceB.match(/<[^>]+>/g) || [];
-      let tagIdx = 0;
-      let propagated = targetA.replace(/<[^>]+>/g, () => {
-        if (tagIdx < tagsInSourceB.length) return tagsInSourceB[tagIdx++];
-        return "";
-      });
-      while (tagIdx < tagsInSourceB.length) {
-        propagated += tagsInSourceB[tagIdx++];
-      }
-      return propagated;
+      return projectTagsOntoTarget(sourceB, targetA);
     };
 
     const targetSeg = segments.find((s) => String(s.id) === String(id) || Number(s.segment_index) === Number(id));
@@ -2856,6 +2943,8 @@ export default function App() {
     );
   }
 
+  const canTranslate = permission === "write" && user ? (["super_admin", "admin", "verbolabs_staff", "vendor"].includes(user.role) || (user.id === ownerId)) : false;
+
   return (
     <div className="workspace-shell" style={{ color: "var(--text-primary)" }}>
 
@@ -3102,7 +3191,7 @@ export default function App() {
                 onSaveProject={saveProject}
                 onRelinkHtml={permission === "write" ? handleRelinkHtml : null}
                 onImportXliff={permission === "write" ? handleImportXliff : null}
-                onTranslate={permission === "write" ? handleTranslateSegments : null}
+                onTranslate={canTranslate ? handleTranslateSegments : null}
                 onToggleQa={() => setShowQaPanel((value) => !value)}
                 onRunQc={permission === "write" ? handleRunQc : null}
                 isTranslating={isTranslating}
@@ -3119,7 +3208,7 @@ export default function App() {
                 onTargetLanguageChange={handleTargetLanguageChange}
                 fileName={fileName}
                 theme={theme}
-                canTranslate={permission === "write" && user ? (["super_admin", "admin", "verbolabs_staff", "vendor"].includes(user.role) || (user.hasTranslateAccess && user.status === "active")) : false}
+                canTranslate={canTranslate}
                 filterStatus={filterStatus}
                 setFilterStatus={setFilterStatus}
                 onUpload={handleUpload}
@@ -3142,7 +3231,7 @@ export default function App() {
                 isAllSelected={filteredSegments.length > 0 && selectedSegmentIds.size === filteredSegments.length}
                 selectedCount={selectedSegmentIds.size}
                 onToggleSelectAll={handleToggleSelectAll}
-                onTranslateSelected={permission === "write" ? handleTranslateSelectedSegments : null}
+                onTranslateSelected={canTranslate ? handleTranslateSelectedSegments : null}
                 onVerifySelected={permission === "write" ? handleVerifySelectedSegments : null}
                 onUnverifySelected={permission === "write" ? handleUnverifySelectedSegments : null}
                 onCopySourceToTargetSelected={permission === "write" ? handleCopySourceToTargetSelected : null}
@@ -3516,41 +3605,72 @@ export default function App() {
         documentId={documentId}
         docName={fileName}
         projectId={currentRoute.screen === "editor" ? currentRoute.projectId : null}
-        targetLang={currentRoute.screen === "editor" ? currentRoute.targetLang : null}
+        targetLang={currentRoute.screen === "editor" ? currentRoute.targetLang : activeTargetLanguage}
+        isOwner={ownerId ? (ownerId === user?.id || ["admin", "super_admin", "verbolabs_staff"].includes(user?.role)) : true}
         theme={theme}
       />
 
       {/* Access Requests Dialog Overlay */}
-      {pendingAccessRequests.length > 0 && (
-        <div className="fixed bottom-6 right-6 z-[200] w-96 bg-[var(--bg-surface)] border border-[var(--border-medium)] rounded-2xl shadow-2xl p-5 space-y-4 animate-[slideUp_0.2s_ease] select-none text-left">
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-2">
-              <Globe className="w-4 h-4 text-[var(--accent)]" />
-              <h4 className="text-sm font-bold text-[var(--text-primary)]">Access Request</h4>
+      {pendingAccessRequests.length > 0 && (() => {
+        const isOwnerOrStaff = (ownerId && ownerId === user?.id) || ["admin", "super_admin", "verbolabs_staff"].includes(user?.role);
+        if (!isOwnerOrStaff) return null;
+
+        const currentReq = pendingAccessRequests[0];
+        const currentLang = currentRoute.screen === "editor" ? currentRoute.targetLang : activeTargetLanguage;
+        
+        // Language Purity Rule: If request specifies a target language (e.g. Hindi),
+        // only show this popup if the owner is currently viewing that language!
+        if (currentReq.targetLang && currentLang && currentReq.targetLang.toLowerCase() !== currentLang.toLowerCase()) {
+          return null;
+        }
+
+        const email = currentReq.profiles?.email || "Collaborator";
+        const displayName = currentReq.profiles?.full_name || email.split("@")[0];
+        const reqLangCode = currentReq.targetLang;
+        const reqLangName = reqLangCode ? (LANGUAGES.find(l => l.code === reqLangCode.toLowerCase())?.name || reqLangCode.toUpperCase()) : null;
+        const requestedPermission = currentReq.permission || "write";
+
+        return (
+          <div className="fixed bottom-6 right-6 z-[200] w-96 bg-[var(--bg-surface)] border border-[var(--border-medium)] rounded-2xl shadow-2xl p-5 space-y-3.5 animate-[slideUp_0.2s_ease] select-none text-left">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-2">
+                <Globe className="w-4 h-4 text-[var(--accent)]" />
+                <h4 className="text-sm font-bold text-[var(--text-primary)]">Access Request</h4>
+              </div>
+              <span className="text-[10px] bg-[var(--accent-glow)] text-[var(--text-accent)] border border-[var(--border-subtle)] rounded px-1.5 py-0.5 font-bold uppercase tracking-wider">
+                Pending
+              </span>
             </div>
-            <span className="text-[9px] bg-[var(--accent-glow)] text-[var(--text-accent)] border border-[var(--border-subtle)] rounded px-1.5 py-0.5 font-bold uppercase tracking-wider">
-              Pending
-            </span>
+            
+            <div className="text-xs text-[var(--text-secondary)] leading-relaxed space-y-1.5">
+              <p>
+                <strong className="text-[var(--text-primary)]">{displayName}</strong> ({email}) is requesting <strong className="text-[var(--text-primary)]">{requestedPermission === "write" ? "Write Access" : "Read Access"}</strong>.
+              </p>
+              {reqLangName && (
+                <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-[var(--bg-panel)] border border-[var(--border-subtle)] text-[11px] font-semibold text-[var(--text-primary)]">
+                  <LanguageFlag code={reqLangCode} />
+                  <span>Target Language: {reqLangName} ({reqLangCode.toUpperCase()})</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2 justify-end pt-1">
+              <button
+                onClick={() => handleRespondToAccessRequest(currentReq.id, "reject", requestedPermission, reqLangCode)}
+                className="rounded-xl px-3.5 py-1.5 text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border border-transparent transition-all cursor-pointer"
+              >
+                Decline
+              </button>
+              <button
+                onClick={() => handleRespondToAccessRequest(currentReq.id, "approve", requestedPermission, reqLangCode)}
+                className="rounded-xl px-4 py-1.5 text-xs font-bold bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white border border-[var(--accent)] transition-all cursor-pointer shadow-md"
+              >
+                Approve ({requestedPermission === "write" ? "Write" : "Read"})
+              </button>
+            </div>
           </div>
-          <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-            <strong>{pendingAccessRequests[0].profiles?.email.split("@")[0]}</strong> ({pendingAccessRequests[0].profiles?.email}) is requesting <strong>Edit Access</strong> to this document workspace.
-          </p>
-          <div className="flex gap-2 justify-end">
-            <button
-              onClick={() => handleRespondToAccessRequest(pendingAccessRequests[0].id, "reject")}
-              className="rounded-xl px-4 py-2 text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border border-transparent transition-all cursor-pointer"
-            >
-              Decline
-            </button>
-            <button
-              onClick={() => handleRespondToAccessRequest(pendingAccessRequests[0].id, "approve")}
-              className="rounded-xl px-4 py-2 text-xs font-bold bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white border border-[var(--accent)] transition-all cursor-pointer shadow-md"
-            >
-              Grant Edit Access
-            </button>
-          </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
