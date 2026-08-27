@@ -240,7 +240,7 @@ const targetToHtml = (str, forbiddenTerms = [], forbiddenTermsEnabled = true) =>
       }
     }
     const esc = inner.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-    return `<span class="seg-tag" contenteditable="true" data-tag="${esc}">${display}</span>`;
+    return `<span class="seg-tag" contenteditable="false" data-tag="${esc}">${display}</span>`;
   });
 
   if (forbiddenTermsEnabled && forbiddenTerms && forbiddenTerms.length > 0) {
@@ -687,84 +687,91 @@ export const SegmentCard = ({
     onUpdateTranslation(segment.id, fixed);
   };
 
-  /* ── Source renderer ── */
+  /* ── Source renderer (Tokenizes tags first to prevent corruption from glossary/forbidden term regexes) ── */
   const renderSource = (text) => {
     if (!text) return null;
-    let els = [text];
 
-    if (translationGlossary?.length) {
-      translationGlossary.forEach((term) => {
-        if (!term.source) return;
-        const rx = new RegExp(`(${term.source.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
-        els = els.flatMap((el) =>
-          typeof el === "string"
-            ? el.split(rx).map((p, i) => i % 2 === 1
-                ? <GlossaryHighlight key={`${term.source}-${i}`} term={term}>{p}</GlossaryHighlight>
-                : p)
-            : el
-        );
-      });
-    }
+    // 1. Split text into alternating text tokens and tag tokens
+    const parts = String(text).split(/(<\/?[\d]+>|<\/?(?:g|ph|x|bpt|ept|it)[^>]*>)/gi);
 
-    if (forbiddenTermsEnabled && activeForbiddenTerms.length) {
-      activeForbiddenTerms.forEach((ft) => {
-        if (ft.scope === "target") return;
-        const flags = ft.matchCase ? "g" : "gi";
-        const pattern = ft.term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        const rx = new RegExp(`(${pattern})`, flags);
-        els = els.flatMap((el) =>
-          typeof el === "string"
-            ? el.split(rx).map((p, i) =>
-                i % 2 === 1 ? (
-                  <ForbiddenHighlight key={`ft-${ft.id}-${i}`} term={ft}>
-                    {p}
-                  </ForbiddenHighlight>
-                ) : (
-                  p
-                )
-              )
-            : el
-        );
-      });
-    }
+    return parts.map((p, idx) => {
+      if (!p) return null;
 
-    els = els.flatMap((el) => {
-      if (typeof el === "string") {
-        const parts = el.split(/(<\/?[\d]+>|<\/?(?:g|ph|x|bpt|ept|it)[^>]*>)/gi);
-        return parts.map((p, i) => {
-          if (/^<\/?[\d]+>$/.test(p) || /^<\/?(?:g|ph|x|bpt|ept|it)[^>]*>$/i.test(p)) {
-            const inner = p.replace(/[<>]/g, "");
-            let display = p;
-            if (!/^\/?\d+$/.test(inner)) {
-              const m = inner.match(/id=(?:&quot;|"|')([^"']+)("|&quot;|')/i);
-              if (m) {
-                const closing = inner.startsWith("/");
-                const name = inner.replace(/^\//, "").split(/[\s/]/)[0];
-                display = (closing ? "/" : "") + name + m[1];
-              }
-            }
-            return (
-              <span
-                key={`tag-${i}`}
-                className="seg-tag"
-                title={`Click to insert ${p} into target text box at cursor`}
-                style={{ cursor: "pointer", userSelect: "all" }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleInsertTagAtCursor(p);
-                }}
-              >
-                {display}
-              </span>
-            );
+      // Check if this part is a tag token
+      if (/^<\/?[\d]+>$/.test(p) || /^<\/?(?:g|ph|x|bpt|ept|it)[^>]*>$/i.test(p)) {
+        const inner = p.replace(/[<>]/g, "");
+        let display = p;
+        if (!/^\/?\d+$/.test(inner)) {
+          const m = inner.match(/id=(?:&quot;|"|')([^"']+)("|&quot;|')/i);
+          if (m) {
+            const closing = inner.startsWith("/");
+            const name = inner.replace(/^\//, "").split(/[\s/]/)[0];
+            display = (closing ? "/" : "") + name + m[1];
           }
-          return p;
+        }
+        return (
+          <span
+            key={`tag-${idx}`}
+            className="seg-tag"
+            title={`Click to insert ${p} into target text box at cursor`}
+            style={{ cursor: "pointer", userSelect: "all" }}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleInsertTagAtCursor(p);
+            }}
+          >
+            {display}
+          </span>
+        );
+      }
+
+      // 2. For plain text tokens, apply glossary and forbidden term highlights
+      let textEls = [p];
+
+      if (translationGlossary?.length) {
+        translationGlossary.forEach((term) => {
+          if (!term.source || !term.source.trim()) return;
+          const rx = new RegExp(`(${term.source.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
+          textEls = textEls.flatMap((el) =>
+            typeof el === "string"
+              ? el.split(rx).map((sub, i) =>
+                  i % 2 === 1 ? (
+                    <GlossaryHighlight key={`${term.source}-${idx}-${i}`} term={term}>
+                      {sub}
+                    </GlossaryHighlight>
+                  ) : (
+                    sub
+                  )
+                )
+              : el
+          );
         });
       }
-      return el;
-    });
 
-    return els;
+      if (forbiddenTermsEnabled && activeForbiddenTerms.length) {
+        activeForbiddenTerms.forEach((ft) => {
+          if (ft.scope === "target" || !ft.term || !ft.term.trim()) return;
+          const flags = ft.matchCase ? "g" : "gi";
+          const pattern = ft.term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const rx = new RegExp(`(${pattern})`, flags);
+          textEls = textEls.flatMap((el) =>
+            typeof el === "string"
+              ? el.split(rx).map((sub, i) =>
+                  i % 2 === 1 ? (
+                    <ForbiddenHighlight key={`ft-${ft.id}-${idx}-${i}`} term={ft}>
+                      {sub}
+                    </ForbiddenHighlight>
+                  ) : (
+                    sub
+                  )
+                )
+              : el
+          );
+        });
+      }
+
+      return <span key={`txt-${idx}`}>{textEls}</span>;
+    });
   };
 
   /* ── Input handlers ── */

@@ -5,7 +5,7 @@ const path = require("path");
 const { processUploadedFile } = require("../services/fileService");
 const { supabase, fetchAllSegments } = require("../config/supabase");
 const { checkAuth, getDocumentPermission, checkDocumentAccess } = require("../utils/authMiddleware");
-const { getDocumentRoomId } = require("../services/socket");
+const { getDocumentRoomId, getIo } = require("../services/socket");
 
 const documentRouter = express.Router();
 
@@ -380,7 +380,32 @@ documentRouter.post(
 // 3.5 QC Audit Endpoints (Pre-flight estimate, Start AI MQM Audit, Cancel, Status)
 documentRouter.post(["/documents/:id/audit/estimate", "/api/documents/:id/audit/estimate"], checkAuth, async (request, response) => {
   try {
+    // ── Server-side role guard: only owner, admin, or staff can run audits ──
+    const role = request.profile?.role || "";
     const documentId = request.params.id;
+    const isPrivileged = ["super_admin", "admin", "verbolabs_staff", "vendor"].includes(role);
+    if (!isPrivileged) {
+      // Check if this user is the document owner
+      const { data: doc } = await supabase
+        .from("documents")
+        .select("owner_id, project_id")
+        .eq("id", documentId)
+        .maybeSingle();
+      const isOwner = doc && doc.owner_id === request.user.id;
+      // Also check project owner
+      let isProjectOwner = false;
+      if (!isOwner && doc?.project_id) {
+        const { data: proj } = await supabase
+          .from("projects")
+          .select("owner_id")
+          .eq("id", doc.project_id)
+          .maybeSingle();
+        isProjectOwner = proj && proj.owner_id === request.user.id;
+      }
+      if (!isOwner && !isProjectOwner) {
+        return response.status(403).json({ error: "Access Denied: Only document owners and administrators can run QC Audits." });
+      }
+    }
     const targetLang = request.body.contextSettings?.targetLang || request.body.contextSettings?.targetLanguage || request.body.targetLang || request.query.target || "ja";
 
     let segments;
@@ -419,7 +444,30 @@ documentRouter.post(["/documents/:id/audit/estimate", "/api/documents/:id/audit/
 
 documentRouter.post(["/documents/:id/audit/start", "/api/documents/:id/audit/start"], checkAuth, async (request, response) => {
   try {
+    // ── Server-side role guard: only owner, admin, or staff can start audits ──
+    const role = request.profile?.role || "";
     const documentId = request.params.id;
+    const isPrivileged = ["super_admin", "admin", "verbolabs_staff", "vendor"].includes(role);
+    if (!isPrivileged) {
+      const { data: doc } = await supabase
+        .from("documents")
+        .select("owner_id, project_id")
+        .eq("id", documentId)
+        .maybeSingle();
+      const isOwner = doc && doc.owner_id === request.user.id;
+      let isProjectOwner = false;
+      if (!isOwner && doc?.project_id) {
+        const { data: proj } = await supabase
+          .from("projects")
+          .select("owner_id")
+          .eq("id", doc.project_id)
+          .maybeSingle();
+        isProjectOwner = proj && proj.owner_id === request.user.id;
+      }
+      if (!isOwner && !isProjectOwner) {
+        return response.status(403).json({ error: "Access Denied: Only document owners and administrators can start QC Audits." });
+      }
+    }
     const targetLang = request.body.contextSettings?.targetLang || request.body.contextSettings?.targetLanguage || request.body.targetLang || request.query.target || "ja";
 
     const { data: activeJobs } = await supabase
@@ -1093,8 +1141,31 @@ documentRouter.get(["/documents/:id/request-status", "/api/documents/:id/request
 documentRouter.post(["/documents/:id/request-access", "/api/documents/:id/request-access"], checkAuth, async (request, response) => {
   try {
     const { id } = request.params;
+    const { permission = "write", targetLang } = request.body;
 
-    const { error } = await supabase
+    // 1. Fetch document and project info
+    const { data: doc, error: docErr } = await supabase
+      .from("documents")
+      .select("id, name, owner_id, project_id")
+      .eq("id", id)
+      .single();
+
+    if (docErr || !doc) {
+      return response.status(404).json({ error: "Document not found." });
+    }
+
+    let proj = null;
+    if (doc.project_id) {
+      const { data: projData } = await supabase
+        .from("projects")
+        .select("id, owner_id, settings")
+        .eq("id", doc.project_id)
+        .maybeSingle();
+      proj = projData;
+    }
+
+    // 2. Upsert document_access_requests row
+    const { error: reqErr } = await supabase
       .from("document_access_requests")
       .upsert(
         {
@@ -1105,7 +1176,75 @@ documentRouter.post(["/documents/:id/request-access", "/api/documents/:id/reques
         { onConflict: "document_id,user_id" }
       );
 
-    if (error) throw error;
+    if (reqErr) throw reqErr;
+
+    const reqId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const userDisplayName = request.profile?.full_name || request.user.email?.split("@")[0] || "Linguist";
+
+    // 3. Store rich request in project settings if project exists
+    if (proj) {
+      try {
+        const projSettings = proj.settings || {};
+        const accessRequests = { ...(projSettings.accessRequests || {}) };
+        const reqKey = `${id}_${targetLang || "all"}_${request.user.id}`;
+        
+        accessRequests[reqKey] = {
+          id: reqId,
+          key: reqKey,
+          documentId: id,
+          documentName: doc.name,
+          targetLang: targetLang || null,
+          userId: request.user.id,
+          userEmail: request.user.email,
+          userName: userDisplayName,
+          permission: permission || "write",
+          status: "pending",
+          createdAt: new Date().toISOString()
+        };
+
+        await supabase
+          .from("projects")
+          .update({
+            settings: { ...projSettings, accessRequests }
+          })
+          .eq("id", proj.id);
+      } catch (projSaveErr) {
+        console.error("Failed to save access request to project settings:", projSaveErr);
+      }
+    }
+
+    // 4. Targeted Socket Notification ONLY to file owner / project owner
+    try {
+      const io = getIo();
+      if (io) {
+        const socketPayload = {
+          id: reqId,
+          documentId: id,
+          docName: doc.name,
+          targetLang: targetLang || null,
+          userId: request.user.id,
+          userEmail: request.user.email,
+          userName: userDisplayName,
+          permission: permission || "write"
+        };
+
+        // Targeted to document owner's personal room
+        if (doc.owner_id) {
+          io.to(`user:${doc.owner_id}`).emit("access-request-received", socketPayload);
+        }
+        // If project owner is distinct from document owner, target project owner
+        if (proj?.owner_id && proj.owner_id !== doc.owner_id) {
+          io.to(`user:${proj.owner_id}`).emit("access-request-received", socketPayload);
+        }
+        // Notify project room if anyone is on project screen
+        if (proj?.id) {
+          io.to(`project:${proj.id}`).emit("access-request-received", socketPayload);
+        }
+      }
+    } catch (socketErr) {
+      console.error("Socket notification error on request-access:", socketErr);
+    }
+
     return response.json({ success: true, message: "Access request submitted to document owner." });
   } catch (err) {
     console.error("Request Access Error:", err);
@@ -1116,6 +1255,25 @@ documentRouter.post(["/documents/:id/request-access", "/api/documents/:id/reques
 documentRouter.get(["/documents/:id/access-requests", "/api/documents/:id/access-requests"], checkAuth, async (request, response) => {
   try {
     const { id } = request.params;
+    const { targetLang } = request.query;
+
+    // Fetch document & project to check permissions & rich requests
+    const { data: doc } = await supabase.from("documents").select("id, project_id, owner_id").eq("id", id).maybeSingle();
+    let richRequests = [];
+
+    if (doc?.project_id) {
+      const { data: proj } = await supabase.from("projects").select("settings").eq("id", doc.project_id).maybeSingle();
+      const accessRequests = proj?.settings?.accessRequests || {};
+      richRequests = Object.values(accessRequests).filter(r => r.documentId === id && r.status === "pending");
+      if (targetLang) {
+        richRequests = richRequests.filter(r => !r.targetLang || r.targetLang.toLowerCase() === targetLang.toLowerCase());
+      }
+    }
+
+    if (richRequests.length > 0) {
+      return response.json(richRequests);
+    }
+
     const { data: reqs } = await supabase
       .from("document_access_requests")
       .select("*, profiles(*)")
@@ -1139,42 +1297,153 @@ documentRouter.post(
   async (request, response) => {
     try {
       const { id, requestId: paramReqId } = request.params;
-      const { requestId: bodyReqId, action } = request.body; // action: 'approve' or 'reject'
+      const { requestId: bodyReqId, action, permission = "write", targetLang } = request.body; // action: 'approve' or 'reject'
       const requestId = paramReqId || bodyReqId;
 
-    const { data: reqRow } = await supabase
-      .from("document_access_requests")
-      .select("user_id")
-      .eq("id", requestId)
-      .single();
+      // 1. Resolve target user from document_access_requests or project settings
+      let targetUserId = null;
+      let reqTargetLang = targetLang || null;
+      let requestedPermission = permission || "write";
 
-    if (!reqRow) return response.status(404).json({ error: "Access request not found" });
+      const { data: doc } = await supabase.from("documents").select("id, name, owner_id, project_id").eq("id", id).maybeSingle();
+      
+      let proj = null;
+      if (doc?.project_id) {
+        const { data: projData } = await supabase.from("projects").select("id, owner_id, settings").eq("id", doc.project_id).maybeSingle();
+        proj = projData;
+      }
 
-    const newStatus = action === "approve" ? "approved" : "rejected";
-    await supabase
-      .from("document_access_requests")
-      .update({ status: newStatus })
-      .eq("id", requestId);
+      if (proj && proj.settings?.accessRequests) {
+        const accessRequests = proj.settings.accessRequests;
+        for (const [key, reqObj] of Object.entries(accessRequests)) {
+          if (reqObj.id === requestId || key.includes(requestId) || reqObj.documentId === id) {
+            targetUserId = reqObj.userId;
+            reqTargetLang = reqTargetLang || reqObj.targetLang;
+            requestedPermission = permission || reqObj.permission || "write";
+            break;
+          }
+        }
+      }
 
-    if (action === "approve") {
+      if (!targetUserId) {
+        const { data: reqRow } = await supabase
+          .from("document_access_requests")
+          .select("user_id")
+          .eq("id", requestId)
+          .maybeSingle();
+
+        if (reqRow) {
+          targetUserId = reqRow.user_id;
+        } else {
+          // If requestId is a UUID or user_id
+          const { data: userReq } = await supabase
+            .from("document_access_requests")
+            .select("user_id")
+            .eq("document_id", id)
+            .eq("status", "pending")
+            .maybeSingle();
+          if (userReq) targetUserId = userReq.user_id;
+        }
+      }
+
+      if (!targetUserId) {
+        return response.status(404).json({ error: "Access request not found" });
+      }
+
+      const newStatus = action === "approve" ? "approved" : "rejected";
+
+      // 2. Update document_access_requests table status
       await supabase
-        .from("document_access")
-        .upsert(
-          {
-            document_id: id,
-            user_id: reqRow.user_id,
-            permission: "write"
-          },
-          { onConflict: "document_id,user_id" }
-        );
-    }
+        .from("document_access_requests")
+        .update({ status: newStatus })
+        .eq("document_id", id)
+        .eq("user_id", targetUserId);
 
-    return response.json({ success: true, status: newStatus });
-  } catch (err) {
-    console.error("Respond Access Request Error:", err);
-    return response.status(500).json({ error: "Failed to respond to access request" });
+      // 3. Update project settings accessRequests and assignments
+      if (proj) {
+        try {
+          const projSettings = proj.settings || {};
+          const accessRequests = { ...(projSettings.accessRequests || {}) };
+          const jobAssignments = { ...(projSettings.jobAssignments || {}) };
+          const linguistAssignments = { ...(projSettings.linguistAssignments || {}) };
+
+          for (const [key, reqObj] of Object.entries(accessRequests)) {
+            if (reqObj.documentId === id && reqObj.userId === targetUserId && reqObj.status === "pending") {
+              accessRequests[key] = {
+                ...reqObj,
+                status: newStatus,
+                respondedAt: new Date().toISOString(),
+                respondedBy: request.user.id
+              };
+            }
+          }
+
+          if (action === "approve" && reqTargetLang) {
+            const assignKey = `${id}_${reqTargetLang}`;
+            jobAssignments[assignKey] = {
+              userId: targetUserId,
+              targetLang: reqTargetLang,
+              permission: requestedPermission,
+              assignedAt: new Date().toISOString()
+            };
+
+            const userList = [...(linguistAssignments[targetUserId] || [])];
+            const exists = userList.some(item => item.documentId === id && item.targetLang === reqTargetLang);
+            if (!exists) {
+              userList.push({ documentId: id, targetLang: reqTargetLang, permission: requestedPermission });
+            }
+            linguistAssignments[targetUserId] = userList;
+          }
+
+          await supabase.from("projects").update({
+            settings: { ...projSettings, accessRequests, jobAssignments, linguistAssignments }
+          }).eq("id", proj.id);
+        } catch (projUpdateErr) {
+          console.error("Failed to update project settings on respond-request:", projUpdateErr);
+        }
+      }
+
+      // 4. If approved, grant permission in document_access table
+      if (action === "approve") {
+        await supabase
+          .from("document_access")
+          .upsert(
+            {
+              document_id: id,
+              user_id: targetUserId,
+              permission: requestedPermission
+            },
+            { onConflict: "document_id,user_id" }
+          );
+      }
+
+      // 5. Emit real-time socket events
+      try {
+        const io = getIo();
+        if (io) {
+          io.to(`user:${targetUserId}`).emit("access-request-responded", {
+            documentId: id,
+            targetLang: reqTargetLang,
+            action,
+            userId: targetUserId,
+            permission: requestedPermission
+          });
+
+          io.to(`user:${request.user.id}`).emit("access-request-processed", { requestId, action });
+          if (doc?.owner_id) io.to(`user:${doc.owner_id}`).emit("access-request-processed", { requestId, action });
+          if (proj?.id) io.to(`project:${proj.id}`).emit("access-request-processed", { requestId, action });
+        }
+      } catch (socketEmitErr) {
+        console.error("Socket emit error on respond-request:", socketEmitErr);
+      }
+
+      return response.json({ success: true, status: newStatus });
+    } catch (err) {
+      console.error("Respond Access Request Error:", err);
+      return response.status(500).json({ error: "Failed to respond to access request" });
+    }
   }
-});
+);
 
 // 6. Delete Document
 documentRouter.delete(["/documents/:id", "/api/documents/:id"], checkAuth, async (request, response) => {

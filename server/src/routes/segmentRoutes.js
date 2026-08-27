@@ -65,10 +65,40 @@ const syncToTranslationMemory = async (sourceText, targetText, sourceLang, targe
 
 const segmentRouter = express.Router();
 
-// 1. Batch AI Translate (Requires write access to document)
+// 1. Batch AI Translate (Requires write access to document + owner/admin role for linguist block)
 segmentRouter.post(["/translate-batch", "/api/translate-batch"], checkAuth, checkTranslateAccess, checkDocumentAccess({ requiredPermission: "write" }), async (request, response) => {
   try {
     const { segments, target, source, contextSettings, fileName, documentId } = request.body;
+
+    // ── Server-side linguist guard: block linguists from running Auto-Translate ──
+    // Only document owners, project owners, and privileged roles (admin/staff) may call this.
+    {
+      const role = request.profile?.role || "";
+      const isPrivileged = ["super_admin", "admin", "verbolabs_staff", "vendor"].includes(role);
+      if (!isPrivileged && documentId) {
+        const { data: doc } = await supabase
+          .from("documents")
+          .select("owner_id, project_id")
+          .eq("id", documentId)
+          .maybeSingle();
+        const isOwner = doc && doc.owner_id === request.user.id;
+        let isProjectOwner = false;
+        if (!isOwner && doc?.project_id) {
+          const { data: proj } = await supabase
+            .from("projects")
+            .select("owner_id")
+            .eq("id", doc.project_id)
+            .maybeSingle();
+          isProjectOwner = proj && proj.owner_id === request.user.id;
+        }
+        if (!isOwner && !isProjectOwner) {
+          return response.status(403).json({
+            error: "Access Denied: Linguists cannot run Auto-Translate. Only document owners and administrators can trigger batch AI translation."
+          });
+        }
+      }
+    }
+
     let fileExtension = "";
     if (documentId) {
       const { data: doc } = await supabase.from("documents").select("file_extension").eq("id", documentId).single();
@@ -212,27 +242,45 @@ segmentRouter.post(["/translate-batch", "/api/translate-batch"], checkAuth, chec
       }
     }
 
-    if (wordCount > 0) {
+    // ── AUDIT TRAIL FIX: Always log translate-batch activity ──
+    // `wordCount` only counts segments sent to AI (not TM/cache hits). If all segments
+    // were served from TM, wordCount = 0 and was previously silently skipped.
+    // Now we ALWAYS log using request.wordCount (total words in the batch request)
+    // so there is always an audit trail, even for pure TM-hit runs.
+    {
       const email = request.profile.email;
       const userId = request.profile.id;
       const isSeo = contextSettings?.purpose === "SEO";
-      const actionName = isSeo ? "translate-batch (SEO)" : "translate-batch";
-
       const logOrgId = request.tenant?.id || request.profile.organization_id || null;
+      // Total words requested (computed by checkTranslateAccess middleware)
+      const totalRequestedWords = request.wordCount || 0;
+
+      let actionName;
+      if (wordCount === 0 && totalRequestedWords > 0) {
+        // All segments served from TM — no AI credits used, but log for audit trail
+        actionName = isSeo ? "translate-batch-tm (SEO)" : "translate-batch-tm";
+      } else {
+        actionName = isSeo ? "translate-batch (SEO)" : "translate-batch";
+      }
+
+      // Always insert an audit log row regardless of TM vs AI
       await supabase.from("credit_logs").insert({
         user_id: userId,
         email: email,
         action: actionName,
-        word_count: wordCount,
+        word_count: totalRequestedWords,
         file_name: fileName || "document",
         organization_id: logOrgId
-      });
+      }).catch(logErr => console.error("[CREDIT_LOG_WARN] Failed to insert credit_log:", logErr.message));
 
-      const newConsumed = request.profile.credits_consumed + wordCount;
-      await supabase
-        .from("profiles")
-        .update({ credits_consumed: newConsumed })
-        .eq("id", userId);
+      // Only debit credits when AI translation was actually performed (not TM)
+      if (wordCount > 0) {
+        const newConsumed = (request.profile.credits_consumed || 0) + wordCount;
+        await supabase
+          .from("profiles")
+          .update({ credits_consumed: newConsumed })
+          .eq("id", userId);
+      }
     }
 
     response.json({ results });
@@ -518,6 +566,112 @@ segmentRouter.post([
   } catch (error) {
     console.error("Bulk Update Segments Error:", error);
     response.status(500).json({ error: "Failed to bulk update segments" });
+  }
+});
+
+// 5. Admin-Only: Repair Corrupted source_text in Target-Lang Rows
+// ─────────────────────────────────────────────────────────────────
+// This endpoint resets source_text in ALL target-lang rows for a document
+// back to the clean values stored in the template (target_lang IS NULL) rows.
+// Safe: only source_text is written; target_text, status, verified etc. are untouched.
+// Use case: fix tag-multiplication corruption caused by translate-batch writing
+//           tag-embedded source text into target-lang rows.
+segmentRouter.post([
+  "/documents/:id/repair-source-text",
+  "/api/documents/:id/repair-source-text"
+], checkAuth, async (request, response) => {
+  try {
+    // Admin / super_admin / verbolabs_staff only
+    const role = request.profile?.role || "";
+    const isPrivileged = ["super_admin", "admin", "verbolabs_staff"].includes(role);
+    if (!isPrivileged) {
+      return response.status(403).json({ error: "Access Denied: Admin role required to run source text repair." });
+    }
+
+    const documentId = request.params.id;
+
+    // 1. Fetch all template rows (target_lang IS NULL) — these are the ground truth
+    const { data: templateSegs, error: tmplErr } = await supabase
+      .from("document_segments")
+      .select("segment_index, source_text")
+      .eq("document_id", documentId)
+      .is("target_lang", null);
+
+    if (tmplErr) {
+      console.error("[REPAIR_SOURCE] Failed to fetch template segments:", tmplErr.message);
+      return response.status(500).json({ error: "Failed to fetch template segments: " + tmplErr.message });
+    }
+
+    if (!templateSegs || templateSegs.length === 0) {
+      return response.status(404).json({ error: "No template segments found for this document." });
+    }
+
+    const templateMap = new Map();
+    templateSegs.forEach(t => templateMap.set(t.segment_index, t.source_text || ""));
+
+    console.log(`[REPAIR_SOURCE] Starting repair for doc ${documentId}: ${templateSegs.length} template segments`);
+
+    // 2. Fetch all target-lang rows (target_lang IS NOT NULL) for this document
+    const { data: targetRows, error: tgtErr } = await supabase
+      .from("document_segments")
+      .select("id, segment_index, source_text, target_lang")
+      .eq("document_id", documentId)
+      .not("target_lang", "is", null);
+
+    if (tgtErr) {
+      console.error("[REPAIR_SOURCE] Failed to fetch target rows:", tgtErr.message);
+      return response.status(500).json({ error: "Failed to fetch target-lang segments: " + tgtErr.message });
+    }
+
+    if (!targetRows || targetRows.length === 0) {
+      return response.json({ success: true, repaired: 0, message: "No target-lang rows found; nothing to repair." });
+    }
+
+    // 3. For each target-lang row, if source_text differs from template, update it
+    let repairedCount = 0;
+    let skippedCount = 0;
+    const BATCH_SIZE = 100;
+
+    // Group rows that need repair
+    const rowsNeedingRepair = targetRows.filter(row => {
+      const cleanTemplate = templateMap.get(row.segment_index) ?? null;
+      if (cleanTemplate === null) return false; // No template row — skip
+      return row.source_text !== cleanTemplate; // Only update if different
+    });
+
+    // Batch update in groups to avoid overwhelming the DB
+    for (let i = 0; i < rowsNeedingRepair.length; i += BATCH_SIZE) {
+      const batch = rowsNeedingRepair.slice(i, i + BATCH_SIZE);
+      const updatePromises = batch.map(async (row) => {
+        const cleanSource = templateMap.get(row.segment_index) || "";
+        const { error: upErr } = await supabase
+          .from("document_segments")
+          .update({ source_text: cleanSource })
+          .eq("id", row.id);
+        if (upErr) {
+          console.error(`[REPAIR_SOURCE] Failed to repair row id=${row.id} seg=${row.segment_index} lang=${row.target_lang}:`, upErr.message);
+        } else {
+          repairedCount++;
+        }
+      });
+      await Promise.all(updatePromises);
+    }
+
+    skippedCount = targetRows.length - rowsNeedingRepair.length;
+
+    console.log(`[REPAIR_SOURCE] ✅ Repair complete for doc ${documentId}: ${repairedCount} rows repaired, ${skippedCount} already clean.`);
+
+    response.json({
+      success: true,
+      documentId,
+      totalTargetRows: targetRows.length,
+      repaired: repairedCount,
+      alreadyClean: skippedCount,
+      message: `Repair complete. ${repairedCount} source_text rows restored from template. ${skippedCount} rows were already clean.`
+    });
+  } catch (error) {
+    console.error("[REPAIR_SOURCE] Unexpected error:", error);
+    response.status(500).json({ error: "Repair failed: " + (error.message || "Unknown error") });
   }
 });
 

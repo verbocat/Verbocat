@@ -2944,6 +2944,8 @@ export default function App() {
   }
 
   const canTranslate = permission === "write" && user ? (["super_admin", "admin", "verbolabs_staff", "vendor"].includes(user.role) || (user.id === ownerId)) : false;
+  // Run QC (AI Audit) is equally credit-consuming — restrict to same roles as Auto-Translate
+  const canRunQc = canTranslate;
 
   return (
     <div className="workspace-shell" style={{ color: "var(--text-primary)" }}>
@@ -3193,7 +3195,7 @@ export default function App() {
                 onImportXliff={permission === "write" ? handleImportXliff : null}
                 onTranslate={canTranslate ? handleTranslateSegments : null}
                 onToggleQa={() => setShowQaPanel((value) => !value)}
-                onRunQc={permission === "write" ? handleRunQc : null}
+                onRunQc={canRunQc ? handleRunQc : null}
                 isTranslating={isTranslating}
                 isAuditing={isAuditing}
                 qaIssuesCount={qaIssuesList.length}

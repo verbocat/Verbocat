@@ -6,6 +6,7 @@ const { supabase } = require("../config/supabase");
 const { checkAuth } = require("../utils/authMiddleware");
 const { processUploadedFile } = require("../services/fileService");
 const { recordActivity, getActivityLogs } = require("../utils/activityLogger");
+const { getIo } = require("../services/socket");
 
 const projectRouter = express.Router();
 
@@ -962,6 +963,241 @@ projectRouter.put(["/projects/:id/public-access", "/api/projects/:id/public-acce
   } catch (error) {
     console.error("Update Project Public Access Error:", error);
     response.status(500).json({ error: "Failed to update project public access" });
+  }
+});
+
+// 14. Get Project Access Requests (Pending requests for all documents in project)
+projectRouter.get(["/projects/:projectId/access-requests", "/api/projects/:projectId/access-requests"], checkAuth, async (request, response) => {
+  try {
+    const { projectId } = request.params;
+    const { data: proj, error: projErr } = await supabase
+      .from("projects")
+      .select("id, owner_id, settings")
+      .eq("id", projectId)
+      .maybeSingle();
+
+    if (projErr || !proj) {
+      return response.status(404).json({ error: "Project not found." });
+    }
+
+    const isOwnerOrStaff = proj.owner_id === request.user.id || ["admin", "super_admin", "verbolabs_staff"].includes(request.profile?.role);
+    if (!isOwnerOrStaff) {
+      return response.status(403).json({ error: "Only project owners and managers can view access requests." });
+    }
+
+    const accessRequests = proj.settings?.accessRequests || {};
+    const pendingList = Object.values(accessRequests).filter(r => r.status === "pending");
+
+    // Also sync with database table document_access_requests for all documents in this project
+    const { data: docs } = await supabase.from("documents").select("id, name").eq("project_id", projectId);
+    const docMap = new Map((docs || []).map(d => [d.id, d.name]));
+    const docIds = Array.from(docMap.keys());
+
+    if (docIds.length > 0) {
+      const { data: dbReqs } = await supabase
+        .from("document_access_requests")
+        .select("*, profiles(id, email, full_name)")
+        .in("document_id", docIds)
+        .eq("status", "pending");
+
+      (dbReqs || []).forEach(dReq => {
+        const alreadyInPending = pendingList.some(r => r.documentId === dReq.document_id && r.userId === dReq.user_id);
+        if (!alreadyInPending) {
+          pendingList.push({
+            id: dReq.id,
+            documentId: dReq.document_id,
+            documentName: docMap.get(dReq.document_id) || "Document",
+            targetLang: null,
+            userId: dReq.user_id,
+            userEmail: dReq.profiles?.email || "User",
+            userName: dReq.profiles?.full_name || dReq.profiles?.email?.split("@")[0] || "Linguist",
+            permission: "write",
+            status: "pending",
+            createdAt: dReq.created_at
+          });
+        }
+      });
+    }
+
+    // Sort newest first
+    pendingList.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+    return response.json({ requests: pendingList });
+  } catch (error) {
+    console.error("Get Project Access Requests Error:", error);
+    return response.status(500).json({ error: "Failed to fetch project access requests" });
+  }
+});
+
+// 15. Respond to Project Access Request (Approve or Reject for specific language)
+projectRouter.post(["/projects/:projectId/access-requests/:requestId/respond", "/api/projects/:projectId/access-requests/:requestId/respond"], checkAuth, async (request, response) => {
+  try {
+    const { projectId, requestId } = request.params;
+    const { action, permission = "write", targetLang } = request.body; // action: 'approve' or 'reject'
+
+    const { data: proj, error: projErr } = await supabase
+      .from("projects")
+      .select("id, owner_id, settings")
+      .eq("id", projectId)
+      .maybeSingle();
+
+    if (projErr || !proj) {
+      return response.status(404).json({ error: "Project not found." });
+    }
+
+    const isOwnerOrStaff = proj.owner_id === request.user.id || ["admin", "super_admin", "verbolabs_staff"].includes(request.profile?.role);
+    if (!isOwnerOrStaff) {
+      return response.status(403).json({ error: "Only project owners and managers can respond to access requests." });
+    }
+
+    const projSettings = proj.settings || {};
+    const accessRequests = { ...(projSettings.accessRequests || {}) };
+    const jobAssignments = { ...(projSettings.jobAssignments || {}) };
+    const linguistAssignments = { ...(projSettings.linguistAssignments || {}) };
+
+    let targetRequest = null;
+    let targetKey = null;
+
+    for (const [key, reqObj] of Object.entries(accessRequests)) {
+      if (reqObj.id === requestId || key.includes(requestId)) {
+        targetRequest = reqObj;
+        targetKey = key;
+        break;
+      }
+    }
+
+    // Fallback lookup in document_access_requests table if not in settings map
+    if (!targetRequest) {
+      const { data: dbReq } = await supabase
+        .from("document_access_requests")
+        .select("*, profiles(id, email, full_name)")
+        .eq("id", requestId)
+        .maybeSingle();
+
+      if (dbReq) {
+        targetRequest = {
+          id: dbReq.id,
+          documentId: dbReq.document_id,
+          targetLang: targetLang || null,
+          userId: dbReq.user_id,
+          userEmail: dbReq.profiles?.email,
+          permission: permission || "write",
+          status: "pending"
+        };
+      }
+    }
+
+    if (!targetRequest) {
+      return response.status(404).json({ error: "Access request not found." });
+    }
+
+    const newStatus = action === "approve" ? "approved" : "rejected";
+    const effectiveTargetLang = targetLang || targetRequest.targetLang || null;
+    const effectivePermission = permission || targetRequest.permission || "write";
+
+    // 1. Update project settings accessRequests map
+    if (targetKey) {
+      accessRequests[targetKey] = {
+        ...targetRequest,
+        status: newStatus,
+        respondedAt: new Date().toISOString(),
+        respondedBy: request.user.id
+      };
+    }
+
+    // 2. If approved, add assignments to project settings
+    if (action === "approve") {
+      // Upsert into document_access table
+      await supabase
+        .from("document_access")
+        .upsert(
+          {
+            document_id: targetRequest.documentId,
+            user_id: targetRequest.userId,
+            permission: effectivePermission
+          },
+          { onConflict: "document_id,user_id" }
+        );
+
+      if (effectiveTargetLang) {
+        const assignKey = `${targetRequest.documentId}_${effectiveTargetLang}`;
+        jobAssignments[assignKey] = {
+          userId: targetRequest.userId,
+          email: targetRequest.userEmail,
+          targetLang: effectiveTargetLang,
+          permission: effectivePermission,
+          assignedAt: new Date().toISOString()
+        };
+
+        const userList = [...(linguistAssignments[targetRequest.userId] || [])];
+        const exists = userList.some(item => item.documentId === targetRequest.documentId && item.targetLang === effectiveTargetLang);
+        if (!exists) {
+          userList.push({
+            documentId: targetRequest.documentId,
+            targetLang: effectiveTargetLang,
+            permission: effectivePermission
+          });
+        }
+        linguistAssignments[targetRequest.userId] = userList;
+      }
+    }
+
+    // Save updated project settings
+    await supabase.from("projects").update({
+      settings: {
+        ...projSettings,
+        accessRequests,
+        jobAssignments,
+        linguistAssignments
+      }
+    }).eq("id", projectId);
+
+    // 3. Update status in document_access_requests table
+    await supabase
+      .from("document_access_requests")
+      .update({ status: newStatus })
+      .eq("document_id", targetRequest.documentId)
+      .eq("user_id", targetRequest.userId);
+
+    // 4. Real-time socket events
+    try {
+      const io = getIo();
+      if (io) {
+        // Notify the linguist directly
+        io.to(`user:${targetRequest.userId}`).emit("access-request-responded", {
+          documentId: targetRequest.documentId,
+          projectId,
+          targetLang: effectiveTargetLang,
+          action,
+          userId: targetRequest.userId,
+          permission: effectivePermission
+        });
+
+        // Notify project room to update badge and list
+        io.to(`project:${projectId}`).emit("access-request-processed", {
+          requestId,
+          action,
+          userId: targetRequest.userId,
+          documentId: targetRequest.documentId
+        });
+
+        io.to(`user:${request.user.id}`).emit("access-request-processed", {
+          requestId,
+          action
+        });
+      }
+    } catch (socketErr) {
+      console.error("Socket emit error on project respond-request:", socketErr);
+    }
+
+    return response.json({
+      success: true,
+      status: newStatus,
+      message: `Access request ${action === "approve" ? "approved" : "rejected"} successfully.`
+    });
+  } catch (error) {
+    console.error("Respond Project Access Request Error:", error);
+    return response.status(500).json({ error: "Failed to respond to access request" });
   }
 });
 

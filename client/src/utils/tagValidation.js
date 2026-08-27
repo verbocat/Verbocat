@@ -148,7 +148,7 @@ export function autoFixSegmentTags(sourceText, targetText) {
 
   // Strip extra tags
   report.extraTags.forEach(extra => {
-    repaired = repaired.replace(extra, "");
+    repaired = repaired.replaceAll(extra, "");
   });
 
   // Restore missing tags

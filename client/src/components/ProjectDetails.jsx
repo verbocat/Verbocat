@@ -8,7 +8,8 @@ import io from "socket.io-client";
 import { 
   fetchProjectDetails, uploadFileToProject, updateProjectLanguages, 
   controlJobQueue, downloadJobFile, downloadLanguageZip, downloadProjectZip, fetchProjectAnalytics, deleteDocument,
-  updateProjectDetails, renameDocument, duplicateDocument, deleteProject, uploadProjectReferenceFile
+  updateProjectDetails, renameDocument, duplicateDocument, deleteProject, uploadProjectReferenceFile,
+  fetchProjectAccessRequests
 } from "../services/api";
 import { LANGUAGES } from "../constants/languages";
 import { getSocketUrl } from "../utils/socketUrl.js";
@@ -17,6 +18,7 @@ import { ProjectNotesModal } from "./ProjectNotesModal";
 import { ProjectHistoryModal } from "./ProjectHistoryModal";
 import { BatchTranslateModal } from "./BatchTranslateModal";
 import { TmAnalysisModal } from "./TmAnalysisModal";
+import { ProjectAccessRequestsModal } from "./ProjectAccessRequestsModal";
 import { 
   ProjectDetailsOverviewSkeleton, 
   ProjectDetailsFilesSkeleton, 
@@ -59,6 +61,8 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showBatchTranslateModal, setShowBatchTranslateModal] = useState(false);
   const [showTmAnalysisModal, setShowTmAnalysisModal] = useState(false);
+  const [showAccessRequestsModal, setShowAccessRequestsModal] = useState(false);
+  const [pendingProjectRequests, setPendingProjectRequests] = useState([]);
   const [analysisTargetDocId, setAnalysisTargetDocId] = useState(null);
   const [analysisTargetDocName, setAnalysisTargetDocName] = useState("");
   
@@ -112,11 +116,22 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
 
+  const loadProjectRequests = async () => {
+    if (!projectId) return;
+    try {
+      const res = await fetchProjectAccessRequests(projectId);
+      setPendingProjectRequests(res.requests || []);
+    } catch (err) {
+      console.error("Failed to load project requests:", err);
+    }
+  };
+
   useEffect(() => {
     loadProjectDetails();
     loadAnalytics();
+    loadProjectRequests();
 
-    // Setup real-time socket updates for queue progress
+    // Setup real-time socket updates for queue progress & access requests
     const socketUrl = getSocketUrl();
     const socket = io(socketUrl, { auth: { token }, transports: ["websocket", "polling"] });
     socketRef.current = socket;
@@ -132,6 +147,18 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
       if (status === "completed" || status === "failed") {
         loadAnalytics();
       }
+    });
+
+    socket.on("access-request-received", (data) => {
+      loadProjectRequests();
+      if (showToast && data?.userName) {
+        const langText = data.targetLang ? ` for ${data.targetLang.toUpperCase()}` : "";
+        showToast(`New access request from ${data.userName}${langText}`, "info");
+      }
+    });
+
+    socket.on("access-request-processed", () => {
+      loadProjectRequests();
     });
 
     return () => {
@@ -225,7 +252,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
     setShareModalConfig({
       mode: "bulk_files",
       documentId: null,
-      docName: "",
+      docName: `${selectedFiles.length} Selected Files`,
       selectedDocumentIds: selectedFiles,
       selectedDocNames: selectedDocs.map(f => f.name),
       targetLang: null,
@@ -241,7 +268,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
     setShareModalConfig({
       mode: "bulk_files",
       documentId: null,
-      docName: "",
+      docName: `${selectedJobs.length} Selected Jobs`,
       selectedDocumentIds: docIds,
       selectedDocNames: docNames,
       selectedJobItems: selectedJobs,
@@ -256,7 +283,7 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
     setShareModalConfig({
       mode: "language",
       documentId: null,
-      docName: "",
+      docName: `${langName || langCode?.toUpperCase()} Package`,
       selectedDocumentIds: files.map(f => f.id),
       selectedDocNames: files.map(f => f.name),
       targetLang: langCode,
@@ -708,14 +735,16 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
               <span>Add Document</span>
             </button>
 
-            <button
-              onClick={() => setShowBatchTranslateModal(true)}
-              className="btn-batch-translate flex items-center gap-1.5 text-xs font-medium h-8 px-2.5 rounded-lg transition-all cursor-pointer shadow-xs"
-              title="Batch AI Translation"
-            >
-              <Sparkles size={13} />
-              <span className="hidden sm:inline">Batch Translate</span>
-            </button>
+            {isProjectOwner && (
+              <button
+                onClick={() => setShowBatchTranslateModal(true)}
+                className="btn-batch-translate flex items-center gap-1.5 text-xs font-medium h-8 px-2.5 rounded-lg transition-all cursor-pointer shadow-xs"
+                title="Batch AI Translation"
+              >
+                <Sparkles size={13} />
+                <span className="hidden sm:inline">Batch Translate</span>
+              </button>
+            )}
 
             <button
               onClick={() => {
@@ -738,6 +767,27 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
               <Users size={13} />
               <span className="hidden sm:inline">Share</span>
             </button>
+
+            {isProjectOwner && (
+              <button
+                onClick={() => setShowAccessRequestsModal(true)}
+                className="flex items-center gap-1.5 text-xs font-medium h-8 px-2.5 rounded-lg border transition-all cursor-pointer shadow-xs relative"
+                style={{
+                  background: pendingProjectRequests.length > 0 ? "rgba(245, 158, 11, 0.15)" : "var(--bg-panel)",
+                  borderColor: pendingProjectRequests.length > 0 ? "rgba(245, 158, 11, 0.45)" : "var(--border-medium)",
+                  color: pendingProjectRequests.length > 0 ? "var(--amber)" : "var(--text-primary)"
+                }}
+                title={pendingProjectRequests.length > 0 ? `${pendingProjectRequests.length} pending access request(s)` : "Access Requests"}
+              >
+                <ShieldCheck size={13} className={pendingProjectRequests.length > 0 ? "text-amber-400" : ""} />
+                <span className="hidden sm:inline">Requests</span>
+                {pendingProjectRequests.length > 0 && (
+                  <span className="flex items-center justify-center min-w-[17px] h-[17px] px-1 rounded-full text-[10px] font-extrabold bg-amber-500 text-black">
+                    {pendingProjectRequests.length}
+                  </span>
+                )}
+              </button>
+            )}
 
             <button
               onClick={handleExportReports}
@@ -1258,12 +1308,14 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
                       <Users size={11} /> Share Selected Files
                     </button>
 
-                    <button
-                      onClick={() => setShowBatchTranslateModal(true)}
-                      className="btn-batch-translate flex items-center gap-1 text-xs font-medium h-6 px-2 rounded-md cursor-pointer transition-all active:scale-[0.98] shadow-xs"
-                    >
-                      <Sparkles size={11} /> Batch Translate
-                    </button>
+                    {isProjectOwner && (
+                      <button
+                        onClick={() => setShowBatchTranslateModal(true)}
+                        className="btn-batch-translate flex items-center gap-1 text-xs font-medium h-6 px-2 rounded-md cursor-pointer transition-all active:scale-[0.98] shadow-xs"
+                      >
+                        <Sparkles size={11} /> Batch Translate
+                      </button>
+                    )}
 
                     <button
                       onClick={handleBulkDownload}
@@ -1492,6 +1544,22 @@ export default function ProjectDetails({ projectId, onBack, onOpenEditor, showTo
           documentCount={shareModalConfig.documentCount}
           targetLanguages={project?.target_languages || []}
           selectedJobItems={shareModalConfig.selectedJobItems || []}
+        />
+      )}
+
+      {/* Project Access Requests Modal */}
+      {showAccessRequestsModal && (
+        <ProjectAccessRequestsModal
+          isOpen={showAccessRequestsModal}
+          onClose={() => setShowAccessRequestsModal(false)}
+          projectId={projectId}
+          projectName={project?.name}
+          requests={pendingProjectRequests}
+          onRequestsUpdated={() => {
+            loadProjectRequests();
+            loadProjectDetails();
+          }}
+          showToast={showToast}
         />
       )}
 

@@ -742,6 +742,7 @@ export default function ProjectDashboard({
           docName={shareModalProject.name}
           isOwner={!shareModalProject.isShared}
           mode="project"
+          targetLanguages={shareModalProject.target_languages || []}
         />
       )}
 

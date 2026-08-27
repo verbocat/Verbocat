@@ -407,20 +407,38 @@ export const fetchRequestStatus = async (documentId) => {
   return response.data;
 };
 
-export const requestAccess = async (documentId, permission = "write") => {
-  const response = await api.post(`/api/documents/${documentId}/request-access`, { permission });
+export const requestAccess = async (documentId, permission = "write", targetLang = null) => {
+  const response = await api.post(`/api/documents/${documentId}/request-access`, { permission, targetLang });
   return response.data;
 };
 
-export const fetchAccessRequests = async (documentId) => {
-  const response = await api.get(`/api/documents/${documentId}/access-requests`);
+export const fetchAccessRequests = async (documentId, targetLang = null) => {
+  const params = targetLang ? { targetLang } : {};
+  const response = await api.get(`/api/documents/${documentId}/access-requests`, { params });
   return response.data;
 };
 
-export const respondToAccessRequest = async (documentId, requestId, action) => {
+export const respondToAccessRequest = async (documentId, requestId, action, permission = "write", targetLang = null) => {
   const response = await api.post(`/api/documents/${documentId}/access-requests/${requestId}/respond`, {
     requestId,
-    action
+    action,
+    permission,
+    targetLang
+  });
+  return response.data;
+};
+
+export const fetchProjectAccessRequests = async (projectId) => {
+  const response = await api.get(`/api/projects/${projectId}/access-requests`);
+  return response.data;
+};
+
+export const respondToProjectAccessRequest = async (projectId, requestId, action, permission = "write", targetLang = null) => {
+  const response = await api.post(`/api/projects/${projectId}/access-requests/${requestId}/respond`, {
+    requestId,
+    action,
+    permission,
+    targetLang
   });
   return response.data;
 };

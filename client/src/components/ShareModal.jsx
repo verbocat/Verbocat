@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
-import { X, Copy, Check, Lock, Globe, Shield, Link, Users, ChevronDown, Plus, FileText, Sparkles, UserCheck, AlertCircle, ExternalLink } from "lucide-react";
+import { 
+  X, Copy, Check, Lock, Globe, Share2, Link2, Users, ChevronDown, 
+  ChevronUp, FileText, AlertCircle, ExternalLink, Mail, UserPlus, 
+  Trash2, ArrowUpRight, Search, CheckCheck, Languages, Edit3, Eye
+} from "lucide-react";
 import { 
   fetchDocumentAccess, grantDocumentAccess, revokeDocumentAccess, 
   fetchProjectShares, shareProject, revokeProjectShare,
@@ -28,39 +32,37 @@ export function ShareModal({
   const [emailInput, setEmailInput] = useState("");
   const [selectedEmails, setSelectedEmails] = useState([]);
   const [selectedTargetLang, setSelectedTargetLang] = useState(targetLang || (targetLanguages && targetLanguages.length > 0 ? targetLanguages[0] : ""));
-  const [permission, setPermission] = useState("write");
+  const [permission, setPermission] = useState("write"); // 'write' | 'read'
   const [accessList, setAccessList] = useState([]);
-  const [availableLinguists, setAvailableLinguists] = useState([]);
   const [owner, setOwner] = useState(null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [copiedSingleCode, setCopiedSingleCode] = useState(null);
+  const [copiedCode, setCopiedCode] = useState(null);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+  const [memberSearch, setMemberSearch] = useState("");
   
   const [publicAccess, setPublicAccess] = useState("none");
-  const [accessFilter, setAccessFilter] = useState("all");
+  const [emailSuggestions, setEmailSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  
+  const dropdownRef = useRef(null);
+  const inputRef = useRef(null);
 
-  // Keep selectedTargetLang in sync when props change
+  const activeMode = mode || (projectId && !documentId ? "project" : "file");
+  const isProjectMode = activeMode === "project";
+
+  // Keep selectedTargetLang in sync
   useEffect(() => {
     if (targetLang) {
       setSelectedTargetLang(targetLang);
-      setAccessFilter("current");
     } else if (targetLanguages && targetLanguages.length > 0) {
       setSelectedTargetLang(prev => prev || targetLanguages[0]);
     }
   }, [targetLang, targetLanguages]);
 
-  // Suggestion states
-  const [emailSuggestions, setEmailSuggestions] = useState([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const dropdownRef = useRef(null);
-
-  const activeMode = mode || (projectId && !documentId ? "project" : "file");
-  const isProjectMode = activeMode === "project";
-
-  // Build space-aware base URL so share links always carry the correct tenant
+  // Space-aware URL suffix
   const getSpaceSuffix = () => {
     const spaceParam = new URLSearchParams(window.location.search).get("space");
     if (spaceParam && !["centroid", "verbolabs"].includes(spaceParam.toLowerCase())) {
@@ -75,58 +77,51 @@ export function ShareModal({
     return found ? found.name : code.toUpperCase();
   };
 
-  const getLanguageFlag = (code) => {
-    return <LanguageFlag code={code} />;
-  };
-
-  // Generate All Direct Links (Project Workspace + Specific Job / File Editor Links)
+  // Generate All Direct Links
   const generateAllDirectLinks = () => {
     const spaceSuffix = getSpaceSuffix();
     const origin = window.location.origin;
     const links = [];
 
-    // 1. If explicit selected job items are provided (e.g. 6 French jobs across 6 files)
     if (selectedJobItems && selectedJobItems.length > 0) {
       selectedJobItems.forEach((jobItem, idx) => {
         const lName = jobItem.langName || getLanguageName(jobItem.targetLang);
-        const flag = getLanguageFlag(jobItem.targetLang);
         const dName = jobItem.docName || `Document ${idx + 1}`;
         const url = `${origin}/project/${projectId}/file/${jobItem.fileId}/lang/${jobItem.targetLang}${spaceSuffix}`;
         links.push({
           label: `${dName} (${lName})`,
           code: `${jobItem.fileId}_${jobItem.targetLang}`,
-          flag,
+          langCode: jobItem.targetLang,
+          langName: lName,
           url
         });
       });
       return links;
     }
 
-    // 2. If multiple document IDs are selected for a target language (e.g. 6 files for French)
     if (selectedDocumentIds && selectedDocumentIds.length > 1 && targetLang) {
       const lName = languageName || getLanguageName(targetLang);
-      const flag = getLanguageFlag(targetLang);
       selectedDocumentIds.forEach((docId, idx) => {
         const dName = selectedDocNames[idx] || `Document ${idx + 1}`;
         const url = `${origin}/project/${projectId}/file/${docId}/lang/${targetLang}${spaceSuffix}`;
         links.push({
           label: `${dName} (${lName})`,
           code: `${docId}_${targetLang}`,
-          flag,
+          langCode: targetLang,
+          langName: lName,
           url
         });
       });
       return links;
     }
 
-    // 3. Single file or project workspace links
     if (projectId && documentId && targetLang) {
       const lName = languageName || getLanguageName(targetLang);
-      const flag = getLanguageFlag(targetLang);
       links.push({
-        label: `${docName || 'Document'} (${lName}) Editor`,
+        label: `${docName || 'Document'} (${lName})`,
         code: `${documentId}_${targetLang}`,
-        flag,
+        langCode: targetLang,
+        langName: lName,
         url: `${origin}/project/${projectId}/file/${documentId}/lang/${targetLang}${spaceSuffix}`
       });
       return links;
@@ -135,23 +130,37 @@ export function ShareModal({
     if (projectId && documentId && targetLanguages && targetLanguages.length > 0) {
       targetLanguages.forEach((tCode) => {
         const lName = getLanguageName(tCode);
-        const flag = getLanguageFlag(tCode);
         links.push({
-          label: `${docName || 'Document'} (${lName}) Editor`,
+          label: `${docName || 'Document'} (${lName})`,
           code: `${documentId}_${tCode}`,
-          flag,
+          langCode: tCode,
+          langName: lName,
           url: `${origin}/project/${projectId}/file/${documentId}/lang/${tCode}${spaceSuffix}`
         });
       });
       return links;
     }
 
-    // Fallback Project Workspace Link
+    if (projectId && targetLanguages && targetLanguages.length > 0) {
+      targetLanguages.forEach((tCode) => {
+        const lName = getLanguageName(tCode);
+        links.push({
+          label: `${lName} Translation Workspace`,
+          code: `proj_${tCode}`,
+          langCode: tCode,
+          langName: lName,
+          url: `${origin}/project/${projectId}${spaceSuffix}`
+        });
+      });
+      return links;
+    }
+
     if (projectId) {
       links.push({
         label: "Project Workspace",
         code: "project",
-        flag: "📁",
+        langCode: null,
+        langName: "Workspace",
         url: `${origin}/project/${projectId}${spaceSuffix}`
       });
     }
@@ -160,36 +169,60 @@ export function ShareModal({
   };
 
   const allDirectLinks = generateAllDirectLinks();
+  
+  // Primary Share Link
+  const primaryLink = (() => {
+    const spaceSuffix = getSpaceSuffix();
+    const origin = window.location.origin;
+    if (projectId && documentId && (targetLang || selectedTargetLang)) {
+      return `${origin}/project/${projectId}/file/${documentId}/lang/${targetLang || selectedTargetLang}${spaceSuffix}`;
+    }
+    if (projectId && documentId) {
+      return `${origin}/project/${projectId}${spaceSuffix}`;
+    }
+    if (projectId) {
+      return `${origin}/project/${projectId}${spaceSuffix}`;
+    }
+    if (documentId) {
+      return `${origin}/editor/${documentId}${spaceSuffix}`;
+    }
+    return window.location.href;
+  })();
 
-  const copyAllLinksToClipboard = () => {
-    if (allDirectLinks.length === 0) return;
-    const formattedText = allDirectLinks
-      .map(l => `${l.label} (${l.code}): ${l.url}`)
-      .join("\n");
-    navigator.clipboard.writeText(formattedText);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
-  };
-
-  const copySingleLinkToClipboard = (url, code) => {
+  const copyLinkToClipboard = (url, code = "primary") => {
     navigator.clipboard.writeText(url);
-    setCopiedSingleCode(code);
-    setTimeout(() => setCopiedSingleCode(null), 2000);
+    if (code === "primary") {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } else {
+      setCopiedCode(code);
+      setTimeout(() => setCopiedCode(null), 2000);
+    }
   };
 
-  // Fetch access list & available linguists when modal is opened
+  const copyAllLinks = () => {
+    if (allDirectLinks.length === 0) return;
+    const formatted = allDirectLinks
+      .map(l => `${l.label}: ${l.url}`)
+      .join("\n");
+    navigator.clipboard.writeText(formatted);
+    setCopiedCode("all");
+    setTimeout(() => setCopiedCode(null), 2000);
+  };
+
+  // Load access list on open
   useEffect(() => {
     if (isOpen) {
       setEmailInput("");
       setSelectedEmails([]);
       setError("");
       setSuccessMsg("");
+      setMemberSearch("");
       loadAccessList();
-      loadAvailableLinguists();
     }
   }, [isOpen, documentId, projectId, activeMode, targetLang]);
 
-  // Click outside listener for suggestions dropdown
+  // Click outside listener for suggestions
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -199,16 +232,6 @@ export function ShareModal({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  const loadAvailableLinguists = async () => {
-    try {
-      const data = await fetchLinguists();
-      const list = Array.isArray(data) ? data : (data?.linguists || []);
-      setAvailableLinguists(list);
-    } catch (err) {
-      console.error("Failed to load linguists:", err);
-    }
-  };
 
   const loadAccessList = async () => {
     setLoading(true);
@@ -228,7 +251,7 @@ export function ShareModal({
       }
     } catch (err) {
       console.error(err);
-      setError("Failed to load access list.");
+      setError("Failed to load access permissions.");
     } finally {
       setLoading(false);
     }
@@ -244,54 +267,35 @@ export function ShareModal({
         setEmailSuggestions(list);
         setShowSuggestions(list.length > 0);
       } catch (err) {
-        console.error("User search failed:", err);
+        console.error("User search error:", err);
       }
     } else {
-      if (availableLinguists.length > 0) {
-        setEmailSuggestions(availableLinguists.slice(0, 10));
-        setShowSuggestions(true);
-      } else {
-        setEmailSuggestions([]);
-        setShowSuggestions(false);
-      }
-    }
-  };
-
-  const handleInputFocus = async () => {
-    if (emailInput.trim().length > 0) {
-      handleEmailInputChange(emailInput);
-    } else if (availableLinguists.length > 0) {
-      setEmailSuggestions(availableLinguists.slice(0, 10));
-      setShowSuggestions(true);
-    } else {
-      try {
-        const res = await searchUsers("");
-        const list = Array.isArray(res) ? res : (res?.users || []);
-        setEmailSuggestions(list);
-        setShowSuggestions(list.length > 0);
-      } catch (_) {}
+      setShowSuggestions(false);
     }
   };
 
   const addEmailTag = (emailToUse) => {
-    const emailToAdd = emailToUse || emailInput.trim();
+    const emailToAdd = (emailToUse || emailInput).trim().toLowerCase();
     if (!emailToAdd) return;
     if (!emailToAdd.includes("@")) {
       setError("Please enter a valid email address.");
       return;
     }
-    if (!selectedEmails.includes(emailToAdd.toLowerCase())) {
-      setSelectedEmails(prev => [...prev, emailToAdd.toLowerCase()]);
+    if (!selectedEmails.includes(emailToAdd)) {
+      setSelectedEmails(prev => [...prev, emailToAdd]);
     }
     setEmailInput("");
     setShowSuggestions(false);
     setError("");
+    if (inputRef.current) inputRef.current.focus();
   };
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter" || e.key === "," || e.key === " ") {
       e.preventDefault();
       addEmailTag();
+    } else if (e.key === "Backspace" && !emailInput && selectedEmails.length > 0) {
+      setSelectedEmails(prev => prev.slice(0, -1));
     }
   };
 
@@ -300,21 +304,21 @@ export function ShareModal({
   };
 
   const handleGrantAccess = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     const emailsToProcess = [...selectedEmails];
     if (emailInput.trim()) {
       const rawInput = emailInput.trim();
       const splitInputs = rawInput.split(/[\s,]+/);
       for (const item of splitInputs) {
         const clean = item.trim().toLowerCase();
-        if (clean && !emailsToProcess.includes(clean)) {
+        if (clean && clean.includes("@") && !emailsToProcess.includes(clean)) {
           emailsToProcess.push(clean);
         }
       }
     }
 
     if (emailsToProcess.length === 0) {
-      setError("Please select or type at least one user email address.");
+      setError("Please add at least one email address to invite.");
       return;
     }
 
@@ -327,18 +331,19 @@ export function ShareModal({
     try {
       if (isProjectMode && projectId) {
         await shareProject(projectId, emailsToProcess, permission);
-        setSuccessMsg(`Project access granted to ${emailsToProcess.length} user(s)!`);
+        setSuccessMsg(`Access granted to ${emailsToProcess.length} user(s).`);
       } else if (activeMode === "bulk_files" || activeMode === "language" || selectedDocumentIds.length > 1) {
         await bulkShareDocuments(selectedDocumentIds, emailsToProcess, permission, effectiveTargetLang);
-        setSuccessMsg(`Access granted to ${emailsToProcess.length} user(s) for ${selectedDocumentIds.length} document(s) [${effectiveTargetLang ? effectiveTargetLang.toUpperCase() : "all"} ]!`);
+        setSuccessMsg(`Access granted to ${emailsToProcess.length} user(s).`);
       } else if (documentId) {
         await grantDocumentAccess(documentId, emailsToProcess, permission, effectiveTargetLang);
-        setSuccessMsg(`Access granted to ${emailsToProcess.length} user(s) for ${effectiveTargetLang ? effectiveTargetLang.toUpperCase() : "all"}!`);
+        setSuccessMsg(`Access granted to ${emailsToProcess.length} user(s).`);
       }
 
       setSelectedEmails([]);
       setEmailInput("");
       loadAccessList();
+      setTimeout(() => setSuccessMsg(""), 3500);
     } catch (err) {
       console.error(err);
       const errMsg = err.response?.data?.error || err.message || "Failed to grant access.";
@@ -355,8 +360,9 @@ export function ShareModal({
       } else if (documentId) {
         await revokeDocumentAccess(documentId, identifier, targetLang || selectedTargetLang);
       }
-      setSuccessMsg("Access revoked.");
+      setSuccessMsg("Access removed.");
       loadAccessList();
+      setTimeout(() => setSuccessMsg(""), 2500);
     } catch (err) {
       console.error(err);
       setError("Failed to revoke access.");
@@ -371,222 +377,441 @@ export function ShareModal({
       } else if (documentId) {
         await updatePublicAccess(documentId, newAccess);
       }
-      setSuccessMsg(`Public link access updated to: ${newAccess}`);
+      setSuccessMsg(newAccess === "none" ? "Restricted to invited collaborators." : "Public link access updated.");
+      setTimeout(() => setSuccessMsg(""), 2500);
     } catch (err) {
       console.error(err);
-      setError("Failed to update link access settings.");
+      setError("Failed to update link settings.");
     }
   };
 
-  const getAvatarInitials = (emailStr) => {
+  const getInitials = (emailStr) => {
     if (!emailStr) return "?";
     return emailStr.substring(0, 2).toUpperCase();
   };
 
-  const getAvatarColor = (emailStr) => {
-    const colors = [
-      "bg-blue-600/20 text-blue-400 border border-blue-500/30",
-      "bg-purple-600/20 text-purple-400 border border-purple-500/30",
-      "bg-emerald-600/20 text-emerald-400 border border-emerald-500/30",
-      "bg-amber-600/20 text-amber-400 border border-amber-500/30",
-      "bg-pink-600/20 text-pink-400 border border-pink-500/30",
-      "bg-indigo-600/20 text-indigo-400 border border-indigo-500/30",
-      "bg-rose-600/20 text-rose-400 border border-rose-500/30"
-    ];
-    const code = emailStr ? emailStr.charCodeAt(0) : 0;
-    return colors[code % colors.length];
-  };
-
   if (!isOpen) return null;
 
+  // Filtered members list
+  const filteredAccessList = accessList.filter(item => {
+    const userEmail = item.email || item.profiles?.email || "";
+    if (memberSearch && !userEmail.toLowerCase().includes(memberSearch.toLowerCase())) {
+      return false;
+    }
+    return true;
+  });
+
   return (
-    <div className="modal-overlay">
-      <div className="modal-card max-w-2xl select-text text-left p-5 flex flex-col gap-4 border border-indigo-500/30 shadow-2xl rounded-xl">
-        
-        {/* Modal Header Banner */}
-        <div className="flex justify-between items-start">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${
-                isProjectMode 
-                  ? "bg-amber-500/10 text-amber-400 border-amber-500/30" 
-                  : activeMode === "language"
-                    ? "bg-purple-500/10 text-purple-400 border-purple-500/30"
-                    : "bg-indigo-500/10 text-indigo-400 border-indigo-500/30"
-              }`}>
-                {isProjectMode ? "Project Coordinator Access" : activeMode === "language" ? "Language Package Assignment" : activeMode === "bulk_files" ? "Bulk Assignment" : "File Share & Assignment"}
-              </span>
+    <div 
+      className="modal-overlay" 
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 500,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(0, 0, 0, 0.72)",
+        backdropFilter: "blur(8px)",
+        padding: "20px"
+      }}
+    >
+      <div 
+        className="modal-card"
+        style={{
+          width: "100%",
+          maxWidth: "640px",
+          background: "var(--bg-surface)",
+          border: "1px solid var(--border-medium)",
+          borderRadius: "16px",
+          boxShadow: "0 24px 70px rgba(0, 0, 0, 0.55)",
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column"
+        }}
+      >
+        {/* Header */}
+        <div 
+          style={{
+            padding: "20px 24px 16px",
+            borderBottom: "1px solid var(--border-subtle)",
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: "16px"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
+            <div 
+              style={{
+                width: "40px",
+                height: "40px",
+                borderRadius: "10px",
+                background: "var(--accent-faint)",
+                border: "1px solid var(--border-medium)",
+                color: "var(--accent)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0
+              }}
+            >
+              <Share2 size={18} />
             </div>
 
-            <h3 className="text-base font-black text-[var(--text-primary)] leading-snug">
-              {isProjectMode && `Share Project "${docName || "Untitled Project"}"`}
-              {activeMode === "language" && `Assign ${languageName || targetLang?.toUpperCase() || "Target Language"} Files`}
-              {activeMode === "bulk_files" && `Assign ${selectedDocumentIds.length} Selected Items`}
-              {activeMode === "file" && `Assign Document "${docName || "Untitled Document"}"`}
-            </h3>
-
-            <p className="text-xs text-[var(--text-secondary)] font-medium">
-              {isProjectMode && "Grant workspace access to Project Coordinators and VerbiLabs Staff."}
-              {activeMode === "language" && `Assigning all file(s) for ${languageName || targetLang} to linguists.`}
-              {activeMode === "bulk_files" && `Assigning selected files/jobs to linguists simultaneously.`}
-              {activeMode === "file" && "Assign this file to linguists or collaborators."}
-            </p>
+            <div style={{ minWidth: 0 }}>
+              <h3 
+                style={{
+                  fontSize: "16px",
+                  fontWeight: 700,
+                  color: "var(--text-primary)",
+                  margin: 0,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis"
+                }}
+              >
+                Share "{docName || "Project Workspace"}"
+              </h3>
+              <p style={{ fontSize: "12px", color: "var(--text-secondary)", margin: "2px 0 0" }}>
+                {isProjectMode && "Manage access permissions and direct workspace links"}
+                {activeMode === "language" && `Assign access for ${languageName || targetLang?.toUpperCase()}`}
+                {activeMode === "bulk_files" && `Assign ${selectedDocumentIds.length} selected documents`}
+                {activeMode === "file" && "Manage access and direct editor links for this document"}
+              </p>
+            </div>
           </div>
 
           <button 
+            type="button"
             onClick={onClose}
-            className="p-1 rounded-full hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all cursor-pointer"
-            title="Close modal"
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "var(--text-muted)",
+              cursor: "pointer",
+              padding: "6px",
+              borderRadius: "8px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "color 0.15s, background 0.15s"
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "transparent"; }}
+            title="Close"
           >
-            <X className="w-5 h-5" />
+            <X size={18} />
           </button>
         </div>
 
-        {/* Selected Items Summary Pill List */}
-        {!isProjectMode && selectedDocNames.length > 0 && (
-          <div className="bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-lg p-2.5 max-h-20 overflow-y-auto space-y-1">
-            <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-muted)] block">
-              Included Items ({selectedDocNames.length}):
-            </span>
-            <div className="flex flex-wrap gap-1">
-              {selectedDocNames.map((name, i) => (
-                <span key={i} className="text-[10px] bg-[var(--bg-surface)] border border-[var(--border-subtle)] px-2 py-0.5 rounded font-mono text-indigo-300">
-                  📄 {name}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Multi-Email Assignment Form */}
-        <form onSubmit={handleGrantAccess} className="space-y-3">
-          
-          {/* Target Language Selection if Multiple Target Languages Exist */}
-          {!isProjectMode && targetLanguages && targetLanguages.length > 1 && !targetLang && (
-            <div className="bg-[var(--bg-input)] border border-[var(--border-medium)] rounded-lg p-2 flex items-center justify-between gap-2">
-              <span className="text-[11px] font-bold text-[var(--text-secondary)] flex items-center gap-1.5 shrink-0">
-                <Globe size={13} className="text-indigo-400" />
-                <span>Assign Target Language Job:</span>
-              </span>
-              <select
-                value={selectedTargetLang}
-                onChange={(e) => setSelectedTargetLang(e.target.value)}
-                className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded px-2.5 py-1 text-xs font-bold text-indigo-400 outline-none cursor-pointer flex-1 max-w-[200px]"
-              >
-                {targetLanguages.map((tCode) => (
-                  <option key={tCode} value={tCode}>
-                    {getLanguageName(tCode)} ({tCode.toUpperCase()})
-                  </option>
-                ))}
-              </select>
+        {/* Modal Body */}
+        <div 
+          style={{
+            padding: "20px 24px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "18px",
+            maxHeight: "75vh",
+            overflowY: "auto"
+          }}
+        >
+          {/* Notifications */}
+          {error && (
+            <div 
+              style={{
+                padding: "10px 14px",
+                borderRadius: "10px",
+                background: "rgba(244, 63, 94, 0.1)",
+                border: "1px solid rgba(244, 63, 94, 0.25)",
+                color: "var(--rose)",
+                fontSize: "12.5px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "8px"
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <AlertCircle size={15} style={{ flexShrink: 0 }} />
+                <span>{error}</span>
+              </div>
+              <X size={14} style={{ cursor: "pointer" }} onClick={() => setError("")} />
             </div>
           )}
 
-          {targetLang && (
-            <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-lg px-3 py-1.5 flex items-center justify-between text-xs">
-              <span className="text-[11px] font-bold text-indigo-300 flex items-center gap-1.5">
-                <Globe size={13} className="text-indigo-400" />
-                <span>Assigning Job For:</span>
-              </span>
-              <span className="font-extrabold text-indigo-300 flex items-center gap-1">
-                {getLanguageFlag(targetLang)} {languageName || getLanguageName(targetLang)} ({targetLang.toUpperCase()})
-              </span>
+          {successMsg && (
+            <div 
+              style={{
+                padding: "10px 14px",
+                borderRadius: "10px",
+                background: "rgba(34, 197, 94, 0.1)",
+                border: "1px solid rgba(34, 197, 94, 0.25)",
+                color: "var(--emerald)",
+                fontSize: "12.5px",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px"
+              }}
+            >
+              <Check size={15} style={{ flexShrink: 0 }} />
+              <span>{successMsg}</span>
             </div>
           )}
 
-          <div className="space-y-1.5 relative" ref={dropdownRef}>
-            <label className="text-xs font-bold text-[var(--text-secondary)] flex items-center justify-between">
-              <span>Enter Email Addresses or Pick Linguist(s)</span>
-              {availableLinguists.length > 0 && (
-                <span className="text-[10px] text-indigo-400 font-normal">
-                  {availableLinguists.length} Linguists Available
-                </span>
-              )}
+          {/* Section 1: Invite Form */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px", position: "relative" }} ref={dropdownRef}>
+            <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span>Add Collaborators</span>
+              <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 400 }}>
+                Press enter to add multiple emails
+              </span>
             </label>
 
-            {/* Quick Linguist Pills Selection */}
-            {availableLinguists.length > 0 && (
-              <div className="flex items-center gap-1.5 overflow-x-auto py-1">
-                <span className="text-[10px] font-bold text-[var(--text-muted)] shrink-0">Quick Add:</span>
-                {availableLinguists.slice(0, 6).map((ling) => {
-                  const isAdded = selectedEmails.includes(ling.email.toLowerCase());
-                  return (
-                    <button
-                      type="button"
-                      key={ling.id}
-                      onClick={() => {
-                        if (isAdded) removeEmailTag(ling.email.toLowerCase());
-                        else addEmailTag(ling.email.toLowerCase());
-                      }}
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border transition-all cursor-pointer shrink-0 flex items-center gap-1 ${
-                        isAdded
-                          ? "bg-indigo-600 text-white border-indigo-500"
-                          : "bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-white"
-                      }`}
-                    >
-                      <UserCheck size={10} />
-                      <span>{ling.full_name || ling.email.split("@")[0]}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Chips Multi-Email Tag Container */}
-            <div className="min-h-[42px] bg-[var(--bg-input)] border border-[var(--border-medium)] focus-within:border-indigo-500 rounded-lg p-2 flex flex-wrap items-center gap-1.5 transition-all">
+            {/* Email Chips Input Container */}
+            <div 
+              style={{
+                minHeight: "44px",
+                background: "var(--bg-input)",
+                border: "1px solid var(--border-medium)",
+                borderRadius: "10px",
+                padding: "6px 10px",
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                gap: "6px",
+                cursor: "text",
+                transition: "border-color 0.15s"
+              }}
+              onClick={() => inputRef.current?.focus()}
+            >
               {selectedEmails.map((email) => (
-                <span key={email} className="inline-flex items-center gap-1 bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded text-xs font-semibold">
+                <span 
+                  key={email}
+                  style={{
+                    background: "var(--bg-surface)",
+                    border: "1px solid var(--border-medium)",
+                    borderRadius: "6px",
+                    padding: "3px 8px",
+                    fontSize: "12px",
+                    fontWeight: 500,
+                    color: "var(--text-primary)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px"
+                  }}
+                >
                   <span>{email}</span>
                   <button
                     type="button"
-                    onClick={() => removeEmailTag(email)}
-                    className="hover:text-rose-400 transition-colors"
+                    onClick={(e) => { e.stopPropagation(); removeEmailTag(email); }}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      padding: 0,
+                      color: "var(--text-muted)",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center"
+                    }}
                   >
-                    <X className="w-3 h-3" />
+                    <X size={12} />
                   </button>
                 </span>
               ))}
 
               <input
+                ref={inputRef}
                 type="text"
-                placeholder={selectedEmails.length === 0 ? "Type name or email and press Enter..." : "Add another person..."}
+                placeholder={selectedEmails.length === 0 ? "Enter email address or name..." : "Add another..."}
                 value={emailInput}
                 onChange={(e) => handleEmailInputChange(e.target.value)}
-                onFocus={handleInputFocus}
                 onKeyDown={handleKeyDown}
-                className="flex-1 bg-transparent text-xs font-semibold text-[var(--text-primary)] outline-none min-w-[160px] placeholder-[var(--text-muted)]"
+                style={{
+                  flex: 1,
+                  minWidth: "160px",
+                  background: "transparent",
+                  border: "none",
+                  outline: "none",
+                  color: "var(--text-primary)",
+                  fontSize: "13px"
+                }}
               />
             </div>
 
-            {/* Auto-complete Dropdown */}
+            {/* Controls Bar: Target Language + Permission (Write / Read) + Submit Button */}
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "4px" }}>
+              
+              {/* Target Language Selector (if multi-language project) */}
+              {!isProjectMode && targetLanguages && targetLanguages.length > 1 && !targetLang ? (
+                <div style={{ flex: 1, display: "flex", alignItems: "center", gap: "6px" }}>
+                  <select
+                    value={selectedTargetLang}
+                    onChange={(e) => setSelectedTargetLang(e.target.value)}
+                    style={{
+                      width: "100%",
+                      height: "36px",
+                      background: "var(--bg-input)",
+                      border: "1px solid var(--border-medium)",
+                      borderRadius: "8px",
+                      padding: "0 10px",
+                      fontSize: "12px",
+                      fontWeight: 500,
+                      color: "var(--text-primary)",
+                      outline: "none",
+                      cursor: "pointer"
+                    }}
+                  >
+                    <option value="">All Target Languages</option>
+                    {targetLanguages.map((tCode) => (
+                      <option key={tCode} value={tCode}>
+                        {getLanguageName(tCode)} ({tCode.toUpperCase()})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+
+              {/* Permission Dropdown: Write (Can Edit) / Read (View Only) */}
+              <div style={{ flex: (!isProjectMode && targetLanguages && targetLanguages.length > 1 && !targetLang) ? 1 : 2 }}>
+                <select
+                  value={permission}
+                  onChange={(e) => setPermission(e.target.value)}
+                  style={{
+                    width: "100%",
+                    height: "36px",
+                    background: "var(--bg-input)",
+                    border: "1px solid var(--border-medium)",
+                    borderRadius: "8px",
+                    padding: "0 10px",
+                    fontSize: "12.5px",
+                    fontWeight: 600,
+                    color: "var(--text-primary)",
+                    outline: "none",
+                    cursor: "pointer"
+                  }}
+                >
+                  <option value="write">Write</option>
+                  <option value="read">Read</option>
+                </select>
+              </div>
+
+              {/* Invite Button */}
+              <button
+                type="button"
+                onClick={handleGrantAccess}
+                disabled={submitting || (selectedEmails.length === 0 && !emailInput.trim())}
+                style={{
+                  height: "36px",
+                  background: "var(--accent)",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "8px",
+                  padding: "0 18px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: (submitting || (selectedEmails.length === 0 && !emailInput.trim())) ? "not-allowed" : "pointer",
+                  opacity: (submitting || (selectedEmails.length === 0 && !emailInput.trim())) ? 0.5 : 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                  whiteSpace: "nowrap",
+                  transition: "opacity 0.15s"
+                }}
+              >
+                {submitting ? (
+                  <span>Inviting...</span>
+                ) : (
+                  <>
+                    <UserPlus size={14} />
+                    <span>{selectedEmails.length > 1 ? `Invite (${selectedEmails.length})` : "Invite"}</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Autocomplete Dropdown */}
             {showSuggestions && emailSuggestions.length > 0 && (
-              <div className="absolute left-0 right-0 top-full mt-1 bg-[var(--bg-surface)] border border-[var(--border-medium)] rounded-lg shadow-2xl z-50 max-h-56 overflow-y-auto divide-y divide-[var(--border-subtle)]">
+              <div 
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  right: 0,
+                  top: "100%",
+                  marginTop: "6px",
+                  background: "var(--bg-surface)",
+                  border: "1px solid var(--border-medium)",
+                  borderRadius: "10px",
+                  boxShadow: "0 12px 35px rgba(0, 0, 0, 0.45)",
+                  zIndex: 100,
+                  maxHeight: "200px",
+                  overflowY: "auto"
+                }}
+              >
                 {emailSuggestions.map((u) => {
-                  const displayName = u.full_name || u.name || (u.email ? u.email.split("@")[0] : "");
-                  const isSelected = selectedEmails.includes(u.email?.toLowerCase());
+                  const emailStr = u.email || "";
+                  const displayName = u.full_name || u.name || (emailStr ? emailStr.split("@")[0] : "User");
                   return (
                     <button
-                      key={u.id || u.email}
+                      key={u.id || emailStr}
                       type="button"
-                      onClick={() => addEmailTag(u.email)}
-                      className={`w-full text-left px-3 py-2 text-xs font-semibold hover:bg-[var(--bg-hover)] transition-colors flex items-center justify-between cursor-pointer ${
-                        isSelected ? "bg-indigo-600/10" : ""
-                      }`}
+                      onClick={() => addEmailTag(emailStr)}
+                      style={{
+                        width: "100%",
+                        padding: "10px 14px",
+                        textAlign: "left",
+                        background: "transparent",
+                        border: "none",
+                        borderBottom: "1px solid var(--border-subtle)",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        transition: "background 0.1s"
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = "var(--bg-hover)"}
+                      onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
                     >
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[var(--text-primary)] font-bold text-xs">{displayName}</span>
-                        <span className="text-[11px] text-[var(--text-secondary)] font-mono">{u.email}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <div 
+                          style={{
+                            width: "28px",
+                            height: "28px",
+                            borderRadius: "50%",
+                            background: "var(--bg-panel)",
+                            border: "1px solid var(--border-subtle)",
+                            color: "var(--text-primary)",
+                            fontSize: "11px",
+                            fontWeight: 600,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center"
+                          }}
+                        >
+                          {getInitials(emailStr)}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--text-primary)" }}>{displayName}</div>
+                          <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>{emailStr}</div>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        {u.role && (
-                          <span className="text-[9px] text-indigo-400 uppercase font-mono bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded">
-                            {u.role}
-                          </span>
-                        )}
-                        {isSelected && (
-                          <span className="text-[10px] text-emerald-400 font-bold">✓ Added</span>
-                        )}
-                      </div>
+                      {u.role && (
+                        <span 
+                          style={{
+                            fontSize: "10px",
+                            fontWeight: 600,
+                            padding: "2px 8px",
+                            borderRadius: "4px",
+                            background: "var(--bg-panel)",
+                            color: "var(--text-secondary)",
+                            textTransform: "uppercase"
+                          }}
+                        >
+                          {u.role}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -594,226 +819,542 @@ export function ShareModal({
             )}
           </div>
 
-          <div className="flex items-center gap-2">
-            <select
-              value={permission}
-              onChange={(e) => setPermission(e.target.value)}
-              className="bg-[var(--bg-input)] border border-[var(--border-medium)] rounded-lg px-3 py-2 text-xs font-semibold text-[var(--text-primary)] outline-none cursor-pointer"
-            >
-              <option value="write">Translator / Editor (Can Translate & Edit)</option>
-              <option value="read">Reviewer / Viewer (Read-only Access)</option>
-              <option value="admin">Project Manager (Full Access)</option>
-            </select>
-
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-black py-2 rounded-lg transition-all shadow-md cursor-pointer active:scale-[0.98]"
-            >
-              {submitting ? "Granting Access..." : "Grant Access & Assign"}
-            </button>
-          </div>
-        </form>
-
-        {/* Feedback Messages */}
-        {error && (
-          <div className="bg-rose-500/10 border border-rose-500/30 rounded-lg p-2.5 text-xs text-rose-400 font-semibold flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
-
-        {successMsg && (
-          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-2.5 text-xs text-emerald-400 font-semibold flex items-center gap-2">
-            <Check className="w-4 h-4 shrink-0" />
-            <span>{successMsg}</span>
-          </div>
-        )}
-
-        {/* DIRECT LINKS BREAKDOWN SECTION (ALL TARGET LANGUAGE LINKS) */}
-        {allDirectLinks.length > 0 && (
-          <div className="bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-lg p-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-black uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5">
-                <Link className="w-3 h-3 text-indigo-400" />
-                <span>Direct Access Links Breakdown ({allDirectLinks.length}):</span>
+          {/* Section 2: Direct Shareable Links */}
+          <div 
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
+              paddingTop: "14px",
+              borderTop: "1px solid var(--border-subtle)"
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "6px" }}>
+                <Link2 size={14} style={{ color: "var(--accent)" }} />
+                <span>Direct Access Links</span>
               </span>
-              
+              {allDirectLinks.length > 1 && (
+                <button
+                  type="button"
+                  onClick={copyAllLinks}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: copiedCode === "all" ? "var(--emerald)" : "var(--accent)",
+                    fontSize: "11.5px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px"
+                  }}
+                >
+                  {copiedCode === "all" ? <Check size={12} /> : <Copy size={12} />}
+                  <span>{copiedCode === "all" ? "All Links Copied!" : "Copy All Direct Links"}</span>
+                </button>
+              )}
+            </div>
+
+            {/* Primary Workspace Link Box */}
+            <div 
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                background: "var(--bg-panel)",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: "10px",
+                padding: "8px 12px"
+              }}
+            >
+              <div 
+                style={{
+                  flex: 1,
+                  fontSize: "12px",
+                  fontFamily: "var(--font-mono, monospace)",
+                  color: "var(--text-secondary)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  userSelect: "all"
+                }}
+              >
+                {primaryLink}
+              </div>
+
               <button
                 type="button"
-                onClick={copyAllLinksToClipboard}
-                className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 px-2 py-0.5 rounded transition-all cursor-pointer flex items-center gap-1"
+                onClick={() => copyLinkToClipboard(primaryLink, "primary")}
+                style={{
+                  background: copied ? "rgba(34, 197, 94, 0.15)" : "var(--bg-surface)",
+                  border: "1px solid " + (copied ? "rgba(34, 197, 94, 0.3)" : "var(--border-medium)"),
+                  color: copied ? "var(--emerald)" : "var(--text-primary)",
+                  borderRadius: "8px",
+                  padding: "5px 12px",
+                  fontSize: "11.5px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  flexShrink: 0,
+                  transition: "all 0.15s"
+                }}
               >
-                {copied ? <Check size={10} className="text-emerald-400" /> : <Copy size={10} />}
-                <span>{copied ? "All 4 Links Copied!" : "Copy All Direct Links"}</span>
+                {copied ? <Check size={12} /> : <Copy size={12} />}
+                <span>{copied ? "Copied" : "Copy"}</span>
               </button>
+
+              <a
+                href={primaryLink}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  background: "var(--bg-surface)",
+                  border: "1px solid var(--border-medium)",
+                  color: "var(--text-muted)",
+                  borderRadius: "8px",
+                  width: "28px",
+                  height: "28px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  flexShrink: 0,
+                  transition: "color 0.15s"
+                }}
+                title="Open in new tab"
+              >
+                <ArrowUpRight size={13} />
+              </a>
             </div>
 
-            <div className="space-y-1.5 max-h-36 overflow-y-auto">
-              {allDirectLinks.map((item) => {
-                const isItemCopied = copiedSingleCode === item.code;
-                return (
-                  <div key={item.code} className="flex items-center justify-between gap-2 bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded px-2.5 py-1 text-[11px]">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="text-sm">{item.flag}</span>
-                      <span className="font-extrabold text-[var(--text-primary)] shrink-0">{item.label}:</span>
-                      <span className="text-[10px] font-mono text-[var(--text-muted)] truncate select-all">{item.url}</span>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => copySingleLinkToClipboard(item.url, item.code)}
-                      className="p-1 text-[var(--text-muted)] hover:text-indigo-400 transition-colors shrink-0 cursor-pointer"
-                      title={`Copy ${item.label} URL`}
+            {/* Multiple Target Language Links Breakdown (if multi-language) */}
+            {allDirectLinks.length > 1 && (
+              <div 
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "4px",
+                  maxHeight: "140px",
+                  overflowY: "auto",
+                  paddingRight: "2px"
+                }}
+              >
+                {allDirectLinks.map((item) => {
+                  const isItemCopied = copiedCode === item.code;
+                  return (
+                    <div 
+                      key={item.code}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "6px 10px",
+                        borderRadius: "8px",
+                        background: "var(--bg-panel)",
+                        border: "1px solid var(--border-subtle)",
+                        fontSize: "12px"
+                      }}
                     >
-                      {isItemCopied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+                        {item.langCode ? <LanguageFlag code={item.langCode} /> : <span>📁</span>}
+                        <span style={{ fontWeight: 600, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {item.label}
+                        </span>
+                      </div>
 
-        {/* Existing Access List Section */}
-        <div className="space-y-2 border-t border-[var(--border-subtle)] pt-3">
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs font-bold text-[var(--text-secondary)]">People with Access</h4>
-            {(targetLang || selectedTargetLang) && accessList.length > 0 && (
-              <div className="flex items-center gap-1 bg-[var(--bg-input)] p-0.5 rounded-md border border-[var(--border-subtle)] text-[10px]">
-                <button
-                  type="button"
-                  onClick={() => setAccessFilter("current")}
-                  className={`px-2 py-0.5 rounded font-bold transition-all cursor-pointer ${
-                    accessFilter === "current"
-                      ? "bg-indigo-600 text-white shadow"
-                      : "text-[var(--text-muted)] hover:text-white"
-                  }`}
-                >
-                  {(targetLang || selectedTargetLang).toUpperCase()} Only ({
-                    accessList.filter(i => i.isGlobalAccess || (i.targetLang && i.targetLang.toLowerCase() === (targetLang || selectedTargetLang).toLowerCase())).length
-                  })
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAccessFilter("all")}
-                  className={`px-2 py-0.5 rounded font-bold transition-all cursor-pointer ${
-                    accessFilter === "all"
-                      ? "bg-indigo-600 text-white shadow"
-                      : "text-[var(--text-muted)] hover:text-white"
-                  }`}
-                >
-                  All ({accessList.length})
-                </button>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+                        <button
+                          type="button"
+                          onClick={() => copyLinkToClipboard(item.url, item.code)}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            color: isItemCopied ? "var(--emerald)" : "var(--text-muted)",
+                            cursor: "pointer",
+                            padding: "3px 6px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            fontSize: "11px",
+                            fontWeight: 600
+                          }}
+                        >
+                          {isItemCopied ? (
+                            <>
+                              <Check size={12} /> Copied
+                            </>
+                          ) : (
+                            <>
+                              <Copy size={12} /> Copy
+                            </>
+                          )}
+                        </button>
+
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            color: "var(--text-muted)",
+                            display: "flex",
+                            alignItems: "center"
+                          }}
+                          title="Open editor"
+                        >
+                          <ArrowUpRight size={12} />
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
 
-          <div className="space-y-1.5 max-h-48 overflow-y-auto">
-            {loading ? (
-              <p className="text-xs text-[var(--text-muted)] italic animate-pulse">Loading access records...</p>
-            ) : (
-              <>
-                {owner && (
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-[var(--bg-input)] border border-[var(--border-subtle)]">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center text-xs font-bold">
-                        {getAvatarInitials(owner.email)}
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-[var(--text-primary)]">{owner.email}</p>
-                        <p className="text-[10px] text-[var(--text-muted)]">Project Creator</p>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
-                      Owner
-                    </span>
-                  </div>
-                )}
+          {/* Section 3: People with Access List */}
+          <div 
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
+              paddingTop: "14px",
+              borderTop: "1px solid var(--border-subtle)"
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)" }}>
+                People with access ({accessList.length + (owner ? 1 : 0)})
+              </span>
 
-                {((accessFilter === "current" && (targetLang || selectedTargetLang))
-                  ? accessList.filter(item => item.isGlobalAccess || (item.targetLang && item.targetLang.toLowerCase() === (targetLang || selectedTargetLang).toLowerCase()))
-                  : accessList
-                ).map((item) => {
-                  const userEmail = item.email || item.profiles?.email || "";
-                  const userRole = item.role || item.profiles?.role || "linguist";
-                  const assignedLanguage = item.targetLang || item.target_lang;
-                  const langName = assignedLanguage ? getLanguageName(assignedLanguage) : null;
+              {accessList.length > 2 && (
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <input
+                    type="text"
+                    placeholder="Filter members..."
+                    value={memberSearch}
+                    onChange={(e) => setMemberSearch(e.target.value)}
+                    style={{
+                      background: "var(--bg-input)",
+                      border: "1px solid var(--border-subtle)",
+                      borderRadius: "6px",
+                      padding: "2px 8px",
+                      fontSize: "11px",
+                      color: "var(--text-primary)",
+                      outline: "none",
+                      width: "120px"
+                    }}
+                  />
+                </div>
+              )}
+            </div>
 
-                  return (
-                    <div key={item.shareId || item.accessId || item.id || userEmail} className="flex items-center justify-between p-2 rounded-lg bg-[var(--bg-panel)] border border-[var(--border-subtle)]">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${getAvatarColor(userEmail)}`}>
-                          {getAvatarInitials(userEmail)}
+            {/* Member Cards List */}
+            <div 
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "4px",
+                maxHeight: "180px",
+                overflowY: "auto",
+                paddingRight: "2px"
+              }}
+            >
+              {loading ? (
+                <div style={{ fontSize: "12px", color: "var(--text-muted)", padding: "14px 0", textAlign: "center" }}>
+                  Loading member permissions...
+                </div>
+              ) : (
+                <>
+                  {/* Owner Card */}
+                  {owner && (
+                    <div 
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "8px 10px",
+                        borderRadius: "10px",
+                        background: "var(--bg-panel)",
+                        border: "1px solid var(--border-subtle)"
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
+                        <div 
+                          style={{
+                            width: "32px",
+                            height: "32px",
+                            borderRadius: "50%",
+                            background: "rgba(245, 158, 11, 0.15)",
+                            border: "1px solid rgba(245, 158, 11, 0.3)",
+                            color: "var(--amber)",
+                            fontSize: "11.5px",
+                            fontWeight: 700,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexShrink: 0
+                          }}
+                        >
+                          {getInitials(owner.email)}
                         </div>
-                        <div>
-                          <p className="text-xs font-bold text-[var(--text-primary)]">{userEmail || "Registered User"}</p>
-                          <div className="flex items-center gap-1.5 text-[10px] text-[var(--text-muted)]">
-                            <span className="font-semibold">{userRole === "linguist" ? "Linguist" : (userRole === "verbolabs_staff" ? "Staff" : userRole)}</span>
-                            {assignedLanguage && (
-                              <span className="inline-flex items-center gap-1 font-bold text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded text-[9px] uppercase border border-indigo-500/20">
-                                {getLanguageFlag(assignedLanguage)} {langName || assignedLanguage.toUpperCase()}
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {owner.email}
+                          </div>
+                          <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>Project Owner</div>
+                        </div>
+                      </div>
+                      <span 
+                        style={{
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          color: "var(--amber)",
+                          background: "rgba(245, 158, 11, 0.1)",
+                          padding: "2px 8px",
+                          borderRadius: "20px",
+                          border: "1px solid rgba(245, 158, 11, 0.25)"
+                        }}
+                      >
+                        Owner
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Collaborator Cards */}
+                  {filteredAccessList.map((item) => {
+                    const userEmail = item.email || item.profiles?.email || "";
+                    const assignedLanguage = item.targetLang || item.target_lang;
+                    const langName = assignedLanguage ? getLanguageName(assignedLanguage) : null;
+                    const isWrite = (item.permission || item.accessLevel || "write") === "write";
+                    const roleLabel = isWrite ? "Write" : "Read";
+
+                    return (
+                      <div 
+                        key={item.shareId || item.accessId || item.id || userEmail}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "8px 10px",
+                          borderRadius: "10px",
+                          background: "var(--bg-panel)",
+                          border: "1px solid var(--border-subtle)",
+                          transition: "background 0.1s"
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
+                          <div 
+                            style={{
+                              width: "32px",
+                              height: "32px",
+                              borderRadius: "50%",
+                              background: "var(--bg-surface)",
+                              border: "1px solid var(--border-medium)",
+                              color: "var(--accent)",
+                              fontSize: "11.5px",
+                              fontWeight: 600,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              flexShrink: 0
+                            }}
+                          >
+                            {getInitials(userEmail)}
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {userEmail}
+                            </div>
+                            <div style={{ fontSize: "11px", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "6px", marginTop: "1px" }}>
+                              {assignedLanguage && (
+                                <>
+                                  <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", color: "var(--text-secondary)", fontWeight: 500 }}>
+                                    <LanguageFlag code={assignedLanguage} /> {langName || assignedLanguage.toUpperCase()}
+                                  </span>
+                                  <span>•</span>
+                                </>
+                              )}
+                              {item.isGlobalAccess && (
+                                <>
+                                  <span style={{ color: "var(--text-secondary)" }}>All Languages</span>
+                                  <span>•</span>
+                                </>
+                              )}
+                              <span 
+                                style={{ 
+                                  fontWeight: 600,
+                                  color: isWrite ? "var(--accent)" : "var(--text-secondary)",
+                                  background: isWrite ? "var(--accent-faint)" : "var(--bg-surface)",
+                                  padding: "1px 6px",
+                                  borderRadius: "4px",
+                                  border: "1px solid var(--border-subtle)",
+                                  fontSize: "10px"
+                                }}
+                              >
+                                {roleLabel}
                               </span>
-                            )}
-                            {item.isGlobalAccess && (
-                              <span className="text-[9px] text-amber-400 bg-amber-500/10 px-1 py-0.2 rounded border border-amber-500/20">
-                                Global
-                              </span>
-                            )}
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded uppercase border border-indigo-500/20">
-                          {item.permission || item.accessLevel || "write"}
-                        </span>
                         {isOwner && (
                           <button
                             type="button"
                             onClick={() => handleRevoke(item.userId || item.shareId)}
-                            className="text-xs font-bold text-rose-400 hover:text-red-300 cursor-pointer transition-colors"
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              color: "var(--text-muted)",
+                              cursor: "pointer",
+                              padding: "6px",
+                              borderRadius: "6px",
+                              display: "flex",
+                              alignItems: "center",
+                              transition: "color 0.15s, background 0.15s"
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--rose)"; e.currentTarget.style.background = "rgba(244, 63, 94, 0.1)"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "transparent"; }}
+                            title="Remove collaborator"
                           >
-                            Remove
+                            <Trash2 size={13} />
                           </button>
                         )}
                       </div>
+                    );
+                  })}
+
+                  {filteredAccessList.length === 0 && !owner && (
+                    <div style={{ fontSize: "12px", color: "var(--text-muted)", padding: "12px 0", textAlign: "center" }}>
+                      No collaborators added yet. Add collaborators above to grant access.
                     </div>
-                  );
-                })}
-              </>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Section 4: General Access Privacy Settings */}
+          <div 
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "12px",
+              paddingTop: "14px",
+              borderTop: "1px solid var(--border-subtle)"
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div 
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "50%",
+                  background: publicAccess === "none" ? "var(--bg-panel)" : "rgba(34, 197, 94, 0.15)",
+                  border: "1px solid " + (publicAccess === "none" ? "var(--border-subtle)" : "rgba(34, 197, 94, 0.3)"),
+                  color: publicAccess === "none" ? "var(--text-muted)" : "var(--emerald)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0
+                }}
+              >
+                {publicAccess === "none" ? <Lock size={14} /> : <Globe size={14} />}
+              </div>
+
+              <div>
+                <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
+                  General access
+                </div>
+                <div style={{ fontSize: "11.5px", color: "var(--text-muted)" }}>
+                  {publicAccess === "none" 
+                    ? "Only people with access can open" 
+                    : publicAccess === "view"
+                      ? "Anyone with the link (Read)"
+                      : "Anyone with the link (Write)"}
+                </div>
+              </div>
+            </div>
+
+            {isOwner ? (
+              <select
+                value={publicAccess}
+                onChange={(e) => handlePublicAccessChange(e.target.value)}
+                style={{
+                  background: "var(--bg-input)",
+                  border: "1px solid var(--border-medium)",
+                  borderRadius: "8px",
+                  padding: "6px 10px",
+                  fontSize: "12px",
+                  fontWeight: 500,
+                  color: "var(--text-primary)",
+                  outline: "none",
+                  cursor: "pointer"
+                }}
+              >
+                <option value="none">🔒 Restricted</option>
+                <option value="view">🌐 Anyone with link (Read)</option>
+                <option value="edit">🌐 Anyone with link (Write)</option>
+              </select>
+            ) : (
+              <span style={{ fontSize: "12px", color: "var(--text-muted)", fontWeight: 500 }}>
+                {publicAccess === "none" ? "Restricted" : "Public"}
+              </span>
             )}
           </div>
+
         </div>
 
-        {/* Footer Actions */}
-        <div className="flex items-center justify-between border-t border-[var(--border-subtle)] pt-3 mt-1">
+        {/* Footer */}
+        <div 
+          style={{
+            padding: "14px 24px",
+            borderTop: "1px solid var(--border-subtle)",
+            background: "var(--bg-panel)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between"
+          }}
+        >
           <button
             type="button"
-            onClick={copyAllLinksToClipboard}
-            className={`flex items-center justify-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-bold border transition-all cursor-pointer ${
-              copied 
-                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" 
-                : "bg-transparent border-[var(--border-medium)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
-            }`}
+            onClick={() => copyLinkToClipboard(primaryLink, "primary")}
+            style={{
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-medium)",
+              color: copied ? "var(--emerald)" : "var(--text-primary)",
+              borderRadius: "8px",
+              padding: "7px 14px",
+              fontSize: "12.5px",
+              fontWeight: 600,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              transition: "all 0.15s"
+            }}
           >
-            {copied ? (
-              <>
-                <Check className="w-3.5 h-3.5 text-emerald-400" />
-                <span>All Links Copied!</span>
-              </>
-            ) : (
-              <>
-                <Link className="w-3.5 h-3.5" />
-                <span>Copy Direct Links (All {allDirectLinks.length})</span>
-              </>
-            )}
+            {copied ? <Check size={14} /> : <Link2 size={14} />}
+            <span>{copied ? "Link copied!" : "Copy link"}</span>
           </button>
 
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black px-5 py-1.5 transition-all cursor-pointer shadow-sm active:scale-[0.98]"
+            style={{
+              background: "var(--accent)",
+              color: "#ffffff",
+              border: "none",
+              borderRadius: "8px",
+              padding: "7px 22px",
+              fontSize: "12.5px",
+              fontWeight: 600,
+              cursor: "pointer",
+              transition: "opacity 0.15s"
+            }}
           >
             Done
           </button>

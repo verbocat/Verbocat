@@ -3,12 +3,12 @@ const { supabase } = require("../src/config/supabase");
 async function checkSchemas() {
   console.log("=== DETAILED SCHEMA INSPECTION ===");
 
-  // 1. document_access_requests insert test / select keys
-  const { data: dar, error: darErr } = await supabase.from("document_access_requests").select("*").limit(1);
-  if (darErr) {
-    console.log("document_access_requests Error:", darErr);
+  // 1. documents select
+  const { data: doc, error: docErr } = await supabase.from("documents").select("*").limit(1);
+  if (docErr) {
+    console.log("documents error:", docErr);
   } else {
-    console.log("document_access_requests sample keys:", dar);
+    console.log("documents keys:", doc.length > 0 ? Object.keys(doc[0]) : "No docs");
   }
 
   // 2. translation_jobs
