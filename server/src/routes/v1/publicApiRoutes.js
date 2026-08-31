@@ -1078,15 +1078,20 @@ publicApiRouter.post("/wordpress/submit-batch-human-review", async (req, res) =>
         await dbClient.from("document_segments").insert(segmentInserts.slice(i, i + BATCH_SIZE));
       }
 
+      // Check if WordPress or caller provided explicit linguist assignments per language
+      const explicitAssignments = page.linguist_assignments || {};
+      const hasAnyExplicitAssignment = Object.values(explicitAssignments).some(val => val && String(val).trim().length > 0);
+
       // Pre-create translation segments & assign linguists for each target language
       for (const tLang of targetLangs) {
-        let assignedLinguistId = page.linguist_assignments?.[tLang] || null;
+        let assignedLinguistId = explicitAssignments[tLang] || null;
 
-        // Auto-assign first qualified approved linguist if not explicitly set
-        if (!assignedLinguistId) {
+        // ONLY fallback to auto-assign if NO linguists were configured at all in the request
+        // AND strictly match the target language code (preventing 1 linguist from getting 3 duplicate assignments)
+        if (!assignedLinguistId && !hasAnyExplicitAssignment) {
           const tTokens = expandLanguageTokens(tLang);
           const matched = approvedLinguistsSummary.find(l => 
-            l.target_languages.some(tl => tTokens.includes(tl) || tl === "all")
+            l.target_languages.some(tl => tTokens.includes(tl))
           );
           if (matched) {
             assignedLinguistId = matched.user_id;
