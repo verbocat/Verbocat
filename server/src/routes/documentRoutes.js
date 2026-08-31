@@ -141,145 +141,170 @@ documentRouter.get(["/documents/assigned", "/api/documents/assigned"], checkAuth
   try {
     const userId = request.user.id;
     const userEmail = request.user.email?.trim().toLowerCase();
+    const db = supabaseAdmin || supabase;
 
-    // Find all matching profile IDs for this user email to guarantee no missing access records
-    const { data: userProfiles } = await supabase
+    // Find all matching profile IDs and linguist profile IDs for this user email
+    const { data: userProfiles } = await db
       .from("profiles")
       .select("id")
       .ilike("email", userEmail || "");
 
-    const validUserIds = Array.from(new Set([userId, ...(userProfiles || []).map(p => p.id)].filter(Boolean)));
+    const { data: linguistProfs } = await db
+      .from("linguist_profiles")
+      .select("id, user_id")
+      .ilike("email", userEmail || "");
 
-    // Query document_access for this user
-    const { data: accessRows, error: accessErr } = await supabase
+    const validUserIds = Array.from(new Set([
+      userId, 
+      ...(userProfiles || []).map(p => p.id),
+      ...(linguistProfs || []).map(lp => lp.user_id),
+      ...(linguistProfs || []).map(lp => lp.id)
+    ].filter(Boolean)));
+
+    // 1. Query document_access for this user
+    const { data: accessRows } = await db
       .from("document_access")
       .select("*, documents(*, projects(*))")
       .in("user_id", validUserIds)
       .order("created_at", { ascending: false });
 
-    if (accessErr) {
-      console.error("[FETCH_ASSIGNED_ERR]", accessErr);
-    }
+    // 2. Query document_collaborators for this user
+    const { data: collabRows } = await db
+      .from("document_collaborators")
+      .select("*, documents(*, projects(*))")
+      .in("user_id", validUserIds);
+
+    // 3. Query all projects where settings.linguistAssignments contains any of validUserIds
+    const { data: wpProjects } = await db
+      .from("projects")
+      .select("*, documents(*)")
+      .order("created_at", { ascending: false });
 
     const assignedList = [];
     const seenKeys = new Set();
 
-    const activeTenantId = request.tenant?.id || request.profile?.organization_id;
-    const isSuperAdmin = request.profile?.role === "super_admin";
+    // Helper to process document assignment
+    const addAssignment = (doc, proj, assignedLang, assignStatus, perm, assignerEmail, reason, completedAt, declinedAt) => {
+      if (!doc || !doc.id) return;
+      const lang = assignedLang || doc.target_lang || "hi";
+      const key = `${doc.id}_${lang}`;
+      if (seenKeys.has(key)) return;
+      seenKeys.add(key);
 
-    if (accessRows && accessRows.length > 0) {
-      for (const row of accessRows) {
-        const doc = row.documents;
-        if (!doc) continue;
+      const docMeta = proj?.settings?.documentsMetadata?.[doc.id] || doc.metadata || {};
+      const isWordPress = docMeta.source_type === "wordpress" || doc.name?.startsWith("WP:");
 
-        // STRICT MULTI-TENANT ISOLATION: Filter out assigned documents belonging to another client workspace
-        if (activeTenantId && doc.organization_id && doc.organization_id !== activeTenantId) {
-          continue;
+      assignedList.push({
+        id: `${doc.id}_${lang}`,
+        documentId: doc.id,
+        fileId: doc.file_id || doc.id,
+        documentName: doc.name || "Untitled Document",
+        projectId: doc.project_id || proj?.id || "",
+        projectName: proj?.name || "Translation Project",
+        sourceLang: doc.source_lang || proj?.source_lang || "en",
+        targetLang: lang,
+        permission: perm || "write",
+        assignedAt: doc.created_at || new Date().toISOString(),
+        assignerEmail: assignerEmail || "Project Coordinator",
+        assignerRole: "Project Coordinator",
+        sourceType: isWordPress ? "wordpress" : "generic",
+        metadata: docMeta,
+        status: assignStatus || "active",
+        declinedReason: reason || null,
+        completedAt: completedAt || null,
+        declinedAt: declinedAt || null
+      });
+    };
+
+    // A. Process direct document_access
+    for (const row of accessRows || []) {
+      const doc = row.documents;
+      if (!doc) continue;
+      const proj = doc.projects || {};
+      const linguistAssignments = proj.settings?.linguistAssignments || {};
+      const userAssignments = validUserIds.flatMap(uId => linguistAssignments[uId] || []);
+      const matchingDocAssignments = userAssignments.filter(a => a.documentId === doc.id);
+
+      if (matchingDocAssignments.length > 0) {
+        for (const assignment of matchingDocAssignments) {
+          addAssignment(
+            doc,
+            proj,
+            assignment.targetLang,
+            assignment.status || "active",
+            assignment.permission || row.permission || "write",
+            proj.owner_id ? "Project Coordinator" : null,
+            assignment.declinedReason,
+            assignment.completedAt,
+            assignment.declinedAt
+          );
         }
+      } else {
+        addAssignment(
+          doc,
+          proj,
+          doc.target_lang || "hi",
+          doc.status === "completed" ? "completed" : "active",
+          row.permission || "write",
+          "Project Coordinator",
+          null,
+          null,
+          null
+        );
+      }
+    }
 
-        const proj = doc.projects || {};
-        const ownerId = doc.owner_id || proj.owner_id;
+    // B. Process document_collaborators
+    for (const row of collabRows || []) {
+      const doc = row.documents;
+      if (!doc) continue;
+      const proj = doc.projects || {};
+      addAssignment(
+        doc,
+        proj,
+        row.target_lang || doc.target_lang || "hi",
+        "active",
+        row.role === "editor" ? "write" : "read",
+        "Project Coordinator",
+        null,
+        null,
+        null
+      );
+    }
 
-        let assignerEmail = "Project Coordinator";
-        if (ownerId) {
-          const { data: ownerProf } = await supabase
-            .from("profiles")
-            .select("email")
-            .eq("id", ownerId)
-            .maybeSingle();
-          if (ownerProf?.email) {
-            assignerEmail = ownerProf.email;
-          }
-        }
-
-        const docMeta = proj.settings?.documentsMetadata?.[doc.id] || doc.metadata || {};
-        const isWordPress = docMeta.source_type === "wordpress" || doc.name?.startsWith("WP:");
-
-        // Check if specific target languages were assigned to this linguist in project settings
-        const linguistAssignments = proj.settings?.linguistAssignments || {};
-        const userAssignments = validUserIds.flatMap(uId => linguistAssignments[uId] || []);
-        const matchingDocAssignments = userAssignments.filter(a => a.documentId === doc.id);
-
-        if (matchingDocAssignments.length > 0) {
-          for (const assignment of matchingDocAssignments) {
-            const assignedLang = assignment.targetLang;
-            const key = `${doc.id}_${assignedLang}`;
-            if (seenKeys.has(key)) continue;
-            seenKeys.add(key);
-
-            const assignStatus = assignment.status || (doc.status === "completed" ? "completed" : "active");
-
-            assignedList.push({
-              id: `${row.id}_${assignedLang}`,
-              documentId: doc.id,
-              fileId: doc.file_id || doc.id,
-              documentName: doc.name || "Untitled Document",
-              projectId: doc.project_id || proj.id || "",
-              projectName: proj.name || "Translation Project",
-              sourceLang: doc.source_lang || proj.source_lang || "en",
-              targetLang: assignedLang,
-              permission: assignment.permission || row.permission || "write",
-              assignedAt: row.created_at || doc.created_at,
-              assignerEmail,
-              assignerRole: "Project Coordinator",
-              sourceType: isWordPress ? "wordpress" : "generic",
-              metadata: docMeta,
-              status: assignStatus,
-              declinedReason: assignment.declinedReason || null,
-              completedAt: assignment.completedAt || null,
-              declinedAt: assignment.declinedAt || null
-            });
-          }
-        } else {
-          // Detect exact target language code fallback
-          let tLang = doc.target_lang;
-          if (!tLang || tLang === "hi") {
-            const match = doc.name?.match(/_([a-z]{2,3})\.[a-z0-9]+$/i);
-            if (match && match[1]) {
-              tLang = match[1].toLowerCase();
-            }
-          }
-          if (!tLang && proj.target_languages && proj.target_languages.length > 0) {
-            tLang = proj.target_languages[0];
-          }
-          if (!tLang) {
-            tLang = "hi";
-          }
-
-          const key = `${doc.id}_${tLang}`;
-          if (seenKeys.has(key)) continue;
-          seenKeys.add(key);
-
-          const assignStatus = doc.status === "completed" ? "completed" : "active";
-
-          assignedList.push({
-            id: row.id,
-            documentId: doc.id,
-            fileId: doc.file_id || doc.id,
-            documentName: doc.name || "Untitled Document",
-            projectId: doc.project_id || proj.id || "",
-            projectName: proj.name || "Translation Project",
-            sourceLang: doc.source_lang || proj.source_lang || "en",
-            targetLang: tLang,
-            permission: row.permission || "write",
-            assignedAt: row.created_at || doc.created_at,
-            assignerEmail,
-            assignerRole: "Project Coordinator",
-            sourceType: isWordPress ? "wordpress" : "generic",
-            metadata: docMeta,
-            status: assignStatus,
-            declinedReason: null,
-            completedAt: null,
-            declinedAt: null
-          });
+    // C. Process projects with JSON linguistAssignments
+    for (const proj of wpProjects || []) {
+      const linguistAssignments = proj.settings?.linguistAssignments || {};
+      const userAssignments = validUserIds.flatMap(uId => linguistAssignments[uId] || []);
+      if (userAssignments.length > 0) {
+        const projDocs = Array.isArray(proj.documents) ? proj.documents : [];
+        for (const assignment of userAssignments) {
+          const doc = projDocs.find(d => d.id === assignment.documentId) || {
+            id: assignment.documentId,
+            name: proj.settings?.documentsMetadata?.[assignment.documentId]?.wp_post_id ? `WP: Post #${proj.settings.documentsMetadata[assignment.documentId].wp_post_id}` : "WordPress Document",
+            project_id: proj.id,
+            target_lang: assignment.targetLang,
+            source_lang: proj.source_lang || "en"
+          };
+          addAssignment(
+            doc,
+            proj,
+            assignment.targetLang,
+            assignment.status || "active",
+            assignment.permission || "write",
+            "Project Coordinator",
+            assignment.declinedReason,
+            assignment.completedAt,
+            assignment.declinedAt
+          );
         }
       }
     }
 
     response.json({ assignments: assignedList });
   } catch (error) {
-    console.error("Fetch Assigned Documents Error:", error);
-    response.json({ assignments: [] });
+    console.error("[ASSIGNED_DOCS_ERROR]", error);
+    response.status(500).json({ error: "Failed to fetch assigned tasks." });
   }
 });
 

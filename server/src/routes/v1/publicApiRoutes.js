@@ -1114,17 +1114,20 @@ ${htmlContent}
       }
 
       // Check if WordPress or caller provided explicit linguist assignments per language
-      const explicitAssignments = page.linguist_assignments || {};
+      const explicitAssignments = page.linguist_assignments || req.body.linguist_assignments || {};
       const hasAnyExplicitAssignment = Object.values(explicitAssignments).some(val => val && String(val).trim().length > 0);
 
       // Pre-create translation segments & assign linguists for each target language
       for (const tLang of targetLangs) {
-        let assignedLinguistId = explicitAssignments[tLang] || null;
+        const cleanTLang = String(tLang).toLowerCase().trim();
+        const baseCode = cleanTLang.split(/[-_]/)[0];
+
+        let assignedLinguistId = explicitAssignments[cleanTLang] || explicitAssignments[tLang] || explicitAssignments[baseCode] || null;
 
         // ONLY fallback to auto-assign if NO linguists were configured at all in the request
-        // AND strictly match the target language code (preventing 1 linguist from getting 3 duplicate assignments)
+        // AND strictly match the target language code
         if (!assignedLinguistId && !hasAnyExplicitAssignment) {
-          const tTokens = expandLanguageTokens(tLang);
+          const tTokens = expandLanguageTokens(cleanTLang);
           const matched = approvedLinguistsSummary.find(l => 
             l.target_languages.some(tl => tTokens.includes(tl))
           );
@@ -1146,7 +1149,7 @@ ${htmlContent}
         const targetInserts = (parseResult.segments || []).map((seg, idx) => ({
           document_id: documentId,
           segment_index: idx + 1,
-          target_lang: tLang,
+          target_lang: cleanTLang,
           source_text: seg.source || "",
           target_text: "",
           status: "draft"
@@ -1167,14 +1170,15 @@ ${htmlContent}
             }, { onConflict: "document_id,user_id" });
           } catch (_) {}
 
-          // 2. Track in project assignments
+          // 2. Track in project assignments with active status
           if (!projectLinguistAssignments[resolvedUserId]) {
             projectLinguistAssignments[resolvedUserId] = [];
           }
           projectLinguistAssignments[resolvedUserId].push({
             documentId: documentId,
-            targetLang: tLang,
-            permission: "write"
+            targetLang: cleanTLang,
+            permission: "write",
+            status: "active"
           });
 
           // 3. Upsert into document_collaborators
@@ -1183,7 +1187,7 @@ ${htmlContent}
               document_id: documentId,
               user_id: resolvedUserId,
               role: "editor",
-              target_lang: tLang
+              target_lang: cleanTLang
             }, { onConflict: "document_id,user_id,target_lang" });
           } catch (_) {}
         }
