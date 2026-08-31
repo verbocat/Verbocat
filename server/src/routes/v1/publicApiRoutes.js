@@ -756,7 +756,60 @@ publicApiRouter.post("/keys/generate", async (req, res) => {
 });
 
 /**
- * 10. WordPress Integration: List Approved Linguists by Language
+ * 10. WordPress Integration: List Approved Linguists by Languageconst LANGUAGE_ALIASES = {
+  hindi: ["hi", "hindi"],
+  punjabi: ["pa", "punjabi", "gurmukhi"],
+  bengali: ["bn", "bengali"],
+  tamil: ["ta", "tamil"],
+  telugu: ["te", "telugu"],
+  marathi: ["mr", "marathi"],
+  gujarati: ["gu", "gujarati"],
+  urdu: ["ur", "urdu"],
+  kannada: ["kn", "kannada"],
+  malayalam: ["ml", "malayalam"],
+  spanish: ["es", "spanish", "es-es", "es-mx"],
+  french: ["fr", "french", "fr-fr"],
+  german: ["de", "german", "de-de"],
+  italian: ["it", "italian"],
+  portuguese: ["pt", "portuguese", "pt-br", "pt-pt"],
+  russian: ["ru", "russian"],
+  chinese: ["zh", "chinese", "zh-cn", "zh-tw"],
+  japanese: ["ja", "japanese"],
+  arabic: ["ar", "arabic"],
+  dutch: ["nl", "dutch"],
+  polish: ["pl", "polish"],
+  turkish: ["tr", "turkish"],
+  korean: ["ko", "korean"],
+  vietnamese: ["vi", "vietnamese"],
+  swedish: ["sv", "swedish"],
+  norwegian: ["no", "norwegian"],
+  danish: ["da", "danish"],
+  finnish: ["fi", "finnish"],
+  greek: ["el", "greek"],
+  hebrew: ["he", "hebrew"],
+  thai: ["th", "thai"],
+  indonesian: ["id", "indonesian"],
+  malay: ["ms", "malay"],
+  czech: ["cs", "czech"],
+  romanian: ["ro", "romanian"],
+  hungarian: ["hu", "hungarian"],
+  english: ["en", "english", "en-us", "en-gb"]
+};
+
+function expandLanguageTokens(langStr) {
+  if (!langStr) return [];
+  const normalized = String(langStr).toLowerCase().replace(/[\(\)\-_]/g, " ").trim();
+  const tokens = new Set([normalized, String(langStr).toLowerCase().trim()]);
+  
+  for (const [key, aliases] of Object.entries(LANGUAGE_ALIASES)) {
+    if (normalized.includes(key) || aliases.some(a => normalized.includes(a) || a === normalized)) {
+      aliases.forEach(a => tokens.add(a));
+    }
+  }
+  return Array.from(tokens);
+}
+
+/**
  * GET /api/v1/wordpress/linguists
  * Query: ?target_lang=hi
  */
@@ -764,26 +817,30 @@ publicApiRouter.get("/wordpress/linguists", async (req, res) => {
   try {
     const targetLang = req.query.target_lang ? req.query.target_lang.toLowerCase().trim() : null;
     const orgId = req.organization?.id || req.profile?.organization_id || null;
+    const dbClient = supabaseAdmin || supabase;
 
     // 1. Fetch linguist profiles that are approved / active
-    let query = supabase
+    let query = dbClient
       .from("linguist_profiles")
-      .select("id, user_id, full_name, email, primary_language, secondary_languages, status, availability, years_of_experience")
+      .select("id, user_id, full_name, email, primary_language, secondary_languages, status, availability, years_of_experience, organization_id")
       .in("status", ["approved", "active"]);
 
     if (orgId) {
       query = query.or(`organization_id.eq.${orgId},organization_id.is.null`);
     }
 
-    const { data: linguistProfiles } = await query;
+    const { data: linguistProfiles, error: lpErr } = await query;
+    if (lpErr) {
+      console.warn("[WORDPRESS_LINGUISTS_LP_WARN]", lpErr.message);
+    }
 
     // 2. Also fetch approved linguist language pairs
-    const { data: langPairs } = await supabase
+    const { data: langPairs } = await dbClient
       .from("linguist_language_pairs")
       .select("linguist_profile_id, source_language, target_language, proficiency, is_native");
 
     // 3. Also check general profiles table for users with role 'linguist' or 'in_region_reviewer'
-    const { data: userProfiles } = await supabase
+    const { data: userProfiles } = await dbClient
       .from("profiles")
       .select("id, name, full_name, email, role, status")
       .in("role", ["linguist", "in_region_reviewer"])
@@ -795,12 +852,19 @@ publicApiRouter.get("/wordpress/linguists", async (req, res) => {
     (linguistProfiles || []).forEach(lp => {
       const pairs = (langPairs || []).filter(p => p.linguist_profile_id === lp.id);
       const supportedTargets = new Set();
-      if (lp.primary_language) supportedTargets.add(lp.primary_language.toLowerCase().trim());
+
+      if (lp.primary_language) {
+        expandLanguageTokens(lp.primary_language).forEach(t => supportedTargets.add(t));
+      }
       if (Array.isArray(lp.secondary_languages)) {
-        lp.secondary_languages.forEach(sl => supportedTargets.add(sl.toLowerCase().trim()));
+        lp.secondary_languages.forEach(sl => {
+          expandLanguageTokens(sl).forEach(t => supportedTargets.add(t));
+        });
       }
       pairs.forEach(p => {
-        if (p.target_language) supportedTargets.add(p.target_language.toLowerCase().trim());
+        if (p.target_language) {
+          expandLanguageTokens(p.target_language).forEach(t => supportedTargets.add(t));
+        }
       });
 
       linguistsMap.set(lp.id, {
@@ -811,7 +875,7 @@ publicApiRouter.get("/wordpress/linguists", async (req, res) => {
         primary_language: lp.primary_language,
         target_languages: Array.from(supportedTargets),
         status: lp.status,
-        experience: lp.years_of_experience
+        experience: lp.years_of_experience || 1
       });
     });
 
@@ -825,7 +889,7 @@ publicApiRouter.get("/wordpress/linguists", async (req, res) => {
           name: up.name || up.full_name || up.email.split("@")[0],
           email: up.email,
           primary_language: "All",
-          target_languages: ["hi", "pa", "es", "fr", "de", "ar", "ur", "gu", "ta", "te", "bn", "mr", "it", "pt", "ru", "zh", "ja"],
+          target_languages: Object.values(LANGUAGE_ALIASES).flat(),
           status: up.status,
           experience: 5
         });
@@ -836,8 +900,12 @@ publicApiRouter.get("/wordpress/linguists", async (req, res) => {
 
     // If target_lang filter requested, filter linguists that support this target language
     if (targetLang) {
+      const targetTokens = expandLanguageTokens(targetLang);
       resultList = resultList.filter(l => {
-        return l.target_languages.some(tl => tl.toLowerCase().includes(targetLang) || targetLang.includes(tl.toLowerCase()) || tl === "all");
+        if (!l.target_languages || l.target_languages.length === 0) return true;
+        return l.target_languages.some(tl => 
+          targetTokens.includes(tl) || targetTokens.some(tok => tl.includes(tok) || tok.includes(tl)) || tl === "all"
+        );
       });
     }
 

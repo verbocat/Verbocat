@@ -928,6 +928,94 @@ class Verbocat_Settings {
                 }
             });
 
+            // DYNAMIC LINGUIST MAPPING TABLE IN SECTION 3.5
+            var vbAllLanguages = <?php echo json_encode($all_languages); ?>;
+            var vbOptionName = '<?php echo esc_js(self::$option_name); ?>';
+            var vbSavedAssignments = <?php echo json_encode($opts['linguist_assignments'] ?? []); ?>;
+            var cachedLinguists = [];
+
+            function renderLinguistMappingTable(linguists) {
+                var $container = $('#vb_linguist_mapping_container');
+                var selectedLangs = [];
+                $('.vb-global-lang-cb:checked').each(function() {
+                    selectedLangs.push($(this).val());
+                });
+
+                if (selectedLangs.length === 0) {
+                    $container.html(
+                        '<div style="text-align: center; padding: 24px; color: #64748b; background: #f8fafc; border-radius: 8px; border: 1px dashed #cbd5e1; font-size: 13px;">' +
+                        '<?php _e('No target languages selected above. Please select at least one target language in Section 3 to configure linguist assignments.', 'verbocat-connector'); ?>' +
+                        '</div>'
+                    );
+                    return;
+                }
+
+                var html = '<table class="widefat fixed striped" style="border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden;">' +
+                    '<thead>' +
+                    '<tr style="background: #f8fafc;">' +
+                    '<th style="font-weight: 700; color: #334155; width: 240px; padding: 10px 14px;"><?php _e('Target Language', 'verbocat-connector'); ?></th>' +
+                    '<th style="font-weight: 700; color: #334155; padding: 10px 14px;"><?php _e('Assigned Centroid Linguist', 'verbocat-connector'); ?></th>' +
+                    '<th style="font-weight: 700; color: #334155; width: 140px; text-align: center; padding: 10px 14px;"><?php _e('Routing Status', 'verbocat-connector'); ?></th>' +
+                    '</tr>' +
+                    '</thead>' +
+                    '<tbody>';
+
+                selectedLangs.forEach(function(tcode) {
+                    var lmeta = vbAllLanguages[tcode] || { name: tcode.toUpperCase(), flag: '🌐' };
+                    var assignedId = vbSavedAssignments[tcode] || '';
+
+                    // Filter linguists for this target language
+                    var langCode = tcode.toLowerCase();
+                    var matched = (linguists || []).filter(function(l) {
+                        if (!l.target_languages || l.target_languages.length === 0) return true;
+                        return l.target_languages.some(function(tl) {
+                            var tll = tl.toLowerCase();
+                            return tll.indexOf(langCode) !== -1 || langCode.indexOf(tll) !== -1 || tll === 'all';
+                        });
+                    });
+
+                    var isDedicated = assignedId ? true : false;
+                    var badgeBg = isDedicated ? '#ecfdf5' : '#f1f5f9';
+                    var badgeColor = isDedicated ? '#059669' : '#64748b';
+                    var badgeBorder = isDedicated ? '#a7f3d0' : '#e2e8f0';
+                    var badgeText = isDedicated ? '✓ Dedicated' : 'Auto Pool';
+
+                    var countLabel = linguists && linguists.length ? ' (' + matched.length + ' qualified)' : '';
+
+                    html += '<tr data-lang="' + tcode + '" class="vb-linguist-row">' +
+                        '<td style="padding: 10px 14px; vertical-align: middle;">' +
+                        '<div style="display: flex; align-items: center; gap: 8px;">' +
+                        '<span style="font-size: 18px;">' + lmeta.flag + '</span>' +
+                        '<div>' +
+                        '<strong style="color: #0f172a; font-size: 13px;">' + lmeta.name + '</strong>' +
+                        '<span style="color: #64748b; font-size: 11px; margin-left: 4px;">(' + tcode.toUpperCase() + ')</span>' +
+                        '</div>' +
+                        '</div>' +
+                        '</td>' +
+                        '<td style="padding: 10px 14px; vertical-align: middle;">' +
+                        '<select name="' + vbOptionName + '[linguist_assignments][' + tcode + ']" class="vb-linguist-select" data-lang="' + tcode + '" style="width: 100%; max-width: 440px; border-radius: 6px; font-size: 12px; height: 32px; border: 1px solid #cbd5e1;">' +
+                        '<option value="">-- Auto-Assign / Any Qualified Linguist' + countLabel + ' --</option>';
+
+                    matched.forEach(function(l) {
+                        var isSel = (String(l.id) === String(assignedId) || String(l.profile_id) === String(assignedId)) ? ' selected="selected"' : '';
+                        var expText = l.experience ? ' (' + l.experience + ' yrs exp)' : '';
+                        html += '<option value="' + (l.id || l.profile_id) + '"' + isSel + '>' + (l.name || l.email) + ' &lt;' + l.email + '&gt;' + expText + '</option>';
+                    });
+
+                    html += '</select>' +
+                        '</td>' +
+                        '<td style="padding: 10px 14px; text-align: center; vertical-align: middle;">' +
+                        '<span class="vb-linguist-status-badge" style="font-size: 11px; padding: 3px 8px; border-radius: 12px; font-weight: 600; background: ' + badgeBg + '; color: ' + badgeColor + '; border: 1px solid ' + badgeBorder + ';">' +
+                        badgeText +
+                        '</span>' +
+                        '</td>' +
+                        '</tr>';
+                });
+
+                html += '</tbody></table>';
+                $container.html(html);
+            }
+
             // FETCH & POPULATE CENTROID LINGUISTS
             function fetchAndPopulateLinguists(showToast) {
                 var $btn = $('#vb_refresh_linguists_btn');
@@ -943,43 +1031,14 @@ class Verbocat_Settings {
                     success: function(response) {
                         $btn.prop('disabled', false).find('span').text('🔄');
                         if (response.success && response.data && response.data.linguists) {
-                            var linguists = response.data.linguists;
-                            
-                            $('.vb-linguist-select').each(function() {
-                                var $sel = $(this);
-                                var langCode = ($sel.data('lang') || '').toLowerCase();
-                                var currentVal = $sel.data('current') || $sel.val();
-
-                                // Filter linguists matching this target language
-                                var matched = linguists.filter(function(l) {
-                                    if (!l.target_languages || l.target_languages.length === 0) return true;
-                                    return l.target_languages.some(function(tl) {
-                                        return tl.toLowerCase().indexOf(langCode) !== -1 || langCode.indexOf(tl.toLowerCase()) !== -1 || tl === 'all';
-                                    });
-                                });
-
-                                var html = '<option value="">-- Auto-Assign / Any Qualified Linguist (' + matched.length + ' available) --</option>';
-                                matched.forEach(function(l) {
-                                    var isSel = (String(l.id) === String(currentVal) || String(l.profile_id) === String(currentVal)) ? ' selected="selected"' : '';
-                                    var expText = l.experience ? ' (' + l.experience + ' yrs exp)' : '';
-                                    html += '<option value="' + l.id + '"' + isSel + '>' + (l.name || l.email) + ' &lt;' + l.email + '&gt;' + expText + '</option>';
-                                });
-
-                                $sel.html(html);
-
-                                // Update status badge
-                                var $badge = $sel.closest('tr').find('.vb-linguist-status-badge');
-                                if ($sel.val()) {
-                                    $badge.text('✓ Dedicated').css({'background': '#ecfdf5', 'color': '#059669', 'border-color': '#a7f3d0'});
-                                } else {
-                                    $badge.text('Auto Pool').css({'background': '#f1f5f9', 'color': '#64748b', 'border-color': '#e2e8f0'});
-                                }
-                            });
+                            cachedLinguists = response.data.linguists;
+                            renderLinguistMappingTable(cachedLinguists);
 
                             if (showToast) {
-                                alert('<?php _e('✓ Linguist directory refreshed successfully from Centroid!', 'verbocat-connector'); ?>');
+                                alert('<?php _e('✓ Linguist directory refreshed successfully from Centroid! Found ', 'verbocat-connector'); ?>' + cachedLinguists.length + ' linguist(s).');
                             }
                         } else {
+                            renderLinguistMappingTable(cachedLinguists);
                             if (showToast) {
                                 alert(response.data && response.data.message ? response.data.message : '<?php _e('Failed to fetch linguists list.', 'verbocat-connector'); ?>');
                             }
@@ -987,12 +1046,25 @@ class Verbocat_Settings {
                     },
                     error: function() {
                         $btn.prop('disabled', false).find('span').text('🔄');
+                        renderLinguistMappingTable(cachedLinguists);
                         if (showToast) {
                             alert('<?php _e('Could not connect to Centroid API. Please check your API key & URL.', 'verbocat-connector'); ?>');
                         }
                     }
                 });
             }
+
+            // Real-time re-render when languages are checked/unchecked in Section 3
+            $(document).on('change', '.vb-global-lang-cb', function() {
+                renderLinguistMappingTable(cachedLinguists);
+            });
+
+            // Re-render when Select All or Clear All is clicked
+            $('#vb_select_all_langs, #vb_clear_all_langs').on('click', function() {
+                setTimeout(function() {
+                    renderLinguistMappingTable(cachedLinguists);
+                }, 50);
+            });
 
             // Auto-fetch on page load
             fetchAndPopulateLinguists(false);
@@ -1003,11 +1075,15 @@ class Verbocat_Settings {
                 fetchAndPopulateLinguists(true);
             });
 
-            // Update badge on dropdown change
+            // Update badge & cached value on dropdown change
             $(document).on('change', '.vb-linguist-select', function() {
                 var $sel = $(this);
+                var langCode = $sel.data('lang');
+                var val = $sel.val();
+                vbSavedAssignments[langCode] = val;
+
                 var $badge = $sel.closest('tr').find('.vb-linguist-status-badge');
-                if ($sel.val()) {
+                if (val) {
                     $badge.text('✓ Dedicated').css({'background': '#ecfdf5', 'color': '#059669', 'border-color': '#a7f3d0'});
                 } else {
                     $badge.text('Auto Pool').css({'background': '#f1f5f9', 'color': '#64748b', 'border-color': '#e2e8f0'});
