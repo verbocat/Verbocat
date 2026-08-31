@@ -277,6 +277,115 @@ adminRouter.get("/users", async (request, response) => {
   }
 });
 
+// 1b. Create User Account (Admin & Super Admin)
+adminRouter.post("/users", async (request, response) => {
+  try {
+    const { email, password, role, credits_allowed, has_translate_access, organization_id, status } = request.body;
+    const currentUserRole = request.profile?.role;
+    const activeTenantId = organization_id || request.tenant?.id;
+    const activeSubdomain = request.tenant?.subdomain || "centroid";
+    const isMainSpace = ["centroid", "verbolabs"].includes(activeSubdomain.toLowerCase());
+
+    if (!email || !password) {
+      return response.status(400).json({ error: "Email and password are required to create a user account." });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+
+    // Validate workspace-specific roles
+    let assignedRole = role || "linguist";
+    if (isMainSpace) {
+      const allowedRoles = ["super_admin", "admin", "verbolabs_staff", "vendor", "linguist"];
+      if (!allowedRoles.includes(assignedRole)) {
+        return response.status(400).json({ error: `Invalid role '${assignedRole}' for Root Workspace. Allowed roles: Super Admin, Admin, Verbolabs Staff, Vendor, Linguist.` });
+      }
+      if (assignedRole === "super_admin" && currentUserRole !== "super_admin") {
+        return response.status(403).json({ error: "Only Super Admins can create another Super Admin account." });
+      }
+    } else {
+      const allowedRoles = ["admin", "in_region_reviewer", "linguist"];
+      if (!allowedRoles.includes(assignedRole)) {
+        return response.status(400).json({ error: `Invalid role '${assignedRole}' for Client Workspace. Allowed roles: Admin, In-Region Reviewer, Linguist.` });
+      }
+    }
+
+    // 1. Create User in Supabase Auth via supabaseAdmin
+    let authUser = null;
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email: cleanEmail,
+      password: password,
+      email_confirm: true,
+      user_metadata: { role: assignedRole }
+    });
+
+    if (authError) {
+      // If user already exists in auth, check if they exist in DB
+      if (authError.message?.toLowerCase().includes("already registered") || authError.status === 422) {
+        const { data: existingUserList } = await supabaseAdmin.auth.admin.listUsers();
+        const found = (existingUserList?.users || []).find(u => u.email?.toLowerCase() === cleanEmail);
+        if (!found) {
+          return response.status(400).json({ error: authError.message || "A user with this email already exists." });
+        }
+        authUser = found;
+      } else {
+        return response.status(400).json({ error: authError.message || "Failed to create auth user." });
+      }
+    } else {
+      authUser = authData.user;
+    }
+
+    const targetOrgId = activeTenantId || (isMainSpace ? null : request.profile?.organization_id);
+
+    // 2. Insert or update Profile in profiles table
+    const profilePayload = {
+      id: authUser.id,
+      email: cleanEmail,
+      role: assignedRole,
+      organization_id: targetOrgId || null,
+      credits_allowed: credits_allowed !== undefined ? Number(credits_allowed) : 50000,
+      credits_consumed: 0,
+      has_translate_access: has_translate_access !== undefined ? !!has_translate_access : true,
+      status: status || "active"
+    };
+
+    const { data: profile, error: profileErr } = await supabase
+      .from("profiles")
+      .upsert(profilePayload, { onConflict: "id" })
+      .select()
+      .single();
+
+    if (profileErr) {
+      console.error("Create User Profile Error:", profileErr);
+    }
+
+    // 3. If in a client space, create user_tenant_memberships row
+    if (targetOrgId) {
+      await supabase
+        .from("user_tenant_memberships")
+        .upsert({
+          user_id: authUser.id,
+          organization_id: targetOrgId,
+          role: assignedRole,
+          credits_allowed: credits_allowed !== undefined ? Number(credits_allowed) : 50000,
+          credits_consumed: 0,
+          has_translate_access: has_translate_access !== undefined ? !!has_translate_access : true,
+          status: status || "active"
+        }, { onConflict: "user_id,organization_id" });
+    }
+
+    response.json({
+      message: "User account created successfully",
+      user: {
+        ...profilePayload,
+        email_confirmed: true
+      }
+    });
+  } catch (error) {
+    console.error("Admin Create User Exception:", error);
+    response.status(500).json({ error: error.message || "Failed to create user account" });
+  }
+});
+
 // 2. Modify User Permissions & Credit Limits
 adminRouter.put("/users/:id", async (request, response) => {
   try {

@@ -224,34 +224,29 @@ const isPersistableProvider = (provider) =>
 const upsertTranslationMemoryBatch = async (rows) => {
   if (!rows || rows.length === 0) return;
   try {
-    const { error } = await supabase
-      .from("translation_memory")
-      .upsert(rows, { onConflict: "source_text,source_lang,target_lang" });
+    for (const row of rows) {
+      let query = supabase
+        .from("translation_memory")
+        .select("id")
+        .eq("source_text", row.source_text)
+        .eq("source_lang", row.source_lang)
+        .eq("target_lang", row.target_lang);
 
-    if (error) {
-      // Fallback for tables without composite unique index
-      for (const row of rows) {
-        let query = supabase
+      if (row.organization_id) {
+        query = query.eq("organization_id", row.organization_id);
+      } else {
+        query = query.is("organization_id", null);
+      }
+
+      const { data: existing } = await query.limit(1);
+
+      if (existing && existing.length > 0) {
+        await supabase
           .from("translation_memory")
-          .select("id")
-          .eq("source_text", row.source_text)
-          .eq("source_lang", row.source_lang)
-          .eq("target_lang", row.target_lang);
-
-        if (row.organization_id) {
-          query = query.eq("organization_id", row.organization_id);
-        }
-
-        const { data: existing } = await query.limit(1);
-
-        if (existing && existing.length > 0) {
-          await supabase
-            .from("translation_memory")
-            .update({ target_text: row.target_text, provider: row.provider })
-            .eq("id", existing[0].id);
-        } else {
-          await supabase.from("translation_memory").insert(row);
-        }
+          .update({ target_text: row.target_text, provider: row.provider })
+          .eq("id", existing[0].id);
+      } else {
+        await supabase.from("translation_memory").insert(row);
       }
     }
   } catch (err) {
@@ -268,9 +263,11 @@ const upsertLinguistIceMatch = async (sourceText, targetText, sourceLang, target
       .eq("source_text", sourceText)
       .eq("source_lang", sourceLang)
       .eq("target_lang", targetLang);
-    // Scope lookup to org space
+    // Scope lookup strictly to org space
     if (organizationId) {
       query = query.eq("organization_id", organizationId);
+    } else {
+      query = query.is("organization_id", null);
     }
     const { data: existing } = await query.limit(1);
 
@@ -291,7 +288,7 @@ const upsertLinguistIceMatch = async (sourceText, targetText, sourceLang, target
           source_lang: sourceLang,
           target_lang: targetLang,
           provider: "Linguist (ICE)",
-          organization_id: organizationId
+          organization_id: organizationId || null
         });
     }
   } catch (err) {
@@ -351,9 +348,11 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
       .select("*")
       .in("source_text", chunk)
       .eq("target_lang", target);
-    // Scope to org space (include null for legacy global entries)
+    // Scope strictly to org space
     if (organizationId) {
-      tmQuery = tmQuery.or(`organization_id.eq.${organizationId},organization_id.is.null`);
+      tmQuery = tmQuery.eq("organization_id", organizationId);
+    } else {
+      tmQuery = tmQuery.is("organization_id", null);
     }
     let { data, error } = await tmQuery;
     if (error && (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('organization_id'))) {
@@ -369,13 +368,15 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
     }
   }
 
-  // Fetch all translations for this target language to compute fuzzy matches (scoped to org)
+  // Fetch all translations for this target language to compute fuzzy matches (scoped strictly to org)
   let allTmQuery = supabase
     .from("translation_memory")
     .select("*")
     .eq("target_lang", target);
   if (organizationId) {
-    allTmQuery = allTmQuery.or(`organization_id.eq.${organizationId},organization_id.is.null`);
+    allTmQuery = allTmQuery.eq("organization_id", organizationId);
+  } else {
+    allTmQuery = allTmQuery.is("organization_id", null);
   }
   let { data: allTmList, error: allTmErr } = await allTmQuery;
   if (allTmErr && (allTmErr.code === '42703' || allTmErr.code === 'PGRST204' || allTmErr.message?.includes('organization_id'))) {

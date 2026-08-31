@@ -82,7 +82,9 @@ async function translateSrtSegments(segments, targetLang, sourceLang = "en", srt
       .in("source_text", chunk)
       .eq("target_lang", targetLang);
     if (organizationId) {
-      tmQuery = tmQuery.or(`organization_id.eq.${organizationId},organization_id.is.null`);
+      tmQuery = tmQuery.eq("organization_id", organizationId);
+    } else {
+      tmQuery = tmQuery.is("organization_id", null);
     }
     const { data } = await tmQuery;
     if (data) existingTranslations.push(...data);
@@ -136,47 +138,58 @@ async function translateSrtSegments(segments, targetLang, sourceLang = "en", srt
     // Only reuse human Linguist (ICE) matches for SRT files, ignoring old literal machine TM entries
     const tmMatch = tmMap[sourceText];
     if (tmMatch && tmMatch.provider && tmMatch.provider.startsWith("Linguist (ICE)") && tmMatch.target_text && isScriptValidForLanguage(tmMatch.target_text, targetLang, sourceText)) {
-      seg.target = tmMatch.target_text;
-      seg.provider = tmMatch.provider;
-      continue;
-    }
+  // 3. Process missing segments via sliding-window batch translation
+  if (missingSegments.length > 0) {
+    const srtSegments = missingSegments.map(s => ({
+      source: s.source,
+      index: s.index
+    }));
 
-    // Build Multi-Cue Sliding Context Window (3 preceding cues + target cue + 2 following cues)
-    const windowPayload = buildSlidingWindowPayload(results, i, 3, 2);
+    const slidingPayload = buildSlidingWindowPayload(srtSegments, 3);
     const systemPrompt = buildSrtSystemPrompt(targetLang, actualSourceLang, srtContextSettings);
+    const providerState = createProviderState();
 
-    try {
-      const estimatedTokens = 800 + Math.round(windowPayload.fullPromptText.length / 4);
-      
-      const translatedText = await enqueue({
-        type: "translation",
-        estimatedTokens,
-        userId,
-        execute: () => callAiProvider(systemPrompt, windowPayload.fullPromptText)
-      });
+    const estimatedTokens = 1500 + Math.round(srtSegments.reduce((sum, s) => sum + s.source.length, 0) / 4) * 2;
+    totalWordCount = srtSegments.reduce((sum, s) => sum + s.source.split(/\s+/).filter(Boolean).length, 0);
 
-      const cleanTranslated = String(translatedText || "").trim();
-      
-      if (cleanTranslated && isScriptValidForLanguage(cleanTranslated, targetLang, sourceText)) {
-        seg.target = cleanTranslated;
-        seg.provider = "SRT AI Engine (Pass 1)";
-      } else {
-        // Fallback to original source if translation failed script purity
-        seg.target = sourceText;
-        seg.provider = "Fallback (Raw)";
+    const translatedBatch = await enqueue({
+      type: "srt-translation",
+      estimatedTokens,
+      userId,
+      execute: async () => {
+        const payloadTexts = slidingPayload.map(p => p.currentCue);
+        const chunkResults = await providerState.translateChunk(payloadTexts, targetLang, actualSourceLang, {
+          customSystemPrompt: systemPrompt,
+          ...srtContextSettings
+        });
+        return chunkResults;
       }
-    } catch (err) {
-      console.error(`[SRT_ENGINE_ERROR] Pass 1 translation failed for cue #${seg.id}:`, err.message);
-      seg.target = sourceText;
-      seg.provider = "Fallback (Error)";
+    });
+
+    if (translatedBatch && translatedBatch.length > 0) {
+      translatedBatch.forEach((item, idx) => {
+        const origSeg = missingSegments[idx];
+        if (origSeg && item) {
+          const isValidScript = isScriptValidForLanguage(item.translated, targetLang);
+          const isIdentical = item.translated === origSeg.source && !isLegitimatelyIdentical(origSeg.source);
+
+          if (isValidScript && !isIdentical) {
+            results[origSeg.index].target = item.translated;
+            results[origSeg.index].provider = item.provider;
+          } else {
+            results[origSeg.index].target = origSeg.source;
+            results[origSeg.index].provider = "Fallback (Script Mismatch)";
+          }
+        }
+      });
     }
   }
 
-  // 4. Pass 2: Run Cinematic Dialogue Polish over consecutive subtitle blocks
+  // 4. Two-Pass Polish Pipeline for Cinema/Dialogue Flow
   try {
-    const polishedResults = await runTwoPassSrtPolish(results, srtContextSettings, targetLang, callAiProvider);
-    for (let i = 0; i < results.length; i++) {
-      if (polishedResults[i] && polishedResults[i].target) {
+    const polishedResults = await runTwoPassSrtPolish(results, targetLang, srtContextSettings, userId);
+    if (polishedResults && polishedResults.length === results.length) {
+      for (let i = 0; i < results.length; i++) {
         results[i].target = polishedResults[i].target;
         if (polishedResults[i].polished) {
           results[i].provider = "SRT Cinematic Polish Engine";
@@ -197,18 +210,38 @@ async function translateSrtSegments(segments, targetLang, sourceLang = "en", srt
 
   // 5. Save translated segments to translation_memory in background
   const memoryRows = results
-    .filter(r => r.target && r.target !== r.source && r.provider.includes("Engine"))
+    .filter(r => r.target && r.target !== r.source && r.provider && r.provider.includes("Engine"))
     .map(r => ({
       source_text: r.source,
       target_text: r.target,
       source_lang: actualSourceLang,
       target_lang: targetLang,
       provider: r.provider,
-      organization_id: organizationId
+      organization_id: organizationId || null
     }));
 
   if (memoryRows.length > 0) {
-    supabase.from("translation_memory").upsert(memoryRows, { onConflict: "source_text,source_lang,target_lang" }).catch(() => {});
+    (async () => {
+      for (const row of memoryRows) {
+        let q = supabase
+          .from("translation_memory")
+          .select("id")
+          .eq("source_text", row.source_text)
+          .eq("source_lang", row.source_lang)
+          .eq("target_lang", row.target_lang);
+        if (row.organization_id) {
+          q = q.eq("organization_id", row.organization_id);
+        } else {
+          q = q.is("organization_id", null);
+        }
+        const { data: ex } = await q.limit(1);
+        if (ex && ex.length > 0) {
+          await supabase.from("translation_memory").update({ target_text: row.target_text, provider: row.provider }).eq("id", ex[0].id);
+        } else {
+          await supabase.from("translation_memory").insert(row);
+        }
+      }
+    })().catch(() => {});
   }
 
   console.log(`[SRT_ENGINE_SUCCESS] Finished processing ${results.length} subtitle cues!`);

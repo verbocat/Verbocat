@@ -529,7 +529,9 @@ documentRouter.post(["/documents/:id/audit/start", "/api/documents/:id/audit/sta
         user_id: request.profile.id,
         email: request.profile.email,
         action: actionName,
-        word_count: wordCount
+        word_count: wordCount,
+        file_name: doc.name || "document",
+        organization_id: request.tenant?.id || request.profile?.organization_id || null
       });
 
       const newConsumed = (request.profile.credits_consumed || 0) + wordCount;

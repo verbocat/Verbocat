@@ -233,6 +233,11 @@ export const fetchAdminUsers = async () => {
   return [];
 };
 
+export const createAdminUser = async (data) => {
+  const response = await api.post("/api/admin/users", data);
+  return response.data;
+};
+
 export const updateAdminUser = async (id, data) => {
   const response = await api.put(`/api/admin/users/${id}`, data);
   return response.data;

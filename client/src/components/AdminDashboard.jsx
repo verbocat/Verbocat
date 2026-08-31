@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useUserStore } from "../services/userStore";
 import {
   fetchAdminUsers,
+  createAdminUser,
   updateAdminUser,
   deleteAdminUser,
   fetchAdminCreditLogs,
@@ -32,6 +33,17 @@ export const AdminDashboard = ({ onClose, theme }) => {
   const [editingTm, setEditingTm] = useState(null);
   const [editingTmText, setEditingTmText] = useState("");
   const [submittingTmEdit, setSubmittingTmEdit] = useState(false);
+
+  // Create User Modal State
+  const [showCreateUserModal, setShowCreateUserModal] = useState(false);
+  const [newUserEmail, setNewUserEmail] = useState("");
+  const [newUserPassword, setNewUserPassword] = useState("");
+  const [newUserRole, setNewUserRole] = useState("linguist");
+  const [newUserStatus, setNewUserStatus] = useState("active");
+  const [newUserCreditsAllowed, setNewUserCreditsAllowed] = useState(50000);
+  const [newUserTranslateAccess, setNewUserTranslateAccess] = useState(true);
+  const [newUserOrgId, setNewUserOrgId] = useState("");
+  const [submittingNewUser, setSubmittingNewUser] = useState(false);
 
   // Client Spaces Organization State
   const [organizations, setOrganizations] = useState([]);
@@ -266,6 +278,55 @@ export const AdminDashboard = ({ onClose, theme }) => {
   const [editEmailConfirmed, setEditEmailConfirmed] = useState(false);
   const [editOrganizationId, setEditOrganizationId] = useState("");
   const [submittingEdit, setSubmittingEdit] = useState(false);
+
+  const handleOpenCreateUser = () => {
+    setNewUserEmail("");
+    setNewUserPassword("");
+    const spaceParam = new URLSearchParams(window.location.search).get("space");
+    const isClientWorkspace = !!spaceParam && !["centroid", "verbolabs"].includes(spaceParam.toLowerCase());
+    setNewUserRole(isClientWorkspace ? "in_region_reviewer" : "linguist");
+    setNewUserStatus("active");
+    setNewUserCreditsAllowed(50000);
+    setNewUserTranslateAccess(true);
+    setNewUserOrgId("");
+    setShowCreateUserModal(true);
+  };
+
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    if (!newUserEmail || !newUserPassword) {
+      showToast("Email and password are required", true);
+      return;
+    }
+
+    try {
+      setSubmittingNewUser(true);
+      const payload = {
+        email: newUserEmail.trim(),
+        password: newUserPassword,
+        role: newUserRole,
+        status: newUserStatus,
+        credits_allowed: Number(newUserCreditsAllowed),
+        has_translate_access: newUserTranslateAccess
+      };
+
+      if (currentUser?.role === "super_admin" && newUserOrgId) {
+        payload.organization_id = newUserOrgId;
+      }
+
+      await createAdminUser(payload);
+      showToast(`User account created successfully for ${newUserEmail}`);
+      setShowCreateUserModal(false);
+      setNewUserEmail("");
+      setNewUserPassword("");
+      loadData();
+    } catch (err) {
+      console.error(err);
+      showToast(err.response?.data?.error || "Failed to create user account", true);
+    } finally {
+      setSubmittingNewUser(false);
+    }
+  };
 
   const handleOpenEdit = (user) => {
     setEditingUser(user);
@@ -574,6 +635,15 @@ export const AdminDashboard = ({ onClose, theme }) => {
 
           {/* Controls Container */}
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto justify-end">
+            {activeTab === "users" && (
+              <button
+                onClick={handleOpenCreateUser}
+                className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 px-4 py-2.5 text-xs font-black tracking-wide text-white shadow-lg shadow-indigo-500/20 transition-all border border-indigo-500/30 cursor-pointer shrink-0"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add User
+              </button>
+            )}
             {activeTab === "spaces" && (
               <div className="flex items-center gap-3">
                 <button
@@ -1073,6 +1143,173 @@ export const AdminDashboard = ({ onClose, theme }) => {
         )}
 
       </main>
+
+      {/* Create User Modal Overlay */}
+      {showCreateUserModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 transition-all duration-300 animate-fade-in">
+          <div className="relative w-full max-w-md overflow-hidden rounded-[28px] border border-white/10 bg-slate-900 p-7 shadow-2xl">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-white/5 mb-5">
+              <div>
+                <h3 className="text-base font-black text-white">Create New User</h3>
+                <span className="text-[10px] text-slate-400 block font-bold mt-0.5">Provision account with workspace role and permissions</span>
+              </div>
+              <button
+                onClick={() => setShowCreateUserModal(false)}
+                className="rounded-lg p-1.5 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all cursor-pointer"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateUser} className="space-y-4">
+              
+              {/* Email Address */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 select-none">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  required
+                  placeholder="user@example.com"
+                  value={newUserEmail}
+                  onChange={(e) => setNewUserEmail(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-slate-100 outline-none transition-all focus:border-indigo-500/50 text-sm"
+                />
+              </div>
+
+              {/* Password */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 select-none">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="••••••••"
+                  value={newUserPassword}
+                  onChange={(e) => setNewUserPassword(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-slate-100 outline-none transition-all focus:border-indigo-500/50 text-sm"
+                />
+              </div>
+
+              {/* Space Organization Option (Super Admin on root space) */}
+              {currentUser?.role === "super_admin" && !window.location.pathname.match(/^\/c\/([^\/]+)/) && (
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-indigo-400 mb-1.5 select-none">
+                    Target Workspace Organization
+                  </label>
+                  <select
+                    value={newUserOrgId}
+                    onChange={(e) => setNewUserOrgId(e.target.value)}
+                    className="w-full rounded-xl border border-indigo-500/30 bg-black/50 px-3.5 py-2.5 text-slate-100 outline-none transition-all focus:border-indigo-500 text-sm cursor-pointer"
+                  >
+                    <option value="">Default (VerboLabs Root)</option>
+                    {organizations.map(org => (
+                      <option key={org.id} value={org.id}>{org.name} (/c/{org.subdomain})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Role Option */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 select-none">
+                  Account Role Badge
+                </label>
+                {(() => {
+                  const spaceParam = new URLSearchParams(window.location.search).get("space");
+                  const isClientWorkspace = !!spaceParam && !["centroid", "verbolabs"].includes(spaceParam.toLowerCase());
+
+                  if (isClientWorkspace) {
+                    return (
+                      <select
+                        value={newUserRole}
+                        onChange={(e) => setNewUserRole(e.target.value)}
+                        className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-slate-100 outline-none transition-all focus:border-indigo-500/50 text-sm cursor-pointer"
+                      >
+                         <option value="in_region_reviewer">In-Region Reviewer</option>
+                         <option value="linguist">Linguist</option>
+                         <option value="admin">Admin</option>
+                      </select>
+                    );
+                  }
+
+                  return (
+                    <select
+                      value={newUserRole}
+                      onChange={(e) => setNewUserRole(e.target.value)}
+                      className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-slate-100 outline-none transition-all focus:border-indigo-500/50 text-sm cursor-pointer"
+                    >
+                       <option value="linguist">Linguist</option>
+                       <option value="vendor">Vendor Team</option>
+                       <option value="verbolabs_staff">Verbolabs Staff</option>
+                       <option value="admin">Admin</option>
+                       {currentUser?.role === "super_admin" && <option value="super_admin">Super Admin</option>}
+                    </select>
+                  );
+                })()}
+              </div>
+
+              {/* Word Credit Limit Allowance */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 select-none">
+                  Word Credit Limit Allowance
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  value={newUserCreditsAllowed}
+                  onChange={(e) => setNewUserCreditsAllowed(e.target.value)}
+                  placeholder="e.g. 50000"
+                  className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-slate-100 outline-none transition-all focus:border-indigo-500/50 text-sm"
+                />
+              </div>
+
+              {/* Translate Access Option */}
+              <div className="flex items-center gap-3 pt-1">
+                <input
+                  type="checkbox"
+                  id="new-translate-access"
+                  checked={newUserTranslateAccess}
+                  onChange={(e) => setNewUserTranslateAccess(e.target.checked)}
+                  className="h-4 w-4 rounded border-white/10 bg-black/40 text-indigo-600 focus:ring-indigo-500/20 outline-none cursor-pointer"
+                />
+                <label htmlFor="new-translate-access" className="text-xs font-bold text-slate-300 select-none cursor-pointer">
+                  Authorize "Pre-Translate" Button Actions
+                </label>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-3 pt-3 border-t border-white/5 mt-5">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateUserModal(false)}
+                  className="rounded-xl px-4 py-2.5 text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingNewUser}
+                  className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-indigo-500/15 transition-all hover:from-indigo-500 hover:to-violet-500 cursor-pointer"
+                >
+                  {submittingNewUser ? (
+                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  ) : "Create User"}
+                </button>
+              </div>
+
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Edit User Modal Overlay */}
       {editingUser && (

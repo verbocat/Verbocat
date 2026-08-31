@@ -26,7 +26,7 @@ const { translateSrtSegments } = require("../srtEngine/srtTranslationService");
 const { getDocumentRoomId } = require("../services/socket");
 const { calculateProgress } = require("../utils/segmentProgress");
 
-const syncToTranslationMemory = async (sourceText, targetText, sourceLang, targetLang) => {
+const syncToTranslationMemory = async (sourceText, targetText, sourceLang, targetLang, organizationId = null) => {
   if (!sourceText || !targetText || !targetLang) return;
   const cleanSrc = String(sourceText).replace(/<[^>]+>/g, "").trim();
   const cleanTgt = String(targetText).replace(/<[^>]+>/g, "").trim();
@@ -40,6 +40,12 @@ const syncToTranslationMemory = async (sourceText, targetText, sourceLang, targe
       .eq("source_text", cleanSrc)
       .eq("source_lang", sLang)
       .eq("target_lang", targetLang);
+
+    if (organizationId) {
+      query = query.eq("organization_id", organizationId);
+    } else {
+      query = query.is("organization_id", null);
+    }
 
     const { data: existing } = await query.limit(1);
     if (existing && existing.length > 0) {
@@ -55,7 +61,8 @@ const syncToTranslationMemory = async (sourceText, targetText, sourceLang, targe
           target_text: cleanTgt,
           source_lang: sLang,
           target_lang: targetLang,
-          provider: "Linguist (ICE)"
+          provider: "Linguist (ICE)",
+          organization_id: organizationId || null
         });
     }
   } catch (err) {
@@ -387,10 +394,11 @@ segmentRouter.put([
 
     // Sync to Translation Memory (TM) in background
     if (data && updateFields.target_text && updateFields.target_text.trim().length > 0) {
-      const { data: docInfo } = await supabase.from("documents").select("source_lang").eq("id", id).maybeSingle();
+      const { data: docInfo } = await supabase.from("documents").select("source_lang, organization_id").eq("id", id).maybeSingle();
       const sLang = docInfo?.source_lang || "en";
+      const docOrgId = docInfo?.organization_id || request.tenant?.id || request.profile?.organization_id || null;
       const sText = data.source_text || request.body.sourceText || request.body.source || "";
-      syncToTranslationMemory(sText, updateFields.target_text, sLang, targetLang);
+      syncToTranslationMemory(sText, updateFields.target_text, sLang, targetLang, docOrgId);
     }
 
     // Broadcast socket event
@@ -515,7 +523,8 @@ segmentRouter.post([
         // Sync to Translation Memory (TM) in background
         if (updateFields.target_text && updateFields.target_text.trim().length > 0) {
           const sText = data.source_text || item.source || item.sourceText || templateSourceMap.get(segIndex) || "";
-          syncToTranslationMemory(sText, updateFields.target_text, "en", targetLang);
+          const docOrgId = request.tenant?.id || request.profile?.organization_id || null;
+          syncToTranslationMemory(sText, updateFields.target_text, "en", targetLang, docOrgId);
         }
       }
 
