@@ -192,6 +192,9 @@ documentRouter.get(["/documents/assigned", "/api/documents/assigned"], checkAuth
           }
         }
 
+        const docMeta = proj.settings?.documentsMetadata?.[doc.id] || doc.metadata || {};
+        const isWordPress = docMeta.source_type === "wordpress" || doc.name?.startsWith("WP:");
+
         // Check if specific target languages were assigned to this linguist in project settings
         const linguistAssignments = proj.settings?.linguistAssignments || {};
         const userAssignments = validUserIds.flatMap(uId => linguistAssignments[uId] || []);
@@ -216,7 +219,9 @@ documentRouter.get(["/documents/assigned", "/api/documents/assigned"], checkAuth
               permission: assignment.permission || row.permission || "write",
               assignedAt: row.created_at || doc.created_at,
               assignerEmail,
-              assignerRole: "Project Coordinator"
+              assignerRole: "Project Coordinator",
+              sourceType: isWordPress ? "wordpress" : "generic",
+              metadata: docMeta
             });
           }
         } else {
@@ -251,7 +256,9 @@ documentRouter.get(["/documents/assigned", "/api/documents/assigned"], checkAuth
             permission: row.permission || "write",
             assignedAt: row.created_at || doc.created_at,
             assignerEmail,
-            assignerRole: "Project Coordinator"
+            assignerRole: "Project Coordinator",
+            sourceType: isWordPress ? "wordpress" : "generic",
+            metadata: docMeta
           });
         }
       }
@@ -321,6 +328,107 @@ documentRouter.get(["/documents/:id", "/api/documents/:id"], checkAuth, async (r
     response.status(500).json({ error: "Failed to fetch document." });
   }
 });
+
+// Live Document Preview (WYSIWYG HTML / DOCX / PDF / WordPress)
+documentRouter.post(
+  ["/documents/:id/preview", "/api/documents/:id/preview"],
+  checkAuth,
+  async (request, response) => {
+    try {
+      const documentId = request.params.id;
+      const { segments, targetLang } = request.body;
+      const tLang = targetLang || "hi";
+
+      // 1. Fetch document and project metadata
+      const { data: doc, error: docErr } = await supabase
+        .from("documents")
+        .select("*, projects(id, settings)")
+        .eq("id", documentId)
+        .maybeSingle();
+
+      if (docErr || !doc) {
+        return response.status(404).json({ error: "Document not found." });
+      }
+
+      const docName = doc.name || "document.html";
+      const extIndex = docName.lastIndexOf(".");
+      const ext = doc.file_extension || (extIndex !== -1 ? docName.substring(extIndex).toLowerCase() : ".html");
+      const docMeta = doc.projects?.settings?.documentsMetadata?.[documentId] || doc.metadata || {};
+
+      // 2. If segments are supplied from client editor, use them; otherwise fetch from DB
+      let currentSegments = segments;
+      if (!currentSegments || !Array.isArray(currentSegments) || currentSegments.length === 0) {
+        const { data: dbSegments } = await supabase
+          .from("document_segments")
+          .select("segment_index, source_text, target_text, status")
+          .eq("document_id", documentId)
+          .eq("target_lang", tLang)
+          .order("segment_index", { ascending: true });
+
+        currentSegments = (dbSegments || []).map(s => ({
+          id: s.segment_index,
+          source: s.source_text,
+          target: s.target_text || s.source_text
+        }));
+      } else {
+        currentSegments = currentSegments.map((s, idx) => ({
+          id: s.id !== undefined && s.id !== null ? Number(s.id) : (s.segment_index || idx + 1),
+          source: s.source || s.source_text || "",
+          target: s.target !== undefined && s.target !== null ? s.target : (s.target_text || s.source || "")
+        }));
+      }
+
+      // 3. Render file using exportHtml / htmlParser
+      const { exportHtml } = require("../services/fileService");
+      let renderedBuffer;
+      let contentType = "text/html; charset=utf-8";
+      let docType = "html";
+
+      if (ext === ".html" || ext === ".htm" || docMeta.source_type === "wordpress") {
+        const { data: htmlData } = await supabase
+          .from("html_files")
+          .select("content")
+          .eq("id", doc.file_id || documentId)
+          .maybeSingle();
+
+        if (htmlData && htmlData.content) {
+          const htmlParser = require("../utils/parsers/htmlParser");
+          const exportSegs = currentSegments.map(s => ({
+            id: s.id,
+            target: s.target || s.source || ""
+          }));
+          renderedBuffer = await htmlParser.exportFile(htmlData.content, exportSegs);
+        } else if (docMeta.wp_rendered_html) {
+          renderedBuffer = Buffer.from(docMeta.wp_rendered_html, "utf-8");
+        } else {
+          const fallbackHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${docName}</title><style>body{font-family:system-ui,sans-serif;padding:24px;line-height:1.6;color:#1e293b;max-width:800px;margin:0 auto;}</style></head><body>${currentSegments.map(s => `<p>${s.target || s.source}</p>`).join("")}</body></html>`;
+          renderedBuffer = Buffer.from(fallbackHtml, "utf-8");
+        }
+        contentType = "text/html; charset=utf-8";
+        docType = "html";
+      } else if (ext === ".docx") {
+        renderedBuffer = await exportHtml(doc.file_id || documentId, currentSegments, ".docx", tLang);
+        contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        docType = "docx";
+      } else if (ext === ".pdf") {
+        renderedBuffer = await exportHtml(doc.file_id || documentId, currentSegments, ".pdf", tLang);
+        contentType = "application/pdf";
+        docType = "pdf";
+      } else {
+        renderedBuffer = await exportHtml(doc.file_id || documentId, currentSegments, ext, tLang);
+        contentType = "application/octet-stream";
+        docType = ext.replace(".", "");
+      }
+
+      response.setHeader("Content-Type", contentType);
+      response.setHeader("x-document-type", docType);
+      return response.send(renderedBuffer);
+    } catch (err) {
+      console.error("[DOCUMENT_PREVIEW_ERR]", err);
+      return response.status(500).json({ error: err.message || "Failed to generate document preview." });
+    }
+  }
+);
 
 // Complete WordPress Task from Editor
 documentRouter.post(

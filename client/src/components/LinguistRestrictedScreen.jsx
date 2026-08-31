@@ -443,98 +443,227 @@ export function LinguistRestrictedScreen({ user, onLogout }) {
                 </div>
               ) : assignments.length > 0 ? (
                 <div className="space-y-4">
-                  {assignments.map((item) => (
-                    <div 
-                      key={item.id || item.documentId}
-                      className="bg-white border border-slate-200/90 hover:border-indigo-300 rounded-2xl p-5 shadow-xs transition-all duration-200 hover:shadow-md space-y-4 relative overflow-hidden group"
-                    >
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                        
-                        {/* File & Project Title */}
-                        <div className="flex items-start gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0 mt-0.5">
-                            <FileText className="w-5 h-5 text-indigo-600" />
+                  {assignments.map((item) => {
+                    const isWp = item.sourceType === "wordpress" || 
+                      item.documentName?.startsWith("WP:") || 
+                      item.metadata?.source_type === "wordpress" ||
+                      item.projectName?.includes("WP");
+
+                    // Clean page title for display
+                    let displayTitle = item.documentName;
+                    let wpPostId = item.metadata?.wp_post_id;
+                    if (isWp) {
+                      const match = item.documentName?.match(/WP:\s*(.*?)(?:\s*\(ID:\s*(\d+|N\/A)\))?$/i);
+                      if (match) {
+                        displayTitle = match[1] || item.documentName;
+                        if (!wpPostId && match[2] && match[2] !== "N/A") {
+                          wpPostId = match[2];
+                        }
+                      }
+                    }
+
+                    if (isWp) {
+                      return (
+                        <div 
+                          key={item.id || item.documentId}
+                          className="bg-gradient-to-r from-blue-50/90 via-sky-50/40 to-white border-2 border-blue-200/90 hover:border-blue-500 rounded-2xl p-5 shadow-xs transition-all duration-200 hover:shadow-md space-y-4 relative overflow-hidden group border-l-4 border-l-blue-600"
+                        >
+                          {/* WordPress Brand Banner */}
+                          <div className="flex items-center justify-between gap-2 pb-2 border-b border-blue-100/80">
+                            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-600 text-white text-[11px] font-bold shadow-xs">
+                              <Globe className="w-3.5 h-3.5" />
+                              <span>WordPress Live CMS Task</span>
+                              <span className="h-1.5 w-1.5 rounded-full bg-cyan-300 animate-ping ml-0.5" />
+                            </div>
+                            {wpPostId && (
+                              <span className="text-[11px] font-mono font-bold text-blue-800 bg-blue-100/80 px-2.5 py-0.5 rounded-md border border-blue-200">
+                                Post ID #{wpPostId}
+                              </span>
+                            )}
                           </div>
-                          <div className="min-w-0 space-y-1">
-                            <h4 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors truncate">
-                              {item.documentName}
-                            </h4>
-                            <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
-                              <span className="flex items-center gap-1 text-slate-600 font-semibold">
-                                <Folder className="w-3.5 h-3.5 text-indigo-500" />
-                                <span className="truncate">{item.projectName}</span>
+
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                            {/* Title & Origin */}
+                            <div className="flex items-start gap-3 min-w-0">
+                              <div className="w-11 h-11 rounded-xl bg-blue-600 flex items-center justify-center text-white shrink-0 shadow-xs mt-0.5">
+                                <Globe className="w-6 h-6 text-white" />
+                              </div>
+                              <div className="min-w-0 space-y-1">
+                                <h4 className="text-base font-extrabold text-slate-900 group-hover:text-blue-600 transition-colors truncate">
+                                  {displayTitle}
+                                </h4>
+                                <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
+                                  <span className="flex items-center gap-1 text-blue-700 font-semibold">
+                                    <Folder className="w-3.5 h-3.5 text-blue-600" />
+                                    <span className="truncate">{item.projectName}</span>
+                                  </span>
+                                  {item.metadata?.wp_site_url && (
+                                    <span className="text-slate-400 text-[11px] truncate font-mono">
+                                      · {item.metadata.wp_site_url.replace(/^https?:\/\//, '')}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                              <button
+                                onClick={() => handleOpenExport(item)}
+                                disabled={exportingDocId === (item.id || item.documentId)}
+                                className="w-full sm:w-auto shrink-0 bg-white hover:bg-slate-100 text-slate-800 font-bold text-xs px-4 py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer border border-blue-200 shadow-xs hover:shadow-sm active:scale-[0.98]"
+                                title="Export WordPress page translation"
+                              >
+                                {exportingDocId === (item.id || item.documentId) ? (
+                                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                                ) : (
+                                  <Download className="w-3.5 h-3.5 text-blue-600" />
+                                )}
+                                <span>Export</span>
+                              </button>
+
+                              <button
+                                onClick={() => openEditor(item)}
+                                className="w-full sm:w-auto shrink-0 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md hover:shadow-lg active:scale-[0.98]"
+                              >
+                                <Play className="w-3.5 h-3.5 fill-current" />
+                                <span>⚡ Open Live WP Editor</span>
+                                <ExternalLink className="w-3.5 h-3.5 ml-0.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Details Row */}
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-blue-100 text-xs">
+                            <div className="bg-white/80 border border-blue-200/80 rounded-xl px-3.5 py-2 flex items-center gap-2.5 shadow-2xs">
+                              <Globe className="w-4 h-4 text-blue-600 shrink-0" />
+                              <div className="min-w-0">
+                                <span className="text-[9px] font-bold text-blue-700 uppercase tracking-wider block">Target Language</span>
+                                <span className="font-extrabold text-slate-900 truncate block">
+                                  {getLanguageLabel(item.targetLang)}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="bg-white/80 border border-blue-200/80 rounded-xl px-3.5 py-2 flex items-center gap-2.5 shadow-2xs">
+                              <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <div className="min-w-0">
+                                <span className="text-[9px] font-bold text-emerald-700 uppercase tracking-wider block">Visual Live Sync</span>
+                                <span className="font-bold text-slate-900 truncate block">
+                                  Real-Time WYSIWYG
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="bg-white/80 border border-blue-200/80 rounded-xl px-3.5 py-2 flex items-center gap-2.5 shadow-2xs">
+                              <Clock className="w-4 h-4 text-slate-500 shrink-0" />
+                              <div className="min-w-0">
+                                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Assigned Date & Access</span>
+                                <span className="font-semibold text-slate-800 truncate block">
+                                  {formatDate(item.assignedAt)} · <strong className="text-emerald-700 font-bold uppercase">{item.permission === "read" ? "Viewer" : "Editor"}</strong>
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                        </div>
+                      );
+                    }
+
+                    // Generic Document Card
+                    return (
+                      <div 
+                        key={item.id || item.documentId}
+                        className="bg-white border border-slate-200/90 hover:border-indigo-300 rounded-2xl p-5 shadow-xs transition-all duration-200 hover:shadow-md space-y-4 relative overflow-hidden group"
+                      >
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                          
+                          {/* File & Project Title */}
+                          <div className="flex items-start gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0 mt-0.5">
+                              <FileText className="w-5 h-5 text-indigo-600" />
+                            </div>
+                            <div className="min-w-0 space-y-1">
+                              <h4 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors truncate">
+                                {item.documentName}
+                              </h4>
+                              <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+                                <span className="flex items-center gap-1 text-slate-600 font-semibold">
+                                  <Folder className="w-3.5 h-3.5 text-indigo-500" />
+                                  <span className="truncate">{item.projectName}</span>
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Action Buttons: Export & CAT Editor */}
+                          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                            <button
+                              onClick={() => handleOpenExport(item)}
+                              disabled={exportingDocId === (item.id || item.documentId)}
+                              className="w-full sm:w-auto shrink-0 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs px-4 py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer border border-slate-300/80 shadow-xs hover:shadow-sm active:scale-[0.98]"
+                              title="Export translated document, XLIFF, TMX or Review Table"
+                            >
+                              {exportingDocId === (item.id || item.documentId) ? (
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+                              ) : (
+                                <Download className="w-3.5 h-3.5 text-indigo-600" />
+                              )}
+                              <span>Export</span>
+                            </button>
+
+                            <button
+                              onClick={() => openEditor(item)}
+                              className="w-full sm:w-auto shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm hover:shadow-md active:scale-[0.98]"
+                            >
+                              <Play className="w-3.5 h-3.5 fill-current" />
+                              <span>Open CAT Editor</span>
+                              <ExternalLink className="w-3.5 h-3.5 ml-0.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* BADGES & DETAILS ROW */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-slate-100 text-xs">
+                          
+                          {/* Target Language Badge */}
+                          <div className="bg-cyan-50/70 border border-cyan-200/80 rounded-xl px-3.5 py-2 flex items-center gap-2.5">
+                            <Globe className="w-4 h-4 text-cyan-600 shrink-0" />
+                            <div className="min-w-0">
+                              <span className="text-[9px] font-bold text-cyan-700 uppercase tracking-wider block">Target Language</span>
+                              <span className="font-extrabold text-slate-900 truncate block">
+                                {getLanguageLabel(item.targetLang)}
                               </span>
                             </div>
                           </div>
-                        </div>
 
-                        {/* Action Buttons: Export & CAT Editor */}
-                        <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
-                          <button
-                            onClick={() => handleOpenExport(item)}
-                            disabled={exportingDocId === (item.id || item.documentId)}
-                            className="w-full sm:w-auto shrink-0 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs px-4 py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer border border-slate-300/80 shadow-xs hover:shadow-sm active:scale-[0.98]"
-                            title="Export translated document, XLIFF, TMX or Review Table"
-                          >
-                            {exportingDocId === (item.id || item.documentId) ? (
-                              <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-600" />
-                            ) : (
-                              <Download className="w-3.5 h-3.5 text-indigo-600" />
-                            )}
-                            <span>Export</span>
-                          </button>
-
-                          <button
-                            onClick={() => openEditor(item)}
-                            className="w-full sm:w-auto shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm hover:shadow-md active:scale-[0.98]"
-                          >
-                            <Play className="w-3.5 h-3.5 fill-current" />
-                            <span>Open CAT Editor</span>
-                            <ExternalLink className="w-3.5 h-3.5 ml-0.5" />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* BADGES & DETAILS ROW */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-slate-100 text-xs">
-                        
-                        {/* Target Language Badge */}
-                        <div className="bg-cyan-50/70 border border-cyan-200/80 rounded-xl px-3.5 py-2 flex items-center gap-2.5">
-                          <Globe className="w-4 h-4 text-cyan-600 shrink-0" />
-                          <div className="min-w-0">
-                            <span className="text-[9px] font-bold text-cyan-700 uppercase tracking-wider block">Target Language</span>
-                            <span className="font-extrabold text-slate-900 truncate block">
-                              {getLanguageLabel(item.targetLang)}
-                            </span>
+                          {/* Project Coordinator (Assigner) Badge */}
+                          <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl px-3.5 py-2 flex items-center gap-2.5">
+                            <User className="w-4 h-4 text-amber-600 shrink-0" />
+                            <div className="min-w-0">
+                              <span className="text-[9px] font-bold text-amber-700 uppercase tracking-wider block">Project Coordinator</span>
+                              <span className="font-bold text-slate-900 truncate block" title={item.assignerEmail}>
+                                {item.assignerEmail}
+                              </span>
+                            </div>
                           </div>
-                        </div>
 
-                        {/* Project Coordinator (Assigner) Badge */}
-                        <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl px-3.5 py-2 flex items-center gap-2.5">
-                          <User className="w-4 h-4 text-amber-600 shrink-0" />
-                          <div className="min-w-0">
-                            <span className="text-[9px] font-bold text-amber-700 uppercase tracking-wider block">Project Coordinator</span>
-                            <span className="font-bold text-slate-900 truncate block" title={item.assignerEmail}>
-                              {item.assignerEmail}
-                            </span>
+                          {/* Date & Permission Badge */}
+                          <div className="bg-slate-100/70 border border-slate-200/80 rounded-xl px-3.5 py-2 flex items-center gap-2.5">
+                            <Clock className="w-4 h-4 text-slate-500 shrink-0" />
+                            <div className="min-w-0">
+                              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Assigned Date & Access</span>
+                              <span className="font-semibold text-slate-800 truncate block">
+                                {formatDate(item.assignedAt)} · <strong className="text-emerald-700 font-bold uppercase">{item.permission === "read" ? "Viewer" : "Editor"}</strong>
+                              </span>
+                            </div>
                           </div>
-                        </div>
 
-                        {/* Date & Permission Badge */}
-                        <div className="bg-slate-100/70 border border-slate-200/80 rounded-xl px-3.5 py-2 flex items-center gap-2.5">
-                          <Clock className="w-4 h-4 text-slate-500 shrink-0" />
-                          <div className="min-w-0">
-                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Assigned Date & Access</span>
-                            <span className="font-semibold text-slate-800 truncate block">
-                              {formatDate(item.assignedAt)} · <strong className="text-emerald-700 font-bold uppercase">{item.permission === "read" ? "Viewer" : "Editor"}</strong>
-                            </span>
-                          </div>
                         </div>
 
                       </div>
-
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8 text-center space-y-3">
