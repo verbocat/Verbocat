@@ -962,10 +962,14 @@ publicApiRouter.post("/wordpress/submit-batch-human-review", async (req, res) =>
       name: cleanProjectName,
       source_lang: pages[0]?.source_lang || "en",
       target_languages: allTargetLangs,
-      target_lang: allTargetLangs[0] || "hi",
       owner_id: userId,
       organization_id: orgId,
-      status: "active",
+      settings: {
+        status: "active",
+        source: "wordpress",
+        site_url: site_url,
+        callback_url: callback_url
+      },
       description: `WordPress Batch Dispatch from ${site_url || "WordPress Site"}`
     });
 
@@ -974,6 +978,27 @@ publicApiRouter.post("/wordpress/submit-batch-human-review", async (req, res) =>
     }
 
     const createdDocuments = [];
+    const projectLinguistAssignments = {};
+    const projectDocumentsMetadata = {};
+
+    // Fetch all approved linguists once for auto-assignment fallback
+    const { data: allApprovedLps } = await dbClient
+      .from("linguist_profiles")
+      .select("id, user_id, primary_language, secondary_languages")
+      .in("status", ["approved", "active"]);
+
+    const approvedLinguistsSummary = (allApprovedLps || []).map(lp => {
+      const targets = new Set();
+      if (lp.primary_language) expandLanguageTokens(lp.primary_language).forEach(t => targets.add(t));
+      if (Array.isArray(lp.secondary_languages)) {
+        lp.secondary_languages.forEach(sl => expandLanguageTokens(sl).forEach(t => targets.add(t)));
+      }
+      return {
+        id: lp.user_id || lp.id,
+        user_id: lp.user_id || lp.id,
+        target_languages: Array.from(targets)
+      };
+    });
 
     // 2. Process each page in the batch
     for (const page of pages) {
@@ -1009,7 +1034,7 @@ publicApiRouter.post("/wordpress/submit-batch-human-review", async (req, res) =>
         });
       }
 
-      // Insert Document record with rich WordPress metadata
+      // Track rich WordPress metadata in project settings
       const docMetadata = {
         source_type: "wordpress",
         wp_post_id: page.post_id,
@@ -1020,8 +1045,9 @@ publicApiRouter.post("/wordpress/submit-batch-human-review", async (req, res) =>
         wp_rendered_html: page.rendered_html,
         linguist_assignments: page.linguist_assignments || {}
       };
+      projectDocumentsMetadata[documentId] = docMetadata;
 
-      await dbClient.from("documents").insert({
+      const { error: docInsErr } = await dbClient.from("documents").insert({
         id: documentId,
         file_id: documentId,
         project_id: projectId,
@@ -1030,9 +1056,12 @@ publicApiRouter.post("/wordpress/submit-batch-human-review", async (req, res) =>
         target_lang: targetLangs[0] || "hi",
         owner_id: userId,
         organization_id: orgId,
-        status: "active",
-        metadata: docMetadata
+        status: "active"
       });
+
+      if (docInsErr) {
+        console.error("[WP_DOC_INSERT_ERR]", docInsErr);
+      }
 
       // Insert Template Segments (target_lang: null)
       const segmentInserts = (parseResult.segments || []).map((seg, idx) => ({
@@ -1051,7 +1080,27 @@ publicApiRouter.post("/wordpress/submit-batch-human-review", async (req, res) =>
 
       // Pre-create translation segments & assign linguists for each target language
       for (const tLang of targetLangs) {
-        const assignedLinguistId = page.linguist_assignments?.[tLang] || null;
+        let assignedLinguistId = page.linguist_assignments?.[tLang] || null;
+
+        // Auto-assign first qualified approved linguist if not explicitly set
+        if (!assignedLinguistId) {
+          const tTokens = expandLanguageTokens(tLang);
+          const matched = approvedLinguistsSummary.find(l => 
+            l.target_languages.some(tl => tTokens.includes(tl) || tl === "all")
+          );
+          if (matched) {
+            assignedLinguistId = matched.user_id;
+          }
+        }
+
+        // Resolve user_id for assignment
+        let resolvedUserId = assignedLinguistId;
+        if (assignedLinguistId) {
+          const lpMatch = (allApprovedLps || []).find(l => l.id === assignedLinguistId || l.user_id === assignedLinguistId);
+          if (lpMatch?.user_id) {
+            resolvedUserId = lpMatch.user_id;
+          }
+        }
 
         // Create target language segments
         const targetInserts = (parseResult.segments || []).map((seg, idx) => ({
@@ -1067,14 +1116,36 @@ publicApiRouter.post("/wordpress/submit-batch-human-review", async (req, res) =>
           await dbClient.from("document_segments").insert(targetInserts.slice(i, i + BATCH_SIZE));
         }
 
-        // If assigned to a linguist, insert into document_collaborators
-        if (assignedLinguistId) {
-          await dbClient.from("document_collaborators").upsert({
-            document_id: documentId,
-            user_id: assignedLinguistId,
-            role: "editor",
-            target_lang: tLang
-          }, { onConflict: "document_id,user_id,target_lang" }).catch(() => {});
+        // Grant access and assign to linguist if resolved
+        if (resolvedUserId) {
+          // 1. Upsert document_access record
+          try {
+            await dbClient.from("document_access").upsert({
+              document_id: documentId,
+              user_id: resolvedUserId,
+              permission: "write"
+            }, { onConflict: "document_id,user_id" });
+          } catch (_) {}
+
+          // 2. Track in project assignments
+          if (!projectLinguistAssignments[resolvedUserId]) {
+            projectLinguistAssignments[resolvedUserId] = [];
+          }
+          projectLinguistAssignments[resolvedUserId].push({
+            documentId: documentId,
+            targetLang: tLang,
+            permission: "write"
+          });
+
+          // 3. Upsert into document_collaborators
+          try {
+            await dbClient.from("document_collaborators").upsert({
+              document_id: documentId,
+              user_id: resolvedUserId,
+              role: "editor",
+              target_lang: tLang
+            }, { onConflict: "document_id,user_id,target_lang" });
+          } catch (_) {}
         }
       }
 
@@ -1087,6 +1158,18 @@ publicApiRouter.post("/wordpress/submit-batch-human-review", async (req, res) =>
         direct_url: `/project/${projectId}/file/${documentId}/lang/${targetLangs[0]}`
       });
     }
+
+    // Update project settings with all linguist assignments and documents metadata
+    await dbClient.from("projects").update({
+      settings: {
+        status: "active",
+        linguistAssignments: projectLinguistAssignments,
+        documentsMetadata: projectDocumentsMetadata,
+        source: "wordpress",
+        site_url: site_url,
+        callback_url: callback_url
+      }
+    }).eq("id", projectId);
 
     return res.json({
       success: true,

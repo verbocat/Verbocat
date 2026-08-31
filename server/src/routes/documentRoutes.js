@@ -287,6 +287,7 @@ documentRouter.get(["/documents/:id", "/api/documents/:id"], checkAuth, async (r
     const computedExt = doc.file_extension || (extIndex !== -1 ? docName.substring(extIndex) : ".html");
 
     let contextSettings = {};
+    let resolvedMetadata = doc.metadata || null;
     if (doc.project_id) {
       const { data: proj } = await supabase
         .from("projects")
@@ -295,6 +296,9 @@ documentRouter.get(["/documents/:id", "/api/documents/:id"], checkAuth, async (r
         .maybeSingle();
       if (proj?.settings) {
         contextSettings = proj.settings.contextSettings || proj.settings || {};
+        if (proj.settings.documentsMetadata?.[doc.id]) {
+          resolvedMetadata = proj.settings.documentsMetadata[doc.id];
+        }
       }
     }
 
@@ -309,7 +313,7 @@ documentRouter.get(["/documents/:id", "/api/documents/:id"], checkAuth, async (r
       permission: access.permission,
       trackChangesEnabled: doc.track_changes_enabled || false,
       contextSettings: contextSettings,
-      metadata: doc.metadata || null,
+      metadata: resolvedMetadata,
       segments: segments || []
     });
   } catch (error) {
@@ -329,7 +333,7 @@ documentRouter.post(
 
       const { data: doc } = await supabase
         .from("documents")
-        .select("*")
+        .select("*, projects(id, settings)")
         .eq("id", documentId)
         .maybeSingle();
 
@@ -338,7 +342,7 @@ documentRouter.post(
       }
 
       const tLang = targetLang || doc.target_lang || "hi";
-      const docMeta = doc.metadata || {};
+      const docMeta = doc.projects?.settings?.documentsMetadata?.[documentId] || doc.metadata || {};
       const callbackUrl = docMeta.wp_callback_url;
 
       if (!callbackUrl) {
