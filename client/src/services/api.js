@@ -416,6 +416,15 @@ export const fetchAssignedDocuments = async () => {
   return response.data?.assignments || [];
 };
 
+export const updateAssignmentStatus = async (documentId, targetLang, status, reason = "") => {
+  const response = await api.post(`/api/documents/${documentId}/assignment-status`, {
+    targetLang,
+    status,
+    reason
+  });
+  return response.data;
+};
+
 export const fetchRequestStatus = async (documentId) => {
   const response = await api.get(`/api/documents/${documentId}/request-status`);
   return response.data;

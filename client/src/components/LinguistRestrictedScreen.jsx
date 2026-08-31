@@ -3,9 +3,9 @@ import {
   ShieldCheck, LogOut, FileText, Lock, CheckCircle2, 
   Sparkles, RefreshCw, Mail, ArrowRight, User, Clock, 
   ExternalLink, Layers, Headphones, Cpu, BookOpen, Key, Globe, Folder, Play,
-  Download, AlertCircle, X
+  Download, AlertCircle, X, Check, XCircle, RotateCcw
 } from "lucide-react";
-import { fetchAssignedDocuments, fetchDocument, exportFile, exportGlobalTm } from "../services/api.js";
+import { fetchAssignedDocuments, fetchDocument, exportFile, exportGlobalTm, updateAssignmentStatus } from "../services/api.js";
 import { ExportModal } from "./ExportModal.jsx";
 import { exportLinguistReviewTableDocx } from "../utils/exportReviewTable.js";
 
@@ -36,6 +36,12 @@ export function LinguistRestrictedScreen({ user, onLogout }) {
   const [lastRefreshed, setLastRefreshed] = useState("Just now");
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Status Filter Tabs: "active" | "completed" | "declined" | "all"
+  const [activeTab, setActiveTab] = useState("active");
+  const [actionLoadingId, setActionLoadingId] = useState(null);
+  const [declineModalItem, setDeclineModalItem] = useState(null);
+  const [declineReason, setDeclineReason] = useState("");
 
   // Export Modal State
   const [showExportModal, setShowExportModal] = useState(false);
@@ -79,6 +85,29 @@ export function LinguistRestrictedScreen({ user, onLogout }) {
     setIsRefreshing(false);
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     setLastRefreshed(`Refreshed at ${time}`);
+  };
+
+  const handleUpdateStatus = async (item, newStatus, reason = "") => {
+    const docKey = item.id || item.documentId;
+    setActionLoadingId(`${docKey}_${newStatus}`);
+    try {
+      await updateAssignmentStatus(item.documentId, item.targetLang, newStatus, reason);
+      if (newStatus === "completed") {
+        showToast("🎉 Task marked as completed successfully!", "success");
+      } else if (newStatus === "declined") {
+        showToast("Task declined and moved to Declined tab.", "success");
+      } else {
+        showToast("Task reopened and moved to Active tab.", "success");
+      }
+      await loadAssignments(true);
+    } catch (err) {
+      console.error("Update assignment status error:", err);
+      showToast(err.response?.data?.error || err.message || "Failed to update status", "error");
+    } finally {
+      setActionLoadingId(null);
+      setDeclineModalItem(null);
+      setDeclineReason("");
+    }
   };
 
   const getLanguageLabel = (code) => {
@@ -256,6 +285,19 @@ export function LinguistRestrictedScreen({ user, onLogout }) {
     }
   };
 
+  // Filter categorized assignments
+  const activeAssignments = assignments.filter(a => (a.status || "active") === "active");
+  const completedAssignments = assignments.filter(a => a.status === "completed");
+  const declinedAssignments = assignments.filter(a => a.status === "declined");
+
+  const filteredAssignments = activeTab === "active" 
+    ? activeAssignments 
+    : activeTab === "completed" 
+    ? completedAssignments 
+    : activeTab === "declined" 
+    ? declinedAssignments 
+    : assignments;
+
   return (
     <div className="min-h-dvh h-auto w-full skeuo-matte-bg text-slate-900 flex flex-col justify-between items-center p-4 sm:p-6 lg:p-10 font-sans selection:bg-indigo-500/20 selection:text-indigo-900 relative overflow-x-hidden">
       
@@ -316,22 +358,22 @@ export function LinguistRestrictedScreen({ user, onLogout }) {
             </h1>
 
             <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-medium">
-              Your account (<strong className="text-slate-900">{userEmail}</strong>) is active and ready. Assigned files will appear directly in your <strong>Assignment Radar</strong> below with language details and direct editor launcher buttons.
+              Your account (<strong className="text-slate-900">{userEmail}</strong>) is active. Manage your assigned tasks below, complete reviews, or decline tasks with a single click.
             </p>
           </div>
 
           {/* Quick Metrics Badge */}
           <div className="flex items-center shrink-0 gap-3">
             <div className="bg-white/80 border border-slate-200/80 rounded-2xl px-5 py-3 text-center space-y-0.5 shadow-xs">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">Assigned Jobs</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">Active Tasks</span>
               <span className="text-sm font-extrabold text-indigo-600 flex items-center justify-center gap-1.5">
-                <FileText className="w-4 h-4 text-indigo-500" /> {assignments.length} Files
+                <FileText className="w-4 h-4 text-indigo-500" /> {activeAssignments.length} Active
               </span>
             </div>
             <div className="bg-white/80 border border-slate-200/80 rounded-2xl px-5 py-3 text-center space-y-0.5 shadow-xs">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">Status</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">Completed</span>
               <span className="text-xs font-extrabold text-emerald-600 flex items-center justify-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4" /> Active & Ready
+                <CheckCircle2 className="w-4 h-4" /> {completedAssignments.length} Done
               </span>
             </div>
           </div> 
@@ -379,10 +421,12 @@ export function LinguistRestrictedScreen({ user, onLogout }) {
               <div className="bg-indigo-50/70 border border-indigo-100/90 rounded-2xl p-4 space-y-2">
                 <div className="flex items-center gap-2 text-xs font-bold text-indigo-900">
                   <Headphones className="w-4 h-4 text-indigo-600 shrink-0" />
-                  <span>Project Coordinator Support</span>
+                  <span>Task Management Guidelines</span>
                 </div>
                 <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                  When a Project Coordinator grants you access to a file, it will appear live in your Assignment Radar. Click "Refresh" if a new job was recently assigned.
+                  • <strong>Active Tasks</strong>: Ready for translation in CAT Editor.<br/>
+                  • <strong>Mark as Done</strong>: Finalizes task & syncs with WordPress.<br/>
+                  • <strong>Decline</strong>: Returns task to coordinator radar.
                 </p>
               </div>
 
@@ -420,7 +464,7 @@ export function LinguistRestrictedScreen({ user, onLogout }) {
                     <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
                       <span>Assignment Radar</span>
                       <span className="text-xs font-semibold px-3 py-0.5 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200">
-                        {assignments.length} {assignments.length === 1 ? "Job" : "Jobs"}
+                        {filteredAssignments.length} {filteredAssignments.length === 1 ? "Job" : "Jobs"}
                       </span>
                     </h2>
                     <p className="text-xs text-slate-500 font-medium mt-0.5">
@@ -435,19 +479,51 @@ export function LinguistRestrictedScreen({ user, onLogout }) {
                 </div>
               </div>
 
+              {/* RADAR STATUS FILTER TABS */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                {[
+                  { id: "active", label: "Active Jobs", count: activeAssignments.length, activeClass: "bg-indigo-600 text-white shadow-sm font-extrabold" },
+                  { id: "completed", label: "Completed", count: completedAssignments.length, activeClass: "bg-emerald-600 text-white shadow-sm font-extrabold" },
+                  { id: "declined", label: "Declined", count: declinedAssignments.length, activeClass: "bg-rose-600 text-white shadow-sm font-extrabold" },
+                  { id: "all", label: "All Assigned", count: assignments.length, activeClass: "bg-slate-800 text-white shadow-sm font-extrabold" }
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 text-xs font-bold ${
+                      activeTab === tab.id
+                        ? tab.activeClass
+                        : "bg-white/80 border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-white"
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-extrabold ${
+                      activeTab === tab.id ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"
+                    }`}>
+                      {tab.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
               {/* ASSIGNMENT CARDS LIST */}
               {loading ? (
                 <div className="py-12 text-center space-y-3">
                   <RefreshCw className="w-8 h-8 text-indigo-600 animate-spin mx-auto" />
                   <p className="text-xs font-bold text-slate-600">Scanning Assignment Radar for assigned files...</p>
                 </div>
-              ) : assignments.length > 0 ? (
+              ) : filteredAssignments.length > 0 ? (
                 <div className="space-y-4">
-                  {assignments.map((item) => {
+                  {filteredAssignments.map((item) => {
                     const isWp = item.sourceType === "wordpress" || 
                       item.documentName?.startsWith("WP:") || 
                       item.metadata?.source_type === "wordpress" ||
                       item.projectName?.includes("WP");
+
+                    const itemStatus = item.status || "active";
+                    const docKey = item.id || item.documentId;
+                    const isDoneLoading = actionLoadingId === `${docKey}_completed`;
+                    const isReopenLoading = actionLoadingId === `${docKey}_active`;
 
                     // Clean page title for display
                     let displayTitle = item.documentName;
@@ -466,15 +542,38 @@ export function LinguistRestrictedScreen({ user, onLogout }) {
                       return (
                         <div 
                           key={item.id || item.documentId}
-                          className="bg-gradient-to-r from-blue-50/90 via-sky-50/40 to-white border-2 border-blue-200/90 hover:border-blue-500 rounded-2xl p-5 shadow-xs transition-all duration-200 hover:shadow-md space-y-4 relative overflow-hidden group border-l-4 border-l-blue-600"
+                          className={`border-2 rounded-2xl p-5 shadow-xs transition-all duration-200 hover:shadow-md space-y-4 relative overflow-hidden group border-l-4 ${
+                            itemStatus === "completed"
+                              ? "bg-emerald-50/40 border-emerald-200 border-l-emerald-600"
+                              : itemStatus === "declined"
+                              ? "bg-rose-50/40 border-rose-200 border-l-rose-600 opacity-80"
+                              : "bg-gradient-to-r from-blue-50/90 via-sky-50/40 to-white border-blue-200/90 hover:border-blue-500 border-l-blue-600"
+                          }`}
                         >
                           {/* WordPress Brand Banner */}
-                          <div className="flex items-center justify-between gap-2 pb-2 border-b border-blue-100/80">
-                            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-600 text-white text-[11px] font-bold shadow-xs">
-                              <Globe className="w-3.5 h-3.5" />
-                              <span>WordPress Live CMS Task</span>
-                              <span className="h-1.5 w-1.5 rounded-full bg-cyan-300 animate-ping ml-0.5" />
+                          <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-200/70">
+                            <div className="flex items-center gap-2">
+                              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-600 text-white text-[11px] font-bold shadow-xs">
+                                <Globe className="w-3.5 h-3.5" />
+                                <span>WordPress Live CMS Task</span>
+                                {itemStatus === "active" && (
+                                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-300 animate-ping ml-0.5" />
+                                )}
+                              </div>
+
+                              {itemStatus === "completed" && (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-emerald-800 bg-emerald-100 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Done & Synced
+                                </span>
+                              )}
+
+                              {itemStatus === "declined" && (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-rose-800 bg-rose-100 border border-rose-200 px-2.5 py-0.5 rounded-full">
+                                  <XCircle className="w-3.5 h-3.5 text-rose-600" /> Declined
+                                </span>
+                              )}
                             </div>
+
                             {wpPostId && (
                               <span className="text-[11px] font-mono font-bold text-blue-800 bg-blue-100/80 px-2.5 py-0.5 rounded-md border border-blue-200">
                                 Post ID #{wpPostId}
@@ -485,7 +584,9 @@ export function LinguistRestrictedScreen({ user, onLogout }) {
                           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                             {/* Title & Origin */}
                             <div className="flex items-start gap-3 min-w-0">
-                              <div className="w-11 h-11 rounded-xl bg-blue-600 flex items-center justify-center text-white shrink-0 shadow-xs mt-0.5">
+                              <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-white shrink-0 shadow-xs mt-0.5 ${
+                                itemStatus === "completed" ? "bg-emerald-600" : itemStatus === "declined" ? "bg-rose-600" : "bg-blue-600"
+                              }`}>
                                 <Globe className="w-6 h-6 text-white" />
                               </div>
                               <div className="min-w-0 space-y-1">
@@ -503,18 +604,78 @@ export function LinguistRestrictedScreen({ user, onLogout }) {
                                     </span>
                                   )}
                                 </div>
+
+                                {itemStatus === "declined" && item.declinedReason && (
+                                  <div className="text-xs text-rose-700 font-semibold bg-rose-50 p-2 rounded-lg border border-rose-200/80 mt-1">
+                                    <strong>Decline Reason:</strong> {item.declinedReason}
+                                  </div>
+                                )}
                               </div>
                             </div>
 
                             {/* Action Buttons */}
-                            <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap w-full sm:w-auto shrink-0">
+                              
+                              {/* Open Editor Button */}
+                              <button
+                                onClick={() => openEditor(item)}
+                                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md hover:shadow-lg active:scale-[0.98]"
+                              >
+                                <Play className="w-3.5 h-3.5 fill-current" />
+                                <span>{itemStatus === "completed" ? "Review In Editor" : "⚡ Open WP Editor"}</span>
+                                <ExternalLink className="w-3 h-3 ml-0.5" />
+                              </button>
+
+                              {/* Mark as Done Button (Active only) */}
+                              {itemStatus === "active" && (
+                                <button
+                                  onClick={() => handleUpdateStatus(item, "completed")}
+                                  disabled={isDoneLoading}
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm hover:shadow-md active:scale-[0.98]"
+                                  title="Mark this translation as done and post updates to WordPress"
+                                >
+                                  {isDoneLoading ? (
+                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <Check className="w-4 h-4" />
+                                  )}
+                                  <span>Mark Done</span>
+                                </button>
+                              )}
+
+                              {/* Decline Button (Active only) */}
+                              {itemStatus === "active" && (
+                                <button
+                                  onClick={() => setDeclineModalItem(item)}
+                                  className="bg-white hover:bg-rose-50 text-rose-700 border border-rose-300 font-bold text-xs px-3 py-2.5 rounded-xl flex items-center justify-center gap-1 transition-all cursor-pointer shadow-xs hover:shadow-sm active:scale-[0.98]"
+                                  title="Decline / Reject this assignment"
+                                >
+                                  <X className="w-4 h-4 text-rose-600" />
+                                  <span>Decline</span>
+                                </button>
+                              )}
+
+                              {/* Reopen Button (Completed or Declined) */}
+                              {(itemStatus === "completed" || itemStatus === "declined") && (
+                                <button
+                                  onClick={() => handleUpdateStatus(item, "active")}
+                                  disabled={isReopenLoading}
+                                  className="bg-white hover:bg-slate-100 text-indigo-700 border border-indigo-300 font-bold text-xs px-3.5 py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-[0.98]"
+                                  title="Reopen and move task back to Active Radar"
+                                >
+                                  <RotateCcw className={`w-3.5 h-3.5 ${isReopenLoading ? "animate-spin" : ""}`} />
+                                  <span>Reactivate</span>
+                                </button>
+                              )}
+
+                              {/* Export Button */}
                               <button
                                 onClick={() => handleOpenExport(item)}
-                                disabled={exportingDocId === (item.id || item.documentId)}
-                                className="w-full sm:w-auto shrink-0 bg-white hover:bg-slate-100 text-slate-800 font-bold text-xs px-4 py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer border border-blue-200 shadow-xs hover:shadow-sm active:scale-[0.98]"
+                                disabled={exportingDocId === docKey}
+                                className="bg-white hover:bg-slate-100 text-slate-800 font-bold text-xs px-3 py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-slate-300 shadow-xs hover:shadow-sm active:scale-[0.98]"
                                 title="Export WordPress page translation"
                               >
-                                {exportingDocId === (item.id || item.documentId) ? (
+                                {exportingDocId === docKey ? (
                                   <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-600" />
                                 ) : (
                                   <Download className="w-3.5 h-3.5 text-blue-600" />
@@ -522,20 +683,12 @@ export function LinguistRestrictedScreen({ user, onLogout }) {
                                 <span>Export</span>
                               </button>
 
-                              <button
-                                onClick={() => openEditor(item)}
-                                className="w-full sm:w-auto shrink-0 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md hover:shadow-lg active:scale-[0.98]"
-                              >
-                                <Play className="w-3.5 h-3.5 fill-current" />
-                                <span>⚡ Open Live WP Editor</span>
-                                <ExternalLink className="w-3.5 h-3.5 ml-0.5" />
-                              </button>
                             </div>
                           </div>
 
                           {/* Details Row */}
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-blue-100 text-xs">
-                            <div className="bg-white/80 border border-blue-200/80 rounded-xl px-3.5 py-2 flex items-center gap-2.5 shadow-2xs">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-slate-200/70 text-xs">
+                            <div className="bg-white/80 border border-slate-200 rounded-xl px-3.5 py-2 flex items-center gap-2.5 shadow-2xs">
                               <Globe className="w-4 h-4 text-blue-600 shrink-0" />
                               <div className="min-w-0">
                                 <span className="text-[9px] font-bold text-blue-700 uppercase tracking-wider block">Target Language</span>
@@ -545,7 +698,7 @@ export function LinguistRestrictedScreen({ user, onLogout }) {
                               </div>
                             </div>
 
-                            <div className="bg-white/80 border border-blue-200/80 rounded-xl px-3.5 py-2 flex items-center gap-2.5 shadow-2xs">
+                            <div className="bg-white/80 border border-slate-200 rounded-xl px-3.5 py-2 flex items-center gap-2.5 shadow-2xs">
                               <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
                               <div className="min-w-0">
                                 <span className="text-[9px] font-bold text-emerald-700 uppercase tracking-wider block">Visual Live Sync</span>
@@ -555,7 +708,7 @@ export function LinguistRestrictedScreen({ user, onLogout }) {
                               </div>
                             </div>
 
-                            <div className="bg-white/80 border border-blue-200/80 rounded-xl px-3.5 py-2 flex items-center gap-2.5 shadow-2xs">
+                            <div className="bg-white/80 border border-slate-200 rounded-xl px-3.5 py-2 flex items-center gap-2.5 shadow-2xs">
                               <Clock className="w-4 h-4 text-slate-500 shrink-0" />
                               <div className="min-w-0">
                                 <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Assigned Date & Access</span>
@@ -574,37 +727,117 @@ export function LinguistRestrictedScreen({ user, onLogout }) {
                     return (
                       <div 
                         key={item.id || item.documentId}
-                        className="bg-white border border-slate-200/90 hover:border-indigo-300 rounded-2xl p-5 shadow-xs transition-all duration-200 hover:shadow-md space-y-4 relative overflow-hidden group"
+                        className={`border rounded-2xl p-5 shadow-xs transition-all duration-200 hover:shadow-md space-y-4 relative overflow-hidden group ${
+                          itemStatus === "completed"
+                            ? "bg-emerald-50/30 border-emerald-200"
+                            : itemStatus === "declined"
+                            ? "bg-rose-50/30 border-rose-200 opacity-80"
+                            : "bg-white border-slate-200/90 hover:border-indigo-300"
+                        }`}
                       >
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                           
                           {/* File & Project Title */}
                           <div className="flex items-start gap-3 min-w-0">
-                            <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0 mt-0.5">
-                              <FileText className="w-5 h-5 text-indigo-600" />
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 mt-0.5 ${
+                              itemStatus === "completed" ? "bg-emerald-600" : itemStatus === "declined" ? "bg-rose-600" : "bg-indigo-600"
+                            }`}>
+                              <FileText className="w-5 h-5 text-white" />
                             </div>
                             <div className="min-w-0 space-y-1">
-                              <h4 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors truncate">
-                                {item.documentName}
-                              </h4>
+                              <div className="flex items-center gap-2">
+                                <h4 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors truncate">
+                                  {item.documentName}
+                                </h4>
+                                {itemStatus === "completed" && (
+                                  <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-0.2 rounded-full">
+                                    Done
+                                  </span>
+                                )}
+                                {itemStatus === "declined" && (
+                                  <span className="text-[10px] font-extrabold text-rose-700 bg-rose-100 border border-rose-200 px-2 py-0.2 rounded-full">
+                                    Declined
+                                  </span>
+                                )}
+                              </div>
                               <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
                                 <span className="flex items-center gap-1 text-slate-600 font-semibold">
                                   <Folder className="w-3.5 h-3.5 text-indigo-500" />
                                   <span className="truncate">{item.projectName}</span>
                                 </span>
                               </div>
+
+                              {itemStatus === "declined" && item.declinedReason && (
+                                <div className="text-xs text-rose-700 font-semibold bg-rose-50 p-2 rounded-lg border border-rose-200/80 mt-1">
+                                  <strong>Decline Reason:</strong> {item.declinedReason}
+                                </div>
+                              )}
                             </div>
                           </div>
 
-                          {/* Action Buttons: Export & CAT Editor */}
-                          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                          {/* Action Buttons: Export & CAT Editor & Status */}
+                          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap w-full sm:w-auto shrink-0">
+                            
+                            {/* Open CAT Editor */}
+                            <button
+                              onClick={() => openEditor(item)}
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm hover:shadow-md active:scale-[0.98]"
+                            >
+                              <Play className="w-3.5 h-3.5 fill-current" />
+                              <span>{itemStatus === "completed" ? "Review In Editor" : "Open CAT Editor"}</span>
+                              <ExternalLink className="w-3 h-3 ml-0.5" />
+                            </button>
+
+                            {/* Mark as Done (Active only) */}
+                            {itemStatus === "active" && (
+                              <button
+                                onClick={() => handleUpdateStatus(item, "completed")}
+                                disabled={isDoneLoading}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm hover:shadow-md active:scale-[0.98]"
+                                title="Mark task as completed"
+                              >
+                                {isDoneLoading ? (
+                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <Check className="w-4 h-4" />
+                                )}
+                                <span>Mark Done</span>
+                              </button>
+                            )}
+
+                            {/* Decline (Active only) */}
+                            {itemStatus === "active" && (
+                              <button
+                                onClick={() => setDeclineModalItem(item)}
+                                className="bg-white hover:bg-rose-50 text-rose-700 border border-rose-300 font-bold text-xs px-3 py-2.5 rounded-xl flex items-center justify-center gap-1 transition-all cursor-pointer shadow-xs active:scale-[0.98]"
+                                title="Decline this task"
+                              >
+                                <X className="w-4 h-4 text-rose-600" />
+                                <span>Decline</span>
+                              </button>
+                            )}
+
+                            {/* Reopen (Completed or Declined) */}
+                            {(itemStatus === "completed" || itemStatus === "declined") && (
+                              <button
+                                onClick={() => handleUpdateStatus(item, "active")}
+                                disabled={isReopenLoading}
+                                className="bg-white hover:bg-slate-100 text-indigo-700 border border-indigo-300 font-bold text-xs px-3.5 py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-[0.98]"
+                                title="Reactivate task back to Active Radar"
+                              >
+                                <RotateCcw className={`w-3.5 h-3.5 ${isReopenLoading ? "animate-spin" : ""}`} />
+                                <span>Reactivate</span>
+                              </button>
+                            )}
+
+                            {/* Export */}
                             <button
                               onClick={() => handleOpenExport(item)}
-                              disabled={exportingDocId === (item.id || item.documentId)}
-                              className="w-full sm:w-auto shrink-0 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs px-4 py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer border border-slate-300/80 shadow-xs hover:shadow-sm active:scale-[0.98]"
-                              title="Export translated document, XLIFF, TMX or Review Table"
+                              disabled={exportingDocId === docKey}
+                              className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs px-3 py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-slate-300 shadow-xs hover:shadow-sm active:scale-[0.98]"
+                              title="Export translated document"
                             >
-                              {exportingDocId === (item.id || item.documentId) ? (
+                              {exportingDocId === docKey ? (
                                 <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-600" />
                               ) : (
                                 <Download className="w-3.5 h-3.5 text-indigo-600" />
@@ -612,14 +845,6 @@ export function LinguistRestrictedScreen({ user, onLogout }) {
                               <span>Export</span>
                             </button>
 
-                            <button
-                              onClick={() => openEditor(item)}
-                              className="w-full sm:w-auto shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm hover:shadow-md active:scale-[0.98]"
-                            >
-                              <Play className="w-3.5 h-3.5 fill-current" />
-                              <span>Open CAT Editor</span>
-                              <ExternalLink className="w-3.5 h-3.5 ml-0.5" />
-                            </button>
                           </div>
                         </div>
 
@@ -671,9 +896,17 @@ export function LinguistRestrictedScreen({ user, onLogout }) {
                     <Clock className="w-6 h-6 text-indigo-500" />
                   </div>
                   <div className="space-y-1 max-w-md mx-auto">
-                    <h4 className="text-sm font-bold text-slate-900">Awaiting Job Dispatch</h4>
+                    <h4 className="text-sm font-bold text-slate-900">
+                      {activeTab === "completed"
+                        ? "No Completed Tasks Yet"
+                        : activeTab === "declined"
+                        ? "No Declined Tasks"
+                        : "No Active Tasks Available"}
+                    </h4>
                     <p className="text-xs text-slate-500 leading-relaxed font-medium">
-                      No files assigned yet. When your Project Coordinator shares a document or project with your email address (<strong className="text-slate-800">{userEmail}</strong>), it will instantly populate here in your Assignment Radar!
+                      {activeTab === "active"
+                        ? `When new tasks are assigned to ${userEmail}, they will instantly appear here on your Active Radar!`
+                        : `Switch back to the Active Jobs tab to view current tasks assigned to you.`}
                     </p>
                   </div>
                 </div>
@@ -686,6 +919,64 @@ export function LinguistRestrictedScreen({ user, onLogout }) {
         </div>
 
       </main>
+
+      {/* Decline Task Modal */}
+      {declineModalItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-200 space-y-5 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 shadow-xs">
+                  <XCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Decline Assignment</h3>
+                  <p className="text-xs text-slate-500 font-medium">Return task to coordinator pool</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setDeclineModalItem(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs text-slate-600">
+                Are you sure you want to decline <strong>{declineModalItem.documentName}</strong> ({getLanguageLabel(declineModalItem.targetLang)})?
+              </p>
+              <label className="text-[11px] font-bold text-slate-700 block mt-2">
+                Reason for declining (optional):
+              </label>
+              <textarea
+                value={declineReason}
+                onChange={(e) => setDeclineReason(e.target.value)}
+                placeholder="e.g., Unavailable schedule, domain mismatch, technical constraints..."
+                rows={3}
+                className="w-full text-xs p-3 rounded-xl border border-slate-300 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 outline-none resize-none"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setDeclineModalItem(null)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleUpdateStatus(declineModalItem, "declined", declineReason)}
+                disabled={actionLoadingId !== null}
+                className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer shadow-md flex items-center gap-1.5"
+              >
+                {actionLoadingId ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                <span>Confirm Decline</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Export Modal */}
       {showExportModal && exportModalData && (

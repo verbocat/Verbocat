@@ -207,6 +207,8 @@ documentRouter.get(["/documents/assigned", "/api/documents/assigned"], checkAuth
             if (seenKeys.has(key)) continue;
             seenKeys.add(key);
 
+            const assignStatus = assignment.status || (doc.status === "completed" ? "completed" : "active");
+
             assignedList.push({
               id: `${row.id}_${assignedLang}`,
               documentId: doc.id,
@@ -221,7 +223,11 @@ documentRouter.get(["/documents/assigned", "/api/documents/assigned"], checkAuth
               assignerEmail,
               assignerRole: "Project Coordinator",
               sourceType: isWordPress ? "wordpress" : "generic",
-              metadata: docMeta
+              metadata: docMeta,
+              status: assignStatus,
+              declinedReason: assignment.declinedReason || null,
+              completedAt: assignment.completedAt || null,
+              declinedAt: assignment.declinedAt || null
             });
           }
         } else {
@@ -244,6 +250,8 @@ documentRouter.get(["/documents/assigned", "/api/documents/assigned"], checkAuth
           if (seenKeys.has(key)) continue;
           seenKeys.add(key);
 
+          const assignStatus = doc.status === "completed" ? "completed" : "active";
+
           assignedList.push({
             id: row.id,
             documentId: doc.id,
@@ -258,7 +266,11 @@ documentRouter.get(["/documents/assigned", "/api/documents/assigned"], checkAuth
             assignerEmail,
             assignerRole: "Project Coordinator",
             sourceType: isWordPress ? "wordpress" : "generic",
-            metadata: docMeta
+            metadata: docMeta,
+            status: assignStatus,
+            declinedReason: null,
+            completedAt: null,
+            declinedAt: null
           });
         }
       }
@@ -537,6 +549,145 @@ documentRouter.post(
     } catch (err) {
       console.error("[COMPLETE_WP_TASK_ERR]", err);
       return response.status(500).json({ error: err.message || "Failed to complete WordPress task." });
+    }
+  }
+);
+
+// Update Linguist Assignment Status (Active, Completed, Declined)
+documentRouter.post(
+  ["/documents/:id/assignment-status", "/api/documents/:id/assignment-status"],
+  checkAuth,
+  async (request, response) => {
+    try {
+      const documentId = request.params.id;
+      const { targetLang, status, reason } = request.body;
+      const validStatuses = ["active", "completed", "declined"];
+      const newStatus = validStatuses.includes(status) ? status : "active";
+
+      const userId = request.user.id;
+      const userEmail = request.user.email?.trim().toLowerCase();
+
+      // Find all matching profile IDs for this user
+      const { data: userProfiles } = await supabase
+        .from("profiles")
+        .select("id")
+        .ilike("email", userEmail || "");
+
+      const validUserIds = Array.from(new Set([userId, ...(userProfiles || []).map(p => p.id)].filter(Boolean)));
+
+      // 1. Fetch document and project
+      const { data: doc } = await supabase
+        .from("documents")
+        .select("*, projects(id, settings)")
+        .eq("id", documentId)
+        .maybeSingle();
+
+      if (!doc) {
+        return response.status(404).json({ error: "Document not found" });
+      }
+
+      const proj = doc.projects;
+      if (proj && proj.id) {
+        const projSettings = proj.settings || {};
+        const linguistAssignments = { ...(projSettings.linguistAssignments || {}) };
+        let updated = false;
+
+        for (const uId of validUserIds) {
+          if (linguistAssignments[uId] && Array.isArray(linguistAssignments[uId])) {
+            linguistAssignments[uId] = linguistAssignments[uId].map(a => {
+              if (a.documentId === documentId && (!targetLang || a.targetLang === targetLang)) {
+                updated = true;
+                return {
+                  ...a,
+                  status: newStatus,
+                  declinedReason: newStatus === "declined" ? (reason || "Declined by linguist") : null,
+                  declinedAt: newStatus === "declined" ? new Date().toISOString() : null,
+                  completedAt: newStatus === "completed" ? new Date().toISOString() : null
+                };
+              }
+              return a;
+            });
+          }
+        }
+
+        if (updated) {
+          await supabase
+            .from("projects")
+            .update({
+              settings: {
+                ...projSettings,
+                linguistAssignments
+              }
+            })
+            .eq("id", proj.id);
+        }
+      }
+
+      // If document is marked as completed or for WordPress tasks
+      if (newStatus === "completed") {
+        const docMeta = proj?.settings?.documentsMetadata?.[documentId] || doc.metadata || {};
+        if (docMeta.wp_callback_url) {
+          try {
+            const axios = require("axios");
+            const tLang = targetLang || doc.target_lang || "hi";
+            const { data: segments } = await supabase
+              .from("document_segments")
+              .select("segment_index, source_text, target_text, status")
+              .eq("document_id", documentId)
+              .eq("target_lang", tLang)
+              .order("segment_index", { ascending: true });
+
+            const { data: htmlData } = await supabase
+              .from("html_files")
+              .select("content")
+              .eq("id", doc.file_id || documentId)
+              .maybeSingle();
+
+            let translatedHtml = "";
+            if (htmlData && htmlData.content) {
+              const htmlParser = require("../utils/parsers/htmlParser");
+              const exportSegments = (segments || []).map(s => ({
+                id: s.segment_index,
+                target: s.target_text || s.source_text
+              }));
+              const exportedBuffer = await htmlParser.exportFile(htmlData.content, exportSegments);
+              translatedHtml = exportedBuffer.toString("utf-8");
+            } else {
+              translatedHtml = (segments || []).map(s => `<p>${s.target_text || s.source_text}</p>`).join("\n");
+            }
+
+            const translatedTitle = segments && segments.length > 0 && segments[0].target_text ? segments[0].target_text : "";
+
+            await axios.post(docMeta.wp_callback_url, {
+              action: "translation_completed",
+              document_id: documentId,
+              post_id: docMeta.wp_post_id,
+              source_lang: doc.source_lang,
+              target_lang: tLang,
+              translated_title: translatedTitle,
+              translated_content: translatedHtml,
+              status: "completed",
+              linguist: {
+                name: request.profile?.name || request.profile?.full_name || request.user?.email,
+                email: request.user?.email
+              },
+              timestamp: new Date().toISOString()
+            }, {
+              headers: { "Content-Type": "application/json", "x-verbocat-event": "translation.completed" },
+              timeout: 15000
+            }).catch(e => console.warn("[WP_CALLBACK_WARN]", e.message));
+          } catch (_) {}
+        }
+      }
+
+      return response.json({
+        success: true,
+        status: newStatus,
+        message: `Task successfully marked as ${newStatus}`
+      });
+    } catch (err) {
+      console.error("[UPDATE_ASSIGNMENT_STATUS_ERR]", err);
+      return response.status(500).json({ error: err.message || "Failed to update assignment status." });
     }
   }
 );
