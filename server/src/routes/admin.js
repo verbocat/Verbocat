@@ -524,15 +524,22 @@ adminRouter.get("/credit-logs", async (request, response) => {
 
     if (targetOrgId) {
       query = query.eq("organization_id", targetOrgId);
+    } else {
+      query = query.or("organization_id.is.null,organization_id.eq." + (activeTenantId || "00000000-0000-0000-0000-000000000000"));
     }
 
     let { data: logs, error } = await query;
 
     if (error && (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('organization_id'))) {
-      const fallbackQuery = supabase.from("credit_logs").select("*").order("created_at", { ascending: false });
-      const res = await fallbackQuery;
-      logs = res.data;
-      error = res.error;
+      if (targetOrgId) {
+        logs = [];
+        error = null;
+      } else {
+        const fallbackQuery = supabase.from("credit_logs").select("*").order("created_at", { ascending: false });
+        const res = await fallbackQuery;
+        logs = res.data;
+        error = res.error;
+      }
     }
 
     if (error) {
@@ -569,6 +576,8 @@ adminRouter.get("/tm", async (request, response) => {
     // Isolation logic: filter TM entries strictly by active tenant space
     if (targetOrgId) {
       query = query.eq("organization_id", targetOrgId);
+    } else {
+      query = query.or("organization_id.is.null,organization_id.eq." + (activeTenantId || "00000000-0000-0000-0000-000000000000"));
     }
 
     if (sourceLang) {
@@ -582,12 +591,17 @@ adminRouter.get("/tm", async (request, response) => {
 
     // Schema fallback if organization_id column is missing in DB cache
     if (error && (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('organization_id'))) {
-      let fallbackQuery = supabase.from("translation_memory").select("*").order("created_at", { ascending: false });
-      if (sourceLang) fallbackQuery = fallbackQuery.eq("source_lang", sourceLang);
-      if (targetLang) fallbackQuery = fallbackQuery.eq("target_lang", targetLang);
-      const res = await fallbackQuery;
-      data = res.data;
-      error = res.error;
+      if (targetOrgId) {
+        data = [];
+        error = null;
+      } else {
+        let fallbackQuery = supabase.from("translation_memory").select("*").order("created_at", { ascending: false });
+        if (sourceLang) fallbackQuery = fallbackQuery.eq("source_lang", sourceLang);
+        if (targetLang) fallbackQuery = fallbackQuery.eq("target_lang", targetLang);
+        const res = await fallbackQuery;
+        data = res.data;
+        error = res.error;
+      }
     }
 
     if (error) {

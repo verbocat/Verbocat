@@ -21,33 +21,26 @@ async function getOrganizationBySubdomain(subdomain) {
         .limit(1);
       if (data && data.length > 0) org = data[0];
     } else {
-      // 1. Exact subdomain match
-      const { data: exactOrg } = await supabase
-        .from("organizations")
-        .select("*")
-        .eq("subdomain", cleanSubdomain)
-        .maybeSingle();
+      const variants = [
+        cleanSubdomain,
+        cleanSubdomain.replace(/-/g, " "),
+        cleanSubdomain.replace(/-/g, "_"),
+        cleanSubdomain.replace(/_/g, "-"),
+        cleanSubdomain.replace(/\s+/g, "-"),
+        cleanSubdomain.replace(/\s+/g, "")
+      ];
 
-      if (exactOrg) {
-        org = exactOrg;
-      } else {
-        // 2. Case-insensitive subdomain or name match
-        const { data: ilikeOrg } = await supabase
+      for (const variant of variants) {
+        if (!variant) continue;
+        const { data: matched } = await supabase
           .from("organizations")
           .select("*")
-          .ilike("subdomain", cleanSubdomain)
-          .maybeSingle();
+          .or(`subdomain.eq.${variant},subdomain.ilike.${variant},name.eq.${variant},name.ilike.${variant}`)
+          .limit(1);
 
-        if (ilikeOrg) {
-          org = ilikeOrg;
-        } else {
-          const { data: nameOrg } = await supabase
-            .from("organizations")
-            .select("*")
-            .ilike("name", cleanSubdomain)
-            .maybeSingle();
-
-          if (nameOrg) org = nameOrg;
+        if (matched && matched.length > 0) {
+          org = matched[0];
+          break;
         }
       }
     }
@@ -158,23 +151,17 @@ async function resolveTenant(request, response, next) {
 
     let tenant = await getOrganizationBySubdomain(subdomain);
 
-    const isAuthRoute = /^\/api\/auth(\/|$)/.test(request.path || "");
-
+    // If specific tenant not found, fallback to centroid root space instead of throwing 404
     if (!tenant) {
-      if (isAuthRoute) {
-        tenant = await getOrganizationBySubdomain("centroid");
-      }
-      if (!tenant) {
-        return response.status(404).json({ error: `Tenant space '${subdomain}' not found.` });
-      }
+      tenant = await getOrganizationBySubdomain("centroid");
     }
 
-    if (tenant.status === "suspended") {
+    if (tenant && tenant.status === "suspended") {
       return response.status(403).json({ error: `Tenant space '${tenant.name}' is currently suspended. Please contact VerboLabs support.` });
     }
 
     request.tenant = tenant;
-    request.tenant_id = tenant.id;
+    request.tenant_id = tenant?.id || null;
     next();
   } catch (err) {
     console.error("Tenant Resolution Error:", err);
