@@ -309,6 +309,7 @@ documentRouter.get(["/documents/:id", "/api/documents/:id"], checkAuth, async (r
       permission: access.permission,
       trackChangesEnabled: doc.track_changes_enabled || false,
       contextSettings: contextSettings,
+      metadata: doc.metadata || null,
       segments: segments || []
     });
   } catch (error) {
@@ -316,6 +317,117 @@ documentRouter.get(["/documents/:id", "/api/documents/:id"], checkAuth, async (r
     response.status(500).json({ error: "Failed to fetch document." });
   }
 });
+
+// Complete WordPress Task from Editor
+documentRouter.post(
+  ["/documents/:id/complete-wordpress-task", "/api/documents/:id/complete-wordpress-task"],
+  checkAuth,
+  async (request, response) => {
+    try {
+      const documentId = request.params.id;
+      const { targetLang } = request.body;
+
+      const { data: doc } = await supabase
+        .from("documents")
+        .select("*")
+        .eq("id", documentId)
+        .maybeSingle();
+
+      if (!doc) {
+        return response.status(404).json({ error: "Document not found" });
+      }
+
+      const tLang = targetLang || doc.target_lang || "hi";
+      const docMeta = doc.metadata || {};
+      const callbackUrl = docMeta.wp_callback_url;
+
+      if (!callbackUrl) {
+        return response.status(400).json({ error: "This document is not linked to a WordPress task callback URL." });
+      }
+
+      // Fetch all translated segments for this target language
+      const { data: segments } = await supabase
+        .from("document_segments")
+        .select("segment_index, source_text, target_text, status")
+        .eq("document_id", documentId)
+        .eq("target_lang", tLang)
+        .order("segment_index", { ascending: true });
+
+      // Fetch template from html_files
+      const { data: htmlData } = await supabase
+        .from("html_files")
+        .select("content")
+        .eq("id", documentId)
+        .maybeSingle();
+
+      let translatedHtml = "";
+      if (htmlData && htmlData.content) {
+        const htmlParser = require("../utils/parsers/htmlParser");
+        const exportSegments = (segments || []).map(s => ({
+          id: s.segment_index,
+          target: s.target_text || s.source_text
+        }));
+        const exportedBuffer = await htmlParser.exportFile(htmlData.content, exportSegments);
+        translatedHtml = exportedBuffer.toString("utf-8");
+      } else {
+        translatedHtml = (segments || []).map(s => `<p>${s.target_text || s.source_text}</p>`).join("\n");
+      }
+
+      const translatedTitle = segments && segments.length > 0 && segments[0].target_text ? segments[0].target_text : "";
+
+      // Send HTTP POST webhook to WordPress callback URL
+      const axios = require("axios");
+      const webhookPayload = {
+        action: "translation_completed",
+        document_id: documentId,
+        post_id: docMeta.wp_post_id,
+        source_lang: doc.source_lang,
+        target_lang: tLang,
+        translated_title: translatedTitle,
+        translated_content: translatedHtml,
+        status: "completed",
+        linguist: {
+          name: request.profile?.name || request.profile?.full_name || request.user?.email,
+          email: request.user?.email
+        },
+        timestamp: new Date().toISOString()
+      };
+
+      let wpResponseStatus = 200;
+      let wpResponseBody = null;
+
+      try {
+        const wpRes = await axios.post(callbackUrl, webhookPayload, {
+          headers: {
+            "Content-Type": "application/json",
+            "x-verbocat-event": "translation.completed"
+          },
+          timeout: 15000
+        });
+        wpResponseStatus = wpRes.status;
+        wpResponseBody = wpRes.data;
+      } catch (wpErr) {
+        console.warn("[WORDPRESS_CALLBACK_DISPATCH_WARN]", wpErr.message);
+        wpResponseBody = wpErr.response?.data || wpErr.message;
+      }
+
+      // Update document status to completed
+      await supabase
+        .from("documents")
+        .update({ status: "completed", updated_at: new Date().toISOString() })
+        .eq("id", documentId);
+
+      return response.json({
+        success: true,
+        message: "Translation marked as completed and synced to WordPress!",
+        wordpress_response: wpResponseBody
+      });
+    } catch (err) {
+      console.error("[COMPLETE_WP_TASK_ERR]", err);
+      return response.status(500).json({ error: err.message || "Failed to complete WordPress task." });
+    }
+  }
+);
 
 // 3.4 Auto-detect Document Context Settings
 documentRouter.post(

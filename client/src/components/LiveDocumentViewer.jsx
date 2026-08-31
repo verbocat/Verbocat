@@ -13,6 +13,7 @@ export const LiveDocumentViewer = ({
   segments = [],
   targetLang = "hi",
   darkMode = true,
+  documentMetadata = null,
   onClose = () => {},
 }) => {
   const containerRef = useRef(null);
@@ -212,8 +213,9 @@ export const LiveDocumentViewer = ({
     }
   };
 
+  const isWordPress = documentMetadata?.source_type === "wordpress";
   const hasContent = isHtmlMode ? !!htmlContent : !!previewBuffer;
-  const docTypeLabel = isHtmlMode ? "Live HTML Document" : "Live Word Document";
+  const docTypeLabel = isWordPress ? "WordPress Live Visual Draft" : (isHtmlMode ? "Live HTML Document" : "Live Word Document");
   const exportLabel = isHtmlMode ? "Export HTML" : "Export DOCX";
 
   return (
@@ -226,15 +228,22 @@ export const LiveDocumentViewer = ({
       <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-panel)] shrink-0 select-none">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className={`p-1.5 rounded-lg border shrink-0 ${
-            isHtmlMode
-              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-              : "bg-indigo-500/10 text-indigo-400 border-indigo-500/20"
+            isWordPress
+              ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+              : (isHtmlMode
+                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                : "bg-indigo-500/10 text-indigo-400 border-indigo-500/20")
           }`}>
-            {isHtmlMode ? <Globe size={16} /> : <FileText size={16} />}
+            {isWordPress ? <Globe size={16} /> : (isHtmlMode ? <Globe size={16} /> : <FileText size={16} />)}
           </div>
           <div className="min-w-0">
-            <h4 className="text-xs font-bold truncate text-[var(--text-primary)]">
-              {fileName}
+            <h4 className="text-xs font-bold truncate text-[var(--text-primary)] flex items-center gap-1.5">
+              <span>{fileName}</span>
+              {isWordPress && documentMetadata?.wp_post_id && (
+                <span className="bg-blue-500/10 text-blue-400 text-[9px] px-1.5 py-0.5 rounded font-mono border border-blue-500/20">
+                  WP #{documentMetadata.wp_post_id}
+                </span>
+              )}
             </h4>
             <p className="text-[10px] text-[var(--text-muted)] font-medium flex items-center gap-1.5 mt-0.5">
               <span>{docTypeLabel}</span>

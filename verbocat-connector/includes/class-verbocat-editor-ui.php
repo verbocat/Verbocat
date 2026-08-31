@@ -21,6 +21,13 @@ class Verbocat_Editor_UI {
         add_filter('page_row_actions', [__CLASS__, 'add_row_action'], 10, 2);
         add_action('save_post', [__CLASS__, 'save_meta_box_data'], 10, 2);
 
+        // Bulk Actions on Pages and Posts List for Centroid Human Review
+        add_filter('bulk_actions-edit-page', [__CLASS__, 'register_bulk_actions']);
+        add_filter('bulk_actions-edit-post', [__CLASS__, 'register_bulk_actions']);
+        add_filter('handle_bulk_actions-edit-page', [__CLASS__, 'handle_bulk_action_dispatch'], 10, 3);
+        add_filter('handle_bulk_actions-edit-post', [__CLASS__, 'handle_bulk_action_dispatch'], 10, 3);
+        add_action('admin_notices', [__CLASS__, 'display_bulk_dispatch_notice']);
+
         // AJAX handlers
         add_action('wp_ajax_verbocat_manual_translate', [__CLASS__, 'ajax_manual_translate']);
         add_action('wp_ajax_verbocat_sync_from_tm', [__CLASS__, 'ajax_sync_from_tm']);
@@ -1439,5 +1446,122 @@ class Verbocat_Editor_UI {
         }
 
         wp_send_json_success(['message' => 'Translation Memory synchronized.']);
+    }
+
+    /**
+     * Register Bulk Actions for Pages and Posts
+     */
+    public static function register_bulk_actions($bulk_actions) {
+        $bulk_actions['verbocat_send_human_review'] = __('🚀 Send to Centroid for Human Review', 'verbocat-connector');
+        return $bulk_actions;
+    }
+
+    /**
+     * Handle Bulk Action Dispatch to Centroid
+     */
+    public static function handle_bulk_action_dispatch($redirect_to, $doaction, $post_ids) {
+        if ($doaction !== 'verbocat_send_human_review') {
+            return $redirect_to;
+        }
+
+        if (empty($post_ids) || !is_array($post_ids)) {
+            return $redirect_to;
+        }
+
+        $opts = Verbocat_Settings::get_options();
+        $global_target_langs = !empty($opts['target_langs']) ? array_filter(array_map('trim', explode(',', $opts['target_langs']))) : [];
+        $linguist_assignments = $opts['linguist_assignments'] ?? [];
+
+        $pages_payload = [];
+
+        foreach ($post_ids as $post_id) {
+            $post = get_post($post_id);
+            if (!$post || get_post_meta($post_id, '_verbocat_is_translation', true)) {
+                continue;
+            }
+
+            // Get target languages for this specific page or fallback to global pool
+            $page_langs = get_post_meta($post_id, '_verbocat_auto_target_langs', true);
+            if (!is_array($page_langs) || empty($page_langs)) {
+                $page_langs = $global_target_langs;
+            }
+            if (empty($page_langs)) {
+                $page_langs = ['hi']; // Default fallback
+            }
+
+            // Render HTML for smooth WYSIWYG preview on Centroid
+            $rendered_html = apply_filters('the_content', $post->post_content);
+            if (empty($rendered_html)) {
+                $rendered_html = '<article class="page"><h1>' . esc_html($post->post_title) . '</h1><div>' . wpautop($post->post_content) . '</div></article>';
+            }
+
+            $pages_payload[] = [
+                'post_id'              => $post->ID,
+                'title'                => $post->post_title,
+                'content'              => $post->post_content,
+                'rendered_html'        => $rendered_html,
+                'permalink'            => get_permalink($post->ID),
+                'source_lang'          => $opts['source_lang'] ?? 'en',
+                'target_langs'         => array_values($page_langs),
+                'linguist_assignments' => $linguist_assignments
+            ];
+
+            update_post_meta($post->ID, '_verbocat_translation_status', 'in_centroid_review');
+            update_post_meta($post->ID, '_verbocat_centroid_dispatched_at', current_time('mysql'));
+        }
+
+        if (!empty($pages_payload)) {
+            $batch_payload = [
+                'site_url'     => home_url(),
+                'callback_url' => rest_url('verbocat/v1/webhook'),
+                'project_name' => get_bloginfo('name') . ' - WP Human Review (' . count($pages_payload) . ' Pages)',
+                'pages'        => $pages_payload
+            ];
+
+            $response = Verbocat_Api_Client::submit_batch_human_review($batch_payload);
+
+            if (is_wp_error($response)) {
+                $redirect_to = add_query_arg([
+                    'verbocat_bulk_error' => urlencode($response->get_error_message())
+                ], $redirect_to);
+            } else {
+                $redirect_to = add_query_arg([
+                    'verbocat_bulk_dispatched'  => count($pages_payload),
+                    'verbocat_centroid_project' => $response['project_id'] ?? ''
+                ], $redirect_to);
+            }
+        }
+
+        return $redirect_to;
+    }
+
+    /**
+     * Display Bulk Dispatch Admin Notice
+     */
+    public static function display_bulk_dispatch_notice() {
+        if (!empty($_GET['verbocat_bulk_dispatched'])) {
+            $count = intval($_GET['verbocat_bulk_dispatched']);
+            $proj_id = sanitize_text_field($_GET['verbocat_centroid_project'] ?? '');
+            ?>
+            <div class="notice notice-success is-dismissible" style="padding: 12px 16px; border-left-color: #2563eb; background: #f0fdf4; border-radius: 6px; margin: 16px 0;">
+                <p style="margin: 0; font-size: 14px; color: #166534; display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 18px;">🚀</span>
+                    <strong><?php echo sprintf(__('%d WordPress pages successfully dispatched to Centroid for Human Review!', 'verbocat-connector'), $count); ?></strong>
+                </p>
+                <p style="margin: 4px 0 0 26px; font-size: 12px; color: #15803d;">
+                    <?php _e('Assigned linguists have received these tasks on their Centroid radar. Once reviewed and marked as completed, translations will automatically post back into WordPress drafts.', 'verbocat-connector'); ?>
+                </p>
+            </div>
+            <?php
+        } elseif (!empty($_GET['verbocat_bulk_error'])) {
+            $err = sanitize_text_field(urldecode($_GET['verbocat_bulk_error']));
+            ?>
+            <div class="notice notice-error is-dismissible" style="padding: 12px 16px; margin: 16px 0;">
+                <p style="margin: 0; font-size: 14px; font-weight: 600; color: #991b1b;">
+                    <?php _e('Failed to dispatch pages to Centroid:', 'verbocat-connector'); ?> <?php echo esc_html($err); ?>
+                </p>
+            </div>
+            <?php
+        }
     }
 }

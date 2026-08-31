@@ -24,7 +24,8 @@ export const WorkspaceToolbar = ({
   onTranslateSelected, onVerifySelected, onUnverifySelected,
   onCopySourceToTargetSelected, onClearTargetSelected, onClearSelection,
   showLivePreview = false, onToggleLivePreview, isPreviewLoading = false,
-  hasAutoTranslation = true, hasAutoQc = true, dbSaveStatus = "saved"
+  hasAutoTranslation = true, hasAutoQc = true, dbSaveStatus = "saved",
+  documentMetadata = null, onCompleteWordPressTask = null, isCompletingWpTask = false
 }) => {
 
   const [showDocMenu, setShowDocMenu] = useState(false);
@@ -125,7 +126,45 @@ export const WorkspaceToolbar = ({
           <span>{showLivePreview ? "Hide Preview" : "Live Preview"}</span>
         </button>
 
+        {/* WordPress Task Actions */}
+        {documentMetadata?.source_type === "wordpress" && (
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, marginLeft: 4 }}>
+            <button
+              onClick={onCompleteWordPressTask}
+              disabled={isCompletingWpTask || !canAct}
+              className="ab"
+              style={{
+                background: "linear-gradient(135deg, #059669 0%, #10b981 100%)",
+                color: "#ffffff",
+                fontWeight: 600,
+                border: "1px solid #059669",
+                boxShadow: "0 1px 3px rgba(5,150,105,0.3)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4
+              }}
+              title="Post completed translations back to WordPress"
+            >
+              <CheckCircle2
+                style={{ width: 13, height: 13, color: "#ffffff", flexShrink: 0 }}
+                className={isCompletingWpTask ? "animate-spin" : ""}
+              />
+              <span>{isCompletingWpTask ? "Posting to WP…" : "Complete & Post to WP"}</span>
+            </button>
 
+            {documentMetadata.wp_permalink && (
+              <a
+                href={documentMetadata.wp_permalink}
+                target="_blank"
+                rel="noreferrer"
+                className="ab text-xs text-slate-400 hover:text-indigo-400 flex items-center gap-1"
+                style={{ border: "1px solid rgba(255,255,255,0.1)", background: "rgba(0,0,0,0.2)", textDecoration: "none", color: "#94a3b8" }}
+              >
+                <span>WP Post #{documentMetadata.wp_post_id} ↗</span>
+              </a>
+            )}
+          </div>
+        )}
 
         {/* Track Changes (Owner Only) */}
         {isOwner && (

@@ -171,4 +171,89 @@ class Verbocat_Api_Client {
 
         return $json;
     }
+
+    /**
+     * Fetch approved linguists from Centroid for target languages
+     *
+     * @param string|null $target_lang Optional target language filter
+     * @return array|WP_Error
+     */
+    public static function get_linguists($target_lang = null) {
+        $opts = Verbocat_Settings::get_options();
+        $url = $opts['api_url'];
+        $key = $opts['api_key'];
+
+        if (empty($key)) {
+            return new WP_Error('missing_api_key', __('Verbocat API key is missing.', 'verbocat-connector'));
+        }
+
+        $endpoint = rtrim($url, '/') . '/wordpress/linguists';
+        if ($target_lang) {
+            $endpoint = add_query_arg(['target_lang' => $target_lang], $endpoint);
+        }
+
+        $response = wp_remote_get($endpoint, [
+            'headers' => [
+                'x-api-key' => $key
+            ],
+            'timeout' => 20
+        ]);
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        $code = wp_remote_retrieve_response_code($response);
+        $body = wp_remote_retrieve_body($response);
+        $json = json_decode($body, true);
+
+        if ($code !== 200 || empty($json['success'])) {
+            $msg = $json['error'] ?? sprintf(__('Failed to fetch linguists list (HTTP %d).', 'verbocat-connector'), $code);
+            return new WP_Error('api_error', $msg);
+        }
+
+        return $json['linguists'] ?? [];
+    }
+
+    /**
+     * Submit a batch of WordPress posts/pages to Centroid for Human-in-the-Loop review
+     *
+     * @param array $payload Batch payload containing pages, target languages, linguist assignments
+     * @return array|WP_Error
+     */
+    public static function submit_batch_human_review($payload) {
+        $opts = Verbocat_Settings::get_options();
+        $url = $opts['api_url'];
+        $key = $opts['api_key'];
+
+        if (empty($key)) {
+            return new WP_Error('missing_api_key', __('Verbocat API key is missing.', 'verbocat-connector'));
+        }
+
+        $endpoint = rtrim($url, '/') . '/wordpress/submit-batch-human-review';
+
+        $response = wp_remote_post($endpoint, [
+            'headers' => [
+                'Content-Type' => 'application/json',
+                'x-api-key'    => $key
+            ],
+            'body'    => wp_json_encode($payload),
+            'timeout' => 60
+        ]);
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        $code = wp_remote_retrieve_response_code($response);
+        $body = wp_remote_retrieve_body($response);
+        $json = json_decode($body, true);
+
+        if ($code !== 200 || empty($json['success'])) {
+            $msg = $json['error'] ?? sprintf(__('Centroid Batch Review submission failed (HTTP %d).', 'verbocat-connector'), $code);
+            return new WP_Error('batch_submit_error', $msg);
+        }
+
+        return $json;
+    }
 }

@@ -755,5 +755,390 @@ publicApiRouter.post("/keys/generate", async (req, res) => {
   }
 });
 
+/**
+ * 10. WordPress Integration: List Approved Linguists by Language
+ * GET /api/v1/wordpress/linguists
+ * Query: ?target_lang=hi
+ */
+publicApiRouter.get("/wordpress/linguists", async (req, res) => {
+  try {
+    const targetLang = req.query.target_lang ? req.query.target_lang.toLowerCase().trim() : null;
+    const orgId = req.organization?.id || req.profile?.organization_id || null;
+
+    // 1. Fetch linguist profiles that are approved / active
+    let query = supabase
+      .from("linguist_profiles")
+      .select("id, user_id, full_name, email, primary_language, secondary_languages, status, availability, years_of_experience")
+      .in("status", ["approved", "active"]);
+
+    if (orgId) {
+      query = query.or(`organization_id.eq.${orgId},organization_id.is.null`);
+    }
+
+    const { data: linguistProfiles } = await query;
+
+    // 2. Also fetch approved linguist language pairs
+    const { data: langPairs } = await supabase
+      .from("linguist_language_pairs")
+      .select("linguist_profile_id, source_language, target_language, proficiency, is_native");
+
+    // 3. Also check general profiles table for users with role 'linguist' or 'in_region_reviewer'
+    const { data: userProfiles } = await supabase
+      .from("profiles")
+      .select("id, name, full_name, email, role, status")
+      .in("role", ["linguist", "in_region_reviewer"])
+      .eq("status", "active");
+
+    const linguistsMap = new Map();
+
+    // Add from linguist_profiles
+    (linguistProfiles || []).forEach(lp => {
+      const pairs = (langPairs || []).filter(p => p.linguist_profile_id === lp.id);
+      const supportedTargets = new Set();
+      if (lp.primary_language) supportedTargets.add(lp.primary_language.toLowerCase().trim());
+      if (Array.isArray(lp.secondary_languages)) {
+        lp.secondary_languages.forEach(sl => supportedTargets.add(sl.toLowerCase().trim()));
+      }
+      pairs.forEach(p => {
+        if (p.target_language) supportedTargets.add(p.target_language.toLowerCase().trim());
+      });
+
+      linguistsMap.set(lp.id, {
+        id: lp.user_id || lp.id,
+        profile_id: lp.id,
+        name: lp.full_name,
+        email: lp.email,
+        primary_language: lp.primary_language,
+        target_languages: Array.from(supportedTargets),
+        status: lp.status,
+        experience: lp.years_of_experience
+      });
+    });
+
+    // Add from user profiles if not already added
+    (userProfiles || []).forEach(up => {
+      const existing = Array.from(linguistsMap.values()).find(l => l.email === up.email || l.id === up.id);
+      if (!existing) {
+        linguistsMap.set(up.id, {
+          id: up.id,
+          profile_id: up.id,
+          name: up.name || up.full_name || up.email.split("@")[0],
+          email: up.email,
+          primary_language: "All",
+          target_languages: ["hi", "pa", "es", "fr", "de", "ar", "ur", "gu", "ta", "te", "bn", "mr", "it", "pt", "ru", "zh", "ja"],
+          status: up.status,
+          experience: 5
+        });
+      }
+    });
+
+    let resultList = Array.from(linguistsMap.values());
+
+    // If target_lang filter requested, filter linguists that support this target language
+    if (targetLang) {
+      resultList = resultList.filter(l => {
+        return l.target_languages.some(tl => tl.toLowerCase().includes(targetLang) || targetLang.includes(tl.toLowerCase()) || tl === "all");
+      });
+    }
+
+    return res.json({
+      success: true,
+      count: resultList.length,
+      linguists: resultList
+    });
+  } catch (err) {
+    console.error("[WORDPRESS_LINGUISTS_API_ERR]", err);
+    return res.status(500).json({ error: err.message || "Failed to fetch linguists list." });
+  }
+});
+
+/**
+ * 11. WordPress Integration: Submit Batch Pages for Human Review
+ * POST /api/v1/wordpress/submit-batch-human-review
+ */
+publicApiRouter.post("/wordpress/submit-batch-human-review", async (req, res) => {
+  try {
+    const { site_url, callback_url, pages, project_name } = req.body;
+
+    if (!Array.isArray(pages) || pages.length === 0) {
+      return res.status(400).json({ error: "No pages provided in batch review request." });
+    }
+
+    const orgId = req.organization?.id || req.profile?.organization_id || null;
+    let userId = req.user?.id;
+    if (!userId || userId === "00000000-0000-0000-0000-000000000000") {
+      const { data: adminProf } = await supabase.from("profiles").select("id").limit(1).single();
+      userId = adminProf?.id || "d02d37ba-90d1-4147-bf8f-1687d66500d5";
+    }
+
+    const dbClient = supabaseAdmin || supabase;
+    const { v4: uuidv4 } = require("uuid");
+    const htmlParser = require("../../utils/parsers/htmlParser");
+
+    // 1. Create a Master Project in Centroid for this WordPress Batch
+    const projectId = uuidv4();
+    const cleanProjectName = project_name || `WP Batch Review - ${new Date().toISOString().slice(0, 10)}`;
+    
+    // Collect all distinct target languages across pages
+    const allTargetLangsSet = new Set();
+    pages.forEach(p => {
+      const pLangs = Array.isArray(p.target_langs) ? p.target_langs : (p.target_lang ? [p.target_lang] : ["hi"]);
+      pLangs.forEach(l => allTargetLangsSet.add(l.toLowerCase().trim()));
+    });
+    const allTargetLangs = Array.from(allTargetLangsSet);
+
+    const { error: projErr } = await dbClient.from("projects").insert({
+      id: projectId,
+      name: cleanProjectName,
+      source_lang: pages[0]?.source_lang || "en",
+      target_languages: allTargetLangs,
+      target_lang: allTargetLangs[0] || "hi",
+      owner_id: userId,
+      organization_id: orgId,
+      status: "active",
+      description: `WordPress Batch Dispatch from ${site_url || "WordPress Site"}`
+    });
+
+    if (projErr) {
+      console.error("[WP_BATCH_PROJECT_CREATE_ERR]", projErr);
+    }
+
+    const createdDocuments = [];
+
+    // 2. Process each page in the batch
+    for (const page of pages) {
+      const documentId = uuidv4();
+      const pageTitle = page.title || `WordPress Page ${page.post_id || ""}`;
+      const docName = `WP: ${pageTitle} (ID: ${page.post_id || "N/A"})`;
+      const htmlContent = page.rendered_html || page.content || `<article><h1>${pageTitle}</h1></article>`;
+      const srcLang = page.source_lang || "en";
+      const targetLangs = Array.isArray(page.target_langs) ? page.target_langs : (page.target_lang ? [page.target_lang] : allTargetLangs);
+
+      // Write temp file to parse with htmlParser
+      const tempPath = path.join(uploadDir, `wp_temp_${documentId}.html`);
+      fs.writeFileSync(tempPath, htmlContent, "utf-8");
+
+      let parseResult;
+      try {
+        parseResult = await htmlParser.parseFile(tempPath, false);
+      } catch (parseErr) {
+        console.error("[WP_HTML_PARSE_ERR]", parseErr);
+        parseResult = {
+          segments: [{ id: 1, source: pageTitle }],
+          template: Buffer.from(`<h1>__SEG_1__</h1>`, "utf-8")
+        };
+      } finally {
+        if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+      }
+
+      // Save template to html_files
+      if (parseResult.template) {
+        await dbClient.from("html_files").upsert({
+          id: documentId,
+          content: parseResult.template
+        });
+      }
+
+      // Insert Document record with rich WordPress metadata
+      const docMetadata = {
+        source_type: "wordpress",
+        wp_post_id: page.post_id,
+        wp_site_url: site_url,
+        wp_callback_url: callback_url,
+        wp_permalink: page.permalink,
+        wp_original_content: page.content,
+        wp_rendered_html: page.rendered_html,
+        linguist_assignments: page.linguist_assignments || {}
+      };
+
+      await dbClient.from("documents").insert({
+        id: documentId,
+        file_id: documentId,
+        project_id: projectId,
+        name: docName,
+        source_lang: srcLang,
+        target_lang: targetLangs[0] || "hi",
+        owner_id: userId,
+        organization_id: orgId,
+        status: "active",
+        metadata: docMetadata
+      });
+
+      // Insert Template Segments (target_lang: null)
+      const segmentInserts = (parseResult.segments || []).map((seg, idx) => ({
+        document_id: documentId,
+        segment_index: idx + 1,
+        target_lang: null,
+        source_text: seg.source || "",
+        target_text: "",
+        status: "draft"
+      }));
+
+      const BATCH_SIZE = 500;
+      for (let i = 0; i < segmentInserts.length; i += BATCH_SIZE) {
+        await dbClient.from("document_segments").insert(segmentInserts.slice(i, i + BATCH_SIZE));
+      }
+
+      // Pre-create translation segments & assign linguists for each target language
+      for (const tLang of targetLangs) {
+        const assignedLinguistId = page.linguist_assignments?.[tLang] || null;
+
+        // Create target language segments
+        const targetInserts = (parseResult.segments || []).map((seg, idx) => ({
+          document_id: documentId,
+          segment_index: idx + 1,
+          target_lang: tLang,
+          source_text: seg.source || "",
+          target_text: "",
+          status: "draft"
+        }));
+
+        for (let i = 0; i < targetInserts.length; i += BATCH_SIZE) {
+          await dbClient.from("document_segments").insert(targetInserts.slice(i, i + BATCH_SIZE));
+        }
+
+        // If assigned to a linguist, insert into document_collaborators
+        if (assignedLinguistId) {
+          await dbClient.from("document_collaborators").upsert({
+            document_id: documentId,
+            user_id: assignedLinguistId,
+            role: "editor",
+            target_lang: tLang
+          }, { onConflict: "document_id,user_id,target_lang" }).catch(() => {});
+        }
+      }
+
+      createdDocuments.push({
+        document_id: documentId,
+        post_id: page.post_id,
+        name: docName,
+        target_langs: targetLangs,
+        total_segments: parseResult.segments?.length || 0,
+        direct_url: `/project/${projectId}/file/${documentId}/lang/${targetLangs[0]}`
+      });
+    }
+
+    return res.json({
+      success: true,
+      project_id: projectId,
+      project_name: cleanProjectName,
+      total_pages: pages.length,
+      created_documents: createdDocuments
+    });
+  } catch (err) {
+    console.error("[WORDPRESS_BATCH_REVIEW_ERR]", err);
+    return res.status(500).json({ error: err.message || "Failed to submit batch for human review." });
+  }
+});
+
+/**
+ * 12. WordPress Integration: Complete Task & Dispatch Webhook
+ * POST /api/v1/wordpress/complete-task
+ */
+publicApiRouter.post("/wordpress/complete-task", async (req, res) => {
+  try {
+    const { document_id, target_lang } = req.body;
+    if (!document_id) {
+      return res.status(400).json({ error: "document_id is required" });
+    }
+
+    const dbClient = supabaseAdmin || supabase;
+    const { data: doc } = await dbClient
+      .from("documents")
+      .select("*")
+      .eq("id", document_id)
+      .maybeSingle();
+
+    if (!doc) {
+      return res.status(404).json({ error: "Document not found" });
+    }
+
+    const tLang = target_lang || doc.target_lang || "hi";
+    const docMeta = doc.metadata || {};
+    const callbackUrl = docMeta.wp_callback_url;
+
+    if (!callbackUrl) {
+      return res.status(400).json({ error: "No WordPress callback URL configured for this document" });
+    }
+
+    // Fetch all translated segments for this target language
+    const { data: segments } = await dbClient
+      .from("document_segments")
+      .select("segment_index, source_text, target_text, status")
+      .eq("document_id", document_id)
+      .eq("target_lang", tLang)
+      .order("segment_index", { ascending: true });
+
+    // Fetch template from html_files
+    const { data: htmlData } = await dbClient
+      .from("html_files")
+      .select("content")
+      .eq("id", document_id)
+      .maybeSingle();
+
+    let translatedHtml = "";
+    if (htmlData && htmlData.content) {
+      const htmlParser = require("../../utils/parsers/htmlParser");
+      const exportSegments = (segments || []).map(s => ({
+        id: s.segment_index,
+        target: s.target_text || s.source_text
+      }));
+      const exportedBuffer = await htmlParser.exportFile(htmlData.content, exportSegments);
+      translatedHtml = exportedBuffer.toString("utf-8");
+    } else {
+      translatedHtml = (segments || []).map(s => `<p>${s.target_text || s.source_text}</p>`).join("\n");
+    }
+
+    const translatedTitle = segments && segments.length > 0 && segments[0].target_text ? segments[0].target_text : "";
+
+    // Send HTTP POST webhook to WordPress callback URL
+    const axios = require("axios");
+    const webhookPayload = {
+      action: "translation_completed",
+      document_id: document_id,
+      post_id: docMeta.wp_post_id,
+      source_lang: doc.source_lang,
+      target_lang: tLang,
+      translated_title: translatedTitle,
+      translated_content: translatedHtml,
+      status: "completed",
+      timestamp: new Date().toISOString()
+    };
+
+    let wpResponseStatus = 200;
+    let wpResponseBody = null;
+
+    try {
+      const wpRes = await axios.post(callbackUrl, webhookPayload, {
+        headers: {
+          "Content-Type": "application/json",
+          "x-verbocat-event": "translation.completed"
+        },
+        timeout: 15000
+      });
+      wpResponseStatus = wpRes.status;
+      wpResponseBody = wpRes.data;
+    } catch (wpErr) {
+      console.warn("[WORDPRESS_CALLBACK_WARN] Callback dispatch warning:", wpErr.message);
+      wpResponseBody = wpErr.response?.data || wpErr.message;
+    }
+
+    // Update document status to completed
+    await dbClient
+      .from("documents")
+      .update({ status: "completed", updated_at: new Date().toISOString() })
+      .eq("id", document_id);
+
+    return res.json({
+      success: true,
+      message: "Translation marked as completed and dispatched to WordPress!",
+      wordpress_response: wpResponseBody
+    });
+  } catch (err) {
+    console.error("[WORDPRESS_COMPLETE_TASK_ERR]", err);
+    return res.status(500).json({ error: err.message || "Failed to complete WordPress task." });
+  }
+});
+
 module.exports = publicApiRouter;
 

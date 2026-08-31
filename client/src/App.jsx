@@ -131,6 +131,10 @@ export default function App() {
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const previewDebounceRef = useRef(null);
 
+  // WordPress Task Integration State
+  const [documentMetadata, setDocumentMetadata] = useState(null);
+  const [isCompletingWpTask, setIsCompletingWpTask] = useState(false);
+
   // Screenshot Context Modal State
   const [showScreenshotModal, setShowScreenshotModal] = useState(false);
   const [activeSegmentForScreenshot, setActiveSegmentForScreenshot] = useState(null);
@@ -404,6 +408,33 @@ export default function App() {
     };
   }, [segments, showLivePreview, handleFetchLivePreview]);
 
+  // Complete WordPress Task and trigger Webhook Callback
+  const handleCompleteWordPressTask = useCallback(async () => {
+    const activeDocId = documentId || currentRoute.fileId;
+    if (!activeDocId) return;
+    setIsCompletingWpTask(true);
+    try {
+      if (flushPendingBulkSave) {
+        await flushPendingBulkSave();
+      }
+      const activeTargetLanguage = targetLanguage || currentRoute.targetLang || "hi";
+      const res = await api.post(`/documents/${activeDocId}/complete-wordpress-task`, {
+        targetLang: activeTargetLanguage
+      });
+
+      if (res.data.success) {
+        showToast("🚀 Translation marked as completed and posted to WordPress!", "success");
+      } else {
+        showToast(res.data.error || "Failed to update WordPress", "error");
+      }
+    } catch (err) {
+      console.error("WordPress complete task error:", err);
+      showToast(err.response?.data?.error || err.message || "Failed to update WordPress", "error");
+    } finally {
+      setIsCompletingWpTask(false);
+    }
+  }, [documentId, currentRoute, targetLanguage, flushPendingBulkSave, showToast]);
+
 
   useEffect(() => {
     if (isAuth) {
@@ -527,6 +558,10 @@ export default function App() {
       setPermission(doc.permission || "write");
       setOwnerId(doc.ownerId);
       setTrackChangesEnabled(doc.trackChangesEnabled || false);
+      setDocumentMetadata(doc.metadata || null);
+      if (doc.metadata?.source_type === "wordpress") {
+        setShowLivePreview(true);
+      }
 
       // Fetch pending requests if the user is owner or staff
       const isOwnerOrStaff = doc.ownerId === userRef.current?.id || ["admin", "super_admin", "verbolabs_staff"].includes(userRef.current?.role);
@@ -3266,6 +3301,9 @@ export default function App() {
                 onClearTargetSelected={permission === "write" ? handleClearTargetSelected : null}
                 onClearSelection={() => setSelectedSegmentIds(new Set())}
                 dbSaveStatus={dbSaveStatus}
+                documentMetadata={documentMetadata}
+                onCompleteWordPressTask={handleCompleteWordPressTask}
+                isCompletingWpTask={isCompletingWpTask}
               />
 
               {/* QA panel (collapsible modal) */}
@@ -3357,6 +3395,7 @@ export default function App() {
                       segments={segments}
                       targetLang={targetLanguage}
                       darkMode={darkMode}
+                      documentMetadata={documentMetadata}
                       onClose={() => setShowLivePreview(false)}
                     />
                   </div>

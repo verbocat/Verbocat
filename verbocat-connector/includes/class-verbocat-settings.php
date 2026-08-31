@@ -21,6 +21,7 @@ class Verbocat_Settings {
         add_action('admin_init', [__CLASS__, 'register_settings']);
         add_action('wp_ajax_verbocat_test_connection', [__CLASS__, 'ajax_test_connection']);
         add_action('wp_ajax_verbocat_save_page_automation', [__CLASS__, 'ajax_save_page_automation']);
+        add_action('wp_ajax_verbocat_get_linguists', [__CLASS__, 'ajax_get_linguists']);
     }
 
     /**
@@ -32,6 +33,7 @@ class Verbocat_Settings {
             'api_key'                 => '',
             'source_lang'             => 'en',
             'target_langs'            => '', // 0 selected by default
+            'linguist_assignments'    => [], // Target Lang => Linguist User ID
             'workflow_mode'           => 'ice_first', // 'ice_first', 'ai', 'manual_review'
             'auto_push_policy'        => 'ice_only',  // 'ice_only', 'always_draft', 'always_publish'
             'continuous_sync_trigger' => 'publish_update', // 'publish_update', 'manual_only'
@@ -106,6 +108,14 @@ class Verbocat_Settings {
         $sanitized['post_status'] = in_array($input['post_status'] ?? '', ['publish', 'draft']) ? $input['post_status'] : 'draft';
         $sanitized['post_types'] = ['post', 'page'];
 
+        // Sanitize Linguist Assignments per Target Language
+        $sanitized['linguist_assignments'] = [];
+        if (!empty($input['linguist_assignments']) && is_array($input['linguist_assignments'])) {
+            foreach ($input['linguist_assignments'] as $l_code => $l_uid) {
+                $sanitized['linguist_assignments'][sanitize_text_field($l_code)] = sanitize_text_field($l_uid);
+            }
+        }
+
         // Save page-level automation rules if submitted
         if (!empty($_POST['page_automation']) && is_array($_POST['page_automation'])) {
             foreach ($_POST['page_automation'] as $p_id => $p_data) {
@@ -155,6 +165,26 @@ class Verbocat_Settings {
             'remaining' => $remaining,
             'allowed'   => $allowed
         ]);
+    }
+
+    /**
+     * AJAX handler for fetching approved linguists from Centroid
+     */
+    public static function ajax_get_linguists() {
+        check_ajax_referer('verbocat_test_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Permission denied.', 'verbocat-connector')]);
+        }
+
+        $target_lang = !empty($_POST['target_lang']) ? sanitize_text_field($_POST['target_lang']) : null;
+        $linguists = Verbocat_Api_Client::get_linguists($target_lang);
+
+        if (is_wp_error($linguists)) {
+            wp_send_json_error(['message' => $linguists->get_error_message()]);
+        }
+
+        wp_send_json_success(['linguists' => $linguists]);
     }
 
     /**
@@ -374,6 +404,75 @@ class Verbocat_Settings {
                                 <span style="color: #1e293b; font-weight: 500;"><?php echo esc_html($meta['name']); ?></span>
                             </label>
                         <?php endforeach; ?>
+                    </div>
+                </div>
+
+                <!-- SECTION 3.5: CENTROID LINGUIST ASSIGNMENTS -->
+                <div style="margin-bottom: 28px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px 24px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #f1f5f9; padding-bottom: 12px; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+                        <div>
+                            <h2 style="font-size: 15px; font-weight: 700; color: #0f172a; margin: 0; display: flex; align-items: center; gap: 8px;">
+                                <span style="background: #059669; color: #fff; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;">3.5</span>
+                                <?php _e('Centroid Human Linguist Assignments per Target Language', 'verbocat-connector'); ?>
+                            </h2>
+                            <p style="color: #64748b; font-size: 12px; margin: 4px 0 0 0;">
+                                <?php _e('Assign qualified, approved Centroid linguists to each target language. When you bulk dispatch pages for human review, jobs are automatically routed to these linguists.', 'verbocat-connector'); ?>
+                            </p>
+                        </div>
+                        <div>
+                            <button type="button" id="vb_refresh_linguists_btn" class="button button-secondary" style="font-size: 11px; height: 28px; padding: 0 10px; display: inline-flex; align-items: center; gap: 4px; border-radius: 6px; font-weight: 600;">
+                                <span>🔄</span> <?php _e('Refresh Linguists from Centroid', 'verbocat-connector'); ?>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="vb_linguist_mapping_container">
+                        <?php if (empty($selected_target_langs)): ?>
+                            <div style="text-align: center; padding: 24px; color: #64748b; background: #f8fafc; border-radius: 8px; border: 1px dashed #cbd5e1; font-size: 13px;">
+                                <?php _e('No target languages selected above. Please select at least one target language in Section 3 to configure linguist assignments.', 'verbocat-connector'); ?>
+                            </div>
+                        <?php else: ?>
+                            <table class="widefat fixed striped" style="border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden;">
+                                <thead>
+                                    <tr style="background: #f8fafc;">
+                                        <th style="font-weight: 700; color: #334155; width: 240px; padding: 10px 14px;"><?php _e('Target Language', 'verbocat-connector'); ?></th>
+                                        <th style="font-weight: 700; color: #334155; padding: 10px 14px;"><?php _e('Assigned Centroid Linguist', 'verbocat-connector'); ?></th>
+                                        <th style="font-weight: 700; color: #334155; width: 140px; text-align: center; padding: 10px 14px;"><?php _e('Routing Status', 'verbocat-connector'); ?></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php 
+                                    $assignments = $opts['linguist_assignments'] ?? [];
+                                    foreach ($selected_target_langs as $tcode):
+                                        $tcode = trim($tcode);
+                                        $lmeta = Verbocat_Languages::get_language($tcode);
+                                        $assigned_id = $assignments[$tcode] ?? '';
+                                    ?>
+                                    <tr data-lang="<?php echo esc_attr($tcode); ?>" class="vb-linguist-row">
+                                        <td style="padding: 10px 14px; vertical-align: middle;">
+                                            <div style="display: flex; align-items: center; gap: 8px;">
+                                                <span style="font-size: 18px;"><?php echo $lmeta['flag']; ?></span>
+                                                <div>
+                                                    <strong style="color: #0f172a; font-size: 13px;"><?php echo esc_html($lmeta['name']); ?></strong>
+                                                    <span style="color: #64748b; font-size: 11px; margin-left: 4px;">(<?php echo strtoupper($tcode); ?>)</span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td style="padding: 10px 14px; vertical-align: middle;">
+                                            <select name="<?php echo self::$option_name; ?>[linguist_assignments][<?php echo esc_attr($tcode); ?>]" class="vb-linguist-select" data-lang="<?php echo esc_attr($tcode); ?>" data-current="<?php echo esc_attr($assigned_id); ?>" style="width: 100%; max-width: 440px; border-radius: 6px; font-size: 12px; height: 32px; border: 1px solid #cbd5e1;">
+                                                <option value=""><?php _e('-- Auto-Assign / Any Qualified Linguist --', 'verbocat-connector'); ?></option>
+                                            </select>
+                                        </td>
+                                        <td style="padding: 10px 14px; text-align: center; vertical-align: middle;">
+                                            <span class="vb-linguist-status-badge" style="font-size: 11px; padding: 3px 8px; border-radius: 12px; font-weight: 600; background: <?php echo !empty($assigned_id) ? '#ecfdf5' : '#f1f5f9'; ?>; color: <?php echo !empty($assigned_id) ? '#059669' : '#64748b'; ?>; border: 1px solid <?php echo !empty($assigned_id) ? '#a7f3d0' : '#e2e8f0'; ?>;">
+                                                <?php echo !empty($assigned_id) ? __('✓ Dedicated', 'verbocat-connector') : __('Auto Pool', 'verbocat-connector'); ?>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        <?php endif; ?>
                     </div>
                 </div>
 
@@ -826,6 +925,92 @@ class Verbocat_Settings {
                             $(newChip).insertBefore($container.find('.vb-add-custom-lang-select'));
                         }
                     });
+                }
+            });
+
+            // FETCH & POPULATE CENTROID LINGUISTS
+            function fetchAndPopulateLinguists(showToast) {
+                var $btn = $('#vb_refresh_linguists_btn');
+                $btn.prop('disabled', true).find('span').text('⏳');
+
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'verbocat_get_linguists',
+                        nonce: '<?php echo esc_js($test_nonce); ?>'
+                    },
+                    success: function(response) {
+                        $btn.prop('disabled', false).find('span').text('🔄');
+                        if (response.success && response.data && response.data.linguists) {
+                            var linguists = response.data.linguists;
+                            
+                            $('.vb-linguist-select').each(function() {
+                                var $sel = $(this);
+                                var langCode = ($sel.data('lang') || '').toLowerCase();
+                                var currentVal = $sel.data('current') || $sel.val();
+
+                                // Filter linguists matching this target language
+                                var matched = linguists.filter(function(l) {
+                                    if (!l.target_languages || l.target_languages.length === 0) return true;
+                                    return l.target_languages.some(function(tl) {
+                                        return tl.toLowerCase().indexOf(langCode) !== -1 || langCode.indexOf(tl.toLowerCase()) !== -1 || tl === 'all';
+                                    });
+                                });
+
+                                var html = '<option value="">-- Auto-Assign / Any Qualified Linguist (' + matched.length + ' available) --</option>';
+                                matched.forEach(function(l) {
+                                    var isSel = (String(l.id) === String(currentVal) || String(l.profile_id) === String(currentVal)) ? ' selected="selected"' : '';
+                                    var expText = l.experience ? ' (' + l.experience + ' yrs exp)' : '';
+                                    html += '<option value="' + l.id + '"' + isSel + '>' + (l.name || l.email) + ' &lt;' + l.email + '&gt;' + expText + '</option>';
+                                });
+
+                                $sel.html(html);
+
+                                // Update status badge
+                                var $badge = $sel.closest('tr').find('.vb-linguist-status-badge');
+                                if ($sel.val()) {
+                                    $badge.text('✓ Dedicated').css({'background': '#ecfdf5', 'color': '#059669', 'border-color': '#a7f3d0'});
+                                } else {
+                                    $badge.text('Auto Pool').css({'background': '#f1f5f9', 'color': '#64748b', 'border-color': '#e2e8f0'});
+                                }
+                            });
+
+                            if (showToast) {
+                                alert('<?php _e('✓ Linguist directory refreshed successfully from Centroid!', 'verbocat-connector'); ?>');
+                            }
+                        } else {
+                            if (showToast) {
+                                alert(response.data && response.data.message ? response.data.message : '<?php _e('Failed to fetch linguists list.', 'verbocat-connector'); ?>');
+                            }
+                        }
+                    },
+                    error: function() {
+                        $btn.prop('disabled', false).find('span').text('🔄');
+                        if (showToast) {
+                            alert('<?php _e('Could not connect to Centroid API. Please check your API key & URL.', 'verbocat-connector'); ?>');
+                        }
+                    }
+                });
+            }
+
+            // Auto-fetch on page load
+            fetchAndPopulateLinguists(false);
+
+            // Manual refresh click
+            $('#vb_refresh_linguists_btn').on('click', function(e) {
+                e.preventDefault();
+                fetchAndPopulateLinguists(true);
+            });
+
+            // Update badge on dropdown change
+            $(document).on('change', '.vb-linguist-select', function() {
+                var $sel = $(this);
+                var $badge = $sel.closest('tr').find('.vb-linguist-status-badge');
+                if ($sel.val()) {
+                    $badge.text('✓ Dedicated').css({'background': '#ecfdf5', 'color': '#059669', 'border-color': '#a7f3d0'});
+                } else {
+                    $badge.text('Auto Pool').css({'background': '#f1f5f9', 'color': '#64748b', 'border-color': '#e2e8f0'});
                 }
             });
         });
