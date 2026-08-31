@@ -408,33 +408,6 @@ export default function App() {
     };
   }, [segments, showLivePreview, handleFetchLivePreview]);
 
-  // Complete WordPress Task and trigger Webhook Callback
-  const handleCompleteWordPressTask = useCallback(async () => {
-    const activeDocId = documentId || currentRoute.fileId;
-    if (!activeDocId) return;
-    setIsCompletingWpTask(true);
-    try {
-      if (flushPendingBulkSave) {
-        await flushPendingBulkSave();
-      }
-      const activeTargetLanguage = targetLanguage || currentRoute.targetLang || "hi";
-      const res = await api.post(`/documents/${activeDocId}/complete-wordpress-task`, {
-        targetLang: activeTargetLanguage
-      });
-
-      if (res.data.success) {
-        showToast("🚀 Translation marked as completed and posted to WordPress!", "success");
-      } else {
-        showToast(res.data.error || "Failed to update WordPress", "error");
-      }
-    } catch (err) {
-      console.error("WordPress complete task error:", err);
-      showToast(err.response?.data?.error || err.message || "Failed to update WordPress", "error");
-    } finally {
-      setIsCompletingWpTask(false);
-    }
-  }, [documentId, currentRoute, targetLanguage, flushPendingBulkSave, showToast]);
-
 
   useEffect(() => {
     if (isAuth) {
@@ -2228,6 +2201,33 @@ export default function App() {
     showToast(`Cleared target text for ${selectedSegmentIds.size} segments!`);
     persistBulkSegmentUpdates(affected, true);
   };
+
+  // Complete WordPress Task and trigger Webhook Callback
+  const handleCompleteWordPressTask = useCallback(async () => {
+    const activeDocId = documentId || currentRoute.fileId;
+    if (!activeDocId) return;
+    setIsCompletingWpTask(true);
+    try {
+      if (flushPendingBulkSave) {
+        await flushPendingBulkSave();
+      }
+      const activeTargetLanguage = targetLanguage || currentRoute.targetLang || "hi";
+      const res = await api.post(`/documents/${activeDocId}/complete-wordpress-task`, {
+        targetLang: activeTargetLanguage
+      });
+
+      if (res.data.success) {
+        showToast("🚀 Translation marked as completed and posted to WordPress!", "success");
+      } else {
+        showToast(res.data.error || "Failed to update WordPress", "error");
+      }
+    } catch (err) {
+      console.error("WordPress complete task error:", err);
+      showToast(err.response?.data?.error || err.message || "Failed to update WordPress", "error");
+    } finally {
+      setIsCompletingWpTask(false);
+    }
+  }, [documentId, currentRoute, targetLanguage, flushPendingBulkSave, showToast]);
 
   const updateTranslation = (id, value) => {
     let sourceText = "";
