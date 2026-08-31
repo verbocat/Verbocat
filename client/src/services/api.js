@@ -57,12 +57,20 @@ api.interceptors.request.use(async (config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
-  // Inject tenant subdomain header from URL query param (?space=slug) or browser hostname
+  // Inject tenant slug/subdomain header from path (/c/:clientSlug), query param (?space=slug), or hostname
   try {
+    let clientSlug = "";
+    const pathMatch = window.location.pathname.match(/^\/c\/([^\/]+)/);
+    if (pathMatch && pathMatch[1]) {
+      clientSlug = pathMatch[1].toLowerCase().trim();
+    }
+
     const searchParams = new URLSearchParams(window.location.search);
-    const spaceParam = searchParams.get("space") || searchParams.get("tenant") || searchParams.get("org");
-    if (spaceParam) {
+    const spaceParam = searchParams.get("space") || searchParams.get("tenant") || searchParams.get("client") || searchParams.get("org") || clientSlug;
+
+    if (spaceParam && !["www", "app", "centroid", "verbolabs", "localhost"].includes(spaceParam.toLowerCase())) {
       config.headers["X-Tenant-Subdomain"] = spaceParam.toLowerCase().trim();
+      config.headers["X-Tenant-Slug"] = spaceParam.toLowerCase().trim();
     } else {
       const hostname = window.location.hostname;
       const parts = hostname.split(".");
@@ -77,6 +85,7 @@ api.interceptors.request.use(async (config) => {
 
       if (subdomain && !["www", "app", "centroid", "verbolabs", "localhost"].includes(subdomain.toLowerCase())) {
         config.headers["X-Tenant-Subdomain"] = subdomain;
+        config.headers["X-Tenant-Slug"] = subdomain;
       }
     }
   } catch (_) {}
@@ -900,6 +909,15 @@ export const linkSegmentScreenshot = async (segmentId, documentId, screenshotId,
 export const deleteScreenshot = async (screenshotId) => {
   const response = await api.delete(`/api/screenshots/${screenshotId}`);
   return response.data;
+};
+
+export const fetchCurrentSpaceDetails = async () => {
+  try {
+    const response = await api.get("/api/auth/current-space");
+    return response.data;
+  } catch (_) {
+    return { isCustomSpace: false, name: "VerboLabs", subdomain: "centroid" };
+  }
 };
 
 

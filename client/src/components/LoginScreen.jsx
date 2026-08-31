@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useUserStore } from "../services/userStore";
-import { api } from "../services/api";
+import { api, fetchCurrentSpaceDetails } from "../services/api";
 import { 
   Eye, EyeOff, Lock, ArrowRight, CheckCircle2, 
   AlertCircle, Sparkles, Mail, KeyRound, Fingerprint, User, ExternalLink
@@ -268,15 +268,33 @@ export const LoginScreen = ({ mode: initialMode = "login", onResetSuccess }) => 
     setSuccessMsg("");
   }, [initialMode]);
 
-  // Derive active workspace tenant space name
+  const [spaceDetails, setSpaceDetails] = useState(null);
+
+  // Derive active workspace tenant space name from /c/:clientSlug path or query param
   const getActiveSpaceName = () => {
-    const spaceParam = new URLSearchParams(window.location.search).get("space");
+    const pathMatch = window.location.pathname.match(/^\/c\/([^\/]+)/);
+    if (pathMatch && pathMatch[1] && !["centroid", "verbolabs"].includes(pathMatch[1].toLowerCase())) {
+      return pathMatch[1];
+    }
+    const spaceParam = new URLSearchParams(window.location.search).get("space") || new URLSearchParams(window.location.search).get("client");
     if (spaceParam && !["centroid", "verbolabs"].includes(spaceParam.toLowerCase())) {
       return spaceParam;
     }
     return null;
   };
-  const spaceName = getActiveSpaceName();
+  const spaceSlug = getActiveSpaceName();
+
+  useEffect(() => {
+    if (spaceSlug) {
+      fetchCurrentSpaceDetails().then(data => {
+        if (data && data.isCustomSpace) {
+          setSpaceDetails(data);
+        }
+      }).catch(() => {});
+    }
+  }, [spaceSlug]);
+
+  const spaceName = spaceDetails?.name || spaceSlug;
 
   // Password Security Validator Helper
   const validatePasswordSecurity = (pass) => {

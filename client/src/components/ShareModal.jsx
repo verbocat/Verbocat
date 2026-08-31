@@ -62,8 +62,18 @@ export function ShareModal({
     }
   }, [targetLang, targetLanguages]);
 
-  // Space-aware URL suffix
+  // Space-aware URL prefix and suffix
+  const getSpacePrefix = () => {
+    const pathMatch = window.location.pathname.match(/^\/c\/([^\/]+)/);
+    if (pathMatch && pathMatch[1] && !["centroid", "verbolabs"].includes(pathMatch[1].toLowerCase())) {
+      return `/c/${pathMatch[1]}`;
+    }
+    return "";
+  };
+
   const getSpaceSuffix = () => {
+    const spacePrefix = getSpacePrefix();
+    if (spacePrefix) return ""; // No query suffix needed if path prefix is used
     const spaceParam = new URLSearchParams(window.location.search).get("space");
     if (spaceParam && !["centroid", "verbolabs"].includes(spaceParam.toLowerCase())) {
       return `?space=${spaceParam}`;
@@ -79,6 +89,7 @@ export function ShareModal({
 
   // Generate All Direct Links
   const generateAllDirectLinks = () => {
+    const spacePrefix = getSpacePrefix();
     const spaceSuffix = getSpaceSuffix();
     const origin = window.location.origin;
     const links = [];
@@ -87,7 +98,7 @@ export function ShareModal({
       selectedJobItems.forEach((jobItem, idx) => {
         const lName = jobItem.langName || getLanguageName(jobItem.targetLang);
         const dName = jobItem.docName || `Document ${idx + 1}`;
-        const url = `${origin}/project/${projectId}/file/${jobItem.fileId}/lang/${jobItem.targetLang}${spaceSuffix}`;
+        const url = `${origin}${spacePrefix}/project/${projectId}/file/${jobItem.fileId}/lang/${jobItem.targetLang}${spaceSuffix}`;
         links.push({
           label: `${dName} (${lName})`,
           code: `${jobItem.fileId}_${jobItem.targetLang}`,
@@ -103,7 +114,7 @@ export function ShareModal({
       const lName = languageName || getLanguageName(targetLang);
       selectedDocumentIds.forEach((docId, idx) => {
         const dName = selectedDocNames[idx] || `Document ${idx + 1}`;
-        const url = `${origin}/project/${projectId}/file/${docId}/lang/${targetLang}${spaceSuffix}`;
+        const url = `${origin}${spacePrefix}/project/${projectId}/file/${docId}/lang/${targetLang}${spaceSuffix}`;
         links.push({
           label: `${dName} (${lName})`,
           code: `${docId}_${targetLang}`,
@@ -122,7 +133,7 @@ export function ShareModal({
         code: `${documentId}_${targetLang}`,
         langCode: targetLang,
         langName: lName,
-        url: `${origin}/project/${projectId}/file/${documentId}/lang/${targetLang}${spaceSuffix}`
+        url: `${origin}${spacePrefix}/project/${projectId}/file/${documentId}/lang/${targetLang}${spaceSuffix}`
       });
       return links;
     }
@@ -135,7 +146,7 @@ export function ShareModal({
           code: `${documentId}_${tCode}`,
           langCode: tCode,
           langName: lName,
-          url: `${origin}/project/${projectId}/file/${documentId}/lang/${tCode}${spaceSuffix}`
+          url: `${origin}${spacePrefix}/project/${projectId}/file/${documentId}/lang/${tCode}${spaceSuffix}`
         });
       });
       return links;
@@ -149,7 +160,7 @@ export function ShareModal({
           code: `proj_${tCode}`,
           langCode: tCode,
           langName: lName,
-          url: `${origin}/project/${projectId}${spaceSuffix}`
+          url: `${origin}${spacePrefix}/project/${projectId}${spaceSuffix}`
         });
       });
       return links;
@@ -161,7 +172,7 @@ export function ShareModal({
         code: "project",
         langCode: null,
         langName: "Workspace",
-        url: `${origin}/project/${projectId}${spaceSuffix}`
+        url: `${origin}${spacePrefix}/project/${projectId}${spaceSuffix}`
       });
     }
 
@@ -172,19 +183,20 @@ export function ShareModal({
   
   // Primary Share Link
   const primaryLink = (() => {
+    const spacePrefix = getSpacePrefix();
     const spaceSuffix = getSpaceSuffix();
     const origin = window.location.origin;
     if (projectId && documentId && (targetLang || selectedTargetLang)) {
-      return `${origin}/project/${projectId}/file/${documentId}/lang/${targetLang || selectedTargetLang}${spaceSuffix}`;
+      return `${origin}${spacePrefix}/project/${projectId}/file/${documentId}/lang/${targetLang || selectedTargetLang}${spaceSuffix}`;
     }
     if (projectId && documentId) {
-      return `${origin}/project/${projectId}${spaceSuffix}`;
+      return `${origin}${spacePrefix}/project/${projectId}${spaceSuffix}`;
     }
     if (projectId) {
-      return `${origin}/project/${projectId}${spaceSuffix}`;
+      return `${origin}${spacePrefix}/project/${projectId}${spaceSuffix}`;
     }
     if (documentId) {
-      return `${origin}/editor/${documentId}${spaceSuffix}`;
+      return `${origin}${spacePrefix}/editor/${documentId}${spaceSuffix}`;
     }
     return window.location.href;
   })();

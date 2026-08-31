@@ -712,14 +712,37 @@ export const AdminDashboard = ({ onClose, theme }) => {
                         {org.name}
                       </td>
                       <td className="px-6 py-4 font-mono select-all">
-                        <a
-                          href={`https://${org.subdomain}.centroid.verbolabs.com`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-indigo-400 font-mono font-bold hover:underline"
-                        >
-                          https://{org.subdomain}.centroid.verbolabs.com
-                        </a>
+                        <div className="flex items-center gap-2">
+                          <a
+                            href={`/c/${org.subdomain}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-indigo-400 font-mono font-bold hover:underline"
+                          >
+                            {window.location.origin}/c/{org.subdomain}
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const url = `${window.location.origin}/c/${org.subdomain}`;
+                              navigator.clipboard.writeText(url);
+                              showToast(`Copied URL for ${org.name}!`, "success");
+                            }}
+                            className="rounded-md p-1 border border-indigo-500/20 bg-indigo-500/10 hover:bg-indigo-500/25 text-indigo-300 transition-all cursor-pointer"
+                            title="Copy Client Space Link"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                          </button>
+                          <a
+                            href={`/c/${org.subdomain}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-md p-1 border border-white/10 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white transition-all"
+                            title="Open Client Space in New Tab"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                          </a>
+                        </div>
                       </td>
                       <td className="px-4 py-4 text-slate-300 font-bold">
                         {org.userCount || 0} users
@@ -1082,9 +1105,9 @@ export const AdminDashboard = ({ onClose, theme }) => {
                     onChange={(e) => setEditOrganizationId(e.target.value)}
                     className="w-full rounded-xl border border-indigo-500/30 bg-black/50 px-3.5 py-2.5 text-slate-100 outline-none transition-all focus:border-indigo-500 text-sm cursor-pointer"
                   >
-                    <option value="">Default (VerboLabs)</option>
+                    <option value="">Default (VerboLabs Root)</option>
                     {organizations.map(org => (
-                      <option key={org.id} value={org.id}>{org.name} ({org.subdomain}.centroid.verbolabs.com)</option>
+                      <option key={org.id} value={org.id}>{org.name} (/c/{org.subdomain})</option>
                     ))}
                   </select>
                 </div>
@@ -1213,7 +1236,7 @@ export const AdminDashboard = ({ onClose, theme }) => {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                  ) : "Save Changes"}
+                  ) : "Save Adjustments"}
                 </button>
               </div>
 
@@ -1312,8 +1335,8 @@ export const AdminDashboard = ({ onClose, theme }) => {
           <div className="relative w-full max-w-md overflow-hidden rounded-[28px] border border-white/10 bg-slate-900 p-7 shadow-2xl">
             <div className="flex items-center justify-between pb-4 border-b border-white/5 mb-5">
               <div>
-                <h3 className="text-base font-black text-white">Create New Client Space</h3>
-                <span className="text-[10px] text-slate-400 block font-bold mt-0.5">Provision an isolated client workspace & subdomain</span>
+                <h3 className="text-base font-black text-white">Create Client Space</h3>
+                <span className="text-[10px] text-slate-400 block font-bold mt-0.5">Generate a dedicated client URL and workspace</span>
               </div>
               <button
                 onClick={() => setShowCreateOrgModal(false)}
@@ -1331,29 +1354,36 @@ export const AdminDashboard = ({ onClose, theme }) => {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Acme Corp"
+                  placeholder="e.g. Piramal Finance or Acme Corp"
                   value={newOrgName}
-                  onChange={(e) => setNewOrgName(e.target.value)}
+                  onChange={(e) => {
+                    setNewOrgName(e.target.value);
+                    if (!newOrgSubdomain || newOrgSubdomain === newOrgName.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 16)) {
+                      setNewOrgSubdomain(e.target.value.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "").slice(0, 24));
+                    }
+                  }}
                   className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-slate-100 outline-none focus:border-indigo-500/50 text-sm"
                 />
               </div>
 
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 select-none">
-                  Client Subdomain Address
+                  Dedicated Client URL Postfix (Path)
                 </label>
                 <div className="flex items-center rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-xs overflow-x-auto">
-                  <span className="text-slate-500 font-mono select-none shrink-0">https://</span>
+                  <span className="text-slate-500 font-mono select-none shrink-0">{window.location.origin}/c/</span>
                   <input
                     type="text"
                     required
-                    placeholder="alpha"
+                    placeholder="piramal"
                     value={newOrgSubdomain}
                     onChange={(e) => setNewOrgSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
-                    className="bg-transparent text-indigo-400 font-bold outline-none font-mono px-1 min-w-[60px] text-center"
+                    className="bg-transparent text-indigo-400 font-bold outline-none font-mono px-1 min-w-[80px]"
                   />
-                  <span className="text-slate-500 font-mono select-none shrink-0">.centroid.verbolabs.com</span>
                 </div>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Direct client login & work portal: <span className="text-indigo-300 font-mono font-bold">{window.location.origin}/c/{newOrgSubdomain || "client-name"}</span>
+                </p>
               </div>
 
               <div>
@@ -1398,7 +1428,7 @@ export const AdminDashboard = ({ onClose, theme }) => {
             <div className="flex items-center justify-between pb-4 border-b border-white/5 mb-5">
               <div>
                 <h3 className="text-base font-black text-white">Edit Client Space</h3>
-                <span className="text-[10px] text-indigo-400 font-mono font-bold block mt-0.5">https://{editingOrg.subdomain}.centroid.verbolabs.com</span>
+                <span className="text-[10px] text-indigo-400 font-mono font-bold block mt-0.5">{window.location.origin}/c/{editingOrg.subdomain}</span>
               </div>
               <button
                 onClick={() => setEditingOrg(null)}

@@ -17,16 +17,17 @@ async function getOrganizationBySubdomain(subdomain) {
       const { data } = await supabase
         .from("organizations")
         .select("*")
-        .or("subdomain.eq.centroid,subdomain.eq.verbolabs")
+        .or("subdomain.eq.centroid,subdomain.eq.verbolabs,subdomain.ilike.centroid,subdomain.ilike.verbolabs")
         .limit(1);
       if (data && data.length > 0) org = data[0];
     } else {
+      // Check subdomain (exact or ilike) or name (ilike)
       const { data } = await supabase
         .from("organizations")
         .select("*")
-        .eq("subdomain", cleanSubdomain)
-        .maybeSingle();
-      if (data) org = data;
+        .or(`subdomain.eq.${cleanSubdomain},subdomain.ilike.${cleanSubdomain},name.ilike.${cleanSubdomain}`)
+        .limit(1);
+      if (data && data.length > 0) org = data[0];
     }
   } catch (err) {
     console.error("DB Query error fetching organization space:", err?.message || err);
@@ -73,46 +74,36 @@ function clearTenantCache() {
 }
 
 /**
- * Express middleware to identify the current tenant space strictly based on Host header, Origin, or X-Tenant-Subdomain header.
- * 
- * Examples:
- * - Host: test.centroid.verbolabs.com -> tenant_slug = test
- * - Host: test.lvh.me:5173 / test.localhost:5000 -> tenant_slug = test
- * - Host: centroid.verbolabs.com / localhost:5000 -> tenant_slug = centroid (default master tenant)
+ * Express middleware to identify the current tenant space based on:
+ * 1. Path-based client prefix: /c/:clientSlug in Referer / Origin or Request URL
+ * 2. Headers: X-Tenant-Slug or X-Tenant-Subdomain
+ * 3. Query params: ?space=, ?client=, ?tenant=, ?org=
+ * 4. Host header: client.centroid.verbolabs.com
  */
 async function resolveTenant(request, response, next) {
   try {
     let subdomain = "";
 
-    // 1. URL Query Parameter at the back (e.g. ?space=branch or ?tenant=branch)
-    if (request.query.space || request.query.tenant || request.query.org) {
-      subdomain = (request.query.space || request.query.tenant || request.query.org).toLowerCase().trim();
-    }
-    // 2. Explicit API Header
-    else if (request.headers["x-tenant-subdomain"]) {
+    // 1. Explicit API Headers (highest priority)
+    if (request.headers["x-tenant-slug"]) {
+      subdomain = request.headers["x-tenant-slug"].toLowerCase().trim();
+    } else if (request.headers["x-tenant-subdomain"]) {
       subdomain = request.headers["x-tenant-subdomain"].toLowerCase().trim();
     }
-    // 3. Host header resolution (e.g. branch.centroid.verbolabs.com or branch.lvh.me)
-    else if (request.headers.host) {
-      const host = request.headers.host.split(":")[0]; // strip port
-      const parts = host.split(".");
-      
-      if (parts.length >= 4) {
-        subdomain = parts[0];
-      } else if (parts.length === 3 && parts[1] === "lvh" && parts[2] === "me") {
-        subdomain = parts[0];
-      } else if (parts.length === 2 && parts[1] === "localhost") {
-        subdomain = parts[0];
-      }
-    } 
-    // 4. Origin / Referer header fallback
-    else if (request.headers.origin || request.headers.referer) {
+    // 2. URL Query Parameter (e.g. ?space=piramal or ?client=piramal)
+    else if (request.query.space || request.query.client || request.query.tenant || request.query.org) {
+      subdomain = (request.query.space || request.query.client || request.query.tenant || request.query.org).toLowerCase().trim();
+    }
+    // 3. Referer / Origin pathname matching /c/:clientSlug
+    else if (request.headers.referer || request.headers.origin) {
       try {
-        const urlStr = request.headers.origin || request.headers.referer;
+        const urlStr = request.headers.referer || request.headers.origin;
         const parsedUrl = new URL(urlStr);
-        const searchParams = parsedUrl.searchParams;
-        if (searchParams.get("space") || searchParams.get("tenant")) {
-          subdomain = (searchParams.get("space") || searchParams.get("tenant")).toLowerCase().trim();
+        const pathMatch = parsedUrl.pathname.match(/^\/c\/([^\/]+)/);
+        if (pathMatch && pathMatch[1]) {
+          subdomain = pathMatch[1].toLowerCase().trim();
+        } else if (parsedUrl.searchParams.get("space") || parsedUrl.searchParams.get("client") || parsedUrl.searchParams.get("tenant")) {
+          subdomain = (parsedUrl.searchParams.get("space") || parsedUrl.searchParams.get("client") || parsedUrl.searchParams.get("tenant")).toLowerCase().trim();
         } else {
           const parts = parsedUrl.hostname.split(".");
           if (parts.length >= 4) {
@@ -125,6 +116,19 @@ async function resolveTenant(request, response, next) {
         }
       } catch (_) {}
     }
+    // 4. Host header resolution (e.g. branch.centroid.verbolabs.com or branch.lvh.me)
+    if (!subdomain && request.headers.host) {
+      const host = request.headers.host.split(":")[0]; // strip port
+      const parts = host.split(".");
+      
+      if (parts.length >= 4) {
+        subdomain = parts[0];
+      } else if (parts.length === 3 && parts[1] === "lvh" && parts[2] === "me") {
+        subdomain = parts[0];
+      } else if (parts.length === 2 && parts[1] === "localhost") {
+        subdomain = parts[0];
+      }
+    } 
 
     if (!subdomain || ["www", "app", "centroid", "verbolabs", "localhost"].includes(subdomain.toLowerCase())) {
       subdomain = "centroid";

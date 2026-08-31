@@ -175,14 +175,22 @@ export default function App() {
     }
   };
   const parseUrlRoute = () => {
-    const path = window.location.pathname;
+    let path = window.location.pathname;
     const searchParams = new URLSearchParams(window.location.search);
     const docParam = searchParams.get("doc");
     const langParam = searchParams.get("lang");
 
+    // Extract /c/:clientSlug prefix if present
+    let clientSlug = null;
+    const clientMatch = path.match(/^\/c\/([^\/]+)(.*)/);
+    if (clientMatch) {
+      clientSlug = clientMatch[1].toLowerCase().trim();
+      path = clientMatch[2] || "/";
+    }
+
     // 0. Vendor Portal routes — delegate to VendorApp
     if (path.startsWith("/vendor")) {
-      return { screen: "vendor" };
+      return { screen: "vendor", clientSlug };
     }
 
     // 1. /project/:projectId/file/:fileId/lang/:targetLang or /project/:projectId/file/:fileId
@@ -192,7 +200,8 @@ export default function App() {
         screen: "editor",
         projectId: jobMatch[1],
         fileId: jobMatch[2],
-        targetLang: jobMatch[3] || langParam || "hi"
+        targetLang: jobMatch[3] || langParam || "hi",
+        clientSlug
       };
     }
 
@@ -202,7 +211,8 @@ export default function App() {
       return {
         screen: "editor",
         fileId: fileMatch[1],
-        targetLang: fileMatch[2] || langParam || "hi"
+        targetLang: fileMatch[2] || langParam || "hi",
+        clientSlug
       };
     }
 
@@ -211,7 +221,8 @@ export default function App() {
       return {
         screen: "editor",
         fileId: docParam,
-        targetLang: langParam || "hi"
+        targetLang: langParam || "hi",
+        clientSlug
       };
     }
 
@@ -220,12 +231,14 @@ export default function App() {
     if (projectMatch) {
       return {
         screen: "project",
-        projectId: projectMatch[1]
+        projectId: projectMatch[1],
+        clientSlug
       };
     }
 
     return {
-      screen: "dashboard"
+      screen: "dashboard",
+      clientSlug
     };
   };
 
@@ -249,11 +262,24 @@ export default function App() {
   };
 
   const navigateTo = (path) => {
-    // Preserve ?space= across navigation (e.g. /project/xyz -> /project/xyz?space=branch)
-    const spaceQuery = getSpaceQuery();
-    const alreadyHasQuery = path.includes("?");
-    const fullPath = spaceQuery ? (alreadyHasQuery ? path : `${path}${spaceQuery}`) : path;
-    window.history.pushState(null, "", fullPath);
+    // Check if we are currently inside a path-based client space (/c/:clientSlug)
+    const clientMatch = window.location.pathname.match(/^\/c\/([^\/]+)/);
+    let targetPath = path;
+
+    if (clientMatch && clientMatch[1]) {
+      const clientSlug = clientMatch[1];
+      const clientPrefix = `/c/${clientSlug}`;
+      if (!path.startsWith("/c/") && !path.startsWith("/vendor")) {
+        targetPath = path === "/" ? clientPrefix : `${clientPrefix}${path.startsWith("/") ? path : `/${path}`}`;
+      }
+    } else {
+      // Preserve ?space= if legacy query param was used
+      const spaceQuery = getSpaceQuery();
+      const alreadyHasQuery = path.includes("?");
+      targetPath = spaceQuery ? (alreadyHasQuery ? path : `${path}${spaceQuery}`) : path;
+    }
+
+    window.history.pushState(null, "", targetPath);
     setCurrentRoute(parseUrlRoute());
   };
 

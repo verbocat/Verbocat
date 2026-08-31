@@ -84,6 +84,30 @@ async function findExistingAuthUser(cleanEmail) {
   return null;
 }
 
+// 0. Public Space Details for login screen branding
+authRouter.get("/current-space", async (request, response) => {
+  try {
+    const tenant = request.tenant;
+    if (!tenant) {
+      return response.json({
+        isCustomSpace: false,
+        name: "VerboLabs",
+        subdomain: "centroid"
+      });
+    }
+    const isCustomSpace = !["centroid", "verbolabs"].includes(tenant.subdomain?.toLowerCase());
+    response.json({
+      isCustomSpace,
+      id: tenant.id,
+      name: tenant.name,
+      subdomain: tenant.subdomain,
+      status: tenant.status
+    });
+  } catch (err) {
+    response.status(500).json({ error: "Failed to fetch space details" });
+  }
+});
+
 // 1. User Account Registration / Join Space
 authRouter.post("/register", authRateLimiter, async (request, response) => {
   try {

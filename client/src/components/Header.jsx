@@ -47,7 +47,15 @@ export const Header = ({
       {/* Brand Logo & Name */}
       <div 
         className="topbar-brand cursor-pointer hover:opacity-90 transition-opacity flex items-center gap-2"
-        onClick={() => window.location.href = "/"}
+        onClick={() => {
+          const clientMatch = window.location.pathname.match(/^\/c\/([^\/]+)/);
+          if (clientMatch && clientMatch[1]) {
+            window.location.href = `/c/${clientMatch[1]}`;
+          } else {
+            const spaceParam = new URLSearchParams(window.location.search).get("space");
+            window.location.href = spaceParam ? `/?space=${spaceParam}` : "/";
+          }
+        }}
         title="Go to Home"
       >
         <div className="h-7 w-7 rounded-xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-indigo-400 flex items-center justify-center shadow-md shadow-indigo-500/20 shrink-0">
@@ -62,14 +70,20 @@ export const Header = ({
           </span>
         </div>
         {(() => {
-          const spaceParam = new URLSearchParams(window.location.search).get("space");
-          let subdomain = spaceParam || "";
-          if (!subdomain) {
-            const hostname = window.location.hostname;
-            const parts = hostname.split(".");
-            if (parts.length >= 4) subdomain = parts[0];
-            else if (parts.length === 3 && parts[1] === "lvh" && parts[2] === "me") subdomain = parts[0];
-            else if (parts.length === 2 && parts[1] === "localhost") subdomain = parts[0];
+          let subdomain = "";
+          const pathMatch = window.location.pathname.match(/^\/c\/([^\/]+)/);
+          if (pathMatch && pathMatch[1]) {
+            subdomain = pathMatch[1];
+          } else {
+            const spaceParam = new URLSearchParams(window.location.search).get("space") || new URLSearchParams(window.location.search).get("client");
+            subdomain = spaceParam || "";
+            if (!subdomain) {
+              const hostname = window.location.hostname;
+              const parts = hostname.split(".");
+              if (parts.length >= 4) subdomain = parts[0];
+              else if (parts.length === 3 && parts[1] === "lvh" && parts[2] === "me") subdomain = parts[0];
+              else if (parts.length === 2 && parts[1] === "localhost") subdomain = parts[0];
+            }
           }
 
           const isCustomSpace = subdomain && !["www", "app", "centroid", "verbolabs", "localhost"].includes(subdomain.toLowerCase());
