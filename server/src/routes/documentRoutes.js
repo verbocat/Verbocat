@@ -413,9 +413,33 @@ documentRouter.post(
         } else if (docMeta.wp_rendered_html) {
           renderedBuffer = Buffer.from(docMeta.wp_rendered_html, "utf-8");
         } else {
-          const fallbackHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${docName}</title><style>body{font-family:system-ui,sans-serif;padding:24px;line-height:1.6;color:#1e293b;max-width:800px;margin:0 auto;}</style></head><body>${currentSegments.map(s => `<p>${s.target || s.source}</p>`).join("")}</body></html>`;
+          const fallbackHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${docName}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:40px 32px;line-height:1.7;color:#1e293b;max-width:840px;margin:0 auto;}</style></head><body>${currentSegments.map(s => `<p>${s.target || s.source}</p>`).join("")}</body></html>`;
           renderedBuffer = Buffer.from(fallbackHtml, "utf-8");
         }
+
+        // Ensure modern high-fidelity WordPress typography styling is present
+        let htmlStr = renderedBuffer ? renderedBuffer.toString("utf-8") : "";
+        if (!htmlStr.includes("<style>") && !htmlStr.includes("<style ")) {
+          const wpStyleBlock = `<style>
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; font-size: 16px; line-height: 1.7; color: #1e293b; background-color: #ffffff; margin: 0; padding: 40px 32px; -webkit-font-smoothing: antialiased; }
+.wp-site-preview-container { max-width: 840px; margin: 0 auto; background: #ffffff; }
+.wp-block-post-title, h1.entry-title, h1 { font-size: 2.25rem; font-weight: 800; line-height: 1.25; color: #0f172a; margin-top: 0; margin-bottom: 2rem; letter-spacing: -0.025em; }
+h2 { font-size: 1.75rem; font-weight: 700; margin-top: 2rem; margin-bottom: 1rem; color: #1e293b; }
+h3 { font-size: 1.35rem; font-weight: 600; margin-top: 1.75rem; margin-bottom: 0.75rem; color: #334155; }
+p { margin-top: 0; margin-bottom: 1.5rem; color: #334155; font-size: 1.05rem; line-height: 1.75; }
+img { max-width: 100%; height: auto; border-radius: 8px; }
+blockquote { border-left: 4px solid #2563eb; margin: 1.75rem 0; padding: 0.75rem 1.5rem; color: #475569; background: #f8fafc; border-radius: 0 8px 8px 0; }
+ul, ol { padding-left: 1.5rem; margin-bottom: 1.5rem; color: #334155; }
+li { margin-bottom: 0.5rem; }
+</style>`;
+          if (htmlStr.includes("</head>")) {
+            htmlStr = htmlStr.replace("</head>", `${wpStyleBlock}\n</head>`);
+          } else {
+            htmlStr = `${wpStyleBlock}\n${htmlStr}`;
+          }
+          renderedBuffer = Buffer.from(htmlStr, "utf-8");
+        }
+
         contentType = "text/html; charset=utf-8";
         docType = "html";
       } else if (ext === ".docx") {

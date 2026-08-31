@@ -1005,9 +1005,44 @@ publicApiRouter.post("/wordpress/submit-batch-human-review", async (req, res) =>
       const documentId = uuidv4();
       const pageTitle = page.title || `WordPress Page ${page.post_id || ""}`;
       const docName = `WP: ${pageTitle} (ID: ${page.post_id || "N/A"})`;
-      const htmlContent = page.rendered_html || page.content || `<article><h1>${pageTitle}</h1></article>`;
       const srcLang = page.source_lang || "en";
       const targetLangs = Array.isArray(page.target_langs) ? page.target_langs : (page.target_lang ? [page.target_lang] : allTargetLangs);
+
+      let htmlContent = page.rendered_html || page.content || `<article><h1>${pageTitle}</h1></article>`;
+
+      // Ensure page title is always present as <h1> heading if not found in HTML
+      if (!htmlContent.includes("<h1") && !htmlContent.includes(pageTitle)) {
+        htmlContent = `<h1 class="wp-block-post-title entry-title">${pageTitle}</h1>\n` + htmlContent;
+      }
+
+      // Ensure full HTML document structure with modern WordPress typography CSS
+      if (!htmlContent.includes("<style>") && !htmlContent.includes("<style ")) {
+        htmlContent = `<!DOCTYPE html>
+<html lang="${srcLang}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${pageTitle}</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; font-size: 16px; line-height: 1.7; color: #1e293b; background-color: #ffffff; margin: 0; padding: 40px 32px; -webkit-font-smoothing: antialiased; }
+.wp-site-preview-container { max-width: 840px; margin: 0 auto; background: #ffffff; }
+.wp-block-post-title, h1.entry-title, h1 { font-size: 2.25rem; font-weight: 800; line-height: 1.25; color: #0f172a; margin-top: 0; margin-bottom: 2rem; letter-spacing: -0.025em; }
+h2 { font-size: 1.75rem; font-weight: 700; margin-top: 2rem; margin-bottom: 1rem; color: #1e293b; }
+h3 { font-size: 1.35rem; font-weight: 600; margin-top: 1.75rem; margin-bottom: 0.75rem; color: #334155; }
+p { margin-top: 0; margin-bottom: 1.5rem; color: #334155; font-size: 1.05rem; line-height: 1.75; }
+img { max-width: 100%; height: auto; border-radius: 8px; }
+blockquote { border-left: 4px solid #2563eb; margin: 1.75rem 0; padding: 0.75rem 1.5rem; color: #475569; background: #f8fafc; border-radius: 0 8px 8px 0; }
+ul, ol { padding-left: 1.5rem; margin-bottom: 1.5rem; color: #334155; }
+li { margin-bottom: 0.5rem; }
+</style>
+</head>
+<body>
+<article class="wp-site-preview-container">
+${htmlContent}
+</article>
+</body>
+</html>`;
+      }
 
       // Write temp file to parse with htmlParser
       const tempPath = path.join(uploadDir, `wp_temp_${documentId}.html`);

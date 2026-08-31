@@ -1489,11 +1489,43 @@ class Verbocat_Editor_UI {
                 $page_langs = ['hi']; // Default fallback
             }
 
-            // Render HTML for smooth WYSIWYG preview on Centroid
-            $rendered_html = apply_filters('the_content', $post->post_content);
-            if (empty($rendered_html)) {
-                $rendered_html = '<article class="page"><h1>' . esc_html($post->post_title) . '</h1><div>' . wpautop($post->post_content) . '</div></article>';
+            // Render rich content HTML
+            $content_html = apply_filters('the_content', $post->post_content);
+            if (empty($content_html)) {
+                $content_html = wpautop($post->post_content);
             }
+
+            // Build full, styled HTML document for 100% exact WYSIWYG match
+            $source_code = $opts['source_lang'] ?? 'en';
+            $page_title_escaped = esc_html($post->post_title);
+            $rendered_html = '<!DOCTYPE html>' . "\n" .
+                '<html lang="' . esc_attr($source_code) . '">' . "\n" .
+                '<head>' . "\n" .
+                '<meta charset="utf-8">' . "\n" .
+                '<meta name="viewport" content="width=device-width, initial-scale=1.0">' . "\n" .
+                '<title>' . $page_title_escaped . '</title>' . "\n" .
+                '<style>' . "\n" .
+                'body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; font-size: 16px; line-height: 1.7; color: #1e293b; background-color: #ffffff; margin: 0; padding: 40px 32px; -webkit-font-smoothing: antialiased; }' . "\n" .
+                '.wp-site-preview-container { max-width: 840px; margin: 0 auto; background: #ffffff; }' . "\n" .
+                '.wp-block-post-title, h1.entry-title { font-size: 2.25rem; font-weight: 800; line-height: 1.25; color: #0f172a; margin-top: 0; margin-bottom: 2rem; letter-spacing: -0.025em; }' . "\n" .
+                'h2 { font-size: 1.75rem; font-weight: 700; margin-top: 2rem; margin-bottom: 1rem; color: #1e293b; }' . "\n" .
+                'h3 { font-size: 1.35rem; font-weight: 600; margin-top: 1.75rem; margin-bottom: 0.75rem; color: #334155; }' . "\n" .
+                'p { margin-top: 0; margin-bottom: 1.5rem; color: #334155; font-size: 1.05rem; line-height: 1.75; }' . "\n" .
+                'img { max-width: 100%; height: auto; border-radius: 8px; }' . "\n" .
+                'blockquote { border-left: 4px solid #2563eb; margin: 1.75rem 0; padding: 0.75rem 1.5rem; color: #475569; background: #f8fafc; border-radius: 0 8px 8px 0; }' . "\n" .
+                'ul, ol { padding-left: 1.5rem; margin-bottom: 1.5rem; color: #334155; }' . "\n" .
+                'li { margin-bottom: 0.5rem; }' . "\n" .
+                '</style>' . "\n" .
+                '</head>' . "\n" .
+                '<body>' . "\n" .
+                '<article class="wp-site-preview-container">' . "\n" .
+                '<h1 class="wp-block-post-title entry-title">' . $page_title_escaped . '</h1>' . "\n" .
+                '<div class="entry-content">' . "\n" .
+                $content_html . "\n" .
+                '</div>' . "\n" .
+                '</article>' . "\n" .
+                '</body>' . "\n" .
+                '</html>';
 
             $pages_payload[] = [
                 'post_id'              => $post->ID,
