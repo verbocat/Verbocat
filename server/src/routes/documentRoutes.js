@@ -173,7 +173,7 @@ documentRouter.get(["/documents/assigned", "/api/documents/assigned"], checkAuth
         if (!doc) continue;
 
         // STRICT MULTI-TENANT ISOLATION: Filter out assigned documents belonging to another client workspace
-        if (!isSuperAdmin && activeTenantId && doc.organization_id && doc.organization_id !== activeTenantId) {
+        if (activeTenantId && doc.organization_id && doc.organization_id !== activeTenantId) {
           continue;
         }
 

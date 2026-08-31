@@ -71,11 +71,12 @@ export const AdminDashboard = ({ onClose, theme }) => {
   const handleCreateOrganization = async (e) => {
     e.preventDefault();
     if (!newOrgName || !newOrgSubdomain) return;
+    const cleanSubdomain = newOrgSubdomain.toLowerCase().trim().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
     try {
       setSubmittingOrg(true);
       await createAdminOrganization({
-        name: newOrgName,
-        subdomain: newOrgSubdomain,
+        name: newOrgName.trim(),
+        subdomain: cleanSubdomain,
         credits_allowed: Number(newOrgCredits)
       });
       showToast("Client space created successfully!");
@@ -557,7 +558,7 @@ export const AdminDashboard = ({ onClose, theme }) => {
             >
               Translation Memory
             </button>
-            {currentUser?.role === "super_admin" && !new URLSearchParams(window.location.search).get("space") && (
+            {currentUser?.role === "super_admin" && !window.location.pathname.match(/^\/c\/([^\/]+)/) && !new URLSearchParams(window.location.search).get("space") && (
               <button
                 onClick={() => setActiveTab("spaces")}
                 className={`px-4 py-2 rounded-xl text-xs font-black tracking-wide transition-all cursor-pointer ${
@@ -1357,10 +1358,9 @@ export const AdminDashboard = ({ onClose, theme }) => {
                   placeholder="e.g. Piramal Finance or Acme Corp"
                   value={newOrgName}
                   onChange={(e) => {
-                    setNewOrgName(e.target.value);
-                    if (!newOrgSubdomain || newOrgSubdomain === newOrgName.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 16)) {
-                      setNewOrgSubdomain(e.target.value.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "").slice(0, 24));
-                    }
+                    const val = e.target.value;
+                    setNewOrgName(val);
+                    setNewOrgSubdomain(val.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""));
                   }}
                   className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-slate-100 outline-none focus:border-indigo-500/50 text-sm"
                 />
@@ -1375,9 +1375,9 @@ export const AdminDashboard = ({ onClose, theme }) => {
                   <input
                     type="text"
                     required
-                    placeholder="piramal"
+                    placeholder="piramal-finance"
                     value={newOrgSubdomain}
-                    onChange={(e) => setNewOrgSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                    onChange={(e) => setNewOrgSubdomain(e.target.value.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""))}
                     className="bg-transparent text-indigo-400 font-bold outline-none font-mono px-1 min-w-[80px]"
                   />
                 </div>

@@ -66,7 +66,7 @@ adminRouter.post("/organizations", checkRole(["super_admin"]), async (request, r
       return response.status(400).json({ error: "Workspace name and subdomain are required." });
     }
 
-    const cleanSubdomain = subdomain.toLowerCase().trim().replace(/[^a-z0-9-]/g, "");
+    const cleanSubdomain = subdomain.toLowerCase().trim().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
 
     const { data: existing } = await supabase
       .from("organizations")
@@ -221,6 +221,24 @@ adminRouter.get("/users", async (request, response) => {
       });
     });
 
+    // If viewing a dedicated client space, always ensure the Super Admin (Master Admin) profile is present
+    if (targetOrgId) {
+      try {
+        const { data: superAdmins } = await supabase
+          .from("profiles")
+          .select("*, organization:organizations(*)")
+          .eq("role", "super_admin");
+
+        if (superAdmins) {
+          superAdmins.forEach(sa => {
+            if (!userMap.has(sa.id)) {
+              userMap.set(sa.id, sa);
+            }
+          });
+        }
+      } catch (_) {}
+    }
+
     let authUsersMap = new Map();
     try {
       const { data: authData } = await supabaseAdmin.auth.admin.listUsers();
@@ -247,9 +265,9 @@ adminRouter.get("/users", async (request, response) => {
       };
     });
 
-    // Enforce strict space boundary: if viewing a space, only include users associated with that space
+    // Enforce strict space boundary: if viewing a space, only include users associated with that space or the super_admin
     if (targetOrgId) {
-      users = users.filter(u => u.organization_id === targetOrgId || membershipsMap.has(u.id));
+      users = users.filter(u => u.organization_id === targetOrgId || membershipsMap.has(u.id) || u.role === "super_admin");
     }
 
     response.json({ users });

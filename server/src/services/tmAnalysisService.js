@@ -42,7 +42,7 @@ const runProjectTmAnalysis = async ({
 }) => {
   // 1. Fetch project details
   let projQuery = supabase.from("projects").select("*").eq("id", projectId);
-  if (!isSuperAdmin && activeTenantId) {
+  if (activeTenantId) {
     projQuery = projQuery.eq("organization_id", activeTenantId);
   }
   const { data: project, error: projErr } = await projQuery.single();
@@ -68,7 +68,7 @@ const runProjectTmAnalysis = async ({
     .select("source_text, target_text, provider")
     .eq("target_lang", selectedTargetLang);
 
-  if (!isSuperAdmin && (activeTenantId || project.organization_id)) {
+  if (activeTenantId || project.organization_id) {
     tmQuery = tmQuery.eq("organization_id", activeTenantId || project.organization_id);
   }
 
@@ -303,7 +303,7 @@ const runDocumentTmAnalysis = async ({
     .select("source_text, target_text, provider")
     .eq("target_lang", selectedTargetLang);
 
-  if (!isSuperAdmin && (activeTenantId || doc.organization_id)) {
+  if (activeTenantId || doc.organization_id) {
     tmQuery = tmQuery.eq("organization_id", activeTenantId || doc.organization_id);
   }
 

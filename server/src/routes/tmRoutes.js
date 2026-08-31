@@ -23,7 +23,7 @@ tmRouter.post("/tm/search", checkAuth, async (request, response) => {
 
     if (sourceLang) query = query.eq("source_lang", sourceLang);
     if (targetLang) query = query.eq("target_lang", targetLang);
-    if (!isSuperAdmin && activeTenantId) {
+    if (activeTenantId) {
       query = query.eq("organization_id", activeTenantId);
     }
 

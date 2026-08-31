@@ -107,7 +107,8 @@ async function getActivityLogs({ projectId = null, organizationId = null, isSupe
     // 1. Filter persisted logs
     persisted.forEach(item => {
       if (projectId && item.project_id !== projectId) return;
-      if (!isSuperAdmin && organizationId && item.organization_id && item.organization_id !== organizationId) return;
+      if (organizationId && item.organization_id && item.organization_id !== organizationId) return;
+      if (organizationId && !item.organization_id) return;
       
       seenIds.add(item.id);
       history.push(item);
@@ -123,7 +124,7 @@ async function getActivityLogs({ projectId = null, organizationId = null, isSupe
 
       if (projectId) {
         projsQuery = projsQuery.eq("id", projectId);
-      } else if (!isSuperAdmin && organizationId) {
+      } else if (organizationId) {
         projsQuery = projsQuery.eq("organization_id", organizationId);
       }
 
@@ -177,7 +178,8 @@ async function getActivityLogs({ projectId = null, organizationId = null, isSupe
 
       if (docs && docs.length > 0) {
         docs.forEach(doc => {
-          if (!isSuperAdmin && organizationId && doc.projects?.organization_id && doc.projects.organization_id !== organizationId) return;
+          if (organizationId && doc.projects?.organization_id && doc.projects.organization_id !== organizationId) return;
+          if (organizationId && !doc.projects?.organization_id) return;
 
           const key = `doc_uploaded_${doc.id}`;
           const alreadyLogged = history.some(h => 
@@ -220,7 +222,8 @@ async function getActivityLogs({ projectId = null, organizationId = null, isSupe
         shares.forEach(s => {
           const docProjId = s.documents?.project_id;
           if (projectId && docProjId !== projectId) return;
-          if (!isSuperAdmin && organizationId && s.documents?.projects?.organization_id && s.documents.projects.organization_id !== organizationId) return;
+          if (organizationId && s.documents?.projects?.organization_id && s.documents.projects.organization_id !== organizationId) return;
+          if (organizationId && !s.documents?.projects?.organization_id) return;
 
           const key = `share_${s.id}`;
           if (!seenIds.has(key)) {

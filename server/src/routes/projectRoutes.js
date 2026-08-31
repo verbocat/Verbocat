@@ -33,8 +33,14 @@ projectRouter.get(["/projects", "/api/projects"], checkAuth, async (request, res
       .select("*, documents(*), translation_jobs(*)")
       .order("created_at", { ascending: false });
 
-    if (!isSuperAdmin && activeTenantId) {
-      query = query.eq("organization_id", activeTenantId);
+    if (activeTenantId) {
+      const activeSubdomain = request.tenant?.subdomain || "centroid";
+      const isMainSpace = ["centroid", "verbolabs"].includes(activeSubdomain.toLowerCase());
+      if (isMainSpace) {
+        query = query.or(`organization_id.eq.${activeTenantId},organization_id.is.null`);
+      } else {
+        query = query.eq("organization_id", activeTenantId);
+      }
     }
 
     const { data: projects, error } = await query;
@@ -206,11 +212,10 @@ projectRouter.post(["/projects", "/api/projects"], checkAuth, upload.single("ref
 projectRouter.get(["/projects/history", "/api/projects/history"], checkAuth, async (request, response) => {
   try {
     const activeTenantId = request.tenant?.id || request.profile?.organization_id;
-    const isSuperAdmin = request.profile?.role === "super_admin";
 
     const history = await getActivityLogs({
       organizationId: activeTenantId,
-      isSuperAdmin
+      isSuperAdmin: false
     });
 
     response.json({ history });
@@ -232,8 +237,14 @@ projectRouter.get(["/projects/:id", "/api/projects/:id"], checkAuth, async (requ
       .select("*, documents(*)")
       .eq("id", id);
 
-    if (!isSuperAdmin && activeTenantId) {
-      query = query.eq("organization_id", activeTenantId);
+    if (activeTenantId) {
+      const activeSubdomain = request.tenant?.subdomain || "centroid";
+      const isMainSpace = ["centroid", "verbolabs"].includes(activeSubdomain.toLowerCase());
+      if (isMainSpace) {
+        query = query.or(`organization_id.eq.${activeTenantId},organization_id.is.null`);
+      } else {
+        query = query.eq("organization_id", activeTenantId);
+      }
     }
 
     const { data: project, error } = await query.single();
@@ -641,8 +652,14 @@ projectRouter.put(["/projects/:id", "/api/projects/:id"], checkAuth, async (requ
     updateData.updated_at = new Date().toISOString();
 
     let query = supabase.from("projects").update(updateData).eq("id", id);
-    if (!isSuperAdmin && activeTenantId) {
-      query = query.eq("organization_id", activeTenantId);
+    if (activeTenantId) {
+      const activeSubdomain = request.tenant?.subdomain || "centroid";
+      const isMainSpace = ["centroid", "verbolabs"].includes(activeSubdomain.toLowerCase());
+      if (isMainSpace) {
+        query = query.or(`organization_id.eq.${activeTenantId},organization_id.is.null`);
+      } else {
+        query = query.eq("organization_id", activeTenantId);
+      }
     }
 
     const { data: updatedProject, error } = await query.select().single();
@@ -716,8 +733,14 @@ projectRouter.delete(["/projects/:id", "/api/projects/:id"], checkAuth, async (r
 
     // 2. Perform deletion
     let query = supabase.from("projects").delete().eq("id", id);
-    if (!isSuperAdmin && activeTenantId) {
-      query = query.eq("organization_id", activeTenantId);
+    if (activeTenantId) {
+      const activeSubdomain = request.tenant?.subdomain || "centroid";
+      const isMainSpace = ["centroid", "verbolabs"].includes(activeSubdomain.toLowerCase());
+      if (isMainSpace) {
+        query = query.or(`organization_id.eq.${activeTenantId},organization_id.is.null`);
+      } else {
+        query = query.eq("organization_id", activeTenantId);
+      }
     }
 
     const { error } = await query;

@@ -222,8 +222,8 @@ async function getDocumentPermission(documentId, user, profile, tenantId = null,
   const userOrgId = tenantId || profile.organization_id || null;
 
   // STRICT MULTI-TENANT ISOLATION:
-  // If the document belongs to a specific organization space and user is not super_admin, block cross-tenant access!
-  if (!isSuperAdmin && doc.organization_id && userOrgId && doc.organization_id !== userOrgId) {
+  // If the document belongs to a specific organization space and doesn't match active tenant space, block access!
+  if (userOrgId && doc.organization_id && doc.organization_id !== userOrgId) {
     return { hasAccess: false, permission: null, document: doc };
   }
 

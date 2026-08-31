@@ -14,7 +14,7 @@ glossaryRouter.get("/glossary", checkAuth, async (request, response) => {
     let query = supabase.from("glossary").select("*").order("term", { ascending: true });
     if (sourceLang) query = query.eq("source_lang", sourceLang);
     if (targetLang) query = query.eq("target_lang", targetLang);
-    if (!isSuperAdmin && activeTenantId) {
+    if (activeTenantId) {
       query = query.eq("organization_id", activeTenantId);
     }
 
@@ -71,7 +71,7 @@ glossaryRouter.delete("/glossary/:id", checkAuth, async (request, response) => {
     const isSuperAdmin = request.profile?.role === "super_admin";
 
     let query = supabase.from("glossary").delete().eq("id", id);
-    if (!isSuperAdmin && activeTenantId) {
+    if (activeTenantId) {
       query = query.eq("organization_id", activeTenantId);
     }
 

@@ -21,13 +21,35 @@ async function getOrganizationBySubdomain(subdomain) {
         .limit(1);
       if (data && data.length > 0) org = data[0];
     } else {
-      // Check subdomain (exact or ilike) or name (ilike)
-      const { data } = await supabase
+      // 1. Exact subdomain match
+      const { data: exactOrg } = await supabase
         .from("organizations")
         .select("*")
-        .or(`subdomain.eq.${cleanSubdomain},subdomain.ilike.${cleanSubdomain},name.ilike.${cleanSubdomain}`)
-        .limit(1);
-      if (data && data.length > 0) org = data[0];
+        .eq("subdomain", cleanSubdomain)
+        .maybeSingle();
+
+      if (exactOrg) {
+        org = exactOrg;
+      } else {
+        // 2. Case-insensitive subdomain or name match
+        const { data: ilikeOrg } = await supabase
+          .from("organizations")
+          .select("*")
+          .ilike("subdomain", cleanSubdomain)
+          .maybeSingle();
+
+        if (ilikeOrg) {
+          org = ilikeOrg;
+        } else {
+          const { data: nameOrg } = await supabase
+            .from("organizations")
+            .select("*")
+            .ilike("name", cleanSubdomain)
+            .maybeSingle();
+
+          if (nameOrg) org = nameOrg;
+        }
+      }
     }
   } catch (err) {
     console.error("DB Query error fetching organization space:", err?.message || err);
