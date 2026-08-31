@@ -756,7 +756,9 @@ publicApiRouter.post("/keys/generate", async (req, res) => {
 });
 
 /**
- * 10. WordPress Integration: List Approved Linguists by Languageconst LANGUAGE_ALIASES = {
+ * 10. WordPress Integration: List Approved Linguists by Language
+ */
+const LANGUAGE_ALIASES = {
   hindi: ["hi", "hindi"],
   punjabi: ["pa", "punjabi", "gurmukhi"],
   bengali: ["bn", "bengali"],
