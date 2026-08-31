@@ -133,65 +133,53 @@ async function translateSrtSegments(segments, targetLang, sourceLang = "en", srt
     const sourceText = seg.source;
     if (!sourceText) continue;
 
-    totalWordCount += sourceText.split(/\s+/).length;
+    totalWordCount += sourceText.split(/\s+/).filter(Boolean).length;
 
-    // Only reuse human Linguist (ICE) matches for SRT files, ignoring old literal machine TM entries
+    // Reuse human Linguist (ICE) matches for SRT files
     const tmMatch = tmMap[sourceText];
     if (tmMatch && tmMatch.provider && tmMatch.provider.startsWith("Linguist (ICE)") && tmMatch.target_text && isScriptValidForLanguage(tmMatch.target_text, targetLang, sourceText)) {
-  // 3. Process missing segments via sliding-window batch translation
-  if (missingSegments.length > 0) {
-    const srtSegments = missingSegments.map(s => ({
-      source: s.source,
-      index: s.index
-    }));
+      seg.target = tmMatch.target_text;
+      seg.provider = tmMatch.provider;
+      continue;
+    }
 
-    const slidingPayload = buildSlidingWindowPayload(srtSegments, 3);
+    // Build Multi-Cue Sliding Context Window
+    const windowPayload = buildSlidingWindowPayload(results, i, 3, 2);
     const systemPrompt = buildSrtSystemPrompt(targetLang, actualSourceLang, srtContextSettings);
-    const providerState = createProviderState();
 
-    const estimatedTokens = 1500 + Math.round(srtSegments.reduce((sum, s) => sum + s.source.length, 0) / 4) * 2;
-    totalWordCount = srtSegments.reduce((sum, s) => sum + s.source.split(/\s+/).filter(Boolean).length, 0);
-
-    const translatedBatch = await enqueue({
-      type: "srt-translation",
-      estimatedTokens,
-      userId,
-      execute: async () => {
-        const payloadTexts = slidingPayload.map(p => p.currentCue);
-        const chunkResults = await providerState.translateChunk(payloadTexts, targetLang, actualSourceLang, {
-          customSystemPrompt: systemPrompt,
-          ...srtContextSettings
-        });
-        return chunkResults;
-      }
-    });
-
-    if (translatedBatch && translatedBatch.length > 0) {
-      translatedBatch.forEach((item, idx) => {
-        const origSeg = missingSegments[idx];
-        if (origSeg && item) {
-          const isValidScript = isScriptValidForLanguage(item.translated, targetLang);
-          const isIdentical = item.translated === origSeg.source && !isLegitimatelyIdentical(origSeg.source);
-
-          if (isValidScript && !isIdentical) {
-            results[origSeg.index].target = item.translated;
-            results[origSeg.index].provider = item.provider;
-          } else {
-            results[origSeg.index].target = origSeg.source;
-            results[origSeg.index].provider = "Fallback (Script Mismatch)";
-          }
-        }
+    try {
+      const estimatedTokens = 800 + Math.round(windowPayload.fullPromptText.length / 4);
+      
+      const translatedText = await enqueue({
+        type: "translation",
+        estimatedTokens,
+        userId,
+        execute: () => callAiProvider(systemPrompt, windowPayload.fullPromptText)
       });
+
+      const cleanTranslated = String(translatedText || "").trim();
+      
+      if (cleanTranslated && isScriptValidForLanguage(cleanTranslated, targetLang, sourceText)) {
+        seg.target = cleanTranslated;
+        seg.provider = "SRT AI Engine (Pass 1)";
+      } else {
+        seg.target = sourceText;
+        seg.provider = "Fallback (Raw)";
+      }
+    } catch (err) {
+      console.error(`[SRT_ENGINE_ERROR] Pass 1 translation failed for cue #${seg.id}:`, err.message);
+      seg.target = sourceText;
+      seg.provider = "Fallback (Error)";
     }
   }
 
-  // 4. Two-Pass Polish Pipeline for Cinema/Dialogue Flow
+  // 4. Pass 2: Run Cinematic Dialogue Polish over consecutive subtitle blocks
   try {
-    const polishedResults = await runTwoPassSrtPolish(results, targetLang, srtContextSettings, userId);
-    if (polishedResults && polishedResults.length === results.length) {
-      for (let i = 0; i < results.length; i++) {
+    const polishedResults = await runTwoPassSrtPolish(results, srtContextSettings, targetLang, callAiProvider);
+    for (let i = 0; i < results.length; i++) {
+      if (polishedResults[i] && polishedResults[i].target) {
         results[i].target = polishedResults[i].target;
-        if (polishedResults[i].polished) {
+        if (polishedResults[i].provider && polishedResults[i].provider !== "Fallback (Raw)") {
           results[i].provider = "SRT Cinematic Polish Engine";
         }
       }
