@@ -22,6 +22,7 @@ class Verbocat_Settings {
         add_action('wp_ajax_verbocat_test_connection', [__CLASS__, 'ajax_test_connection']);
         add_action('wp_ajax_verbocat_save_page_automation', [__CLASS__, 'ajax_save_page_automation']);
         add_action('wp_ajax_verbocat_get_linguists', [__CLASS__, 'ajax_get_linguists']);
+        add_action('wp_ajax_verbocat_save_settings_partial', [__CLASS__, 'ajax_save_settings_partial']);
     }
 
     /**
@@ -112,7 +113,11 @@ class Verbocat_Settings {
         $sanitized['linguist_assignments'] = [];
         if (!empty($input['linguist_assignments']) && is_array($input['linguist_assignments'])) {
             foreach ($input['linguist_assignments'] as $l_code => $l_uid) {
-                $sanitized['linguist_assignments'][sanitize_text_field($l_code)] = sanitize_text_field($l_uid);
+                $clean_code = sanitize_text_field($l_code);
+                $clean_uid = sanitize_text_field($l_uid);
+                if (!empty($clean_uid)) {
+                    $sanitized['linguist_assignments'][$clean_code] = $clean_uid;
+                }
             }
         }
 
@@ -149,21 +154,19 @@ class Verbocat_Settings {
             wp_send_json_error(['message' => __('Please enter an API Key first.', 'verbocat-connector')]);
         }
 
-        $res = Verbocat_Api_Client::check_account($api_url, $api_key);
+        $result = Verbocat_Api_Client::test_connection($api_url, $api_key);
 
-        if (is_wp_error($res)) {
-            wp_send_json_error(['message' => $res->get_error_message()]);
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
         }
 
-        $org = $res['organization'] ?? 'Workspace';
-        $allowed = number_format($res['credits_allowed'] ?? 0);
-        $remaining = number_format($res['credits_remaining'] ?? 0);
+        $quota = $result['quota'] ?? [];
+        $words_left = isset($quota['words_remaining']) ? number_format($quota['words_remaining']) : 'Unlimited';
+        $tier = $quota['tier'] ?? 'Active';
 
         wp_send_json_success([
-            'message'   => sprintf(__('✓ Connected to %s (%s remaining / %s allowed words)', 'verbocat-connector'), $org, $remaining, $allowed),
-            'org'       => $org,
-            'remaining' => $remaining,
-            'allowed'   => $allowed
+            'message' => sprintf(__('Connected! Tier: %s | Words Remaining: %s', 'verbocat-connector'), esc_html($tier), esc_html($words_left)),
+            'data'    => $result
         ]);
     }
 
@@ -210,6 +213,69 @@ class Verbocat_Settings {
 
         wp_send_json_success([
             'message' => __('Automation settings updated successfully.', 'verbocat-connector')
+        ]);
+    }
+
+    /**
+     * AJAX handler for automatically saving partial settings (Languages pool, Linguist assignments, workflow)
+     */
+    public static function ajax_save_settings_partial() {
+        check_ajax_referer('verbocat_test_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Permission denied.', 'verbocat-connector')]);
+        }
+
+        $opts = self::get_options();
+
+        // 1. Target Languages Pool update
+        if (isset($_POST['target_langs'])) {
+            if (is_array($_POST['target_langs'])) {
+                $opts['target_langs'] = implode(', ', array_map('sanitize_text_field', array_filter($_POST['target_langs'])));
+            } else {
+                $opts['target_langs'] = sanitize_text_field($_POST['target_langs']);
+            }
+        }
+
+        // 2. Bulk Linguist Assignments update
+        if (isset($_POST['linguist_assignments']) && is_array($_POST['linguist_assignments'])) {
+            $existing_assignments = $opts['linguist_assignments'] ?? [];
+            if (!is_array($existing_assignments)) $existing_assignments = [];
+
+            foreach ($_POST['linguist_assignments'] as $l_code => $l_uid) {
+                $clean_code = sanitize_text_field($l_code);
+                $clean_uid = sanitize_text_field($l_uid);
+                if (empty($clean_uid)) {
+                    unset($existing_assignments[$clean_code]);
+                } else {
+                    $existing_assignments[$clean_code] = $clean_uid;
+                }
+            }
+            $opts['linguist_assignments'] = $existing_assignments;
+        }
+
+        // 3. Single Linguist Assignment update
+        if (isset($_POST['single_linguist_assignment'])) {
+            $l_code = sanitize_text_field($_POST['single_linguist_assignment']['lang'] ?? '');
+            $l_uid = sanitize_text_field($_POST['single_linguist_assignment']['uid'] ?? '');
+            if (!empty($l_code)) {
+                if (!isset($opts['linguist_assignments']) || !is_array($opts['linguist_assignments'])) {
+                    $opts['linguist_assignments'] = [];
+                }
+                if (empty($l_uid)) {
+                    unset($opts['linguist_assignments'][$l_code]);
+                } else {
+                    $opts['linguist_assignments'][$l_code] = $l_uid;
+                }
+            }
+        }
+
+        update_option(self::$option_name, $opts);
+
+        wp_send_json_success([
+            'message' => __('Settings saved automatically.', 'verbocat-connector'),
+            'target_langs' => $opts['target_langs'],
+            'linguist_assignments' => $opts['linguist_assignments'] ?? []
         ]);
     }
 
@@ -690,10 +756,28 @@ class Verbocat_Settings {
                     <?php submit_button(__('Save All Workflow & Automation Settings', 'verbocat-connector'), 'primary large', 'submit', false, ['style' => 'font-weight: 600; padding: 8px 28px; font-size: 14px; border-radius: 6px;']); ?>
                 </div>
             </form>
+            
+            <!-- Floating Auto-Save Notification Toast -->
+            <div id="vb_autosave_toast" style="position: fixed; bottom: 24px; right: 24px; z-index: 99999; background: #0f172a; color: #fff; padding: 10px 18px; border-radius: 8px; font-size: 12px; font-weight: 600; box-shadow: 0 10px 25px rgba(0,0,0,0.25); display: none; align-items: center; gap: 8px; border-left: 4px solid #10b981; transition: all 0.2s ease;"></div>
         </div>
 
         <script>
         jQuery(document).ready(function($) {
+            // Toast Notification Helper
+            var toastTimer = null;
+            function showAutoSaveToast(msg, isSuccess) {
+                var $toast = $('#vb_autosave_toast');
+                clearTimeout(toastTimer);
+                var icon = (isSuccess === true) ? '✓ ' : (isSuccess === false ? '✕ ' : '⏳ ');
+                var color = (isSuccess === true) ? '#10b981' : (isSuccess === false ? '#ef4444' : '#3b82f6');
+                $toast.html(icon + msg).css('border-left-color', color).fadeIn(150);
+                if (isSuccess === true || isSuccess === false) {
+                    toastTimer = setTimeout(function() {
+                        $toast.fadeOut(300);
+                    }, 3500);
+                }
+            }
+
             // Test API Connection
             $('#verbocat_test_conn_btn').on('click', function(e) {
                 e.preventDefault();
@@ -728,10 +812,41 @@ class Verbocat_Settings {
                 });
             });
 
-            // Global Language Pool: Counter & Select/Clear All
+            // Global Language Pool: Counter & Auto-Save
             function updateGlobalLangCounter() {
                 var count = $('.vb-global-lang-cb:checked').length;
                 $('#vb_global_lang_counter').text(count + ' selected');
+            }
+
+            var autoSaveLangsTimer = null;
+            function triggerAutoSaveLangs() {
+                clearTimeout(autoSaveLangsTimer);
+                showAutoSaveToast('<?php _e('Saving target languages pool...', 'verbocat-connector'); ?>', null);
+                autoSaveLangsTimer = setTimeout(function() {
+                    var selectedLangs = [];
+                    $('.vb-global-lang-cb:checked').each(function() {
+                        selectedLangs.push($(this).val());
+                    });
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        data: {
+                            action: 'verbocat_save_settings_partial',
+                            nonce: '<?php echo esc_js($test_nonce); ?>',
+                            target_langs: selectedLangs
+                        },
+                        success: function(res) {
+                            if (res.success) {
+                                showAutoSaveToast('<?php _e('Global Target Languages Pool saved automatically!', 'verbocat-connector'); ?>', true);
+                            } else {
+                                showAutoSaveToast(res.data && res.data.message ? res.data.message : 'Failed to auto-save languages.', false);
+                            }
+                        },
+                        error: function() {
+                            showAutoSaveToast('Auto-save network error.', false);
+                        }
+                    });
+                }, 300);
             }
 
             $('.vb-global-lang-cb').on('change', function() {
@@ -742,16 +857,28 @@ class Verbocat_Settings {
                     $card.css({'background': '#ffffff', 'border-color': '#e2e8f0'});
                 }
                 updateGlobalLangCounter();
+                renderLinguistMappingTable(cachedLinguists);
+                triggerAutoSaveLangs();
             });
 
             $('#vb_select_all_langs').on('click', function(e) {
                 e.preventDefault();
-                $('.vb-global-lang-cb').prop('checked', true).trigger('change');
+                $('.vb-global-lang-cb').prop('checked', true).each(function() {
+                    $(this).closest('.vb-global-lang-card').css({'background': '#eff6ff', 'border-color': '#93c5fd'});
+                });
+                updateGlobalLangCounter();
+                renderLinguistMappingTable(cachedLinguists);
+                triggerAutoSaveLangs();
             });
 
             $('#vb_clear_all_langs').on('click', function(e) {
                 e.preventDefault();
-                $('.vb-global-lang-cb').prop('checked', false).trigger('change');
+                $('.vb-global-lang-cb').prop('checked', false).each(function() {
+                    $(this).closest('.vb-global-lang-card').css({'background': '#ffffff', 'border-color': '#e2e8f0'});
+                });
+                updateGlobalLangCounter();
+                renderLinguistMappingTable(cachedLinguists);
+                triggerAutoSaveLangs();
             });
 
             // Filter Global Languages by typing
@@ -935,6 +1062,15 @@ class Verbocat_Settings {
             var cachedLinguists = [];
 
             function renderLinguistMappingTable(linguists) {
+                // Capture any current dropdown values before rebuilding table
+                $('.vb-linguist-select').each(function() {
+                    var lang = $(this).data('lang');
+                    var uid = $(this).val();
+                    if (lang) {
+                        vbSavedAssignments[lang] = uid;
+                    }
+                });
+
                 var $container = $('#vb_linguist_mapping_container');
                 var selectedLangs = [];
                 $('.vb-global-lang-cb:checked').each(function() {
@@ -1035,12 +1171,12 @@ class Verbocat_Settings {
                             renderLinguistMappingTable(cachedLinguists);
 
                             if (showToast) {
-                                alert('<?php _e('✓ Linguist directory refreshed successfully from Centroid! Found ', 'verbocat-connector'); ?>' + cachedLinguists.length + ' linguist(s).');
+                                showAutoSaveToast('<?php _e('Linguist directory refreshed from Centroid!', 'verbocat-connector'); ?>', true);
                             }
                         } else {
                             renderLinguistMappingTable(cachedLinguists);
                             if (showToast) {
-                                alert(response.data && response.data.message ? response.data.message : '<?php _e('Failed to fetch linguists list.', 'verbocat-connector'); ?>');
+                                showAutoSaveToast(response.data && response.data.message ? response.data.message : '<?php _e('Failed to fetch linguists list.', 'verbocat-connector'); ?>', false);
                             }
                         }
                     },
@@ -1048,23 +1184,11 @@ class Verbocat_Settings {
                         $btn.prop('disabled', false).find('span').text('🔄');
                         renderLinguistMappingTable(cachedLinguists);
                         if (showToast) {
-                            alert('<?php _e('Could not connect to Centroid API. Please check your API key & URL.', 'verbocat-connector'); ?>');
+                            showAutoSaveToast('<?php _e('Could not connect to Centroid API.', 'verbocat-connector'); ?>', false);
                         }
                     }
                 });
             }
-
-            // Real-time re-render when languages are checked/unchecked in Section 3
-            $(document).on('change', '.vb-global-lang-cb', function() {
-                renderLinguistMappingTable(cachedLinguists);
-            });
-
-            // Re-render when Select All or Clear All is clicked
-            $('#vb_select_all_langs, #vb_clear_all_langs').on('click', function() {
-                setTimeout(function() {
-                    renderLinguistMappingTable(cachedLinguists);
-                }, 50);
-            });
 
             // Auto-fetch on page load
             fetchAndPopulateLinguists(false);
@@ -1075,7 +1199,7 @@ class Verbocat_Settings {
                 fetchAndPopulateLinguists(true);
             });
 
-            // Update badge & cached value on dropdown change
+            // Update badge & trigger auto-save on dropdown change
             $(document).on('change', '.vb-linguist-select', function() {
                 var $sel = $(this);
                 var langCode = $sel.data('lang');
@@ -1088,6 +1212,30 @@ class Verbocat_Settings {
                 } else {
                     $badge.text('Auto Pool').css({'background': '#f1f5f9', 'color': '#64748b', 'border-color': '#e2e8f0'});
                 }
+
+                showAutoSaveToast('<?php _e('Saving linguist assignment...', 'verbocat-connector'); ?>', null);
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'verbocat_save_settings_partial',
+                        nonce: '<?php echo esc_js($test_nonce); ?>',
+                        single_linguist_assignment: {
+                            lang: langCode,
+                            uid: val
+                        }
+                    },
+                    success: function(res) {
+                        if (res.success) {
+                            showAutoSaveToast(langCode.toUpperCase() + ' <?php _e('linguist assignment saved automatically!', 'verbocat-connector'); ?>', true);
+                        } else {
+                            showAutoSaveToast(res.data && res.data.message ? res.data.message : 'Failed to save linguist.', false);
+                        }
+                    },
+                    error: function() {
+                        showAutoSaveToast('Auto-save network error.', false);
+                    }
+                });
             });
         });
         </script>
