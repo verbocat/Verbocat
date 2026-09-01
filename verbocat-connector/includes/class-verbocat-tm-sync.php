@@ -114,15 +114,20 @@ class Verbocat_Tm_Sync {
         $has_existing = $target_post_id && get_post($target_post_id);
 
         // Text-Only Substitution Engine: preserves 100% of Gutenberg blocks, columns, colors, and layout
-        $final_post_content = $source_post->post_content;
-        if ($updated_segments && is_array($updated_segments)) {
-            foreach ($updated_segments as $seg) {
-                if (!empty($seg['source_text']) && !empty($seg['target_text'])) {
-                    $final_post_content = str_replace($seg['source_text'], $seg['target_text'], $final_post_content);
+        $gutenberg_content = $params['gutenberg_content'] ?? null;
+        if (!empty($gutenberg_content)) {
+            $final_post_content = $gutenberg_content;
+        } else {
+            $final_post_content = $source_post->post_content;
+            if ($updated_segments && is_array($updated_segments)) {
+                foreach ($updated_segments as $seg) {
+                    if (!empty($seg['source_text']) && !empty($seg['target_text'])) {
+                        $final_post_content = str_replace($seg['source_text'], $seg['target_text'], $final_post_content);
+                    }
                 }
+            } else if ($translated_content) {
+                $final_post_content = $translated_content;
             }
-        } else if ($translated_content) {
-            $final_post_content = $translated_content;
         }
 
         if ($has_existing) {

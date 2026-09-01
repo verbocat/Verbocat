@@ -1279,6 +1279,16 @@ publicApiRouter.post("/wordpress/complete-task", async (req, res) => {
 
     const translatedTitle = segments && segments.length > 0 && segments[0].target_text ? segments[0].target_text : "";
 
+    // Construct 100% pristine Gutenberg block content by substituting text inside wp_original_content
+    let pristineGutenberg = docMeta.wp_original_content || "";
+    if (pristineGutenberg) {
+      for (const seg of (segments || [])) {
+        if (seg.source_text && seg.target_text && seg.source_text !== seg.target_text) {
+          pristineGutenberg = pristineGutenberg.split(seg.source_text).join(seg.target_text);
+        }
+      }
+    }
+
     // Send HTTP POST webhook to WordPress callback URL
     const axios = require("axios");
     const webhookPayload = {
@@ -1289,6 +1299,7 @@ publicApiRouter.post("/wordpress/complete-task", async (req, res) => {
       target_lang: tLang,
       translated_title: translatedTitle,
       translated_content: translatedHtml,
+      gutenberg_content: pristineGutenberg,
       updated_segments: (segments || []).map(s => ({
         segment_index: s.segment_index,
         source_text: s.source_text,
