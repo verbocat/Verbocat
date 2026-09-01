@@ -250,6 +250,7 @@ export const LiveDocumentViewer = ({
         type: "VERBOCAT_UPDATE_SEGMENTS",
         segments: segments.map((s, idx) => ({
           id: s.id !== undefined && s.id !== null ? Number(s.id) : (s.segment_index || idx + 1),
+          source: s.source || s.source_text || "",
           target: s.target !== undefined && s.target !== null ? s.target : (s.target_text || s.source || s.source_text || "")
         }))
       };

@@ -76,10 +76,7 @@ class Verbocat_Live_Preview {
         $GLOBALS['wp_the_query'] = $wp_query;
         setup_postdata($post);
 
-        // Filter content to tag translatable text blocks with segment markers
-        add_filter('the_content', [__CLASS__, 'tag_content_segments'], 99);
-
-        // Inject real-time postMessage communication bridge
+        // Inject real-time postMessage TreeWalker communication bridge
         add_action('wp_footer', [__CLASS__, 'inject_live_bridge_script'], 9999);
 
         // Load the active theme's native template hierarchy
@@ -97,29 +94,11 @@ class Verbocat_Live_Preview {
         }
 
         if ($template && file_exists($template)) {
-            // Re-assert globals right before template execution
             $GLOBALS['post'] = $post;
             setup_postdata($post);
             include $template;
             exit;
         }
-    }
-
-    public static function tag_content_segments($content) {
-        // Tag paragraphs, headings, buttons, and links with segment indices
-        static $seg_count = 0;
-        return preg_replace_callback('/(<(?:p|h[1-6]|li|blockquote|a|button)[^>]*>)([\s\S]*?)(<\/(?:p|h[1-6]|li|blockquote|a|button)>)/i', function($m) use (&$seg_count) {
-            $seg_count++;
-            $tag_open = $m[1];
-            $inner = $m[2];
-            $tag_close = $m[3];
-
-            // If tag_open doesn't already have data-verbocat-seg
-            if (!str_contains($tag_open, 'data-verbocat-seg')) {
-                $tag_open = substr_replace($tag_open, ' data-verbocat-seg="' . $seg_count . '"', strlen($tag_open) - 1, 0);
-            }
-            return $tag_open . $inner . $tag_close;
-        }, $content);
     }
 
     public static function inject_live_bridge_script() {
@@ -128,22 +107,77 @@ class Verbocat_Live_Preview {
         ?>
         <script id="verbocat-live-preview-bridge">
         (function() {
-            console.log('[Verbocat Bridge] 🚀 Live Preview Bridge Connected for Post #<?php echo $post_id; ?>');
+            console.log('[Verbocat Bridge] 🚀 Live Preview TreeWalker Bridge Connected for Post #<?php echo $post_id; ?>');
+
+            var textNodeEntries = [];
+
+            function indexTextNodes() {
+                textNodeEntries = [];
+                var walker = document.createTreeWalker(
+                    document.body,
+                    NodeFilter.SHOW_TEXT,
+                    {
+                        acceptNode: function(node) {
+                            if (!node.nodeValue) return NodeFilter.FILTER_REJECT;
+                            var parent = node.parentElement;
+                            if (!parent) return NodeFilter.FILTER_REJECT;
+                            var tag = parent.tagName.toLowerCase();
+                            if (tag === 'script' || tag === 'style' || tag === 'noscript' || tag === 'textarea' || tag === 'svg') {
+                                return NodeFilter.FILTER_REJECT;
+                            }
+                            var txt = node.nodeValue.trim();
+                            if (txt.length === 0) return NodeFilter.FILTER_REJECT;
+                            return NodeFilter.FILTER_ACCEPT;
+                        }
+                    },
+                    false
+                );
+
+                while (walker.nextNode()) {
+                    var node = walker.currentNode;
+                    var initialText = (node._verbocatOrigText !== undefined) ? node._verbocatOrigText : node.nodeValue;
+                    node._verbocatOrigText = initialText;
+                    textNodeEntries.push({
+                        node: node,
+                        origText: initialText,
+                        cleanOrig: initialText.replace(/[\s\r\n\t]+/g, ' ').trim()
+                    });
+                }
+                console.log('[Verbocat Bridge] Indexed ' + textNodeEntries.length + ' live text nodes in DOM.');
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', indexTextNodes);
+            } else {
+                indexTextNodes();
+            }
+
+            // Function to precisely apply translated text to matching original text nodes
+            function applyTranslations(segments) {
+                if (!textNodeEntries.length) indexTextNodes();
+                if (!Array.isArray(segments) || !segments.length) return;
+
+                segments.forEach(function(seg) {
+                    var src = (seg.source || seg.source_text || '').replace(/[\s\r\n\t]+/g, ' ').trim();
+                    var tgt = seg.target !== undefined && seg.target !== null ? seg.target : (seg.target_text || '');
+                    if (!src || !tgt) return;
+
+                    textNodeEntries.forEach(function(entry) {
+                        if (entry.cleanOrig === src || entry.origText.trim() === src) {
+                            if (entry.node.nodeValue !== tgt) {
+                                entry.node.nodeValue = tgt;
+                            }
+                        } else if (entry.cleanOrig.length > 20 && src.length > 20 && (entry.cleanOrig.indexOf(src) !== -1 || src.indexOf(entry.cleanOrig) !== -1)) {
+                            entry.node.nodeValue = tgt;
+                        }
+                    });
+                });
+            }
 
             // Listen for real-time translation updates from CAT Editor
             window.addEventListener('message', function(e) {
                 if (!e.data || e.data.type !== 'VERBOCAT_UPDATE_SEGMENTS') return;
-                var segments = e.data.segments || [];
-                segments.forEach(function(seg) {
-                    var idx = seg.id !== undefined ? seg.id : seg.segment_index;
-                    var text = seg.target || seg.text || '';
-                    if (!idx || !text) return;
-
-                    var el = document.querySelector('[data-verbocat-seg="' + idx + '"]');
-                    if (el) {
-                        el.textContent = text;
-                    }
-                });
+                applyTranslations(e.data.segments);
             });
 
             // Signal to parent window that preview is ready
