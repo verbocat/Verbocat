@@ -614,7 +614,7 @@ export default function App() {
       setCellLocks(new Map(locks));
     });
 
-    socket.on("segment-updated", ({ segmentIndex, targetText, status, contextJira, contextDescription, mqmAccuracyScore, mqmReport, originalTargetText, trackedBy, targetLang }) => {
+    socket.on("segment-updated", ({ segmentIndex, sourceText, targetText, status, contextJira, contextDescription, mqmAccuracyScore, mqmReport, originalTargetText, trackedBy, targetLang }) => {
       if (targetLang && currentRoute.screen === "editor" && currentRoute.targetLang && targetLang !== currentRoute.targetLang) {
         return;
       }
@@ -623,6 +623,9 @@ export default function App() {
           const isMatch = String(seg.id) === String(segmentIndex) || Number(seg.segment_index) === Number(segmentIndex);
           if (isMatch) {
             const updatedSeg = { ...seg };
+            if (sourceText !== undefined) {
+              updatedSeg.source = sourceText;
+            }
             if (targetText !== undefined) {
               updatedSeg.target = targetText;
               updatedSeg.status = status;
@@ -639,6 +642,31 @@ export default function App() {
           return seg;
         })
       );
+    });
+
+    socket.on("segments-bulk-updated", ({ segments: newSegments, targetLang }) => {
+      if (targetLang && currentRoute.screen === "editor" && currentRoute.targetLang && targetLang !== currentRoute.targetLang) {
+        return;
+      }
+      if (Array.isArray(newSegments) && newSegments.length > 0) {
+        const updateMap = new Map();
+        newSegments.forEach(s => updateMap.set(Number(s.id || s.segment_index), s));
+        setSegments((prev) =>
+          prev.map((seg) => {
+            const sid = Number(seg.id || seg.segment_index);
+            const incoming = updateMap.get(sid);
+            if (incoming) {
+              return {
+                ...seg,
+                ...(incoming.source !== undefined ? { source: incoming.source } : {}),
+                ...(incoming.target !== undefined ? { target: incoming.target } : {}),
+                ...(incoming.status !== undefined ? { status: incoming.status } : {})
+              };
+            }
+            return seg;
+          })
+        );
+      }
     });
 
     socket.on("typing-update", ({ segmentIndex, targetText, originalTargetText, trackedBy, targetLang, socketId }) => {

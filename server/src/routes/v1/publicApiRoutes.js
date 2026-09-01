@@ -1391,5 +1391,130 @@ publicApiRouter.post("/wordpress/complete-task", async (req, res) => {
   }
 });
 
+/**
+ * POST /api/v1/wordpress/sync-post-updates
+ * Real-time synchronization when a WordPress root or translated post is saved/updated in WordPress.
+ */
+publicApiRouter.post("/wordpress/sync-post-updates", async (req, res) => {
+  try {
+    const { post_id, root_post_id, target_post_id, source_lang, target_lang, rendered_html, target_rendered_html } = req.body;
+    const resolvedRootId = Number(root_post_id || post_id);
+    const resolvedTargetId = Number(target_post_id || post_id);
+    const tgtLang = target_lang || "hi";
+    const dbClient = supabaseAdmin || supabase;
+
+    // 1. Find all active documents referencing this WordPress post
+    const { data: projects } = await dbClient
+      .from("projects")
+      .select("id, settings");
+
+    const matchedDocIds = [];
+    (projects || []).forEach(p => {
+      const metaMap = p.settings?.documentsMetadata || {};
+      Object.entries(metaMap).forEach(([dId, meta]) => {
+        const dRoot = Number(meta.wp_root_post_id);
+        const dPost = Number(meta.wp_post_id);
+        if (dRoot === resolvedRootId || dPost === resolvedRootId || dPost === resolvedTargetId) {
+          matchedDocIds.push({ docId: dId, projectId: p.id });
+        }
+      });
+    });
+
+    if (matchedDocIds.length === 0) {
+      return res.json({ success: true, updated_documents: 0 });
+    }
+
+    // 2. Parse updated root rendered_html to extract new source segments
+    let newSourceSegments = [];
+    if (rendered_html) {
+      const tempPath = path.join(os.tmpdir(), `wp_sync_root_${Date.now()}.html`);
+      fs.writeFileSync(tempPath, rendered_html, "utf-8");
+      try {
+        const parsed = await htmlParser.parseFile(tempPath, false);
+        newSourceSegments = parsed.segments || [];
+      } catch (pe) {
+        console.warn("[WP_SYNC_PARSE_ERR]", pe.message);
+      } finally {
+        if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+      }
+    }
+
+    // 3. Parse updated target rendered_html to extract new target segments
+    let newTargetSegments = [];
+    if (target_rendered_html) {
+      const tempPath = path.join(os.tmpdir(), `wp_sync_tgt_${Date.now()}.html`);
+      fs.writeFileSync(tempPath, target_rendered_html, "utf-8");
+      try {
+        const parsed = await htmlParser.parseFile(tempPath, false);
+        newTargetSegments = parsed.segments || [];
+      } catch (pe) {
+        console.warn("[WP_SYNC_TGT_PARSE_ERR]", pe.message);
+      } finally {
+        if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+      }
+    }
+
+    const { getIo, getDocumentRoomId } = require("../../services/socket");
+    const io = getIo();
+
+    for (const { docId } of matchedDocIds) {
+      const bulkUpdates = [];
+
+      for (let i = 0; i < Math.max(newSourceSegments.length, newTargetSegments.length); i++) {
+        const segIdx = i + 1;
+        const srcText = newSourceSegments[i]?.source;
+        const tgtText = newTargetSegments[i]?.source;
+
+        if (srcText !== undefined) {
+          // Update template row
+          await dbClient
+            .from("document_segments")
+            .update({ source_text: srcText })
+            .eq("document_id", docId)
+            .eq("segment_index", segIdx)
+            .is("target_lang", null);
+        }
+
+        if (srcText !== undefined || tgtText !== undefined) {
+          const updateObj = {};
+          if (srcText !== undefined) updateObj.source_text = srcText;
+          if (tgtText !== undefined) {
+            updateObj.target_text = tgtText;
+            updateObj.status = "translated";
+          }
+          await dbClient
+            .from("document_segments")
+            .update(updateObj)
+            .eq("document_id", docId)
+            .eq("segment_index", segIdx)
+            .eq("target_lang", tgtLang);
+
+          bulkUpdates.push({
+            id: segIdx,
+            segment_index: segIdx,
+            source: srcText,
+            target: tgtText,
+            status: "translated"
+          });
+        }
+      }
+
+      // Broadcast WebSocket live update to Centroid frontend
+      if (io && bulkUpdates.length > 0) {
+        io.to(getDocumentRoomId(docId, tgtLang)).emit("segments-bulk-updated", {
+          segments: bulkUpdates,
+          targetLang: tgtLang
+        });
+      }
+    }
+
+    res.json({ success: true, updated_documents: matchedDocIds.length });
+  } catch (err) {
+    console.error("[WP_SYNC_POST_UPDATES_ERR]", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = publicApiRouter;
+
 

@@ -256,4 +256,33 @@ class Verbocat_Api_Client {
 
         return $json;
     }
+
+    /**
+     * Notify Centroid backend of post updates for real-time segment synchronization
+     *
+     * @param array $payload Post update payload
+     * @return array|WP_Error
+     */
+    public static function sync_post_updates($payload) {
+        $opts = Verbocat_Settings::get_options();
+        $url = $opts['api_url'];
+        $key = $opts['api_key'];
+
+        if (empty($key)) {
+            return false;
+        }
+
+        $endpoint = rtrim($url, '/') . '/wordpress/sync-post-updates';
+
+        return wp_remote_post($endpoint, [
+            'headers' => [
+                'Content-Type' => 'application/json',
+                'x-api-key'    => $key
+            ],
+            'body'     => wp_json_encode($payload),
+            'timeout'  => 10,
+            'blocking' => false
+        ]);
+    }
 }
+

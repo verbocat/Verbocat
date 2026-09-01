@@ -1475,10 +1475,15 @@ class Verbocat_Editor_UI {
             $is_translation = get_post_meta($post_id, '_verbocat_is_translation', true);
             $source_post_id = get_post_meta($post_id, '_verbocat_source_post_id', true);
             
+            // Strictly prevent self-referencing post ID
+            if ((int)$source_post_id === (int)$post_id) {
+                $source_post_id = null;
+            }
+            
             // 1. If source_post_id is missing, search if another post has _verbocat_translations mapping to this post
             if (empty($source_post_id)) {
                 global $wpdb;
-                $candidate_roots = $wpdb->get_results("SELECT post_id, meta_value FROM {$wpdb->postmeta} WHERE meta_key = '_verbocat_translations'", ARRAY_A);
+                $candidate_roots = $wpdb->get_results("SELECT post_id, meta_value FROM {$wpdb->postmeta} WHERE meta_key = '_verbocat_translations' AND post_id != " . intval($post_id), ARRAY_A);
                 if (!empty($candidate_roots)) {
                     foreach ($candidate_roots as $crow) {
                         $tmap = maybe_unserialize($crow['meta_value']);
@@ -1533,7 +1538,7 @@ class Verbocat_Editor_UI {
             // 3. Resolve the English root post as the source for WYSIWYG and segments!
             $root_post = $post;
             $translated_post = null;
-            if ($is_translation && !empty($source_post_id)) {
+            if ($is_translation && !empty($source_post_id) && (int)$source_post_id !== (int)$post->ID) {
                 $candidate_root = get_post($source_post_id);
                 if ($candidate_root) {
                     $root_post = $candidate_root;

@@ -243,7 +243,21 @@ class Verbocat_Delta_Sync {
 
         update_post_meta($post->ID, '_verbocat_translations', $translations_map);
 
+        // Real-time synchronization: notify active Centroid editors with the new source and target renderings
         if (!empty($updated_languages)) {
+            foreach ($updated_languages as $u_lang) {
+                $u_target_id = $translations_map[$u_lang] ?? null;
+                Verbocat_Api_Client::sync_post_updates([
+                    'post_id'              => $post->ID,
+                    'root_post_id'         => $post->ID,
+                    'target_post_id'       => $u_target_id,
+                    'source_lang'          => $src_lang,
+                    'target_lang'          => $u_lang,
+                    'rendered_html'        => Verbocat_Editor_UI::generate_exact_wysiwyg_html($post, $opts),
+                    'target_rendered_html' => !empty($u_target_id) && ($u_tpost = get_post($u_target_id)) ? Verbocat_Editor_UI::generate_exact_wysiwyg_html($u_tpost, $opts) : ''
+                ]);
+            }
+
             $lang_names = array_map(function($code) {
                 return Verbocat_Languages::get_language($code)['native'];
             }, $updated_languages);
