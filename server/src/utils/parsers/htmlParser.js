@@ -27,6 +27,11 @@ function isBlockTag(node) {
   return node && node.type === "tag" && BLOCK_TAGS.includes(node.name.toLowerCase());
 }
 
+// CRITICAL ARCHITECTURAL RULE (DO NOT REMOVE):
+// 1. Accessibility skip-links (e.g. "Skip to content", .screen-reader-text) and global template parts
+//    (headers, navigation, footers, credits) must NEVER be parsed as translatable document segments.
+// 2. Translatable content belongs exclusively to the actual page/post content and title.
+// 3. Omitting these skips causes index desynchronization where source and target segments shift by 1+ rows.
 function isSkipTag(node) {
   if (!node || node.type !== "tag") return false;
   const name = node.name ? node.name.toLowerCase() : "";
@@ -37,9 +42,15 @@ function isSkipTag(node) {
     return true;
   }
 
-  // Check class-based skip containers (global site template parts, headers, footers, navigation)
+  // Check class-based skip containers (global site template parts, headers, footers, navigation, skip links, screen-reader text)
   const className = node.attribs?.class || "";
-  if (/\b(wp-block-template-part|site-header|site-footer|wp-block-navigation|skip-to-content)\b/i.test(className)) {
+  if (/\b(wp-block-template-part|site-header|site-footer|wp-block-navigation|wp-block-skip-link|skip-link|skip-to-content|screen-reader-text|sr-only)\b/i.test(className)) {
+    return true;
+  }
+
+  // Check skip-link anchor targets
+  const href = node.attribs?.href || "";
+  if (href.includes("skip-link") || href.includes("skip-to-content") || href === "#wp--skip-link--target" || href === "#content") {
     return true;
   }
 

@@ -27,3 +27,8 @@
    - In `client/src/App.jsx`, `flushPendingBulkSave` must always resolve `activeDocId` from `documentId || currentRoute.fileId` to prevent silent auto-save aborts during route navigation.
    - Post-translation batch completions MUST explicitly flush all translated segments via `persistBulkSegmentUpdates(segments, true)`.
 
+5. **Strict Post-Content Scope & Skip-Link Exclusion**:
+   - Global site template parts (headers, footers, navigation, theme credits) and accessibility skip-links (`Skip to content`, `.screen-reader-text`, `wp-block-skip-link`) must NEVER be extracted as translatable document segments.
+   - Translatable document segments must strictly map 1-to-1 to the actual post content blocks and title (`post_title` + `post_content`). Any extraction of skip links or header/footer parts creates a 1+ row index shift between source and target columns and breaks CAT alignment.
+
+
