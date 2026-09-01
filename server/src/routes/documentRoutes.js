@@ -579,6 +579,18 @@ documentRouter.post(
         translatedTitle = segments[0].target_text || segments[0].source_text || "";
       }
 
+      // Construct 100% pristine Gutenberg block content by substituting text inside wp_original_content
+      let pristineGutenberg = docMeta.wp_original_content || "";
+      if (pristineGutenberg) {
+        for (const seg of (segments || [])) {
+          const src = (seg.source_text || "").trim();
+          const tgt = (seg.target_text || "").trim();
+          if (src && tgt && src !== tgt) {
+            pristineGutenberg = pristineGutenberg.split(src).join(tgt);
+          }
+        }
+      }
+
       // Send HTTP POST webhook to WordPress callback URL
       const axios = require("axios");
       const webhookPayload = {
@@ -589,6 +601,12 @@ documentRouter.post(
         target_lang: tLang,
         translated_title: translatedTitle,
         translated_content: cleanContent,
+        gutenberg_content: pristineGutenberg,
+        updated_segments: (segments || []).map(s => ({
+          segment_index: s.segment_index,
+          source_text: s.source_text,
+          target_text: s.target_text || s.source_text
+        })),
         status: "completed",
         linguist: {
           name: request.profile?.name || request.profile?.full_name || request.user?.email,
