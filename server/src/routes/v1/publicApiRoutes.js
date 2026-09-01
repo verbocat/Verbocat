@@ -1151,10 +1151,11 @@ ${htmlContent}
         const existingDraft = page.existing_translations?.[cleanTLang] || page.existing_translations?.[tLang] || page.existing_translations?.[baseCode];
         let targetTextMap = {};
 
-        if (existingDraft && existingDraft.content) {
+        if (existingDraft && (existingDraft.rendered_html || existingDraft.content)) {
           try {
+            const draftHtml = existingDraft.rendered_html || existingDraft.content;
             const draftTempPath = path.join(os.tmpdir(), `draft_${Date.now()}_${Math.random().toString(36).substring(7)}.html`);
-            fs.writeFileSync(draftTempPath, existingDraft.content, "utf8");
+            fs.writeFileSync(draftTempPath, draftHtml, "utf8");
             const draftParseResult = await htmlParser.parseFile(draftTempPath, false);
             try { fs.unlinkSync(draftTempPath); } catch (_) {}
             (draftParseResult.segments || []).forEach((dSeg, dIdx) => {
@@ -1165,27 +1166,28 @@ ${htmlContent}
           } catch (_) {}
         }
 
-        // If no existing draft was supplied, run automatic translation to pre-populate target segments
-        if (Object.keys(targetTextMap).length === 0 && parseResult.segments?.length > 0) {
+        // If any segments are missing translations, run automatic translation to pre-populate target segments
+        const missingSegments = (parseResult.segments || [])
+          .map((s, idx) => ({ id: idx + 1, source: s.source }))
+          .filter(s => !targetTextMap[s.id] && s.source && s.source.trim().length > 0);
+
+        if (missingSegments.length > 0) {
           try {
             const { translateSegments } = require("../../services/translationService");
             const autoRes = await translateSegments(
-              parseResult.segments.map((s, idx) => ({ id: idx + 1, source: s.source })),
-              srcLang,
+              missingSegments,
               cleanTLang,
-              projectId,
-              orgId,
-              null,
-              "general",
-              userId
+              srcLang,
+              { isInstant: true },
+              userId,
+              orgId
             );
-            if (Array.isArray(autoRes)) {
-              autoRes.forEach(item => {
-                if (item.id && item.translated) {
-                  targetTextMap[item.id] = item.translated;
-                }
-              });
-            }
+            const translatedItems = autoRes?.results || (Array.isArray(autoRes) ? autoRes : []);
+            translatedItems.forEach(item => {
+              if (item.id && item.translated) {
+                targetTextMap[item.id] = item.translated;
+              }
+            });
           } catch (autoErr) {
             console.warn("[WP_BATCH_AUTO_TRANSLATE_WARN]", autoErr.message);
           }

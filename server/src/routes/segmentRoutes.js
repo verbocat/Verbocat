@@ -26,8 +26,10 @@ const { translateSrtSegments } = require("../srtEngine/srtTranslationService");
 const { getDocumentRoomId } = require("../services/socket");
 const { calculateProgress } = require("../utils/segmentProgress");
 
-const syncToTranslationMemory = async (sourceText, targetText, sourceLang, targetLang, organizationId = null) => {
+const syncToTranslationMemory = async (sourceText, targetText, sourceLang, targetLang, organizationId = null, isVerified = false) => {
   if (!sourceText || !targetText || !targetLang) return;
+  // STRICT RULE: Only segments explicitly verified/reviewed by a linguist from the CAT tool are promoted to ICE Match in TM
+  if (!isVerified) return;
   const cleanSrc = String(sourceText).replace(/<[^>]+>/g, "").trim();
   const cleanTgt = String(targetText).replace(/<[^>]+>/g, "").trim();
   if (!cleanSrc || !cleanTgt) return;
@@ -392,13 +394,14 @@ segmentRouter.put([
       data = inserted;
     }
 
-    // Sync to Translation Memory (TM) in background
+    // Sync to Translation Memory (TM) in background strictly when verified/reviewed by linguist
     if (data && updateFields.target_text && updateFields.target_text.trim().length > 0) {
       const { data: docInfo } = await supabase.from("documents").select("source_lang, organization_id").eq("id", id).maybeSingle();
       const sLang = docInfo?.source_lang || "en";
       const docOrgId = docInfo?.organization_id || request.tenant?.id || request.profile?.organization_id || null;
       const sText = data.source_text || request.body.sourceText || request.body.source || "";
-      syncToTranslationMemory(sText, updateFields.target_text, sLang, targetLang, docOrgId);
+      const isVerified = updateFields.status === "reviewed" || updateFields.status === "verified";
+      syncToTranslationMemory(sText, updateFields.target_text, sLang, targetLang, docOrgId, isVerified);
     }
 
     // Broadcast socket event
@@ -520,11 +523,12 @@ segmentRouter.post([
         console.log(`[SEGMENT_SAVE_SUCCESS] Seg #${segIndex} (${targetLang}) -> target_text: "${updateFields.target_text.substring(0, 40)}"`);
         results.push(data);
 
-        // Sync to Translation Memory (TM) in background
+        // Sync to Translation Memory (TM) in background strictly when verified/reviewed by linguist
         if (updateFields.target_text && updateFields.target_text.trim().length > 0) {
           const sText = data.source_text || item.source || item.sourceText || templateSourceMap.get(segIndex) || "";
           const docOrgId = request.tenant?.id || request.profile?.organization_id || null;
-          syncToTranslationMemory(sText, updateFields.target_text, "en", targetLang, docOrgId);
+          const isVerified = updateFields.status === "reviewed" || updateFields.status === "verified";
+          syncToTranslationMemory(sText, updateFields.target_text, "en", targetLang, docOrgId, isVerified);
         }
       }
 

@@ -1531,9 +1531,10 @@ class Verbocat_Editor_UI {
             if ($translated_post) {
                 $t_lang = $page_langs[0];
                 $existing_translations[$t_lang] = [
-                    'post_id' => $translated_post->ID,
-                    'title'   => $translated_post->post_title,
-                    'content' => $translated_post->post_content
+                    'post_id'       => $translated_post->ID,
+                    'title'         => $translated_post->post_title,
+                    'content'       => $translated_post->post_content,
+                    'rendered_html' => self::generate_exact_wysiwyg_html($translated_post, $opts)
                 ];
             } else {
                 $translations_map = get_post_meta($post->ID, '_verbocat_translations', true) ?: [];
@@ -1541,9 +1542,10 @@ class Verbocat_Editor_UI {
                     $tp_id = $translations_map[$t_lang] ?? null;
                     if ($tp_id && ($tp = get_post($tp_id))) {
                         $existing_translations[$t_lang] = [
-                            'post_id' => $tp->ID,
-                            'title'   => $tp->post_title,
-                            'content' => $tp->post_content
+                            'post_id'       => $tp->ID,
+                            'title'         => $tp->post_title,
+                            'content'       => $tp->post_content,
+                            'rendered_html' => self::generate_exact_wysiwyg_html($tp, $opts)
                         ];
                     }
                 }
