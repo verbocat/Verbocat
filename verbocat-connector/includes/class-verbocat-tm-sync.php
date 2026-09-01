@@ -113,27 +113,27 @@ class Verbocat_Tm_Sync {
         // Check if existing target post exists
         $has_existing = $target_post_id && get_post($target_post_id);
 
+        // Text-Only Substitution Engine: preserves 100% of Gutenberg blocks, columns, colors, and layout
+        $final_post_content = $source_post->post_content;
+        if ($updated_segments && is_array($updated_segments)) {
+            foreach ($updated_segments as $seg) {
+                if (!empty($seg['source_text']) && !empty($seg['target_text'])) {
+                    $final_post_content = str_replace($seg['source_text'], $seg['target_text'], $final_post_content);
+                }
+            }
+        } else if ($translated_content) {
+            $final_post_content = $translated_content;
+        }
+
         if ($has_existing) {
             // Update existing post directly without creating a duplicate
             $update_data = [
-                'ID' => $target_post_id
+                'ID'           => $target_post_id,
+                'post_content' => $final_post_content
             ];
 
             if ($translated_title) {
                 $update_data['post_title'] = $translated_title;
-            }
-            if ($translated_content) {
-                $update_data['post_content'] = $translated_content;
-            }
-
-            if ($updated_segments && is_array($updated_segments)) {
-                $current_content = get_post_field('post_content', $target_post_id);
-                foreach ($updated_segments as $seg) {
-                    if (!empty($seg['source_text']) && !empty($seg['target_text'])) {
-                        $current_content = str_replace($seg['source_text'], $seg['target_text'], $current_content);
-                    }
-                }
-                $update_data['post_content'] = $current_content;
             }
 
             wp_update_post($update_data);
@@ -144,7 +144,7 @@ class Verbocat_Tm_Sync {
 
             $target_post_id = wp_insert_post([
                 'post_title'   => $translated_title ?: ($source_post->post_title . ' (' . strtoupper($target_lang) . ')'),
-                'post_content' => $translated_content ?: $source_post->post_content,
+                'post_content' => $final_post_content,
                 'post_excerpt' => $source_post->post_excerpt,
                 'post_status'  => $new_post_status,
                 'post_type'    => $source_post->post_type,

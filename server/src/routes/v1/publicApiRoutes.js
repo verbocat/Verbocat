@@ -1289,6 +1289,11 @@ publicApiRouter.post("/wordpress/complete-task", async (req, res) => {
       target_lang: tLang,
       translated_title: translatedTitle,
       translated_content: translatedHtml,
+      updated_segments: (segments || []).map(s => ({
+        segment_index: s.segment_index,
+        source_text: s.source_text,
+        target_text: s.target_text || s.source_text
+      })),
       status: "completed",
       timestamp: new Date().toISOString()
     };
