@@ -119,20 +119,12 @@ class Verbocat_Editor_UI {
         $all_languages = Verbocat_Languages::get_all_languages();
         $global_targets = !empty($opts['target_langs']) ? array_filter(array_map('trim', explode(',', $opts['target_langs']))) : [];
 
-        // Page specific automation options
+        // Page specific automation options: STRICTLY disabled by default for new pages
         $saved_auto_sync = get_post_meta($post->ID, '_verbocat_auto_sync_enabled', true);
-        $is_auto_sync_enabled = ($saved_auto_sync === '1') || ($saved_auto_sync === '' && $opts['continuous_sync_trigger'] === 'publish_update');
+        $is_auto_sync_enabled = ($saved_auto_sync === '1');
 
         $saved_page_langs = get_post_meta($post->ID, '_verbocat_auto_target_langs', true);
-        if (is_array($saved_page_langs)) {
-            $temp_saved = $saved_page_langs;
-            sort($temp_saved);
-            if ($temp_saved === ['es', 'fr', 'hi']) {
-                $saved_page_langs = null;
-                delete_post_meta($post->ID, '_verbocat_auto_target_langs');
-            }
-        }
-        $page_auto_langs = is_array($saved_page_langs) ? $saved_page_langs : $global_targets;
+        $page_auto_langs = is_array($saved_page_langs) ? $saved_page_langs : [];
         ?>
         <div style="background: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 4px 0;">
             <?php wp_nonce_field('verbocat_save_metabox', '_verbocat_metabox_nonce'); ?>
@@ -1476,56 +1468,51 @@ class Verbocat_Editor_UI {
 
         foreach ($post_ids as $post_id) {
             $post = get_post($post_id);
-            if (!$post || get_post_meta($post_id, '_verbocat_is_translation', true)) {
+            if (!$post) {
                 continue;
             }
 
-            // Get target languages for this specific page or fallback to global pool
-            $page_langs = get_post_meta($post_id, '_verbocat_auto_target_langs', true);
-            if (!is_array($page_langs) || empty($page_langs)) {
-                $page_langs = $global_target_langs;
-            }
-            if (empty($page_langs)) {
-                $page_langs = ['hi']; // Default fallback
+            $is_translation = get_post_meta($post_id, '_verbocat_is_translation', true);
+            $target_lang_meta = get_post_meta($post_id, '_verbocat_lang', true) ?: get_post_meta($post_id, '_verbocat_target_lang', true);
+
+            // Determine target languages for this specific post
+            if (!empty($target_lang_meta)) {
+                // If user dispatches an existing translated post (e.g. Punjabi Draft), target is STRICTLY that language
+                $page_langs = [sanitize_text_field($target_lang_meta)];
+            } else if ($is_translation) {
+                // Script detection fallback if meta was missing on draft
+                $title_sample = $post->post_title . ' ' . $post->post_content;
+                if (preg_match('/[\x{0A00}-\x{0A7F}]/u', $title_sample)) {
+                    $page_langs = ['pa'];
+                } else if (preg_match('/[\x{0A80}-\x{0AFF}]/u', $title_sample)) {
+                    $page_langs = ['gu'];
+                } else if (preg_match('/[\x{0900}-\x{097F}]/u', $title_sample)) {
+                    $page_langs = ['hi'];
+                } else {
+                    $page_langs = !empty($global_target_langs) ? $global_target_langs : ['hi'];
+                }
+            } else {
+                // Standard source post: retrieve configured auto target languages or fallback to global pool
+                $page_langs = get_post_meta($post_id, '_verbocat_auto_target_langs', true);
+                if (!is_array($page_langs) || empty($page_langs)) {
+                    $page_langs = $global_target_langs;
+                }
+                if (empty($page_langs)) {
+                    $page_langs = ['hi']; // Default fallback
+                }
             }
 
-            // Render rich content HTML
-            $content_html = apply_filters('the_content', $post->post_content);
-            if (empty($content_html)) {
-                $content_html = wpautop($post->post_content);
+            // Only pass linguist assignments for the target languages of THIS post
+            $page_linguist_assignments = [];
+            foreach ($page_langs as $plang) {
+                $plang_clean = strtolower(trim($plang));
+                if (!empty($linguist_assignments[$plang_clean])) {
+                    $page_linguist_assignments[$plang_clean] = $linguist_assignments[$plang_clean];
+                }
             }
 
-            // Build full, styled HTML document for 100% exact WYSIWYG match
-            $source_code = $opts['source_lang'] ?? 'en';
-            $page_title_escaped = esc_html($post->post_title);
-            $rendered_html = '<!DOCTYPE html>' . "\n" .
-                '<html lang="' . esc_attr($source_code) . '">' . "\n" .
-                '<head>' . "\n" .
-                '<meta charset="utf-8">' . "\n" .
-                '<meta name="viewport" content="width=device-width, initial-scale=1.0">' . "\n" .
-                '<title>' . $page_title_escaped . '</title>' . "\n" .
-                '<style>' . "\n" .
-                'body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; font-size: 16px; line-height: 1.7; color: #1e293b; background-color: #ffffff; margin: 0; padding: 40px 32px; -webkit-font-smoothing: antialiased; }' . "\n" .
-                '.wp-site-preview-container { max-width: 840px; margin: 0 auto; background: #ffffff; }' . "\n" .
-                '.wp-block-post-title, h1.entry-title { font-size: 2.25rem; font-weight: 800; line-height: 1.25; color: #0f172a; margin-top: 0; margin-bottom: 2rem; letter-spacing: -0.025em; }' . "\n" .
-                'h2 { font-size: 1.75rem; font-weight: 700; margin-top: 2rem; margin-bottom: 1rem; color: #1e293b; }' . "\n" .
-                'h3 { font-size: 1.35rem; font-weight: 600; margin-top: 1.75rem; margin-bottom: 0.75rem; color: #334155; }' . "\n" .
-                'p { margin-top: 0; margin-bottom: 1.5rem; color: #334155; font-size: 1.05rem; line-height: 1.75; }' . "\n" .
-                'img { max-width: 100%; height: auto; border-radius: 8px; }' . "\n" .
-                'blockquote { border-left: 4px solid #2563eb; margin: 1.75rem 0; padding: 0.75rem 1.5rem; color: #475569; background: #f8fafc; border-radius: 0 8px 8px 0; }' . "\n" .
-                'ul, ol { padding-left: 1.5rem; margin-bottom: 1.5rem; color: #334155; }' . "\n" .
-                'li { margin-bottom: 0.5rem; }' . "\n" .
-                '</style>' . "\n" .
-                '</head>' . "\n" .
-                '<body>' . "\n" .
-                '<article class="wp-site-preview-container">' . "\n" .
-                '<h1 class="wp-block-post-title entry-title">' . $page_title_escaped . '</h1>' . "\n" .
-                '<div class="entry-content">' . "\n" .
-                $content_html . "\n" .
-                '</div>' . "\n" .
-                '</article>' . "\n" .
-                '</body>' . "\n" .
-                '</html>';
+            // Build 1000% exact WYSIWYG HTML document with complete Gutenberg and Theme CSS
+            $rendered_html = self::generate_exact_wysiwyg_html($post, $opts);
 
             $pages_payload[] = [
                 'post_id'              => $post->ID,
@@ -1533,9 +1520,10 @@ class Verbocat_Editor_UI {
                 'content'              => $post->post_content,
                 'rendered_html'        => $rendered_html,
                 'permalink'            => get_permalink($post->ID),
+                'preview_url'          => Verbocat_Live_Preview::get_preview_url($post->ID),
                 'source_lang'          => $opts['source_lang'] ?? 'en',
                 'target_langs'         => array_values($page_langs),
-                'linguist_assignments' => $linguist_assignments
+                'linguist_assignments' => $page_linguist_assignments
             ];
 
             update_post_meta($post->ID, '_verbocat_translation_status', 'in_centroid_review');
@@ -1570,6 +1558,294 @@ class Verbocat_Editor_UI {
     /**
      * Display Bulk Dispatch Admin Notice
      */
+    /**
+     * Build 1000% exact WYSIWYG HTML document with complete Gutenberg and Theme CSS
+     */
+    public static function generate_exact_wysiwyg_html($post, $opts = []) {
+        $source_code = $opts['source_lang'] ?? 'en';
+        $page_title_escaped = esc_html($post->post_title);
+
+        // 1. Try Live Frontend Page Fetch (1000% Real Live WordPress Rendering)
+        $preview_url = get_preview_post_link($post) ?: get_permalink($post->ID);
+        if ($preview_url) {
+            $resp = wp_remote_get($preview_url, [
+                'timeout'   => 3,
+                'sslverify' => false,
+                'headers'   => [
+                    'X-Verbocat-Wysiwyg-Fetch' => '1'
+                ]
+            ]);
+
+            if (!is_wp_error($resp) && wp_remote_retrieve_response_code($resp) === 200) {
+                $live_html = wp_remote_retrieve_body($resp);
+                if (!empty($live_html) && str_contains($live_html, '<html') && (str_contains($live_html, 'entry-content') || str_contains($live_html, 'wp-site-blocks') || str_contains($live_html, 'wp-block-'))) {
+                    return $live_html;
+                }
+            }
+        }
+
+        // 2. Comprehensive Gutenberg & Theme CSS Compiler Fallback
+        $content_html = apply_filters('the_content', $post->post_content);
+        if (empty($content_html)) {
+            $content_html = wpautop($post->post_content);
+        }
+
+        // Convert any relative image/media URLs to full absolute URLs
+        $site_url = home_url();
+        $content_html = preg_replace('/(src|href)=["\'](\/[^"\']+)["\']/i', '$1="' . rtrim($site_url, '/') . '$2"', $content_html);
+
+        $all_styles_html = '';
+
+        // Load Gutenberg frontend block library stylesheets
+        $core_css_paths = [
+            ABSPATH . WPINC . '/css/dist/block-library/common.min.css',
+            ABSPATH . WPINC . '/css/dist/block-library/style.min.css',
+            ABSPATH . WPINC . '/css/dist/block-library/theme.min.css',
+        ];
+
+        foreach ($core_css_paths as $cpath) {
+            if (file_exists($cpath)) {
+                $all_styles_html .= "<style id=\"wp-core-" . basename($cpath, '.min.css') . "-css\">\n" . file_get_contents($cpath) . "\n</style>\n";
+            }
+        }
+
+        // Load Block Theme Global Styles (Theme fonts, colors, spacing vars, section styles)
+        if (function_exists('wp_get_global_stylesheet')) {
+            $global_css = wp_get_global_stylesheet();
+            if (!empty($global_css)) {
+                $all_styles_html .= "<style id=\"global-styles-inline-css\">\n" . $global_css . "\n</style>\n";
+            }
+        }
+
+        // Load active theme stylesheet
+        $theme_css_file = get_stylesheet_directory() . '/style.css';
+        if (file_exists($theme_css_file)) {
+            $all_styles_html .= "<style id=\"theme-styles-inline-css\">\n" . file_get_contents($theme_css_file) . "\n</style>\n";
+        }
+
+        // Load block-specific stylesheets for any blocks used in post_content
+        $blocks_dir = ABSPATH . WPINC . '/blocks/';
+        if (is_dir($blocks_dir)) {
+            $block_names = ['columns', 'column', 'buttons', 'button', 'image', 'cover', 'group', 'media-text', 'heading', 'paragraph', 'quote', 'list', 'details', 'gallery', 'separator'];
+            foreach ($block_names as $bname) {
+                $bfile = $blocks_dir . $bname . '/style.min.css';
+                if (file_exists($bfile)) {
+                    $all_styles_html .= "<style id=\"wp-block-{$bname}-css\">\n" . file_get_contents($bfile) . "\n</style>\n";
+                }
+            }
+        }
+
+        // Complete Gutenberg layout and theme variable rules
+        $all_styles_html .= "<style id=\"wp-verbocat-wysiwyg-layout-css\">
+            :root {
+                --wp--preset--color--black: #000000;
+                --wp--preset--color--white: #ffffff;
+                --wp--preset--color--base: #FFFFFF;
+                --wp--preset--color--contrast: #111111;
+                --wp--preset--color--accent-1: #FFEE58;
+                --wp--preset--color--accent-2: #F6CFF4;
+                --wp--preset--color--accent-3: #503AA8;
+                --wp--preset--color--accent-4: #3B2A82;
+                --wp--preset--color--accent-5: #1D144A;
+
+                --wp--preset--font-size--small: 0.875rem;
+                --wp--preset--font-size--medium: 1rem;
+                --wp--preset--font-size--large: 1.35rem;
+                --wp--preset--font-size--x-large: 1.75rem;
+                --wp--preset--font-size--xx-large: 2.25rem;
+
+                --wp--preset--spacing--20: 0.5rem;
+                --wp--preset--spacing--30: 0.75rem;
+                --wp--preset--spacing--40: 1rem;
+                --wp--preset--spacing--50: 1.5rem;
+                --wp--preset--spacing--60: 2.5rem;
+                --wp--preset--spacing--80: 4rem;
+            }
+
+            html, body {
+                margin: 0 !important;
+                padding: 0 !important;
+                background-color: #ffffff !important;
+                color: #111111 !important;
+                font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen-Sans, Ubuntu, Cantarell, \"Helvetica Neue\", sans-serif;
+                font-size: 16px;
+                line-height: 1.6;
+                -webkit-font-smoothing: antialiased;
+            }
+
+            .wp-site-blocks {
+                width: 100vw;
+                max-width: 100%;
+                margin: 0 auto;
+                overflow-x: hidden;
+            }
+
+            .wp-block-group.alignfull {
+                width: 100% !important;
+                max-width: 100% !important;
+                box-sizing: border-box !important;
+            }
+
+            .wp-block-group.is-style-section-1 {
+                background-color: var(--wp--preset--color--base, #ffffff) !important;
+                color: var(--wp--preset--color--contrast, #111111) !important;
+            }
+
+            .wp-block-group.is-style-section-2 {
+                background-color: var(--wp--preset--color--accent-2, #F6CFF4) !important;
+                color: var(--wp--preset--color--contrast, #111111) !important;
+            }
+
+            .wp-block-group.is-style-section-3, 
+            .wp-block-group.is-style-section-4, 
+            .wp-block-group.is-style-section-5 {
+                background-color: var(--wp--preset--color--contrast, #111111) !important;
+                color: var(--wp--preset--color--base, #ffffff) !important;
+            }
+
+            .wp-block-group.is-style-section-3 h1,
+            .wp-block-group.is-style-section-3 h2,
+            .wp-block-group.is-style-section-3 h3,
+            .wp-block-group.is-style-section-3 p,
+            .wp-block-group.is-style-section-4 h1,
+            .wp-block-group.is-style-section-4 h2,
+            .wp-block-group.is-style-section-4 h3,
+            .wp-block-group.is-style-section-4 p,
+            .wp-block-group.is-style-section-5 h1,
+            .wp-block-group.is-style-section-5 h2,
+            .wp-block-group.is-style-section-5 h3,
+            .wp-block-group.is-style-section-5 p {
+                color: #ffffff !important;
+            }
+
+            /* Flex Columns Layout */
+            .wp-block-columns {
+                display: flex !important;
+                flex-direction: row !important;
+                flex-wrap: nowrap !important;
+                gap: 2.5rem !important;
+                max-width: 1200px !important;
+                margin-left: auto !important;
+                margin-right: auto !important;
+                padding-left: 2rem !important;
+                padding-right: 2rem !important;
+                box-sizing: border-box !important;
+                align-items: center !important;
+            }
+
+            .wp-block-column {
+                box-sizing: border-box !important;
+            }
+
+            .wp-block-column[style*=\"33.33%\"], .wp-block-column[style*=\"33.3%\"] {
+                flex: 0 0 35% !important;
+                max-width: 35% !important;
+            }
+
+            .wp-block-column[style*=\"66.66%\"], .wp-block-column[style*=\"66.6%\"] {
+                flex: 0 0 65% !important;
+                max-width: 65% !important;
+            }
+
+            .wp-block-column[style*=\"50%\"] {
+                flex: 0 0 50% !important;
+                max-width: 50% !important;
+            }
+
+            .wp-block-image img {
+                max-width: 100% !important;
+                height: auto !important;
+                display: block !important;
+                object-fit: cover !important;
+            }
+
+            /* Typography Scale */
+            h1, .wp-block-heading.has-xx-large-font-size {
+                font-size: 2.25rem !important;
+                font-weight: 700 !important;
+                line-height: 1.2 !important;
+                margin-top: 0 !important;
+                margin-bottom: 1rem !important;
+            }
+
+            h2, .wp-block-heading.has-x-large-font-size {
+                font-size: 1.75rem !important;
+                font-weight: 700 !important;
+                line-height: 1.25 !important;
+                margin-top: 0 !important;
+                margin-bottom: 0.75rem !important;
+            }
+
+            h3, .wp-block-heading.has-large-font-size {
+                font-size: 1.35rem !important;
+                font-weight: 600 !important;
+                margin-top: 0 !important;
+                margin-bottom: 0.5rem !important;
+            }
+
+            p {
+                font-size: 1rem !important;
+                line-height: 1.6 !important;
+                margin-top: 0 !important;
+                margin-bottom: 1rem !important;
+            }
+
+            .is-style-text-subtitle {
+                font-size: 0.95rem !important;
+                font-weight: 500 !important;
+                opacity: 0.9 !important;
+                margin-bottom: 0.75rem !important;
+            }
+
+            /* Buttons in WordPress Block Themes */
+            .wp-block-buttons {
+                display: flex !important;
+                flex-direction: row !important;
+                flex-wrap: wrap !important;
+                gap: 0.5rem !important;
+                align-items: center !important;
+                margin-top: 1rem !important;
+            }
+
+            .wp-block-button {
+                margin: 0 !important;
+            }
+
+            .wp-block-button__link {
+                display: inline-block !important;
+                padding: 0.35rem 0.85rem !important;
+                font-size: 0.825rem !important;
+                font-weight: 500 !important;
+                border-radius: 9999px !important;
+                border: 1px solid currentColor !important;
+                text-decoration: none !important;
+                color: inherit !important;
+                background: transparent !important;
+                transition: opacity 0.2s ease !important;
+            }
+
+            .wp-block-button__link:hover {
+                opacity: 0.8 !important;
+            }
+        </style>";
+
+        return '<!DOCTYPE html>' . "\n" .
+            '<html lang="' . esc_attr($source_code) . '">' . "\n" .
+            '<head>' . "\n" .
+            '<meta charset="utf-8">' . "\n" .
+            '<meta name="viewport" content="width=device-width, initial-scale=1.0">' . "\n" .
+            '<title>' . $page_title_escaped . '</title>' . "\n" .
+            $all_styles_html .
+            '</head>' . "\n" .
+            '<body class="wp-embed-responsive is-layout-constrained">' . "\n" .
+            '<div class="wp-site-blocks">' . "\n" .
+            '<h1 style="text-align:center;font-size:1.5rem;font-weight:700;margin:20px 0;">' . $page_title_escaped . '</h1>' . "\n" .
+            $content_html . "\n" .
+            '</div>' . "\n" .
+            '</body>' . "\n" .
+            '</html>';
+    }
+
     public static function display_bulk_dispatch_notice() {
         if (!empty($_GET['verbocat_bulk_dispatched'])) {
             $count = intval($_GET['verbocat_bulk_dispatched']);

@@ -551,10 +551,31 @@ class Verbocat_Settings {
                                 <?php _e('Content Automation Hub (Pages & Target Languages)', 'verbocat-connector'); ?>
                             </h2>
                             <p style="color: #64748b; font-size: 12px; margin: 4px 0 0 0;">
-                                <?php _e('Manage automation and target languages per page. Only active languages are shown.', 'verbocat-connector'); ?>
+                                <?php _e('Manage continuous localization and target languages per page/post. Continuous sync is paused by default until you activate it.', 'verbocat-connector'); ?>
                             </p>
                         </div>
                         <input type="text" id="vb_page_filter_input" placeholder="<?php esc_attr_e('Search pages & posts...', 'verbocat-connector'); ?>" style="padding: 4px 10px; font-size: 12px; border-radius: 6px; border: 1px solid #cbd5e1; width: 220px; height: 28px;" />
+                    </div>
+
+                    <?php
+                    $page_count = 0;
+                    $post_count = 0;
+                    foreach ($source_pages as $sp) {
+                        if ($sp->post_type === 'page') $page_count++;
+                        else if ($sp->post_type === 'post') $post_count++;
+                    }
+                    ?>
+                    <!-- TYPE FILTER TABS -->
+                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 12px;">
+                        <button type="button" class="vb-type-filter-btn active" data-type="all" style="font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 6px; border: 1px solid #2563eb; background: #eff6ff; color: #1d4ed8; cursor: pointer;">
+                            <?php _e('All Content', 'verbocat-connector'); ?> (<?php echo count($source_pages); ?>)
+                        </button>
+                        <button type="button" class="vb-type-filter-btn" data-type="page" style="font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; color: #475569; cursor: pointer;">
+                            <?php _e('Pages Only', 'verbocat-connector'); ?> (<?php echo $page_count; ?>)
+                        </button>
+                        <button type="button" class="vb-type-filter-btn" data-type="post" style="font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; color: #475569; cursor: pointer;">
+                            <?php _e('Blog Posts Only', 'verbocat-connector'); ?> (<?php echo $post_count; ?>)
+                        </button>
                     </div>
 
                     <!-- MODERN BULK ACTION TOOLBAR -->
@@ -589,7 +610,7 @@ class Verbocat_Settings {
                         </div>
                         
                         <span id="vb_selected_count_badge" style="font-size: 12px; color: #475569; font-weight: 600; background: #ffffff; padding: 3px 8px; border-radius: 4px; border: 1px solid #e2e8f0;">
-                            0 <?php _e('pages selected', 'verbocat-connector'); ?>
+                            0 <?php _e('selected', 'verbocat-connector'); ?>
                         </span>
                     </div>
 
@@ -609,41 +630,36 @@ class Verbocat_Settings {
                             </thead>
                             <tbody>
                                 <?php if (empty($source_pages)): ?>
-                                    <tr>
+                                    <tr id="vb_empty_row_all">
                                         <td colspan="5" style="text-align: center; padding: 24px; color: #94a3b8; font-size: 13px;">
                                             <?php _e('No published pages or posts found.', 'verbocat-connector'); ?>
                                         </td>
                                     </tr>
                                 <?php else: ?>
+                                    <tr id="vb_empty_row_pages" style="display: none;">
+                                        <td colspan="5" style="text-align: center; padding: 24px; color: #94a3b8; font-size: 13px;">
+                                            <?php echo sprintf(__('No published pages found. (You have %d blog posts under "Blog Posts Only").', 'verbocat-connector'), $post_count); ?>
+                                        </td>
+                                    </tr>
+                                    <tr id="vb_empty_row_posts" style="display: none;">
+                                        <td colspan="5" style="text-align: center; padding: 24px; color: #94a3b8; font-size: 13px;">
+                                            <?php echo sprintf(__('No published blog posts found. (You have %d pages under "Pages Only").', 'verbocat-connector'), $page_count); ?>
+                                        </td>
+                                    </tr>
                                     <?php foreach ($source_pages as $sp): 
                                         $sp_id = $sp->ID;
                                         $sp_auto = get_post_meta($sp_id, '_verbocat_auto_sync_enabled', true);
-                                        // Default to enabled if continuous mode is on and not explicitly disabled
-                                        $is_sp_auto = ($sp_auto === '1') || ($sp_auto === '' && $opts['continuous_sync_trigger'] === 'publish_update');
+                                        // Auto-sync is strictly paused by default unless explicitly activated ('1')
+                                        $is_sp_auto = ($sp_auto === '1');
                                         
                                         $sp_saved_langs = get_post_meta($sp_id, '_verbocat_auto_target_langs', true);
-                                        
-                                        // Clean legacy default ['es', 'hi', 'fr'] if present
-                                        if (is_array($sp_saved_langs)) {
-                                            $temp_saved = $sp_saved_langs;
-                                            sort($temp_saved);
-                                            if ($temp_saved === ['es', 'fr', 'hi']) {
-                                                $sp_saved_langs = null;
-                                                delete_post_meta($sp_id, '_verbocat_auto_target_langs');
-                                            }
-                                        }
-
-                                        // Determine strictly active languages for this page
-                                        if (is_array($sp_saved_langs)) {
-                                            $sp_active_langs = array_values(array_unique(array_filter($sp_saved_langs)));
-                                        } else {
-                                            $sp_active_langs = $selected_target_langs;
-                                        }
+                                        // Target languages are strictly empty by default unless explicitly chosen for this page
+                                        $sp_active_langs = is_array($sp_saved_langs) ? array_values(array_unique(array_filter($sp_saved_langs))) : [];
 
                                         $translations = get_post_meta($sp_id, '_verbocat_translations', true) ?: [];
                                         $trans_count = count($translations);
                                     ?>
-                                        <tr class="vb-page-row" data-pid="<?php echo $sp_id; ?>" data-title="<?php echo esc_attr(strtolower($sp->post_title)); ?>">
+                                        <tr class="vb-page-row" data-pid="<?php echo $sp_id; ?>" data-post-type="<?php echo esc_attr($sp->post_type); ?>" data-title="<?php echo esc_attr(strtolower($sp->post_title)); ?>">
                                             <td style="text-align: center; padding: 8px 6px; vertical-align: middle;">
                                                 <input type="checkbox" class="vb-row-select-cb" data-pid="<?php echo $sp_id; ?>" style="accent-color: #2563eb;" />
                                             </td>
@@ -947,16 +963,75 @@ class Verbocat_Settings {
                 $(this).val(''); // Reset select
             });
 
+            // TYPE FILTER TABS (All / Pages / Posts) & SEARCH
+            var currentTypeFilter = 'all';
+
+            function applyTableFilters() {
+                var search = ($('#vb_page_filter_input').val() || '').toLowerCase().trim();
+                var visibleCount = 0;
+                var totalOfType = 0;
+
+                $('tr.vb-page-row').each(function() {
+                    var $row = $(this);
+                    var postType = $row.data('post-type');
+                    var title = ($row.data('title') || '').toLowerCase();
+
+                    var matchesType = (currentTypeFilter === 'all' || postType === currentTypeFilter);
+                    var matchesSearch = (search === '' || title.indexOf(search) !== -1);
+
+                    if (matchesType) {
+                        totalOfType++;
+                    }
+
+                    if (matchesType && matchesSearch) {
+                        $row.show();
+                        visibleCount++;
+                    } else {
+                        $row.hide();
+                    }
+                });
+
+                // Toggle empty state rows
+                $('#vb_empty_row_pages').hide();
+                $('#vb_empty_row_posts').hide();
+
+                if (currentTypeFilter === 'page' && totalOfType === 0) {
+                    $('#vb_empty_row_pages').show();
+                } else if (currentTypeFilter === 'post' && totalOfType === 0) {
+                    $('#vb_empty_row_posts').show();
+                }
+            }
+
+            $('.vb-type-filter-btn').on('click', function(e) {
+                e.preventDefault();
+                $('.vb-type-filter-btn').removeClass('active').css({
+                    'background': '#ffffff',
+                    'border-color': '#cbd5e1',
+                    'color': '#475569'
+                });
+                $(this).addClass('active').css({
+                    'background': '#eff6ff',
+                    'border-color': '#2563eb',
+                    'color': '#1d4ed8'
+                });
+                currentTypeFilter = $(this).data('type');
+                applyTableFilters();
+            });
+
+            $('#vb_page_filter_input').on('input', function() {
+                applyTableFilters();
+            });
+
             // BULK SELECTION LOGIC
             function updateSelectedCount() {
                 var count = $('.vb-row-select-cb:checked').length;
-                $('#vb_selected_count_badge').text(count + ' <?php _e('pages selected', 'verbocat-connector'); ?>');
+                $('#vb_selected_count_badge').text(count + ' <?php _e('selected', 'verbocat-connector'); ?>');
             }
 
             $('#vb_th_select_all, #vb_select_all_pages_cb').on('change', function() {
                 var isChecked = $(this).is(':checked');
                 $('#vb_th_select_all, #vb_select_all_pages_cb').prop('checked', isChecked);
-                $('.vb-row-select-cb').prop('checked', isChecked);
+                $('.vb-row-select-cb:visible').prop('checked', isChecked);
                 updateSelectedCount();
             });
 
@@ -1062,11 +1137,11 @@ class Verbocat_Settings {
             var cachedLinguists = [];
 
             function renderLinguistMappingTable(linguists) {
-                // Capture any current dropdown values before rebuilding table
+                // Only capture current dropdown values if non-empty so we don't wipe initial saved settings
                 $('.vb-linguist-select').each(function() {
                     var lang = $(this).data('lang');
                     var uid = $(this).val();
-                    if (lang) {
+                    if (lang && uid && String(uid).trim().length > 0) {
                         vbSavedAssignments[lang] = uid;
                     }
                 });
@@ -1133,9 +1208,10 @@ class Verbocat_Settings {
                         '<option value="">-- Auto-Assign / Any Qualified Linguist' + countLabel + ' --</option>';
 
                     matched.forEach(function(l) {
-                        var isSel = (String(l.id) === String(assignedId) || String(l.profile_id) === String(assignedId)) ? ' selected="selected"' : '';
+                        var lId = l.id || l.profile_id || l.user_id;
+                        var isSel = (String(l.id) === String(assignedId) || String(l.profile_id) === String(assignedId) || String(l.user_id) === String(assignedId) || String(l.email) === String(assignedId)) ? ' selected="selected"' : '';
                         var expText = l.experience ? ' (' + l.experience + ' yrs exp)' : '';
-                        html += '<option value="' + (l.id || l.profile_id) + '"' + isSel + '>' + (l.name || l.email) + ' &lt;' + l.email + '&gt;' + expText + '</option>';
+                        html += '<option value="' + lId + '"' + isSel + '>' + (l.name || l.email) + ' &lt;' + l.email + '&gt;' + expText + '</option>';
                     });
 
                     html += '</select>' +

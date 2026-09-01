@@ -84,14 +84,37 @@ class Verbocat_Tm_Sync {
             );
         }
 
+        // Sanitize translated content to remove any raw CSS or full HTML wrappers
+        if ($translated_content) {
+            $clean_content = preg_replace('/<style[\s\S]*?<\/style>/i', '', $translated_content);
+            $clean_content = preg_replace('/<script[\s\S]*?<\/script>/i', '', $clean_content);
+            $clean_content = preg_replace('/<head[\s\S]*?<\/head>/i', '', $clean_content);
+            $clean_content = preg_replace('/<!DOCTYPE[^>]*>/i', '', $clean_content);
+            $clean_content = preg_replace('/<h1 class="wp-block-post-title[^"]*"[^>]*>[\s\S]*?<\/h1>/i', '', $clean_content);
+            $clean_content = preg_replace('/<\/?(html|body|article)[^>]*>/i', '', $clean_content);
+
+            if (preg_match('/<div class="entry-content">([\s\S]*?)<\/div>/i', $clean_content, $matches)) {
+                $clean_content = $matches[1];
+            }
+            $translated_content = trim($clean_content);
+        }
+
+        $is_self_translation = get_post_meta($source_id, '_verbocat_is_translation', true);
+        $post_lang = get_post_meta($source_id, '_verbocat_lang', true) ?: get_post_meta($source_id, '_verbocat_target_lang', true);
+
         $translations_map = get_post_meta($source_id, '_verbocat_translations', true) ?: [];
         $target_post_id = $translations_map[$target_lang] ?? null;
 
-        // Check if existing translated post exists
+        // If the dispatched post IS the translated post itself, update it directly!
+        if ($is_self_translation || ($post_lang && $post_lang === $target_lang)) {
+            $target_post_id = $source_id;
+        }
+
+        // Check if existing target post exists
         $has_existing = $target_post_id && get_post($target_post_id);
 
         if ($has_existing) {
-            // Update existing post
+            // Update existing post directly without creating a duplicate
             $update_data = [
                 'ID' => $target_post_id
             ];
@@ -115,7 +138,7 @@ class Verbocat_Tm_Sync {
 
             wp_update_post($update_data);
         } else {
-            // Auto-create translated post draft
+            // Auto-create translated post draft only when translating from a master source post
             $opts = Verbocat_Settings::get_options();
             $new_post_status = $opts['post_status'] ?? 'draft';
 

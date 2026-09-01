@@ -55,7 +55,8 @@ import {
   fetchJobSegmentsByPath,
   updateJobSegmentByPath,
   translateJobSegmentContextByPath,
-  updateSegmentsBulk
+  updateSegmentsBulk,
+  completeWordPressTask
 } from "./services/api.js";
 import { ExportModal } from "./components/ExportModal.jsx";
 import { ShareModal } from "./components/ShareModal.jsx";
@@ -2212,14 +2213,12 @@ export default function App() {
         await flushPendingBulkSave();
       }
       const activeTargetLanguage = targetLanguage || currentRoute.targetLang || "hi";
-      const res = await api.post(`/documents/${activeDocId}/complete-wordpress-task`, {
-        targetLang: activeTargetLanguage
-      });
+      const res = await completeWordPressTask(activeDocId, activeTargetLanguage);
 
-      if (res.data.success) {
+      if (res && res.success) {
         showToast("🚀 Translation marked as completed and posted to WordPress!", "success");
       } else {
-        showToast(res.data.error || "Failed to update WordPress", "error");
+        showToast(res?.error || "Failed to update WordPress", "error");
       }
     } catch (err) {
       console.error("WordPress complete task error:", err);

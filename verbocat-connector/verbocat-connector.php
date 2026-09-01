@@ -26,6 +26,7 @@ require_once VERBOCAT_PLUGIN_DIR . 'includes/class-verbocat-api-client.php';
 require_once VERBOCAT_PLUGIN_DIR . 'includes/class-verbocat-delta-sync.php';
 require_once VERBOCAT_PLUGIN_DIR . 'includes/class-verbocat-tm-sync.php';
 require_once VERBOCAT_PLUGIN_DIR . 'includes/class-verbocat-editor-ui.php';
+require_once VERBOCAT_PLUGIN_DIR . 'includes/class-verbocat-live-preview.php';
 require_once VERBOCAT_PLUGIN_DIR . 'includes/class-verbocat-frontend.php';
 require_once VERBOCAT_PLUGIN_DIR . 'includes/class-verbocat-updater.php';
 
@@ -48,6 +49,7 @@ class Verbocat_Connector {
         Verbocat_Settings::init();
         Verbocat_Tm_Sync::init();
         Verbocat_Editor_UI::init();
+        Verbocat_Live_Preview::init();
         Verbocat_Frontend::init();
         Verbocat_Updater::init();
 
@@ -80,34 +82,22 @@ class Verbocat_Connector {
         }
 
         // CASE 2: Source Post is published/updated ➔ Continuous Delta Sync
-        $opts = Verbocat_Settings::get_options();
-        $is_continuous_global = ($opts['continuous_sync_trigger'] === 'publish_update') || ($opts['auto_translate'] === '1');
-
-        // Check page-specific automation overrides
+        // STRICT RULE: Continuous localization is PAUSED by default for new pages/posts.
+        // It ONLY triggers if the user explicitly enabled Auto-Sync for THIS specific page/post.
         $page_auto_enabled = get_post_meta($post_id, '_verbocat_auto_sync_enabled', true);
-        
-        // If explicitly disabled for this page, abort
-        if ($page_auto_enabled === '0') return;
+        if ($page_auto_enabled !== '1') {
+            return; // Not explicitly activated for this page/post
+        }
 
-        // If not globally continuous and not explicitly enabled for this page, abort
-        if (!$is_continuous_global && $page_auto_enabled !== '1') return;
-        if ($post->post_status !== 'publish') return;
+        if ($post->post_status !== 'publish') {
+            return;
+        }
 
-        // Get page-specific target languages or fallback to global pool
+        // STRICT RULE: Target languages MUST be explicitly assigned to this page/post
         $page_target_langs = get_post_meta($post_id, '_verbocat_auto_target_langs', true);
-        if (is_array($page_target_langs)) {
-            $temp_saved = $page_target_langs;
-            sort($temp_saved);
-            if ($temp_saved === ['es', 'fr', 'hi']) {
-                $page_target_langs = null;
-            }
-        }
-
         if (!is_array($page_target_langs) || empty($page_target_langs)) {
-            $page_target_langs = !empty($opts['target_langs']) ? array_filter(array_map('trim', explode(',', $opts['target_langs']))) : [];
+            return; // No target languages configured for this page
         }
-
-        if (empty($page_target_langs)) return;
 
         // Non-blocking Asynchronous Background Execution (Saves instantly in 0.1s!)
         if (!wp_next_scheduled('verbocat_async_sync_event', [$post_id, $page_target_langs])) {

@@ -412,8 +412,30 @@ export const bulkShareDocuments = async (documentIds, emails, permission = "writ
 };
 
 export const fetchAssignedDocuments = async () => {
-  const response = await api.get("/api/documents/assigned");
-  return response.data?.assignments || [];
+  try {
+    const token = localStorage.getItem("centroid_token");
+    console.group("📡 [RADAR_API] fetchAssignedDocuments");
+    console.log("Base URL:", cleanBaseUrl || "(Relative/Vite Proxy)");
+    console.log("Token Present:", Boolean(token));
+    console.log("Requesting: GET /api/documents/assigned");
+    
+    const response = await api.get("/api/documents/assigned");
+    
+    console.log("Response Status:", response.status);
+    console.log("Raw Response Data:", response.data);
+    console.log("Assignments List:", response.data?.assignments);
+    console.groupEnd();
+    
+    return response.data?.assignments || [];
+  } catch (err) {
+    console.group("❌ [RADAR_API_ERROR] fetchAssignedDocuments Failed");
+    console.error("Error Object:", err);
+    console.error("HTTP Status:", err.response?.status);
+    console.error("Error Response Data:", err.response?.data);
+    console.error("Message:", err.message);
+    console.groupEnd();
+    throw err;
+  }
 };
 
 export const updateAssignmentStatus = async (documentId, targetLang, status, reason = "") => {
@@ -421,6 +443,13 @@ export const updateAssignmentStatus = async (documentId, targetLang, status, rea
     targetLang,
     status,
     reason
+  });
+  return response.data;
+};
+
+export const completeWordPressTask = async (documentId, targetLang) => {
+  const response = await api.post(`/api/documents/${documentId}/complete-wordpress-task`, {
+    targetLang
   });
   return response.data;
 };

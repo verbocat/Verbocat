@@ -3,7 +3,7 @@ const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
 const { processUploadedFile } = require("../services/fileService");
-const { supabase, fetchAllSegments } = require("../config/supabase");
+const { supabase, supabaseAdmin, fetchAllSegments } = require("../config/supabase");
 const { checkAuth, getDocumentPermission, checkDocumentAccess } = require("../utils/authMiddleware");
 const { getDocumentRoomId, getIo } = require("../services/socket");
 
@@ -143,16 +143,21 @@ documentRouter.get(["/documents/assigned", "/api/documents/assigned"], checkAuth
     const userEmail = request.user.email?.trim().toLowerCase();
     const db = supabaseAdmin || supabase;
 
+    console.log(`\n🔍 [RADAR_FETCH_START] Request received for User ID: ${userId} (${userEmail})`);
+
     // Find all matching profile IDs and linguist profile IDs for this user email
-    const { data: userProfiles } = await db
+    const { data: userProfiles, error: profErr } = await db
       .from("profiles")
       .select("id")
       .ilike("email", userEmail || "");
 
-    const { data: linguistProfs } = await db
+    const { data: linguistProfs, error: lpErr } = await db
       .from("linguist_profiles")
       .select("id, user_id")
       .ilike("email", userEmail || "");
+
+    if (profErr) console.warn("⚠️ [RADAR] Profile lookup error:", profErr);
+    if (lpErr) console.warn("⚠️ [RADAR] Linguist profile lookup error:", lpErr);
 
     const validUserIds = Array.from(new Set([
       userId, 
@@ -161,24 +166,26 @@ documentRouter.get(["/documents/assigned", "/api/documents/assigned"], checkAuth
       ...(linguistProfs || []).map(lp => lp.id)
     ].filter(Boolean)));
 
+    console.log(`📋 [RADAR_USER_IDS] Resolved valid IDs for ${userEmail}:`, validUserIds);
+
     // 1. Query document_access for this user
-    const { data: accessRows } = await db
+    const { data: accessRows, error: accessErr } = await db
       .from("document_access")
       .select("*, documents(*, projects(*))")
       .in("user_id", validUserIds)
       .order("created_at", { ascending: false });
 
-    // 2. Query document_collaborators for this user
-    const { data: collabRows } = await db
-      .from("document_collaborators")
-      .select("*, documents(*, projects(*))")
-      .in("user_id", validUserIds);
+    if (accessErr) console.error("❌ [RADAR] document_access error:", accessErr);
+    else console.log(`📄 [RADAR] document_access rows found: ${accessRows?.length || 0}`);
 
-    // 3. Query all projects where settings.linguistAssignments contains any of validUserIds
-    const { data: wpProjects } = await db
+    // 2. Query all projects where settings.linguistAssignments contains any of validUserIds
+    const { data: wpProjects, error: projErr } = await db
       .from("projects")
       .select("*, documents(*)")
       .order("created_at", { ascending: false });
+
+    if (projErr) console.error("❌ [RADAR] projects error:", projErr);
+    else console.log(`📁 [RADAR] projects scanned: ${wpProjects?.length || 0}`);
 
     const assignedList = [];
     const seenKeys = new Set();
@@ -254,25 +261,7 @@ documentRouter.get(["/documents/assigned", "/api/documents/assigned"], checkAuth
       }
     }
 
-    // B. Process document_collaborators
-    for (const row of collabRows || []) {
-      const doc = row.documents;
-      if (!doc) continue;
-      const proj = doc.projects || {};
-      addAssignment(
-        doc,
-        proj,
-        row.target_lang || doc.target_lang || "hi",
-        "active",
-        row.role === "editor" ? "write" : "read",
-        "Project Coordinator",
-        null,
-        null,
-        null
-      );
-    }
-
-    // C. Process projects with JSON linguistAssignments
+    // B. Process projects with JSON linguistAssignments
     for (const proj of wpProjects || []) {
       const linguistAssignments = proj.settings?.linguistAssignments || {};
       const userAssignments = validUserIds.flatMap(uId => linguistAssignments[uId] || []);
@@ -301,10 +290,12 @@ documentRouter.get(["/documents/assigned", "/api/documents/assigned"], checkAuth
       }
     }
 
+    console.log(`✅ [RADAR_FETCH_DONE] Returning ${assignedList.length} total assignments (${assignedList.filter(a => a.status === 'active').length} active) for ${userEmail}\n`);
+
     response.json({ assignments: assignedList });
   } catch (error) {
-    console.error("[ASSIGNED_DOCS_ERROR]", error);
-    response.status(500).json({ error: "Failed to fetch assigned tasks." });
+    console.error("❌ [ASSIGNED_DOCS_ERROR]", error);
+    response.status(500).json({ error: "Failed to fetch assigned tasks.", details: error.message });
   }
 });
 
@@ -546,7 +537,47 @@ documentRouter.post(
         translatedHtml = (segments || []).map(s => `<p>${s.target_text || s.source_text}</p>`).join("\n");
       }
 
-      const translatedTitle = segments && segments.length > 0 && segments[0].target_text ? segments[0].target_text : "";
+      let translatedTitle = "";
+      let cleanContent = translatedHtml;
+
+      const cheerio = require("cheerio");
+      try {
+        const $ = cheerio.load(translatedHtml, { decodeEntities: false });
+        
+        // Extract title from h1.wp-block-post-title or first h1
+        const h1 = $("h1.wp-block-post-title, h1.entry-title, h1").first();
+        if (h1.length > 0) {
+          translatedTitle = h1.text().trim();
+          h1.remove(); // Remove title from content body so it is not duplicated
+        }
+
+        // Remove <head>, <style>, <script>, <title>, <meta>
+        $("head, style, script, title, meta").remove();
+
+        // Extract entry-content or body if present
+        if ($(".entry-content").length > 0) {
+          cleanContent = $(".entry-content").html().trim();
+        } else if ($("body").length > 0) {
+          cleanContent = $("body").html().trim();
+        } else if ($("article").length > 0) {
+          cleanContent = $("article").html().trim();
+        } else {
+          cleanContent = $.html().trim();
+        }
+      } catch (_) {
+        cleanContent = translatedHtml
+          .replace(/<!DOCTYPE[^>]*>/gi, "")
+          .replace(/<head[\s\S]*?<\/head>/gi, "")
+          .replace(/<style[\s\S]*?<\/style>/gi, "")
+          .replace(/<script[\s\S]*?<\/script>/gi, "")
+          .replace(/<h1 class="wp-block-post-title[^"]*"[^>]*>[\s\S]*?<\/h1>/gi, "")
+          .replace(/<\/?(html|body|article)[^>]*>/gi, "")
+          .trim();
+      }
+
+      if (!translatedTitle && segments && segments.length > 0) {
+        translatedTitle = segments[0].target_text || segments[0].source_text || "";
+      }
 
       // Send HTTP POST webhook to WordPress callback URL
       const axios = require("axios");
@@ -557,7 +588,7 @@ documentRouter.post(
         source_lang: doc.source_lang,
         target_lang: tLang,
         translated_title: translatedTitle,
-        translated_content: translatedHtml,
+        translated_content: cleanContent,
         status: "completed",
         linguist: {
           name: request.profile?.name || request.profile?.full_name || request.user?.email,

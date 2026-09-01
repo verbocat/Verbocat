@@ -61,10 +61,12 @@ export function LinguistRestrictedScreen({ user, onLogout }) {
   const loadAssignments = async (isBackground = false) => {
     if (!isBackground) setLoading(true);
     try {
+      console.log(`[RADAR_UI] Fetching assignments (background: ${isBackground})...`);
       const data = await fetchAssignedDocuments();
+      console.log("[RADAR_UI] Received assignments count:", Array.isArray(data) ? data.length : "NOT AN ARRAY", data);
       setAssignments(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error("Failed to load linguist assignments:", err);
+      console.error("[RADAR_UI_ERROR] Failed to load linguist assignments:", err);
       if (!isBackground) setAssignments([]);
     } finally {
       if (!isBackground) setLoading(false);

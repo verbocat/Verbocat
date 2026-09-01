@@ -1076,6 +1076,7 @@ ${htmlContent}
         wp_site_url: site_url,
         wp_callback_url: callback_url,
         wp_permalink: page.permalink,
+        wp_preview_url: page.preview_url,
         wp_original_content: page.content,
         wp_rendered_html: page.rendered_html,
         linguist_assignments: page.linguist_assignments || {}
@@ -1180,16 +1181,6 @@ ${htmlContent}
             permission: "write",
             status: "active"
           });
-
-          // 3. Upsert into document_collaborators
-          try {
-            await dbClient.from("document_collaborators").upsert({
-              document_id: documentId,
-              user_id: resolvedUserId,
-              role: "editor",
-              target_lang: cleanTLang
-            }, { onConflict: "document_id,user_id,target_lang" });
-          } catch (_) {}
         }
       }
 

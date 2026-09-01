@@ -3,7 +3,8 @@ import { renderAsync } from "docx-preview";
 import { fetchDocumentPreview } from "../services/api";
 import { isRtlLanguage } from "../constants/languages.js";
 import { 
-  FileText, Globe, RefreshCw, ZoomIn, ZoomOut, Download, AlertTriangle, X, CheckCircle2 
+  FileText, Globe, RefreshCw, ZoomIn, ZoomOut, Download, AlertTriangle, X, CheckCircle2,
+  Maximize2, Minimize2, Monitor, Tablet, Smartphone
 } from "lucide-react";
 
 export const LiveDocumentViewer = ({
@@ -28,10 +29,17 @@ export const LiveDocumentViewer = ({
   const [docType, setDocType] = useState(null); // "html" | "docx" | "pptx" etc.
   const [htmlContent, setHtmlContent] = useState(null);
   const [lastSyncTime, setLastSyncTime] = useState(new Date());
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  const [viewportMode, setViewportMode] = useState("desktop"); // "desktop" (100%) | "tablet" (768px) | "mobile" (375px)
 
   // Derive rendering mode: HTML iframe vs DOCX/binary canvas
   const isHtmlMode = docType === "html" || docType === "htm" ||
     (!docType && (fileExtension === ".html" || fileExtension === ".htm"));
+
+  const isWordPress = documentMetadata?.source_type === "wordpress";
+  const liveWpUrl = isWordPress 
+    ? (documentMetadata.wp_preview_url || `${documentMetadata.wp_site_url || 'http://testing-learning.local'}/?verbocat_live_preview=1&post_id=${documentMetadata.wp_post_id}`)
+    : null;
 
   // 1. Fetch preview buffer/content from backend
   const loadPreviewBuffer = useCallback(async () => {
@@ -154,9 +162,9 @@ export const LiveDocumentViewer = ({
     return () => { isCancelled = true; };
   }, [previewBuffer, isHtmlMode, isRtl]);
 
-  // 2b. Write HTML content into sandboxed iframe
+  // 2b. Write HTML content into sandboxed iframe (for non-live URL documents)
   useEffect(() => {
-    if (!htmlContent || !iframeRef.current) return;
+    if (liveWpUrl || !htmlContent || !iframeRef.current) return;
     try {
       const iframeDoc = iframeRef.current.contentDocument || iframeRef.current.contentWindow?.document;
       if (iframeDoc) {
@@ -175,7 +183,18 @@ export const LiveDocumentViewer = ({
     } catch (e) {
       console.error("HTML iframe write error:", e);
     }
-  }, [htmlContent, isRtl]);
+  }, [htmlContent, isRtl, liveWpUrl]);
+
+  // Escape key listener for exiting full screen mode
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" && isFullScreen) {
+        setIsFullScreen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isFullScreen]);
 
   const handleZoomIn = () => setZoom(prev => Math.min(prev + 15, 200));
   const handleZoomOut = () => setZoom(prev => Math.max(prev - 15, 50));
@@ -213,19 +232,39 @@ export const LiveDocumentViewer = ({
     }
   };
 
-  const isWordPress = documentMetadata?.source_type === "wordpress";
-  const hasContent = isHtmlMode ? !!htmlContent : !!previewBuffer;
-  const docTypeLabel = isWordPress ? "WordPress Live Visual Draft" : (isHtmlMode ? "Live HTML Document" : "Live Word Document");
+  // Send real-time segment updates to live WordPress iframe via postMessage
+  useEffect(() => {
+    if (!isWordPress || !iframeRef.current?.contentWindow) return;
+    try {
+      const payload = {
+        type: "VERBOCAT_UPDATE_SEGMENTS",
+        segments: segments.map((s, idx) => ({
+          id: s.id !== undefined && s.id !== null ? Number(s.id) : (s.segment_index || idx + 1),
+          target: s.target !== undefined && s.target !== null ? s.target : (s.target_text || s.source || s.source_text || "")
+        }))
+      };
+      iframeRef.current.contentWindow.postMessage(payload, "*");
+    } catch (e) {
+      console.error("[LiveDocumentViewer] postMessage error:", e);
+    }
+  }, [segments, isWordPress]);
+
+  const hasContent = isHtmlMode ? (isWordPress ? true : !!htmlContent) : !!previewBuffer;
+  const docTypeLabel = isWordPress ? "WordPress Live Native Site" : (isHtmlMode ? "Live HTML Document" : "Live Word Document");
   const exportLabel = isHtmlMode ? "Export HTML" : "Export DOCX";
 
   return (
     <div 
-      className={`h-full w-full flex flex-col overflow-hidden font-sans border-l border-[var(--border-subtle)] ${
-        darkMode ? "bg-slate-900 text-slate-100" : "bg-slate-50 text-slate-800"
+      className={`flex flex-col overflow-hidden font-sans transition-all duration-200 ${
+        isFullScreen
+          ? "fixed inset-0 z-[9999] w-screen h-screen bg-slate-950 text-slate-100 shadow-2xl"
+          : `h-full w-full border-l border-[var(--border-subtle)] ${
+              darkMode ? "bg-slate-900 text-slate-100" : "bg-slate-50 text-slate-800"
+            }`
       }`}
     >
       {/* Viewer Header Toolbar */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-panel)] shrink-0 select-none">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--border-subtle)] bg-[var(--bg-panel)] shrink-0 select-none">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className={`p-1.5 rounded-lg border shrink-0 ${
             isWordPress
@@ -244,6 +283,11 @@ export const LiveDocumentViewer = ({
                   WP #{documentMetadata.wp_post_id}
                 </span>
               )}
+              {isFullScreen && (
+                <span className="bg-indigo-500/20 text-indigo-300 text-[9px] px-1.5 py-0.5 rounded font-semibold border border-indigo-500/30">
+                  FULL SCREEN
+                </span>
+              )}
             </h4>
             <p className="text-[10px] text-[var(--text-muted)] font-medium flex items-center gap-1.5 mt-0.5">
               <span>{docTypeLabel}</span>
@@ -258,6 +302,45 @@ export const LiveDocumentViewer = ({
 
         {/* Toolbar Action Controls */}
         <div className="flex items-center gap-1.5">
+          {/* Responsive Viewport Mode Selector for HTML previews */}
+          {isHtmlMode && (
+            <div className="flex items-center gap-0.5 bg-[var(--bg-input)] p-0.5 rounded-lg border border-[var(--border-subtle)] mr-1">
+              <button
+                onClick={() => setViewportMode("desktop")}
+                className={`p-1.5 rounded transition cursor-pointer ${
+                  viewportMode === "desktop"
+                    ? "bg-indigo-600 text-white shadow-xs"
+                    : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                }`}
+                title="Desktop View (100% Width)"
+              >
+                <Monitor size={13} />
+              </button>
+              <button
+                onClick={() => setViewportMode("tablet")}
+                className={`p-1.5 rounded transition cursor-pointer ${
+                  viewportMode === "tablet"
+                    ? "bg-indigo-600 text-white shadow-xs"
+                    : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                }`}
+                title="Tablet View (768px)"
+              >
+                <Tablet size={13} />
+              </button>
+              <button
+                onClick={() => setViewportMode("mobile")}
+                className={`p-1.5 rounded transition cursor-pointer ${
+                  viewportMode === "mobile"
+                    ? "bg-indigo-600 text-white shadow-xs"
+                    : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                }`}
+                title="Mobile View (375px)"
+              >
+                <Smartphone size={13} />
+              </button>
+            </div>
+          )}
+
           {/* Zoom Buttons — only for DOCX (HTML iframe scrolls natively) */}
           {!isHtmlMode && (
             <div className="flex items-center gap-1 bg-[var(--bg-input)] p-1 rounded-lg border border-[var(--border-subtle)] mr-1">
@@ -310,10 +393,23 @@ export const LiveDocumentViewer = ({
             <RefreshCw size={13} className={isLoading ? "animate-spin" : ""} />
           </button>
 
+          {/* Full Screen Mode Toggle Button */}
+          <button
+            onClick={() => setIsFullScreen(prev => !prev)}
+            className={`p-1.5 rounded-lg border transition cursor-pointer ${
+              isFullScreen
+                ? "bg-indigo-600 text-white border-indigo-500"
+                : "bg-[var(--bg-surface)] hover:bg-indigo-500/20 border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-indigo-400"
+            }`}
+            title={isFullScreen ? "Exit Full Screen Mode (Esc)" : "Full Screen Mode"}
+          >
+            {isFullScreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+          </button>
+
           {/* Close Panel Button */}
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg bg-[var(--bg-surface)] hover:bg-rose-500/20 border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-rose-400 transition cursor-pointer ml-1"
+            className="p-1.5 rounded-lg bg-[var(--bg-surface)] hover:bg-rose-500/20 border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-rose-400 transition cursor-pointer ml-0.5"
             title="Close Preview"
           >
             <X size={13} />
@@ -324,7 +420,7 @@ export const LiveDocumentViewer = ({
       {/* Main Document Viewport */}
       <div
         ref={viewportRef}
-        className="flex-1 overflow-hidden relative bg-slate-950/80"
+        className="flex-1 overflow-hidden relative bg-slate-950 flex items-center justify-center"
       >
         {/* Loading Overlay */}
         {isLoading && (
@@ -336,7 +432,7 @@ export const LiveDocumentViewer = ({
 
         {/* Error Card */}
         {errorMsg ? (
-          <div className="h-full flex items-center justify-center p-6">
+          <div className="h-full w-full flex items-center justify-center p-6">
             <div className="max-w-md text-center p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-3 shadow-2xl">
               <AlertTriangle size={36} className={`mx-auto ${isSizeLimitError ? "text-orange-400" : "text-amber-400"}`} />
               <h4 className="text-sm font-bold text-slate-100">
@@ -354,14 +450,23 @@ export const LiveDocumentViewer = ({
             </div>
           </div>
         ) : isHtmlMode ? (
-          /* ── HTML Preview: sandboxed iframe ── */
-          <iframe
-            ref={iframeRef}
-            title="HTML Live Preview"
-            className="w-full h-full border-0"
-            sandbox="allow-same-origin"
-            style={{ backgroundColor: "white" }}
-          />
+          /* ── HTML Preview: Responsive Container & Sandboxed iframe ── */
+          <div className={`h-full transition-all duration-300 flex items-center justify-center ${
+            viewportMode === "mobile"
+              ? "w-[375px] max-w-full my-auto shadow-2xl border-x border-slate-800"
+              : viewportMode === "tablet"
+                ? "w-[768px] max-w-full my-auto shadow-2xl border-x border-slate-800"
+                : "w-full"
+          }`}>
+            <iframe
+              ref={iframeRef}
+              src={liveWpUrl || undefined}
+              title="HTML Live Preview"
+              className="w-full h-full border-0 shadow-lg"
+              sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+              style={{ backgroundColor: "white" }}
+            />
+          </div>
         ) : (
           /* ── DOCX / Binary Preview: docx-preview canvas ── */
           <div className="w-full h-full overflow-y-auto overflow-x-auto scroll-smooth p-6">
