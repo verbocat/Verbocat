@@ -33,13 +33,23 @@ export const LiveDocumentViewer = ({
   const [viewportMode, setViewportMode] = useState("desktop"); // "desktop" (100%) | "tablet" (768px) | "mobile" (375px)
 
   // Derive rendering mode: HTML iframe vs DOCX/binary canvas
-  const isHtmlMode = docType === "html" || docType === "htm" ||
-    (!docType && (fileExtension === ".html" || fileExtension === ".htm"));
-
   const isWordPress = documentMetadata?.source_type === "wordpress";
-  const liveWpUrl = isWordPress 
+  const rawWpUrl = isWordPress 
     ? (documentMetadata.wp_preview_url || `${documentMetadata.wp_site_url || 'http://testing-learning.local'}/?verbocat_live_preview=1&post_id=${documentMetadata.wp_post_id}`)
     : null;
+
+  // If WordPress URL is a local private domain (.local or localhost) and client is remote, fallback to server snapshot
+  const isLocalDomain = rawWpUrl && (rawWpUrl.includes('.local') || rawWpUrl.includes('localhost') || rawWpUrl.includes('127.0.0.1'));
+  const isClientLocal = typeof window !== 'undefined' && (
+    window.location.hostname === 'localhost' || 
+    window.location.hostname === '127.0.0.1' || 
+    window.location.hostname.endsWith('.local')
+  );
+
+  const liveWpUrl = (isWordPress && rawWpUrl && (!isLocalDomain || isClientLocal)) ? rawWpUrl : null;
+
+  const isHtmlMode = isWordPress || docType === "html" || docType === "htm" ||
+    (!docType && (fileExtension === ".html" || fileExtension === ".htm"));
 
   // 1. Fetch preview buffer/content from backend
   const loadPreviewBuffer = useCallback(async () => {
@@ -60,7 +70,7 @@ export const LiveDocumentViewer = ({
       }
 
       // HTML preview: decode bytes as UTF-8 text and render in iframe
-      const resolvedIsHtml = detectedType === "html" || detectedType === "htm" ||
+      const resolvedIsHtml = isWordPress || detectedType === "html" || detectedType === "htm" ||
         (!detectedType && (fileExtension === ".html" || fileExtension === ".htm"));
 
       if (resolvedIsHtml) {

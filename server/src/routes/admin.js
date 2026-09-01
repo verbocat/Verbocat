@@ -319,10 +319,17 @@ adminRouter.post("/users", async (request, response) => {
     });
 
     if (authError) {
-      // If user already exists in auth, check if they exist in DB
-      if (authError.message?.toLowerCase().includes("already registered") || authError.status === 422) {
-        const { data: existingUserList } = await supabaseAdmin.auth.admin.listUsers();
-        const found = (existingUserList?.users || []).find(u => u.email?.toLowerCase() === cleanEmail);
+      // If user already exists in auth, find them across all pages and link to DB profile
+      if (authError.message?.toLowerCase().includes("already registered") || authError.status === 422 || authError.code === "email_exists") {
+        let page = 1;
+        let found = null;
+        while (true) {
+          const { data: pageData } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 100 });
+          if (!pageData?.users?.length) break;
+          found = pageData.users.find(u => u.email?.toLowerCase() === cleanEmail);
+          if (found || pageData.users.length < 100) break;
+          page++;
+        }
         if (!found) {
           return response.status(400).json({ error: authError.message || "A user with this email already exists." });
         }

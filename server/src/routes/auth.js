@@ -77,6 +77,17 @@ async function findExistingAuthUser(cleanEmail) {
         return adminUserRes.user;
       }
     }
+
+    // If not in profiles, search Supabase Auth directly across all pages
+    let page = 1;
+    while (true) {
+      const { data: pageData, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 100 });
+      if (error || !pageData?.users?.length) break;
+      const match = pageData.users.find(u => u.email?.toLowerCase() === cleanEmail.toLowerCase());
+      if (match) return match;
+      if (pageData.users.length < 100) break;
+      page++;
+    }
   } catch (err) {
     console.warn("findExistingAuthUser lookup error:", err?.message);
   }
