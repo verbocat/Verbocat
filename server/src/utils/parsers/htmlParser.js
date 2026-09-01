@@ -28,7 +28,27 @@ function isBlockTag(node) {
 }
 
 function isSkipTag(node) {
-  return node && node.type === "tag" && SKIP_TAGS.includes(node.name.toLowerCase());
+  if (!node || node.type !== "tag") return false;
+  const name = node.name ? node.name.toLowerCase() : "";
+  if (SKIP_TAGS.includes(name)) return true;
+
+  // Check explicit skip attributes
+  if (node.attribs?.["data-verbocat-skip"] === "true" || node.attribs?.["data-verbocat-skip"] === "1") {
+    return true;
+  }
+
+  // Check class-based skip containers (global site template parts, headers, footers, navigation)
+  const className = node.attribs?.class || "";
+  if (/\b(wp-block-template-part|site-header|site-footer|wp-block-navigation|skip-to-content)\b/i.test(className)) {
+    return true;
+  }
+
+  // Exclude standalone global header/footer/nav tags unless inside explicit page content
+  if (name === "header" || name === "footer" || name === "nav") {
+    return true;
+  }
+
+  return false;
 }
 
 // ─── Position Utilities ─────────────────────────────────────────────────────────

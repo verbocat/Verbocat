@@ -2,6 +2,8 @@ const express = require("express");
 const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
+const htmlParser = require("../../utils/parsers/htmlParser");
 const { supabase, supabaseAdmin, fetchAllSegments } = require("../../config/supabase");
 const { apiKeyAuth, generateApiKey } = require("../../middleware/apiKeyAuth");
 const { processUploadedFile, exportHtml } = require("../../services/fileService");
@@ -1458,21 +1460,24 @@ publicApiRouter.post("/wordpress/sync-post-updates", async (req, res) => {
     const io = getIo();
 
     for (const { docId } of matchedDocIds) {
+      const maxLen = Math.max(newSourceSegments.length, newTargetSegments.length);
+      const updatePromises = [];
       const bulkUpdates = [];
 
-      for (let i = 0; i < Math.max(newSourceSegments.length, newTargetSegments.length); i++) {
+      for (let i = 0; i < maxLen; i++) {
         const segIdx = i + 1;
         const srcText = newSourceSegments[i]?.source;
         const tgtText = newTargetSegments[i]?.source;
 
         if (srcText !== undefined) {
-          // Update template row
-          await dbClient
-            .from("document_segments")
-            .update({ source_text: srcText })
-            .eq("document_id", docId)
-            .eq("segment_index", segIdx)
-            .is("target_lang", null);
+          updatePromises.push(
+            supabase
+              .from("document_segments")
+              .update({ source_text: srcText })
+              .eq("document_id", docId)
+              .eq("segment_index", segIdx)
+              .is("target_lang", null)
+          );
         }
 
         if (srcText !== undefined || tgtText !== undefined) {
@@ -1482,12 +1487,14 @@ publicApiRouter.post("/wordpress/sync-post-updates", async (req, res) => {
             updateObj.target_text = tgtText;
             updateObj.status = "translated";
           }
-          await dbClient
-            .from("document_segments")
-            .update(updateObj)
-            .eq("document_id", docId)
-            .eq("segment_index", segIdx)
-            .eq("target_lang", tgtLang);
+          updatePromises.push(
+            supabase
+              .from("document_segments")
+              .update(updateObj)
+              .eq("document_id", docId)
+              .eq("segment_index", segIdx)
+              .eq("target_lang", tgtLang)
+          );
 
           bulkUpdates.push({
             id: segIdx,
@@ -1499,6 +1506,8 @@ publicApiRouter.post("/wordpress/sync-post-updates", async (req, res) => {
         }
       }
 
+      await Promise.all(updatePromises);
+
       // Broadcast WebSocket live update to Centroid frontend
       if (io && bulkUpdates.length > 0) {
         io.to(getDocumentRoomId(docId, tgtLang)).emit("segments-bulk-updated", {
@@ -1508,7 +1517,7 @@ publicApiRouter.post("/wordpress/sync-post-updates", async (req, res) => {
       }
     }
 
-    res.json({ success: true, updated_documents: matchedDocIds.length });
+    res.json({ success: true, updated_documents: matchedDocIds.length, updated_segments: newSourceSegments.length });
   } catch (err) {
     console.error("[WP_SYNC_POST_UPDATES_ERR]", err);
     res.status(500).json({ error: err.message });
