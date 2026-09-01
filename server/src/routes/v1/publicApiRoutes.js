@@ -1072,7 +1072,8 @@ ${htmlContent}
       // Track rich WordPress metadata in project settings
       const docMetadata = {
         source_type: "wordpress",
-        wp_post_id: page.post_id,
+        wp_post_id: page.target_post_id || page.post_id,
+        wp_root_post_id: page.post_id,
         wp_site_url: site_url,
         wp_callback_url: callback_url,
         wp_permalink: page.permalink,
@@ -1146,14 +1147,58 @@ ${htmlContent}
           }
         }
 
-        // Create target language segments
+        // Check if existing translation draft was supplied by WordPress
+        const existingDraft = page.existing_translations?.[cleanTLang] || page.existing_translations?.[tLang] || page.existing_translations?.[baseCode];
+        let targetTextMap = {};
+
+        if (existingDraft && existingDraft.content) {
+          try {
+            const draftTempPath = path.join(os.tmpdir(), `draft_${Date.now()}_${Math.random().toString(36).substring(7)}.html`);
+            fs.writeFileSync(draftTempPath, existingDraft.content, "utf8");
+            const draftParseResult = await htmlParser.parseFile(draftTempPath, false);
+            try { fs.unlinkSync(draftTempPath); } catch (_) {}
+            (draftParseResult.segments || []).forEach((dSeg, dIdx) => {
+              if (dSeg.source) {
+                targetTextMap[dIdx + 1] = dSeg.source;
+              }
+            });
+          } catch (_) {}
+        }
+
+        // If no existing draft was supplied, run automatic translation to pre-populate target segments
+        if (Object.keys(targetTextMap).length === 0 && parseResult.segments?.length > 0) {
+          try {
+            const { translateSegments } = require("../../services/translationService");
+            const autoRes = await translateSegments(
+              parseResult.segments.map((s, idx) => ({ id: idx + 1, source: s.source })),
+              srcLang,
+              cleanTLang,
+              projectId,
+              orgId,
+              null,
+              "general",
+              userId
+            );
+            if (Array.isArray(autoRes)) {
+              autoRes.forEach(item => {
+                if (item.id && item.translated) {
+                  targetTextMap[item.id] = item.translated;
+                }
+              });
+            }
+          } catch (autoErr) {
+            console.warn("[WP_BATCH_AUTO_TRANSLATE_WARN]", autoErr.message);
+          }
+        }
+
+        // Create target language segments with pre-populated target_text
         const targetInserts = (parseResult.segments || []).map((seg, idx) => ({
           document_id: documentId,
           segment_index: idx + 1,
           target_lang: cleanTLang,
           source_text: seg.source || "",
-          target_text: "",
-          status: "draft"
+          target_text: targetTextMap[idx + 1] || "",
+          status: targetTextMap[idx + 1] ? "translated" : "draft"
         }));
 
         for (let i = 0; i < targetInserts.length; i += BATCH_SIZE) {

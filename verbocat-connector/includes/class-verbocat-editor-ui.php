@@ -1473,9 +1473,21 @@ class Verbocat_Editor_UI {
             }
 
             $is_translation = get_post_meta($post_id, '_verbocat_is_translation', true);
-            $target_lang_meta = get_post_meta($post_id, '_verbocat_lang', true) ?: get_post_meta($post_id, '_verbocat_target_lang', true);
+            $source_post_id = get_post_meta($post_id, '_verbocat_source_post_id', true);
+            
+            // If this is a translated post, resolve the root source post!
+            $root_post = $post;
+            $translated_post = null;
+            if ($is_translation && !empty($source_post_id)) {
+                $candidate_root = get_post($source_post_id);
+                if ($candidate_root) {
+                    $root_post = $candidate_root;
+                    $translated_post = $post;
+                }
+            }
 
             // Determine target languages for this specific post
+            $target_lang_meta = get_post_meta($post_id, '_verbocat_lang', true) ?: get_post_meta($post_id, '_verbocat_target_lang', true);
             if (!empty($target_lang_meta)) {
                 // If user dispatches an existing translated post (e.g. Punjabi Draft), target is STRICTLY that language
                 $page_langs = [sanitize_text_field($target_lang_meta)];
@@ -1511,19 +1523,44 @@ class Verbocat_Editor_UI {
                 }
             }
 
-            // Build 1000% exact WYSIWYG HTML document with complete Gutenberg and Theme CSS
-            $rendered_html = self::generate_exact_wysiwyg_html($post, $opts);
+            // Build 1000% exact WYSIWYG HTML document with complete Gutenberg and Theme CSS using the ROOT post as source!
+            $rendered_html = self::generate_exact_wysiwyg_html($root_post, $opts);
+
+            // Extract existing translation drafts if available
+            $existing_translations = [];
+            if ($translated_post) {
+                $t_lang = $page_langs[0];
+                $existing_translations[$t_lang] = [
+                    'post_id' => $translated_post->ID,
+                    'title'   => $translated_post->post_title,
+                    'content' => $translated_post->post_content
+                ];
+            } else {
+                $translations_map = get_post_meta($post->ID, '_verbocat_translations', true) ?: [];
+                foreach ($page_langs as $t_lang) {
+                    $tp_id = $translations_map[$t_lang] ?? null;
+                    if ($tp_id && ($tp = get_post($tp_id))) {
+                        $existing_translations[$t_lang] = [
+                            'post_id' => $tp->ID,
+                            'title'   => $tp->post_title,
+                            'content' => $tp->post_content
+                        ];
+                    }
+                }
+            }
 
             $pages_payload[] = [
-                'post_id'              => $post->ID,
-                'title'                => $post->post_title,
-                'content'              => $post->post_content,
-                'rendered_html'        => $rendered_html,
-                'permalink'            => get_permalink($post->ID),
-                'preview_url'          => Verbocat_Live_Preview::get_preview_url($post->ID),
-                'source_lang'          => $opts['source_lang'] ?? 'en',
-                'target_langs'         => array_values($page_langs),
-                'linguist_assignments' => $page_linguist_assignments
+                'post_id'               => $root_post->ID,
+                'target_post_id'        => $translated_post ? $translated_post->ID : $post->ID,
+                'title'                 => $root_post->post_title,
+                'content'               => $root_post->post_content,
+                'rendered_html'         => $rendered_html,
+                'permalink'             => get_permalink($post->ID),
+                'preview_url'           => Verbocat_Live_Preview::get_preview_url($post->ID),
+                'source_lang'           => $opts['source_lang'] ?? 'en',
+                'target_langs'          => array_values($page_langs),
+                'existing_translations' => $existing_translations,
+                'linguist_assignments'  => $page_linguist_assignments
             ];
 
             update_post_meta($post->ID, '_verbocat_translation_status', 'in_centroid_review');
