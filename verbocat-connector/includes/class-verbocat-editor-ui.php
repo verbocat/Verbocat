@@ -1475,7 +1475,62 @@ class Verbocat_Editor_UI {
             $is_translation = get_post_meta($post_id, '_verbocat_is_translation', true);
             $source_post_id = get_post_meta($post_id, '_verbocat_source_post_id', true);
             
-            // If this is a translated post, resolve the root source post!
+            // 1. If source_post_id is missing, search if another post has _verbocat_translations mapping to this post
+            if (empty($source_post_id)) {
+                global $wpdb;
+                $candidate_roots = $wpdb->get_results("SELECT post_id, meta_value FROM {$wpdb->postmeta} WHERE meta_key = '_verbocat_translations'", ARRAY_A);
+                if (!empty($candidate_roots)) {
+                    foreach ($candidate_roots as $crow) {
+                        $tmap = maybe_unserialize($crow['meta_value']);
+                        if (is_array($tmap)) {
+                            foreach ($tmap as $tcode => $tid) {
+                                if ((int)$tid === (int)$post_id) {
+                                    $source_post_id = (int)$crow['post_id'];
+                                    $is_translation = '1';
+                                    update_post_meta($post_id, '_verbocat_source_post_id', $source_post_id);
+                                    update_post_meta($post_id, '_verbocat_is_translation', '1');
+                                    update_post_meta($post_id, '_verbocat_lang', $tcode);
+                                    break 2;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. If still missing, check if post text contains non-Latin target scripts (Devanagari, Gurmukhi, Gujarati, Arabic, Cyrillic)
+            if (empty($source_post_id)) {
+                $sample_text = $post->post_title . ' ' . $post->post_content;
+                $has_non_latin = preg_match('/[\x{0900}-\x{097F}\x{0A00}-\x{0A7F}\x{0A80}-\x{0AFF}\x{0600}-\x{06FF}\x{0400}-\x{04FF}]/u', $sample_text);
+                if ($has_non_latin) {
+                    $candidate_roots = get_posts([
+                        'post_type'      => $post->post_type,
+                        'post_status'    => ['publish', 'draft', 'pending', 'private'],
+                        'posts_per_page' => 10,
+                        'exclude'        => [$post->ID],
+                        'meta_query'     => [
+                            'relation' => 'OR',
+                            [
+                                'key'     => '_verbocat_is_translation',
+                                'compare' => 'NOT EXISTS'
+                            ],
+                            [
+                                'key'     => '_verbocat_is_translation',
+                                'value'   => '1',
+                                'compare' => '!='
+                            ]
+                        ]
+                    ]);
+                    if (!empty($candidate_roots)) {
+                        $source_post_id = $candidate_roots[0]->ID;
+                        $is_translation = '1';
+                        update_post_meta($post_id, '_verbocat_source_post_id', $source_post_id);
+                        update_post_meta($post_id, '_verbocat_is_translation', '1');
+                    }
+                }
+            }
+
+            // 3. Resolve the English root post as the source for WYSIWYG and segments!
             $root_post = $post;
             $translated_post = null;
             if ($is_translation && !empty($source_post_id)) {
