@@ -156,6 +156,17 @@ class Verbocat_Live_Preview {
             .ast-theme-transparent-header #masthead.ast-transparent-header {
                 display: none !important;
             }
+
+            /* Align content container with site header and footer grid */
+            #primary,
+            .site-content > .ast-container,
+            #content > .ast-container,
+            .entry-content {
+                max-width: 1200px !important;
+                margin-left: auto !important;
+                margin-right: auto !important;
+                box-sizing: border-box !important;
+            }
         </style>
         <script id="verbocat-live-preview-bridge">
         (function() {
