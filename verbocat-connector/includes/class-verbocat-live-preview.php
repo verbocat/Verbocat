@@ -53,14 +53,67 @@ class Verbocat_Live_Preview {
         header('Content-Security-Policy: frame-ancestors *');
         header('Access-Control-Allow-Origin: *');
 
-        // Set up global post data
+        // Set up WordPress global query & post state for full native rendering (supporting both publish & draft posts)
+        global $wp_query, $wp_the_query, $post;
+        $post = get_post($post_id);
+        
+        $wp_query = new WP_Query([
+            'p'                => $post_id,
+            'post_type'        => 'any',
+            'post_status'      => 'any',
+            'suppress_filters' => true
+        ]);
+        $wp_query->posts = [$post];
+        $wp_query->post_count = 1;
+        $wp_query->found_posts = 1;
+        $wp_query->max_num_pages = 1;
+        $wp_query->current_post = -1;
+        $wp_query->is_single = ($post->post_type === 'post');
+        $wp_query->is_page = ($post->post_type === 'page');
+        $wp_query->is_singular = true;
+        $wp_query->is_home = false;
+        $wp_query->is_archive = false;
+        $wp_query->is_404 = false;
+        $wp_query->queried_object = $post;
+        $wp_query->queried_object_id = $post_id;
+
+        $wp_the_query = $wp_query;
         $GLOBALS['post'] = $post;
+        $GLOBALS['wp_query'] = $wp_query;
+        $GLOBALS['wp_the_query'] = $wp_query;
         setup_postdata($post);
 
+        // Inject real-time postMessage TreeWalker communication bridge
+        add_action('wp_footer', [__CLASS__, 'inject_live_bridge_script'], 9999);
+
+        // Load the active theme's native template hierarchy
+        $template = '';
+        if ($post->post_type === 'page') {
+            $template = get_page_template();
+        } else {
+            $template = get_single_template();
+        }
+        if (!$template || !file_exists($template)) {
+            $template = get_singular_template();
+        }
+        if (!$template || !file_exists($template)) {
+            $template = get_page_template();
+        }
+        if (!$template || !file_exists($template)) {
+            $template = get_index_template();
+        }
+
+        if ($template && file_exists($template)) {
+            $GLOBALS['post'] = $post;
+            setup_postdata($post);
+            include $template;
+            exit;
+        }
+
+        // Fallback to compiled WYSIWYG if no theme template file found
         $opts = Verbocat_Settings::get_options();
         $html = Verbocat_Editor_UI::generate_exact_wysiwyg_html($post, $opts);
 
-        // Inject live TreeWalker postMessage bridge script before </body>
         ob_start();
         self::inject_live_bridge_script();
         $bridge_script = ob_get_clean();
