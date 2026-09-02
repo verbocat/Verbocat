@@ -110,7 +110,7 @@ segmentRouter.post(["/translate-batch", "/api/translate-batch"], checkAuth, chec
 
     let fileExtension = "";
     if (documentId) {
-      const { data: doc } = await supabase.from("documents").select("file_extension").eq("id", documentId).single();
+      const { data: doc } = await supabase.from("documents").select("file_extension").eq("id", documentId).maybeSingle();
       if (doc) {
         fileExtension = doc.file_extension || "";
       }
@@ -209,7 +209,7 @@ segmentRouter.post(["/translate-batch", "/api/translate-batch"], checkAuth, chec
               { onConflict: "document_id,segment_index,target_lang" }
             )
             .select()
-            .single();
+            .maybeSingle();
 
           if (insErr) {
             console.error(`[TRANSLATE_BATCH_UPSERT_ERR] seg=${segmentIndex} lang=${target}:`, insErr.message);
@@ -243,7 +243,7 @@ segmentRouter.post(["/translate-batch", "/api/translate-batch"], checkAuth, chec
           .select("id")
           .eq("document_id", documentId)
           .eq("target_lang", target)
-          .single();
+          .maybeSingle();
 
         if (job) {
           await supabase
@@ -278,14 +278,21 @@ segmentRouter.post(["/translate-batch", "/api/translate-batch"], checkAuth, chec
 
       if (userId) {
         // Always insert an audit log row regardless of TM vs AI
-        await supabase.from("credit_logs").insert({
+        const logData = {
           user_id: userId,
           email: email,
           action: actionName,
           word_count: totalRequestedWords,
-          file_name: fileName || "document",
-          organization_id: logOrgId
-        }).catch(logErr => console.error("[CREDIT_LOG_WARN] Failed to insert credit_log:", logErr.message));
+          file_name: fileName || "document"
+        };
+        if (logOrgId) {
+          logData.organization_id = logOrgId;
+        }
+        const { error: logErr } = await supabase.from("credit_logs").insert(logData);
+        if (logErr && (logErr.code === '42703' || logErr.code === 'PGRST204' || logErr.message?.includes('organization_id'))) {
+          delete logData.organization_id;
+          await supabase.from("credit_logs").insert(logData);
+        }
 
         // Only debit credits when AI translation was actually performed (not TM)
         if (wordCount > 0 && request.profile) {

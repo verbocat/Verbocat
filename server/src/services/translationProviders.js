@@ -32,8 +32,7 @@ const MAX_TEXT_LENGTH = parseInt(process.env.MAX_TRANSLATION_TEXT_LENGTH, 10) ||
 
 const validateLang = (lang) => {
   if (!lang || typeof lang !== "string") return false;
-  // Simple ISO-ish check: 2-5 chars, letters and dash allowed (e.g. "pt-BR")
-  return /^[a-zA-Z-]{2,5}$/.test(lang);
+  return /^[a-zA-Z0-9_-]{2,15}$/.test(lang.trim());
 };
 
 const getLangName = (code) => {

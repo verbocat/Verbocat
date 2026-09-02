@@ -474,21 +474,21 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
     const insertRows = [];
 
     chunkSources.forEach((source, offset) => {
-      const translated = translatedChunk[offset];
+      const translated = translatedChunk?.[offset] || { source, translated: source, provider: "Fallback" };
       // Unmask tokens back to original protected terms
-      const unmaskedText = unmaskTokensWithOriginals(translated.translated, tokenMaps[offset]);
+      const unmaskedText = unmaskTokensWithOriginals(translated.translated || source, tokenMaps[offset]);
       const processedText = postProcessTranslation(source, unmaskedText, target);
       const translatedText = ensureEnglishNumerals(processedText);
 
       tmMap[source] = {
         source_text: source,
         target_text: translatedText,
-        provider: translated.provider
+        provider: translated.provider || "Fallback"
       };
 
       if (translated.failureReason) {
         failedAttemptsMap.set(source, {
-          translation: translated.originalTranslation,
+          translation: translated.originalTranslation || translated.translated || source,
           reason: translated.failureReason
         });
       }
