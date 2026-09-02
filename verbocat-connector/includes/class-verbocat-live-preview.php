@@ -142,11 +142,11 @@ class Verbocat_Live_Preview {
         $post_id = $post ? $post->ID : 0;
         ?>
         <style id="verbocat-live-preview-fixes">
-            /* Hide WP Admin Bar in live iframe */
+            /* Hide WP Admin Bar in live preview iframe */
             #wpadminbar { display: none !important; }
             html { margin-top: 0 !important; }
 
-            /* 1. Eliminate duplicate Astra theme default headers */
+            /* Suppress duplicate fallback header bar when custom Elementor header is active */
             .main-header-bar-wrap,
             .ast-main-header-wrap,
             .ast-primary-header-bar,
@@ -154,50 +154,6 @@ class Verbocat_Live_Preview {
             .ast-transparent-header,
             .ast-theme-transparent-header #masthead.ast-transparent-header {
                 display: none !important;
-            }
-
-            /* Ensure custom Elementor header is clean and sticky */
-            header#masthead {
-                display: block !important;
-                position: relative !important;
-                z-index: 99 !important;
-            }
-
-            /* 2. Center the main page content identically to native WordPress */
-            .site-content,
-            #primary,
-            .content-area,
-            .ast-container,
-            #content .ast-container,
-            #main,
-            .site-main,
-            .entry-content,
-            article.type-page,
-            article.type-post {
-                max-width: 1200px !important;
-                margin-left: auto !important;
-                margin-right: auto !important;
-                padding-left: 28px !important;
-                padding-right: 28px !important;
-                box-sizing: border-box !important;
-                float: none !important;
-            }
-
-            /* 3. Post Title and Typography styling */
-            .entry-title, h1.entry-title {
-                font-size: 2.25rem !important;
-                font-weight: 700 !important;
-                color: #0c1a4b !important;
-                margin-top: 2.5rem !important;
-                margin-bottom: 1.5rem !important;
-                line-height: 1.3 !important;
-            }
-
-            .entry-content p {
-                font-size: 1.05rem !important;
-                line-height: 1.75 !important;
-                color: #334155 !important;
-                margin-bottom: 1.25rem !important;
             }
         </style>
         <script id="verbocat-live-preview-bridge">
