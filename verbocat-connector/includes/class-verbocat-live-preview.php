@@ -53,52 +53,27 @@ class Verbocat_Live_Preview {
         header('Content-Security-Policy: frame-ancestors *');
         header('Access-Control-Allow-Origin: *');
 
-        // Set up WordPress global query & post state for full native rendering
-        global $wp_query, $wp_the_query, $post;
-        $post = get_post($post_id);
-        
-        $wp_query = new WP_Query([
-            'p'         => $post_id,
-            'post_type' => $post->post_type
-        ]);
-        $wp_query->queried_object = $post;
-        $wp_query->queried_object_id = $post_id;
-        $wp_query->is_single = ($post->post_type === 'post');
-        $wp_query->is_page = ($post->post_type === 'page');
-        $wp_query->is_singular = true;
-        $wp_query->is_home = false;
-        $wp_query->is_archive = false;
-        $wp_query->is_404 = false;
-
-        $wp_the_query = $wp_query;
+        // Set up global post data
         $GLOBALS['post'] = $post;
-        $GLOBALS['wp_query'] = $wp_query;
-        $GLOBALS['wp_the_query'] = $wp_query;
         setup_postdata($post);
 
-        // Inject real-time postMessage TreeWalker communication bridge
-        add_action('wp_footer', [__CLASS__, 'inject_live_bridge_script'], 9999);
+        $opts = Verbocat_Settings::get_options();
+        $html = Verbocat_Editor_UI::generate_exact_wysiwyg_html($post, $opts);
 
-        // Load the active theme's native template hierarchy
-        $template = '';
-        if ($post->post_type === 'page') {
-            $template = get_page_template();
+        // Inject live TreeWalker postMessage bridge script before </body>
+        ob_start();
+        self::inject_live_bridge_script();
+        $bridge_script = ob_get_clean();
+
+        if (strpos($html, '</body>') !== false) {
+            $html = str_replace('</body>', $bridge_script . "\n</body>", $html);
         } else {
-            $template = get_single_template();
-        }
-        if (!$template || !file_exists($template)) {
-            $template = get_singular_template();
-        }
-        if (!$template || !file_exists($template)) {
-            $template = get_index_template();
+            $html .= "\n" . $bridge_script;
         }
 
-        if ($template && file_exists($template)) {
-            $GLOBALS['post'] = $post;
-            setup_postdata($post);
-            include $template;
-            exit;
-        }
+        header('Content-Type: text/html; charset=utf-8');
+        echo $html;
+        exit;
     }
 
     public static function inject_live_bridge_script() {
