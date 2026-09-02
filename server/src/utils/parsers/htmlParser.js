@@ -496,8 +496,19 @@ const parseFile = async (filePath) => {
 
     subSegments.forEach((subSeg) => {
       const segmentId = segmentIndex++;
-      const { leading, body, trailing } = extractSegmentTags(subSeg);
-      const cleanBody = body ? body.replace(/[\r\n]+/g, " ").replace(/^[\s\uFEFF\xA0]+/, "").replace(/ +/g, " ") : "";
+      let cleanBody = body ? body.replace(/[\r\n]+/g, " ").replace(/^[\s\uFEFF\xA0]+/, "").replace(/ +/g, " ") : "";
+      if (cleanBody) {
+        cleanBody = cleanBody
+          .replace(/&#8217;|&#x2019;/g, "’")
+          .replace(/&#8216;|&#x2018;/g, "‘")
+          .replace(/&#8220;|&#x201C;/g, "“")
+          .replace(/&#8221;|&#x201D;/g, "”")
+          .replace(/&#8211;|&#x2013;/g, "–")
+          .replace(/&#8212;|&#x2014;/g, "—")
+          .replace(/&#0*39;|&apos;|&#x27;/g, "'")
+          .replace(/&quot;|&#0*34;|&#x22;/g, '"')
+          .replace(/&nbsp;|&#0*160;|&#xA0;/g, " ");
+      }
       segments.push({
         id: segmentId,
         source: cleanBody,

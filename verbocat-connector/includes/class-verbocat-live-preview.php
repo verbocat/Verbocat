@@ -121,6 +121,20 @@ class Verbocat_Live_Preview {
 
             var textNodeEntries = [];
 
+            function normalizeText(str) {
+                if (!str) return '';
+                var txt = document.createElement('textarea');
+                txt.innerHTML = str;
+                var decoded = txt.value;
+
+                return decoded
+                    .replace(/[\u2018\u2019\u201A\u201B\u0027\u0060\u00B4]/g, "'")
+                    .replace(/[\u201C\u201D\u201E\u201F\u0022]/g, '"')
+                    .replace(/[\u2013\u2014\u2015\u002D]/g, '-')
+                    .replace(/[\s\r\n\t\u00A0]+/g, ' ')
+                    .trim();
+            }
+
             function indexTextNodes() {
                 textNodeEntries = [];
                 var walker = document.createTreeWalker(
@@ -153,7 +167,8 @@ class Verbocat_Live_Preview {
                     node._verbocatOrigText = initialText;
                     textNodeEntries.push({
                         node: node,
-                        initialClean: initialText.replace(/[\s\r\n\t]+/g, ' ').trim()
+                        initialClean: initialText.replace(/[\s\r\n\t]+/g, ' ').trim(),
+                        normClean: normalizeText(initialText)
                     });
                 }
                 console.log('[Verbocat Bridge] Indexed ' + textNodeEntries.length + ' post content text nodes in DOM.');
@@ -172,7 +187,8 @@ class Verbocat_Live_Preview {
 
                 segments.forEach(function(seg, idx) {
                     var segId = Number(seg.id || seg.segment_index || (idx + 1));
-                    var src = (seg.source || seg.source_text || '').replace(/[\s\r\n\t]+/g, ' ').trim();
+                    var rawSrc = (seg.source || seg.source_text || '').replace(/[\s\r\n\t]+/g, ' ').trim();
+                    var normSrc = normalizeText(rawSrc);
                     var tgt = seg.target !== undefined && seg.target !== null ? seg.target : (seg.target_text || '');
                     if (tgt === undefined || tgt === null) return;
 
@@ -185,19 +201,19 @@ class Verbocat_Live_Preview {
                             return;
                         }
 
-                        // 2. Initial Binding by Exact Source Text
+                        // 2. Initial Binding by Exact or Normalized Source Text
                         if (entry.node._verbocatSegmentId === undefined) {
-                            if (src && (entry.initialClean === src || entry.node._verbocatOrigText.trim() === src)) {
+                            if (normSrc && (entry.normClean === normSrc || entry.initialClean === rawSrc || entry.node._verbocatOrigText.trim() === rawSrc)) {
                                 entry.node._verbocatSegmentId = segId;
                                 if (entry.node.nodeValue !== tgt) {
                                     entry.node.nodeValue = tgt;
                                 }
-                            } else if (src && src.length > 20 && entry.initialClean.length > 20 && (entry.initialClean.indexOf(src) !== -1 || src.indexOf(entry.initialClean) !== -1)) {
+                            } else if (normSrc && normSrc.length > 15 && entry.normClean.length > 15 && (entry.normClean.indexOf(normSrc) !== -1 || normSrc.indexOf(entry.normClean) !== -1)) {
                                 entry.node._verbocatSegmentId = segId;
                                 if (entry.node.nodeValue !== tgt) {
                                     entry.node.nodeValue = tgt;
                                 }
-                            } else if (tgt && (entry.initialClean === tgt.trim() || entry.node._verbocatOrigText.trim() === tgt.trim())) {
+                            } else if (tgt && (entry.normClean === normalizeText(tgt) || entry.initialClean === tgt.trim() || entry.node._verbocatOrigText.trim() === tgt.trim())) {
                                 // 3. Fallback Binding if page was already in target language
                                 entry.node._verbocatSegmentId = segId;
                             }
