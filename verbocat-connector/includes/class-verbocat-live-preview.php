@@ -15,7 +15,7 @@ class Verbocat_Live_Preview {
     }
 
     public static function get_preview_token($post_id) {
-        $key = defined('NONCE_SALT') ? NONCE_SALT : 'verbocat_secret_salt_2026';
+        $key = 'verbocat_live_preview_secret_salt_2026';
         return hash_hmac('sha256', 'verbocat_live_preview_' . $post_id, $key);
     }
 
@@ -49,9 +49,10 @@ class Verbocat_Live_Preview {
         // Verify token or admin capability or local IP
         $token = sanitize_text_field($_GET['token'] ?? '');
         $expected_token = self::get_preview_token($post_id);
+        $expected_token_legacy = defined('NONCE_SALT') ? hash_hmac('sha256', 'verbocat_live_preview_' . $post_id, NONCE_SALT) : '';
         $is_localhost = in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1', 'localhost']);
 
-        if ($token !== $expected_token && !current_user_can('edit_post', $post_id) && !$is_localhost) {
+        if ($token !== $expected_token && $token !== $expected_token_legacy && !current_user_can('edit_post', $post_id) && !$is_localhost) {
             wp_die('Invalid or expired preview token', 'Unauthorized', ['response' => 403]);
         }
 
