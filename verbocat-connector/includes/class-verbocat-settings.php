@@ -21,6 +21,7 @@ class Verbocat_Settings {
         add_action('admin_init', [__CLASS__, 'register_settings']);
         add_action('wp_ajax_verbocat_test_connection', [__CLASS__, 'ajax_test_connection']);
         add_action('wp_ajax_verbocat_save_page_automation', [__CLASS__, 'ajax_save_page_automation']);
+        add_action('wp_ajax_verbocat_bulk_update_pages', [__CLASS__, 'ajax_bulk_update_pages']);
         add_action('wp_ajax_verbocat_get_linguists', [__CLASS__, 'ajax_get_linguists']);
         add_action('wp_ajax_verbocat_save_settings_partial', [__CLASS__, 'ajax_save_settings_partial']);
     }
@@ -217,6 +218,58 @@ class Verbocat_Settings {
     }
 
     /**
+     * AJAX handler for bulk updating page automation rules (Auto-sync state, Languages)
+     */
+    public static function ajax_bulk_update_pages() {
+        check_ajax_referer('verbocat_test_nonce', 'nonce');
+
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error(['message' => __('Permission denied.', 'verbocat-connector')]);
+        }
+
+        $page_ids = isset($_POST['page_ids']) && is_array($_POST['page_ids']) ? array_map('intval', $_POST['page_ids']) : [];
+        $operation = sanitize_text_field($_POST['operation'] ?? '');
+        $lang_code = sanitize_text_field($_POST['lang_code'] ?? '');
+        $global_langs = isset($_POST['global_langs']) && is_array($_POST['global_langs']) ? array_values(array_unique(array_filter(array_map('sanitize_text_field', $_POST['global_langs'])))) : [];
+
+        if (empty($page_ids)) {
+            wp_send_json_error(['message' => __('No pages selected.', 'verbocat-connector')]);
+        }
+
+        $updated_count = 0;
+        foreach ($page_ids as $p_id) {
+            if ($p_id <= 0) continue;
+
+            if ($operation === 'enable_auto') {
+                update_post_meta($p_id, '_verbocat_auto_sync_enabled', '1');
+                $updated_count++;
+            } elseif ($operation === 'pause_auto') {
+                update_post_meta($p_id, '_verbocat_auto_sync_enabled', '0');
+                $updated_count++;
+            } elseif ($operation === 'clear_langs') {
+                update_post_meta($p_id, '_verbocat_auto_target_langs', []);
+                $updated_count++;
+            } elseif ($operation === 'apply_global') {
+                update_post_meta($p_id, '_verbocat_auto_target_langs', $global_langs);
+                $updated_count++;
+            } elseif ($operation === 'add_lang' && !empty($lang_code)) {
+                $current = get_post_meta($p_id, '_verbocat_auto_target_langs', true);
+                if (!is_array($current)) $current = [];
+                if (!in_array($lang_code, $current)) {
+                    $current[] = $lang_code;
+                    update_post_meta($p_id, '_verbocat_auto_target_langs', array_values(array_unique(array_filter($current))));
+                }
+                $updated_count++;
+            }
+        }
+
+        wp_send_json_success([
+            'message' => sprintf(__('Updated %d items successfully!', 'verbocat-connector'), $updated_count),
+            'updated_count' => $updated_count
+        ]);
+    }
+
+    /**
      * AJAX handler for automatically saving partial settings (Languages pool, Linguist assignments, workflow)
      */
     public static function ajax_save_settings_partial() {
@@ -294,7 +347,7 @@ class Verbocat_Settings {
         $source_pages = get_posts([
             'post_type'      => ['page', 'post'],
             'post_status'    => 'publish',
-            'posts_per_page' => 200,
+            'posts_per_page' => -1,
             'orderby'        => 'post_type',
             'order'          => 'ASC',
             'meta_query'     => [
@@ -916,7 +969,44 @@ class Verbocat_Settings {
                 });
             });
 
-            // Clickable Auto-Sync Toggle Button
+            // Helper function to auto-save single page automation settings
+            function saveSinglePageAutomation(pid) {
+                var $row = $('tr.vb-page-row[data-pid="' + pid + '"]');
+                if ($row.length === 0) return;
+                
+                var isAuto = $row.find('input.vb-page-auto-toggle-hidden').is(':checked') ? '1' : '0';
+                var langs = [];
+                $row.find('.vb-lang-active-chip').each(function() {
+                    var c = $(this).data('code');
+                    if (c) langs.push(c);
+                });
+
+                showAutoSaveToast('<?php _e('Saving page settings...', 'verbocat-connector'); ?>', null);
+
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'verbocat_save_page_automation',
+                        nonce: '<?php echo esc_js($test_nonce); ?>',
+                        post_id: pid,
+                        enabled: isAuto,
+                        langs: langs
+                    },
+                    success: function(res) {
+                        if (res.success) {
+                            showAutoSaveToast('<?php _e('Page settings saved automatically!', 'verbocat-connector'); ?>', true);
+                        } else {
+                            showAutoSaveToast(res.data && res.data.message ? res.data.message : '<?php _e('Failed to save page settings.', 'verbocat-connector'); ?>', false);
+                        }
+                    },
+                    error: function() {
+                        showAutoSaveToast('<?php _e('Network error saving page settings.', 'verbocat-connector'); ?>', false);
+                    }
+                });
+            }
+
+            // Clickable Auto-Sync Toggle Button with Immediate Auto-Save
             $(document).on('click', '.vb-page-auto-toggle-btn', function(e) {
                 e.preventDefault();
                 var pid = $(this).data('pid');
@@ -932,15 +1022,22 @@ class Verbocat_Settings {
                     'border-color': newState ? '#a7f3d0' : '#e2e8f0',
                     'color': newState ? '#059669' : '#64748b'
                 });
+
+                saveSinglePageAutomation(pid);
             });
 
-            // Remove Language Chip on Click (x)
+            // Remove Language Chip on Click (x) with Immediate Auto-Save
             $(document).on('click', '.vb-remove-lang-chip-btn', function(e) {
                 e.preventDefault();
+                var $row = $(this).closest('tr.vb-page-row');
+                var pid = $row.data('pid');
                 $(this).closest('.vb-lang-active-chip').remove();
+                if (pid) {
+                    saveSinglePageAutomation(pid);
+                }
             });
 
-            // Add Custom Language to a Single Page Row
+            // Add Custom Language to a Single Page Row with Immediate Auto-Save
             $(document).on('change', '.vb-add-custom-lang-select', function() {
                 var langCode = $(this).val();
                 if (!langCode) return;
@@ -958,6 +1055,9 @@ class Verbocat_Settings {
                         '<button type="button" class="vb-remove-lang-chip-btn" style="background: none; border: none; padding: 0; margin-left: 2px; color: #93c5fd; cursor: pointer; font-size: 12px; line-height: 1; font-weight: 700;">&times;</button>' +
                         '</span>';
                     $(newChip).insertBefore($(this));
+                    if (pid) {
+                        saveSinglePageAutomation(pid);
+                    }
                 }
 
                 $(this).val(''); // Reset select
@@ -1047,7 +1147,7 @@ class Verbocat_Settings {
                 }
             });
 
-            // APPLY BULK ACTION
+            // APPLY BULK ACTION WITH IMMEDIATE DATABASE SAVE VIA AJAX
             $('#vb_apply_bulk_btn').on('click', function(e) {
                 e.preventDefault();
                 var action = $('#vb_bulk_action_select').val();
@@ -1062,6 +1162,25 @@ class Verbocat_Settings {
                     return;
                 }
 
+                var pageIds = [];
+                $selectedRows.each(function() {
+                    var pid = $(this).data('pid');
+                    if (pid) pageIds.push(pid);
+                });
+
+                var lCode = $('#vb_bulk_lang_picker').val();
+                if (action === 'add_lang' && !lCode) {
+                    alert('<?php _e('Please choose a language from the dropdown.', 'verbocat-connector'); ?>');
+                    return;
+                }
+
+                // Collect active global pool languages
+                var globalLangs = [];
+                $('.vb-global-lang-cb:checked').each(function() {
+                    globalLangs.push($(this).val());
+                });
+
+                // 1. Update UI immediately for great user responsiveness
                 if (action === 'enable_auto') {
                     $selectedRows.each(function() {
                         var pid = $(this).data('pid');
@@ -1081,12 +1200,6 @@ class Verbocat_Settings {
                 } else if (action === 'clear_langs') {
                     $selectedRows.find('.vb-lang-active-chip').remove();
                 } else if (action === 'apply_global') {
-                    // Collect active global languages
-                    var globalLangs = [];
-                    $('.vb-global-lang-cb:checked').each(function() {
-                        globalLangs.push($(this).val());
-                    });
-
                     $selectedRows.each(function() {
                         var $row = $(this);
                         var pid = $row.data('pid');
@@ -1105,11 +1218,6 @@ class Verbocat_Settings {
                         });
                     });
                 } else if (action === 'add_lang') {
-                    var lCode = $('#vb_bulk_lang_picker').val();
-                    if (!lCode) {
-                        alert('<?php _e('Please choose a language from the dropdown.', 'verbocat-connector'); ?>');
-                        return;
-                    }
                     var $opt = $('#vb_bulk_lang_picker').find('option:selected');
                     var flag = $opt.text().split(' ')[0] || '🌐';
 
@@ -1128,6 +1236,36 @@ class Verbocat_Settings {
                         }
                     });
                 }
+
+                // 2. Perform atomic database save via AJAX
+                showAutoSaveToast('<?php _e('Saving bulk updates...', 'verbocat-connector'); ?>', null);
+                var $btn = $('#vb_apply_bulk_btn');
+                $btn.prop('disabled', true).text('<?php _e('Saving...', 'verbocat-connector'); ?>');
+
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'verbocat_bulk_update_pages',
+                        nonce: '<?php echo esc_js($test_nonce); ?>',
+                        page_ids: pageIds,
+                        operation: action,
+                        lang_code: lCode,
+                        global_langs: globalLangs
+                    },
+                    success: function(res) {
+                        $btn.prop('disabled', false).text('<?php _e('Apply', 'verbocat-connector'); ?>');
+                        if (res.success) {
+                            showAutoSaveToast(res.data && res.data.message ? res.data.message : '<?php _e('Bulk settings saved successfully!', 'verbocat-connector'); ?>', true);
+                        } else {
+                            showAutoSaveToast(res.data && res.data.message ? res.data.message : '<?php _e('Failed to save bulk settings.', 'verbocat-connector'); ?>', false);
+                        }
+                    },
+                    error: function() {
+                        $btn.prop('disabled', false).text('<?php _e('Apply', 'verbocat-connector'); ?>');
+                        showAutoSaveToast('<?php _e('Network error during bulk save.', 'verbocat-connector'); ?>', false);
+                    }
+                });
             });
 
             // DYNAMIC LINGUIST MAPPING TABLE IN SECTION 3.5

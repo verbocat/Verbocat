@@ -88,7 +88,7 @@ class Verbocat_Updater {
                 'version'      => trim($matches[1]),
                 'download_url' => 'https://github.com/' . self::$github_repo . '/raw/main/verbocat-connector.zip'
             ];
-            set_transient('verbocat_remote_version_info', $info, 300); // Cache for 5 minutes
+            set_transient('verbocat_remote_version_info', $info, 12 * HOUR_IN_SECONDS); // Cache for 12 hours
             return $info;
         }
 
