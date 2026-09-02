@@ -45,7 +45,10 @@ function isSkipTag(node) {
   // Check class-based skip containers (global site template parts, headers, footers, navigation, skip links, screen-reader text)
   const className = node.attribs?.class || "";
   if (/\b(wp-block-template-part|site-header|site-footer|wp-block-navigation|wp-block-skip-link|skip-link|skip-to-content|screen-reader-text|sr-only)\b/i.test(className)) {
-    return true;
+    // If it is the post's own title/content element, DO NOT skip!
+    if (!/\b(entry-header|post-header|entry-title|wp-block-post-title)\b/i.test(className)) {
+      return true;
+    }
   }
 
   // Check skip-link anchor targets
@@ -54,8 +57,14 @@ function isSkipTag(node) {
     return true;
   }
 
-  // Exclude standalone global header/footer/nav tags unless inside explicit page content
-  if (name === "header" || name === "footer" || name === "nav") {
+  // Exclude standalone global header/footer/nav tags (unless it is the post's own entry header)
+  if (name === "header") {
+    if (/\b(entry-header|post-header|entry-title|wp-block-post-title)\b/i.test(className)) {
+      return false;
+    }
+    return true;
+  }
+  if (name === "footer" || name === "nav") {
     return true;
   }
 

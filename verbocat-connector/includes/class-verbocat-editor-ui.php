@@ -1664,26 +1664,7 @@ class Verbocat_Editor_UI {
         $source_code = $opts['source_lang'] ?? 'en';
         $page_title_escaped = esc_html($post->post_title);
 
-        // 1. Try Live Frontend Page Fetch (1000% Real Live WordPress Rendering)
-        $preview_url = get_preview_post_link($post) ?: get_permalink($post->ID);
-        if ($preview_url) {
-            $resp = wp_remote_get($preview_url, [
-                'timeout'   => 3,
-                'sslverify' => false,
-                'headers'   => [
-                    'X-Verbocat-Wysiwyg-Fetch' => '1'
-                ]
-            ]);
-
-            if (!is_wp_error($resp) && wp_remote_retrieve_response_code($resp) === 200) {
-                $live_html = wp_remote_retrieve_body($resp);
-                if (!empty($live_html) && str_contains($live_html, '<html') && (str_contains($live_html, 'entry-content') || str_contains($live_html, 'wp-site-blocks') || str_contains($live_html, 'wp-block-'))) {
-                    return $live_html;
-                }
-            }
-        }
-
-        // 2. Comprehensive Gutenberg & Theme CSS Compiler Fallback
+        // Comprehensive Gutenberg & Theme CSS Compiler (Focused Clean Post Rendering)
         $content_html = apply_filters('the_content', $post->post_content);
         if (empty($content_html)) {
             $content_html = wpautop($post->post_content);
@@ -1936,11 +1917,11 @@ class Verbocat_Editor_UI {
             '<title>' . $page_title_escaped . '</title>' . "\n" .
             $all_styles_html .
             '</head>' . "\n" .
-            '<body class="wp-embed-responsive is-layout-constrained">' . "\n" .
-            '<div class="wp-site-blocks">' . "\n" .
-            '<h1 style="text-align:center;font-size:1.5rem;font-weight:700;margin:20px 0;">' . $page_title_escaped . '</h1>' . "\n" .
+            '<body class="wp-embed-responsive is-layout-constrained" style="background:#ffffff; margin:0; padding:40px 24px; color:#1e293b; font-family:-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen-Sans, Ubuntu, Cantarell, \"Helvetica Neue\", sans-serif;">' . "\n" .
+            '<article class="wp-site-preview-container entry-content wp-site-blocks" style="max-width:840px; margin:0 auto;">' . "\n" .
+            '<h1 class="wp-block-post-title entry-title" style="font-size:2.25rem; font-weight:800; line-height:1.25; color:#0f172a; margin-top:0; margin-bottom:1.75rem; letter-spacing:-0.02em;">' . $page_title_escaped . '</h1>' . "\n" .
             $content_html . "\n" .
-            '</div>' . "\n" .
+            '</article>' . "\n" .
             '</body>' . "\n" .
             '</html>';
     }

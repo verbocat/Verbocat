@@ -1155,7 +1155,11 @@ ${htmlContent}
 
         if (existingDraft && (existingDraft.rendered_html || existingDraft.content)) {
           try {
-            const draftHtml = existingDraft.rendered_html || existingDraft.content;
+            let draftHtml = existingDraft.rendered_html || existingDraft.content;
+            const draftTitle = existingDraft.title || "";
+            if (!draftHtml.includes("<h1") && draftTitle) {
+              draftHtml = `<h1 class="wp-block-post-title entry-title">${draftTitle}</h1>\n` + draftHtml;
+            }
             const draftTempPath = path.join(os.tmpdir(), `draft_${Date.now()}_${Math.random().toString(36).substring(7)}.html`);
             fs.writeFileSync(draftTempPath, draftHtml, "utf8");
             const draftParseResult = await htmlParser.parseFile(draftTempPath, false);
