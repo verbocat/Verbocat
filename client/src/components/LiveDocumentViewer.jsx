@@ -34,9 +34,25 @@ export const LiveDocumentViewer = ({
 
   // Derive rendering mode: HTML iframe vs DOCX/binary canvas
   const isWordPress = documentMetadata?.source_type === "wordpress";
-  const rawWpUrl = isWordPress 
-    ? (documentMetadata.wp_preview_url || `${documentMetadata.wp_site_url || 'http://testing-learning.local'}/?page_id=${documentMetadata.wp_post_id}&preview=true&verbocat_live_preview=1&post_id=${documentMetadata.wp_post_id}`)
-    : null;
+  let rawWpUrl = null;
+  if (isWordPress) {
+    const postId = documentMetadata.wp_post_id || documentMetadata.wp_root_post_id;
+    const baseSiteUrl = documentMetadata.wp_site_url || 'https://www.verbolabs.com';
+    if (documentMetadata.wp_preview_url) {
+      try {
+        const urlObj = new URL(documentMetadata.wp_preview_url);
+        if (postId && !urlObj.searchParams.has('page_id') && !urlObj.searchParams.has('p')) {
+          urlObj.searchParams.set('page_id', postId);
+          urlObj.searchParams.set('preview', 'true');
+        }
+        rawWpUrl = urlObj.toString();
+      } catch (_) {
+        rawWpUrl = documentMetadata.wp_preview_url;
+      }
+    } else if (postId) {
+      rawWpUrl = `${baseSiteUrl}/?page_id=${postId}&preview=true&verbocat_live_preview=1&post_id=${postId}`;
+    }
+  }
 
   // If WordPress URL is a local private domain (.local or localhost) and client is remote, fallback to server snapshot
   const isLocalDomain = rawWpUrl && (rawWpUrl.includes('.local') || rawWpUrl.includes('localhost') || rawWpUrl.includes('127.0.0.1'));

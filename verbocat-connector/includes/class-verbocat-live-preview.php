@@ -82,9 +82,24 @@ class Verbocat_Live_Preview {
         if (!self::is_valid_preview_request()) {
             return;
         }
-        if ($query->is_main_query()) {
-            $query->set('post_status', ['publish', 'draft', 'pending', 'private', 'future']);
-            $query->set('ignore_sticky_posts', true);
+        $post_id = intval($_GET['post_id'] ?? ($_GET['page_id'] ?? ($_GET['p'] ?? 0)));
+        if ($post_id && $query->is_main_query()) {
+            $post = get_post($post_id);
+            if ($post) {
+                if ($post->post_type === 'page') {
+                    $query->set('page_id', $post_id);
+                    $query->is_page = true;
+                } else {
+                    $query->set('p', $post_id);
+                    $query->is_single = true;
+                }
+                $query->is_singular = true;
+                $query->is_home = false;
+                $query->is_front_page = false;
+                $query->is_archive = false;
+                $query->set('post_status', ['publish', 'draft', 'pending', 'private', 'future']);
+                $query->set('ignore_sticky_posts', true);
+            }
         }
     }
 
