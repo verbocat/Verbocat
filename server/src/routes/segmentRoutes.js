@@ -19,7 +19,7 @@
  */
 
 const express = require("express");
-const { supabase, fetchAllSegments } = require("../config/supabase");
+const { supabase, fetchAllSegments, fetchAllSegmentsRaw } = require("../config/supabase");
 const { checkAuth, checkTranslateAccess, checkDocumentAccess } = require("../utils/authMiddleware");
 const { translateSegments } = require("../services/translationService");
 const { translateSrtSegments } = require("../srtEngine/srtTranslationService");
@@ -141,21 +141,29 @@ segmentRouter.post(["/translate-batch", "/api/translate-batch"], checkAuth, chec
       const { getIo } = require("../services/socket");
       const io = getIo();
 
-      // Pre-fetch template source_text map for all segments in document
-      const { data: templateSegs } = await supabase
-        .from("document_segments")
-        .select("segment_index, source_text")
-        .eq("document_id", documentId)
-        .is("target_lang", null);
+      // Pre-fetch template source_text map for all segments in document with full pagination
+      let templateSegs = [];
+      try {
+        templateSegs = await fetchAllSegmentsRaw(documentId, "segment_index, source_text", "source");
+      } catch (tmplErr) {
+        console.warn("[TRANSLATE_BATCH_TMPL_WARN] Failed to fetch template segments:", tmplErr.message);
+      }
 
       const templateSourceMap = new Map();
       if (templateSegs) {
         templateSegs.forEach(t => templateSourceMap.set(t.segment_index, t.source_text || ""));
       }
 
-      const updatePromises = results.map(async (item) => {
-        const segmentIndex = item.segment_index !== undefined ? Number(item.segment_index) : (item.id !== undefined ? Number(item.id) : 1);
-        const sourceText = item.source || templateSourceMap.get(segmentIndex) || "";
+      // Also build map from request.body.segments as high-priority fallback
+      const reqSegmentMap = new Map();
+      (segments || []).forEach((s, idx) => {
+        const sIdx = s.segment_index !== undefined ? Number(s.segment_index) : (s.id !== undefined ? Number(s.id) : idx + 1);
+        reqSegmentMap.set(sIdx, s.source || s.source_text || "");
+      });
+
+      const updatePromises = results.map(async (item, resIdx) => {
+        const segmentIndex = item.segment_index !== undefined ? Number(item.segment_index) : (item.id !== undefined ? Number(item.id) : resIdx + 1);
+        const sourceText = item.source || reqSegmentMap.get(segmentIndex) || templateSourceMap.get(segmentIndex) || "";
 
         // NEVER blank out target text with empty string. Keep translated text intact.
         const translatedText = item.translated !== undefined && item.translated !== null ? item.translated : "";
@@ -217,7 +225,7 @@ segmentRouter.post(["/translate-batch", "/api/translate-batch"], checkAuth, chec
             status: updateFields.status,
             mqmAccuracyScore: updateFields.mqm_accuracy_score,
             mqmReport: updateFields.mqm_report,
-            updatedBy: request.user.email,
+            updatedBy: request.user?.email || request.profile?.email || "system",
             targetLang: target
           });
         }
@@ -252,15 +260,11 @@ segmentRouter.post(["/translate-batch", "/api/translate-batch"], checkAuth, chec
     }
 
     // ── AUDIT TRAIL FIX: Always log translate-batch activity ──
-    // `wordCount` only counts segments sent to AI (not TM/cache hits). If all segments
-    // were served from TM, wordCount = 0 and was previously silently skipped.
-    // Now we ALWAYS log using request.wordCount (total words in the batch request)
-    // so there is always an audit trail, even for pure TM-hit runs.
     {
-      const email = request.profile.email;
-      const userId = request.profile.id;
+      const email = request.profile?.email || request.user?.email || "";
+      const userId = request.profile?.id || request.user?.id;
       const isSeo = contextSettings?.purpose === "SEO";
-      const logOrgId = request.tenant?.id || request.profile.organization_id || null;
+      const logOrgId = request.tenant?.id || request.profile?.organization_id || null;
       // Total words requested (computed by checkTranslateAccess middleware)
       const totalRequestedWords = request.wordCount || 0;
 
@@ -272,23 +276,25 @@ segmentRouter.post(["/translate-batch", "/api/translate-batch"], checkAuth, chec
         actionName = isSeo ? "translate-batch (SEO)" : "translate-batch";
       }
 
-      // Always insert an audit log row regardless of TM vs AI
-      await supabase.from("credit_logs").insert({
-        user_id: userId,
-        email: email,
-        action: actionName,
-        word_count: totalRequestedWords,
-        file_name: fileName || "document",
-        organization_id: logOrgId
-      }).catch(logErr => console.error("[CREDIT_LOG_WARN] Failed to insert credit_log:", logErr.message));
+      if (userId) {
+        // Always insert an audit log row regardless of TM vs AI
+        await supabase.from("credit_logs").insert({
+          user_id: userId,
+          email: email,
+          action: actionName,
+          word_count: totalRequestedWords,
+          file_name: fileName || "document",
+          organization_id: logOrgId
+        }).catch(logErr => console.error("[CREDIT_LOG_WARN] Failed to insert credit_log:", logErr.message));
 
-      // Only debit credits when AI translation was actually performed (not TM)
-      if (wordCount > 0) {
-        const newConsumed = (request.profile.credits_consumed || 0) + wordCount;
-        await supabase
-          .from("profiles")
-          .update({ credits_consumed: newConsumed })
-          .eq("id", userId);
+        // Only debit credits when AI translation was actually performed (not TM)
+        if (wordCount > 0 && request.profile) {
+          const newConsumed = (request.profile.credits_consumed || 0) + wordCount;
+          await supabase
+            .from("profiles")
+            .update({ credits_consumed: newConsumed })
+            .eq("id", userId);
+        }
       }
     }
 
@@ -446,12 +452,13 @@ segmentRouter.post([
     const io = getIo();
     const results = [];
 
-    // Pre-fetch template source_text map for document
-    const { data: templateSegs } = await supabase
-      .from("document_segments")
-      .select("segment_index, source_text")
-      .eq("document_id", id)
-      .is("target_lang", null);
+    // Pre-fetch template source_text map for document with full pagination
+    let templateSegs = [];
+    try {
+      templateSegs = await fetchAllSegmentsRaw(id, "segment_index, source_text", "source");
+    } catch (tmplErr) {
+      console.warn("[BULK_SAVE_TMPL_WARN] Failed to fetch template segments:", tmplErr.message);
+    }
 
     const templateSourceMap = new Map();
     if (templateSegs) {

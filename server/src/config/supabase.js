@@ -132,11 +132,17 @@ const resegmentDocumentInDb = async (documentId, sourceSegments) => {
  */
 const fetchAllSegments = async (documentId, select = "*", targetLang = null) => {
   if (targetLang && targetLang !== "source") {
+    // Ensure segment_index is always included in the query select so merging by index works reliably
+    let querySelect = select;
+    if (select !== "*" && typeof select === "string" && !select.includes("segment_index")) {
+      querySelect = `segment_index, ${select}`;
+    }
+
     // 1. Fetch template segments (target_lang IS NULL or target_lang = source)
-    let sourceSegments = await fetchAllSegmentsRaw(documentId, select, "source");
+    let sourceSegments = await fetchAllSegmentsRaw(documentId, querySelect, "source");
 
     // 2. Fetch target language segments
-    let targetSegments = await fetchAllSegmentsRaw(documentId, select, targetLang);
+    let targetSegments = await fetchAllSegmentsRaw(documentId, querySelect, targetLang);
 
     const sourceMap = new Map();
     sourceSegments.forEach(s => sourceMap.set(s.segment_index, s));
@@ -165,8 +171,8 @@ const fetchAllSegments = async (documentId, select = "*", targetLang = null) => 
 
     // 4. Build master union of all unique segment_index values across source & target rows
     const allIndices = new Set([
-      ...sourceSegments.map(s => s.segment_index),
-      ...targetSegments.map(s => s.segment_index)
+      ...sourceSegments.map(s => s.segment_index).filter(idx => idx !== undefined && idx !== null),
+      ...targetSegments.map(s => s.segment_index).filter(idx => idx !== undefined && idx !== null)
     ]);
     const sortedIndices = Array.from(allIndices).sort((a, b) => a - b);
 
@@ -216,5 +222,6 @@ const fetchAllSegments = async (documentId, select = "*", targetLang = null) => 
 module.exports = {
   supabase,
   supabaseAdmin,
-  fetchAllSegments
+  fetchAllSegments,
+  fetchAllSegmentsRaw
 };

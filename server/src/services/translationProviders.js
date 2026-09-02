@@ -682,10 +682,16 @@ const isScriptValidForLanguage = (text, targetLang, sourceText = "") => {
     }
   }
 
-  // 3. Forbid Arabic script leakage into non-Arabic targets
+  // 3. Arabic / Urdu Script Targets:
   const isArabicBased = /^(ar|ur|fa|ps|sd)/.test(cleanLang);
   if (!isArabicBased && /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(cleanText)) {
     return false;
+  }
+  if (isArabicBased) {
+    // Forbid Indic scripts, Cyrillic, CJK in Arabic/Urdu targets
+    if (/[\u0900-\u097F\u0980-\u09FF\u0A00-\u0A7F\u0A80-\u0AFF\u0B00-\u0B7F\u0B80-\u0BFF\u0C00-\u0C7F\u0C80-\u0CFF\u0D00-\u0D7F\u0400-\u04FF\u4E00-\u9FFF\uAC00-\uD7AF]/.test(cleanText)) {
+      return false;
+    }
   }
 
   return true;
@@ -1036,11 +1042,30 @@ ${nextTarget ? `- Next Translation: "${nextTarget}"` : ""}`;
     throw error;
   }
 };
+const callAiPrompt = async (systemPrompt, userPrompt, temperature = 0.3) => {
+  if (!OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY not configured");
+  }
+  const payload = {
+    model: OPENAI_MODEL,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt }
+    ],
+    temperature: typeof temperature === "number" ? temperature : 0.3,
+    max_tokens: 4000
+  };
+  const response = await callOpenAIWithRetry(payload);
+  return response.data?.choices?.[0]?.message?.content || "";
+};
+
 module.exports = {
   createProviderState,
   translateChunk,
   getProviderStatus,
   translateSegmentWithVision,
   isLegitimatelyIdentical,
-  isScriptValidForLanguage
+  isScriptValidForLanguage,
+  callAiPrompt,
+  callOpenAIWithRetry
 };

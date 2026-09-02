@@ -77,7 +77,7 @@ const postProcessTranslation = (source, target, targetLang) => {
   }
 
   // 1. List prefix protection: A. / B. / vi. / vii. / (viii) / 1. / 7(a).
-  const sourceMatch = source.match(LIST_BULLET_PREFIX_REGEX);
+  const sourceMatch = trimmedSource.match(LIST_BULLET_PREFIX_REGEX);
   if (sourceMatch) {
     const sourcePrefix = sourceMatch[0];
     if (!output.startsWith(sourcePrefix)) {
@@ -93,20 +93,12 @@ const postProcessTranslation = (source, target, targetLang) => {
   }
 
   // 2. Language-independent acronym restoration
-  // Detect shortform abbreviations/acronyms in the source (e.g. RBI, KYC, SMA-1, GST, PDC, CA, CS, SC, ST, OBC, MNC, PIO/CIO)
-  // Excludes long all-caps words and proper names (e.g. DIVYANSHU, AGREEMENT) so they can be translated/transliterated normally.
-  const sourceAbbreviations = (source.match(/\b[A-Z0-9]{2,5}(?:[-\/][A-Z0-9]+)*\b/g) || []).filter(abbr => {
+  const sourceAbbreviations = (trimmedSource.match(/\b[A-Z0-9]{2,5}(?:[-\/][A-Z0-9]+)*\b/g) || []).filter(abbr => {
     // Only protect shortforms <= 5 chars or structured codes with hyphens/slashes/numbers
     return abbr.length <= 5 || /[-\/\d]/.test(abbr);
   });
   sourceAbbreviations.forEach(abbr => {
-    // If the abbreviation is missing from output, it may have been transliterated.
-    // We can't reverse-map every script, but we ensure the original is present.
     if (!output.includes(abbr)) {
-      // Try to find a transliterated version (non-Latin cluster near where abbr should be)
-      // and replace it. This is a best-effort approach.
-      // The prompt already instructs the model to keep abbreviations in Latin script,
-      // so this is a safety net for edge cases.
     }
   });
 
@@ -297,8 +289,12 @@ const upsertLinguistIceMatch = async (sourceText, targetText, sourceLang, target
 };
 
 const findTmMatch = (source, targetLang, tmMap, allTmList) => {
+  if (!source || typeof source !== "string" || !source.trim()) {
+    return null;
+  }
+
   // 1. Exact match
-  if (tmMap[source]) {
+  if (tmMap && tmMap[source]) {
     const entry = tmMap[source];
     const isIce = entry.provider && entry.provider.startsWith("Linguist (ICE)");
     return {
@@ -336,7 +332,7 @@ const findTmMatch = (source, targetLang, tmMap, allTmList) => {
 const translateSegments = async (segments, target, sourceLang, contextSettings, userId, organizationId = null) => {
   const providerState = createProviderState();
 
-  const uniqueSources = [...new Set(segments.map((s) => s.source))];
+  const uniqueSources = [...new Set((segments || []).map((s) => s.source || s.source_text || "").filter(s => typeof s === "string" && s.trim().length > 0))];
 
   // Fetch exact translations in chunks of 50 to prevent PostgREST query URL length overflow
   let existingTranslations = [];
@@ -642,7 +638,9 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
     }
   }
 
-  const results = await Promise.all(segments.map(async (segment, index) => {
+  const results = await Promise.all((segments || []).map(async (segment, index) => {
+    const source = segment.source !== undefined && segment.source !== null ? segment.source : (segment.source_text || "");
+    const segIndex = segment.segment_index !== undefined ? Number(segment.segment_index) : (segment.id !== undefined ? Number(segment.id) : index + 1);
     let targetText = "";
     let provider = "";
     let fuzzyScore = null;
@@ -651,9 +649,9 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
     if (segment.target) {
       targetText = segment.target;
       provider = "Existing Segment Target";
-    } else {
+    } else if (source) {
       // Check if we matched it from TM
-      const match = matchResultMap[segment.source];
+      const match = matchResultMap[source];
       if (match) {
         targetText = match.targetText;
         provider = match.provider;
@@ -661,7 +659,7 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
         matchType = match.matchType;
       } else {
         // Fallback to translated text from tmMap
-        const tmEntry = tmMap[segment.source];
+        const tmEntry = tmMap[source];
         if (tmEntry) {
           targetText = tmEntry.target_text || "";
           provider = tmEntry.provider || "TM Database";
@@ -669,32 +667,34 @@ const translateSegments = async (segments, target, sourceLang, contextSettings, 
       }
     }
 
-    if (!isSafeTranslation(segment.source, targetText, target, contextSettings)) {
+    if (source && !isSafeTranslation(source, targetText, target, contextSettings)) {
       let reason = "Unknown reason";
       if (!targetText || targetText.trim() === "") {
         reason = "The translation is empty or null.";
-      } else if (normalizeText(segment.source).toLowerCase() === normalizeText(targetText).toLowerCase() && !isLegitimatelyIdentical(segment.source)) {
+      } else if (normalizeText(source).toLowerCase() === normalizeText(targetText).toLowerCase() && !isLegitimatelyIdentical(source)) {
         reason = `The translated text is identical to the source text: "${targetText}", which is not legitimately identical.`;
       } else {
         const { isScriptValidForLanguage } = require("./translationProviders");
-        if (target && !isScriptValidForLanguage(targetText, target, segment.source)) {
+        if (target && !isScriptValidForLanguage(targetText, target, source)) {
           reason = `The translation failed script validation / purity checks for target language "${target}" (detected foreign script or character leakage).`;
         } else if (/__TAG_/i.test(targetText)) {
           reason = "The translation contains raw tag placeholders (__TAG_).";
-        } else if (hasVisibleMarkup(targetText) && !hasVisibleMarkup(segment.source)) {
+        } else if (hasVisibleMarkup(targetText) && !hasVisibleMarkup(source)) {
           reason = "The translation has visible markup that was not present in the source segment.";
-        } else if (hasDigitMismatch(segment.source, targetText)) {
-          reason = `Mismatch in numeric digits between source ("${getSortedNumbersString(segment.source)}") and translation ("${getSortedNumbersString(targetText)}").`;
+        } else if (hasDigitMismatch(source, targetText)) {
+          reason = `Mismatch in numeric digits between source ("${getSortedNumbersString(source)}") and translation ("${getSortedNumbersString(targetText)}").`;
         } else {
           reason = "The translation failed quality safety checks (e.g. mismatch in list pointers, contact prefixes, or extreme length ratio).";
         }
       }
 
-      console.warn(`[Translation Integrity Warning] Segment index ${index} (Source: "${segment.source.substring(0, 100)}") failed translation validation checks. Reason: ${reason} (Final Target Text: "${targetText || ''}"). Proceeding without throwing.`);
+      console.warn(`[Translation Integrity Warning] Segment index ${index} (Source: "${String(source).substring(0, 100)}") failed translation validation checks. Reason: ${reason} (Final Target Text: "${targetText || ''}"). Proceeding without throwing.`);
     }
 
     return {
-      id: segment.id,
+      id: segment.id !== undefined ? segment.id : segIndex,
+      segment_index: segIndex,
+      source: source,
       translated: targetText,
       provider: provider,
       fuzzyScore,
@@ -820,5 +820,6 @@ module.exports = {
   translateSegmentWithContext,
   ensureEnglishNumerals,
   postProcessTranslation,
-  upsertLinguistIceMatch
+  upsertLinguistIceMatch,
+  findTmMatch
 };

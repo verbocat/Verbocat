@@ -147,31 +147,36 @@ async function checkAuth(request, response, next) {
 // 2. Validate Translation Access & Word Credits
 async function checkTranslateAccess(request, response, next) {
   try {
-    const profile = request.profile;
-    const isPrivilegedRole = ["super_admin", "admin", "verbolabs_staff", "vendor"].includes(profile.role);
+    const profile = request.profile || {};
+    const role = profile.role || "";
+    const isPrivilegedRole = ["super_admin", "admin", "verbolabs_staff", "vendor"].includes(role);
     
-    if (!profile.has_translate_access && !isPrivilegedRole) {
+    if (profile.has_translate_access === false && !isPrivilegedRole) {
       return response.status(403).json({ error: "Your translation access has been disabled by the administrator." });
     }
 
     // Count words in translation batch request
-    const wordCount = countWordsInSegments(request.body.segments);
+    const wordCount = countWordsInSegments(request.body?.segments || []);
 
     // Bypass individual user credit limits for privileged staff/vendor/admin roles
-    if (!isPrivilegedRole) {
-      if (profile.credits_consumed + wordCount > profile.credits_allowed) {
+    if (!isPrivilegedRole && profile.credits_allowed && Number(profile.credits_allowed) > 0) {
+      const consumed = Number(profile.credits_consumed || 0);
+      const allowed = Number(profile.credits_allowed || 0);
+      if (consumed + wordCount > allowed) {
         return response.status(403).json({ 
-          error: `Credit limit exceeded. Reached ${profile.credits_consumed}/${profile.credits_allowed} words allowance. Contact space admin.` 
+          error: `Credit limit exceeded. Reached ${consumed}/${allowed} words allowance. Contact space admin.` 
         });
       }
     }
 
     // Check overall organization credit limit
     const org = request.organization || profile.organization;
-    if (profile.role !== "super_admin" && org && org.credits_allowed > 0) {
-      if (org.credits_consumed + wordCount > org.credits_allowed) {
+    if (role !== "super_admin" && org && typeof org === "object" && Number(org.credits_allowed || 0) > 0) {
+      const orgConsumed = Number(org.credits_consumed || 0);
+      const orgAllowed = Number(org.credits_allowed || 0);
+      if (orgConsumed + wordCount > orgAllowed) {
         return response.status(403).json({
-          error: `Workspace credit limit exceeded for ${org.name}. Reached ${org.credits_consumed}/${org.credits_allowed} words allowance. Contact VerboLabs.`
+          error: `Workspace credit limit exceeded for ${org.name || "this workspace"}. Reached ${orgConsumed}/${orgAllowed} words allowance. Contact VerboLabs.`
         });
       }
     }

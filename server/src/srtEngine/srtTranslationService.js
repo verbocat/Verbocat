@@ -113,16 +113,14 @@ async function translateSrtSegments(segments, targetLang, sourceLang = "en", srt
 
   // Helper AI caller function for Pass 1 & Pass 2
   const callAiProvider = async (systemPrompt, userPromptText) => {
-    const { fetchWithFallbackChain } = require("../services/translationProviders");
-    const aiResponse = await fetchWithFallbackChain({
-      textToTranslate: userPromptText,
-      targetLang,
-      sourceLang: actualSourceLang,
-      customSystemPrompt: systemPrompt,
-      contextSettings: { fileExtension: ".srt", ...srtContextSettings },
-      providerState
-    });
-    return aiResponse?.translated || "";
+    const { callAiPrompt } = require("../services/translationProviders");
+    try {
+      const aiResponse = await callAiPrompt(systemPrompt, userPromptText, 0.65);
+      return aiResponse ? aiResponse.trim() : "";
+    } catch (err) {
+      console.warn("[SRT_AI_CALL_WARN]", err.message);
+      return "";
+    }
   };
 
   // 3. Pass 1: Translate missing subtitle cues using Multi-Cue Sliding Context Windows
