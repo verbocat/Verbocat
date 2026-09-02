@@ -21,11 +21,18 @@ class Verbocat_Live_Preview {
 
     public static function get_preview_url($post_id) {
         $token = self::get_preview_token($post_id);
+        $post = get_post($post_id);
+        $base = home_url('/');
+        if ($post) {
+            $key = ($post->post_type === 'page') ? 'page_id' : 'p';
+            $base = add_query_arg([$key => $post_id], home_url('/'));
+        }
         return add_query_arg([
+            'preview'               => 'true',
             'verbocat_live_preview' => '1',
             'post_id'               => $post_id,
             'token'                 => $token
-        ], home_url('/'));
+        ], $base);
     }
 
     public static function handle_live_preview_request() {
@@ -72,6 +79,7 @@ class Verbocat_Live_Preview {
         $wp_query->is_page = ($post->post_type === 'page');
         $wp_query->is_singular = true;
         $wp_query->is_home = false;
+        $wp_query->is_front_page = false;
         $wp_query->is_archive = false;
         $wp_query->is_404 = false;
         $wp_query->queried_object = $post;
@@ -83,7 +91,7 @@ class Verbocat_Live_Preview {
         $GLOBALS['wp_the_query'] = $wp_query;
         setup_postdata($post);
 
-        // Inject real-time postMessage TreeWalker communication bridge
+        // Inject real-time postMessage TreeWalker communication bridge & iframe cleaning CSS
         add_action('wp_footer', [__CLASS__, 'inject_live_bridge_script'], 9999);
 
         // Load the active theme's native template hierarchy
@@ -133,6 +141,18 @@ class Verbocat_Live_Preview {
         global $post;
         $post_id = $post ? $post->ID : 0;
         ?>
+        <style id="verbocat-live-preview-fixes">
+            /* Hide WP Admin Bar in live iframe */
+            #wpadminbar { display: none !important; }
+            html { margin-top: 0 !important; }
+            /* Eliminate duplicate front-page transparent/sticky headers */
+            .ast-theme-transparent-header #masthead { position: static !important; }
+            .ast-transparent-header { display: none !important; }
+            /* Ensure page container is centered identically to native preview */
+            .ast-container, #content, .entry-content {
+                box-sizing: border-box;
+            }
+        </style>
         <script id="verbocat-live-preview-bridge">
         (function() {
             console.log('[Verbocat Bridge] 🚀 Live Preview TreeWalker Bridge Connected for Post #<?php echo $post_id; ?>');

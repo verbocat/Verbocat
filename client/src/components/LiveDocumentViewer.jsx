@@ -35,7 +35,7 @@ export const LiveDocumentViewer = ({
   // Derive rendering mode: HTML iframe vs DOCX/binary canvas
   const isWordPress = documentMetadata?.source_type === "wordpress";
   const rawWpUrl = isWordPress 
-    ? (documentMetadata.wp_preview_url || `${documentMetadata.wp_site_url || 'http://testing-learning.local'}/?verbocat_live_preview=1&post_id=${documentMetadata.wp_post_id}`)
+    ? (documentMetadata.wp_preview_url || `${documentMetadata.wp_site_url || 'http://testing-learning.local'}/?page_id=${documentMetadata.wp_post_id}&preview=true&verbocat_live_preview=1&post_id=${documentMetadata.wp_post_id}`)
     : null;
 
   // If WordPress URL is a local private domain (.local or localhost) and client is remote, fallback to server snapshot
