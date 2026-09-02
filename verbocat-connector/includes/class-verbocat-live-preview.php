@@ -117,36 +117,12 @@ class Verbocat_Live_Preview {
         </style>
         <script id="verbocat-live-preview-bridge">
         (function() {
-            console.log('[Verbocat Bridge] 🚀 Live Preview Real-Time Bridge Connected for Post #<?php echo $post_id; ?>');
+            console.log('[Verbocat Bridge] 🚀 Live Preview Persistent Segment-Bound Bridge Connected for Post #<?php echo $post_id; ?>');
 
             var textNodeEntries = [];
-            var contentBlocks = [];
 
-            function indexDom() {
+            function indexTextNodes() {
                 textNodeEntries = [];
-                contentBlocks = [];
-
-                // 1. Index translatable content blocks in order (Title, Paragraphs, Headings, Lists)
-                var container = document.querySelector('.entry-content, .post-content, #content, article, main') || document.body;
-                
-                // Include post title if present
-                var titleEl = document.querySelector('.entry-title, .post-title, h1.entry-title');
-                if (titleEl) {
-                    contentBlocks.push(titleEl);
-                }
-
-                if (container) {
-                    var els = container.querySelectorAll('h1:not(.entry-title), h2, h3, h4, h5, h6, p, blockquote, li, td, th, .wp-block-button__link');
-                    els.forEach(function(el) {
-                        // Skip header/footer parts
-                        if (el.closest('header') || el.closest('footer') || el.closest('#masthead') || el.closest('.custom-topbar') || el.closest('.site-footer')) return;
-                        if (el.innerText && el.innerText.trim().length > 0) {
-                            contentBlocks.push(el);
-                        }
-                    });
-                }
-
-                // 2. Index all text nodes via TreeWalker
                 var walker = document.createTreeWalker(
                     document.body,
                     NodeFilter.SHOW_TEXT,
@@ -156,7 +132,11 @@ class Verbocat_Live_Preview {
                             var parent = node.parentElement;
                             if (!parent) return NodeFilter.FILTER_REJECT;
                             var tag = parent.tagName.toLowerCase();
-                            if (tag === 'script' || tag === 'style' || tag === 'noscript' || tag === 'textarea' || tag === 'svg') {
+                            if (tag === 'script' || tag === 'style' || tag === 'noscript' || tag === 'textarea' || tag === 'svg' || tag === 'template') {
+                                return NodeFilter.FILTER_REJECT;
+                            }
+                            // Never mutate header, navigation, or footer parts
+                            if (parent.closest('header, footer, #masthead, .custom-topbar, .site-footer, #wpadminbar, nav, .ekit_menu_responsive_tablet')) {
                                 return NodeFilter.FILTER_REJECT;
                             }
                             var txt = node.nodeValue.trim();
@@ -173,53 +153,54 @@ class Verbocat_Live_Preview {
                     node._verbocatOrigText = initialText;
                     textNodeEntries.push({
                         node: node,
-                        origText: initialText,
-                        cleanOrig: initialText.replace(/[\s\r\n\t]+/g, ' ').trim(),
-                        lastTgt: null
+                        initialClean: initialText.replace(/[\s\r\n\t]+/g, ' ').trim()
                     });
                 }
-                console.log('[Verbocat Bridge] Indexed ' + contentBlocks.length + ' content blocks & ' + textNodeEntries.length + ' text nodes.');
+                console.log('[Verbocat Bridge] Indexed ' + textNodeEntries.length + ' post content text nodes in DOM.');
             }
 
             if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', indexDom);
+                document.addEventListener('DOMContentLoaded', indexTextNodes);
             } else {
-                indexDom();
+                indexTextNodes();
             }
 
+            // Continuous Source-to-Target Memory Binding
             function applyTranslations(segments) {
-                if (!contentBlocks.length && !textNodeEntries.length) indexDom();
+                if (!textNodeEntries.length) indexTextNodes();
                 if (!Array.isArray(segments) || !segments.length) return;
 
                 segments.forEach(function(seg, idx) {
                     var segId = Number(seg.id || seg.segment_index || (idx + 1));
                     var src = (seg.source || seg.source_text || '').replace(/[\s\r\n\t]+/g, ' ').trim();
                     var tgt = seg.target !== undefined && seg.target !== null ? seg.target : (seg.target_text || '');
-                    if (tgt === undefined || tgt === null || tgt === '') return;
+                    if (tgt === undefined || tgt === null) return;
 
-                    var updated = false;
-
-                    // Strategy A: Update by 1-based Segment Index on Content Block
-                    if (segId >= 1 && segId <= contentBlocks.length) {
-                        var targetBlock = contentBlocks[segId - 1];
-                        if (targetBlock && targetBlock.textContent !== tgt) {
-                            targetBlock.textContent = tgt;
-                            updated = true;
-                        }
-                    }
-
-                    // Strategy B: Update matching TextNode entries
                     textNodeEntries.forEach(function(entry) {
-                        if (entry.cleanOrig === src || entry.origText.trim() === src || (entry.lastTgt && entry.node.nodeValue === entry.lastTgt)) {
+                        // 1. Direct Bound Match: Node was already paired with this segment ID
+                        if (entry.node._verbocatSegmentId === segId) {
                             if (entry.node.nodeValue !== tgt) {
                                 entry.node.nodeValue = tgt;
-                                entry.lastTgt = tgt;
-                                updated = true;
                             }
-                        } else if (src.length > 15 && entry.cleanOrig.length > 15 && (entry.cleanOrig.indexOf(src) !== -1 || src.indexOf(entry.cleanOrig) !== -1)) {
-                            entry.node.nodeValue = tgt;
-                            entry.lastTgt = tgt;
-                            updated = true;
+                            return;
+                        }
+
+                        // 2. Initial Binding by Exact Source Text
+                        if (entry.node._verbocatSegmentId === undefined) {
+                            if (src && (entry.initialClean === src || entry.node._verbocatOrigText.trim() === src)) {
+                                entry.node._verbocatSegmentId = segId;
+                                if (entry.node.nodeValue !== tgt) {
+                                    entry.node.nodeValue = tgt;
+                                }
+                            } else if (src && src.length > 20 && entry.initialClean.length > 20 && (entry.initialClean.indexOf(src) !== -1 || src.indexOf(entry.initialClean) !== -1)) {
+                                entry.node._verbocatSegmentId = segId;
+                                if (entry.node.nodeValue !== tgt) {
+                                    entry.node.nodeValue = tgt;
+                                }
+                            } else if (tgt && (entry.initialClean === tgt.trim() || entry.node._verbocatOrigText.trim() === tgt.trim())) {
+                                // 3. Fallback Binding if page was already in target language
+                                entry.node._verbocatSegmentId = segId;
+                            }
                         }
                     });
                 });
