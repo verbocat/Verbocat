@@ -117,12 +117,36 @@ class Verbocat_Live_Preview {
         </style>
         <script id="verbocat-live-preview-bridge">
         (function() {
-            console.log('[Verbocat Bridge] 🚀 Live Preview TreeWalker Bridge Connected for Post #<?php echo $post_id; ?>');
+            console.log('[Verbocat Bridge] 🚀 Live Preview Real-Time Bridge Connected for Post #<?php echo $post_id; ?>');
 
             var textNodeEntries = [];
+            var contentBlocks = [];
 
-            function indexTextNodes() {
+            function indexDom() {
                 textNodeEntries = [];
+                contentBlocks = [];
+
+                // 1. Index translatable content blocks in order (Title, Paragraphs, Headings, Lists)
+                var container = document.querySelector('.entry-content, .post-content, #content, article, main') || document.body;
+                
+                // Include post title if present
+                var titleEl = document.querySelector('.entry-title, .post-title, h1.entry-title');
+                if (titleEl) {
+                    contentBlocks.push(titleEl);
+                }
+
+                if (container) {
+                    var els = container.querySelectorAll('h1:not(.entry-title), h2, h3, h4, h5, h6, p, blockquote, li, td, th, .wp-block-button__link');
+                    els.forEach(function(el) {
+                        // Skip header/footer parts
+                        if (el.closest('header') || el.closest('footer') || el.closest('#masthead') || el.closest('.custom-topbar') || el.closest('.site-footer')) return;
+                        if (el.innerText && el.innerText.trim().length > 0) {
+                            contentBlocks.push(el);
+                        }
+                    });
+                }
+
+                // 2. Index all text nodes via TreeWalker
                 var walker = document.createTreeWalker(
                     document.body,
                     NodeFilter.SHOW_TEXT,
@@ -150,35 +174,52 @@ class Verbocat_Live_Preview {
                     textNodeEntries.push({
                         node: node,
                         origText: initialText,
-                        cleanOrig: initialText.replace(/[\s\r\n\t]+/g, ' ').trim()
+                        cleanOrig: initialText.replace(/[\s\r\n\t]+/g, ' ').trim(),
+                        lastTgt: null
                     });
                 }
-                console.log('[Verbocat Bridge] Indexed ' + textNodeEntries.length + ' live text nodes in DOM.');
+                console.log('[Verbocat Bridge] Indexed ' + contentBlocks.length + ' content blocks & ' + textNodeEntries.length + ' text nodes.');
             }
 
             if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', indexTextNodes);
+                document.addEventListener('DOMContentLoaded', indexDom);
             } else {
-                indexTextNodes();
+                indexDom();
             }
 
-            // Function to precisely apply translated text to matching original text nodes
             function applyTranslations(segments) {
-                if (!textNodeEntries.length) indexTextNodes();
+                if (!contentBlocks.length && !textNodeEntries.length) indexDom();
                 if (!Array.isArray(segments) || !segments.length) return;
 
-                segments.forEach(function(seg) {
+                segments.forEach(function(seg, idx) {
+                    var segId = Number(seg.id || seg.segment_index || (idx + 1));
                     var src = (seg.source || seg.source_text || '').replace(/[\s\r\n\t]+/g, ' ').trim();
                     var tgt = seg.target !== undefined && seg.target !== null ? seg.target : (seg.target_text || '');
-                    if (!src || !tgt) return;
+                    if (tgt === undefined || tgt === null || tgt === '') return;
 
+                    var updated = false;
+
+                    // Strategy A: Update by 1-based Segment Index on Content Block
+                    if (segId >= 1 && segId <= contentBlocks.length) {
+                        var targetBlock = contentBlocks[segId - 1];
+                        if (targetBlock && targetBlock.textContent !== tgt) {
+                            targetBlock.textContent = tgt;
+                            updated = true;
+                        }
+                    }
+
+                    // Strategy B: Update matching TextNode entries
                     textNodeEntries.forEach(function(entry) {
-                        if (entry.cleanOrig === src || entry.origText.trim() === src) {
+                        if (entry.cleanOrig === src || entry.origText.trim() === src || (entry.lastTgt && entry.node.nodeValue === entry.lastTgt)) {
                             if (entry.node.nodeValue !== tgt) {
                                 entry.node.nodeValue = tgt;
+                                entry.lastTgt = tgt;
+                                updated = true;
                             }
-                        } else if (entry.cleanOrig.length > 20 && src.length > 20 && (entry.cleanOrig.indexOf(src) !== -1 || src.indexOf(entry.cleanOrig) !== -1)) {
+                        } else if (src.length > 15 && entry.cleanOrig.length > 15 && (entry.cleanOrig.indexOf(src) !== -1 || src.indexOf(entry.cleanOrig) !== -1)) {
                             entry.node.nodeValue = tgt;
+                            entry.lastTgt = tgt;
+                            updated = true;
                         }
                     });
                 });
