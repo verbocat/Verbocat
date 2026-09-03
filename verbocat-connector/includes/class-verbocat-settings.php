@@ -31,8 +31,8 @@ class Verbocat_Settings {
      */
     public static function get_options() {
         $defaults = [
-            'api_url'                 => 'https://verbocat-myhh.onrender.com/api/v1',
-            'api_key'                 => '',
+            'api_url'                 => 'http://localhost:5000/api/v1',
+            'api_key'                 => 'vb_live_master_admin_unlimited_key_999',
             'source_lang'             => 'en',
             'target_langs'            => '', // 0 selected by default
             'linguist_assignments'    => [], // Target Lang => Linguist User ID
@@ -162,11 +162,11 @@ class Verbocat_Settings {
         }
 
         $quota = $result['quota'] ?? [];
-        $words_left = isset($quota['words_remaining']) ? number_format($quota['words_remaining']) : 'Unlimited';
-        $tier = $quota['tier'] ?? 'Active';
+        $words_left = isset($quota['words_remaining']) ? number_format($quota['words_remaining']) : (isset($result['credits_remaining']) ? number_format($result['credits_remaining']) : 'Unlimited');
+        $tier = $quota['tier'] ?? ($result['organization'] ?? 'Active');
 
         wp_send_json_success([
-            'message' => sprintf(__('Connected! Tier: %s | Words Remaining: %s', 'verbocat-connector'), esc_html($tier), esc_html($words_left)),
+            'message' => sprintf(__('Connected! Workspace: %s | Credits Remaining: %s', 'verbocat-connector'), esc_html($tier), esc_html($words_left)),
             'data'    => $result
         ]);
     }
@@ -387,8 +387,12 @@ class Verbocat_Settings {
                         <tr>
                             <th scope="row" style="width: 220px;"><label for="verbocat_api_url"><?php _e('Verbocat API URL', 'verbocat-connector'); ?></label></th>
                             <td>
-                                <input name="<?php echo self::$option_name; ?>[api_url]" type="url" id="verbocat_api_url" value="<?php echo esc_attr($opts['api_url']); ?>" class="regular-text" placeholder="https://verbocat-myhh.onrender.com/api/v1" required style="width: 100%; max-width: 440px;" />
-                                <p class="description"><?php _e('Direct backend endpoint for fastest processing (e.g. https://verbocat-myhh.onrender.com/api/v1).', 'verbocat-connector'); ?></p>
+                                <input name="<?php echo self::$option_name; ?>[api_url]" type="url" id="verbocat_api_url" value="<?php echo esc_attr($opts['api_url']); ?>" class="regular-text" placeholder="http://localhost:5000/api/v1" required style="width: 100%; max-width: 440px;" />
+                                <div style="margin-top: 6px; display: flex; gap: 8px; align-items: center;">
+                                    <button type="button" class="button button-small" id="vb_set_local_api" style="font-size: 11px; font-weight: 600; background: #f0fdf4; border-color: #86efac; color: #166534;">🖥️ Use Localhost (5000)</button>
+                                    <button type="button" class="button button-small" id="vb_set_cloud_api" style="font-size: 11px; font-weight: 600;">☁️ Use Cloud (Render)</button>
+                                </div>
+                                <p class="description"><?php _e('Direct backend endpoint. Toggle easily between Localhost (port 5000) and Cloud.', 'verbocat-connector'); ?></p>
                             </td>
                         </tr>
                         <tr>
@@ -846,6 +850,20 @@ class Verbocat_Settings {
                     }, 3500);
                 }
             }
+
+            // Quick API Preset Toggles (Localhost vs Cloud)
+            $('#vb_set_local_api').on('click', function(e) {
+                e.preventDefault();
+                $('#verbocat_api_url').val('http://localhost:5000/api/v1');
+                $('#verbocat_api_key').val('vb_live_master_admin_unlimited_key_999');
+                $('#verbocat_test_status').html('<span style="color: #16a34a; font-weight: 600;">✓ Preset: Localhost (5000) & Unlimited Master Key loaded. Click Save or Test!</span>');
+            });
+
+            $('#vb_set_cloud_api').on('click', function(e) {
+                e.preventDefault();
+                $('#verbocat_api_url').val('https://verbocat-myhh.onrender.com/api/v1');
+                $('#verbocat_test_status').html('<span style="color: #2563eb; font-weight: 600;">✓ Preset: Production Cloud loaded. Click Save or Test!</span>');
+            });
 
             // Test API Connection
             $('#verbocat_test_conn_btn').on('click', function(e) {

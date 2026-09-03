@@ -53,6 +53,20 @@ class Verbocat_Connector {
         Verbocat_Frontend::init();
         Verbocat_Updater::init();
 
+        // Allow HTTP requests to localhost / 127.0.0.1 for local development
+        add_filter('http_request_args', function($args, $url) {
+            if (strpos($url, 'localhost') !== false || strpos($url, '127.0.0.1') !== false) {
+                $args['reject_unsafe_urls'] = false;
+            }
+            return $args;
+        }, 10, 2);
+        add_filter('http_request_host_is_external', function($is_external, $host, $url) {
+            if ($host === 'localhost' || $host === '127.0.0.1') {
+                return true;
+            }
+            return $is_external;
+        }, 10, 3);
+
         // Automated Hook on post publish / update
         add_action('save_post', [$this, 'handle_auto_save_post'], 20, 2);
         add_action('verbocat_async_sync_event', [$this, 'execute_async_sync'], 10, 2);

@@ -102,6 +102,13 @@ class Verbocat_Api_Client {
     }
 
     /**
+     * Test connection alias for check_account
+     */
+    public static function test_connection($api_url = null, $api_key = null) {
+        return self::check_account($api_url, $api_key);
+    }
+
+    /**
      * Check API server health
      */
     public static function check_health($api_url = null) {
